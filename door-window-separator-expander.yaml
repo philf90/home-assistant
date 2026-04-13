@@ -1,0 +1,122 @@
+# Voraussetzung: input_boolean Helper in Home Assistant anlegen
+# Entweder via UI (Einstellungen > Geräte & Dienste > Helfer > Schalter)
+# oder in configuration.yaml:
+#
+# input_boolean:
+#   fenster_turen_expanded:
+#     name: Fenster & Türen Bereich ausgeklappt
+
+# ─── 1. Separator mit Toggle-Button ────────────────────────────────────────────
+type: custom:bubble-card
+card_type: separator
+name: Fenster & Türen
+sub_button:
+  - entity: sensor.summe_offene_fenster_turen
+    show_last_changed: false
+    show_state: true
+    show_background: true
+    styles: |-
+      .bubble-sub-button {
+        background-color: orangered !important;
+        color: black !important;
+      }
+  - entity: input_boolean.fenster_turen_expanded
+    show_state: false
+    show_background: false
+    icon: |
+      [[[
+        return entity.state === 'on' ? 'mdi:chevron-up' : 'mdi:chevron-down';
+      ]]]
+    tap_action:
+      action: toggle
+icon: mdi:door-open
+
+# ─── 2. Aufklappbare Inhalte (je Tür/Fenster eine conditional card) ────────────
+---
+type: conditional
+conditions:
+  - entity: input_boolean.fenster_turen_expanded
+    state: "on"
+card:
+  type: custom:button-card
+  entity: binary_sensor.tur_windfang
+  icon: |
+    [[[
+      return entity.state === 'on' ? 'mdi:door-open' : 'mdi:door-closed';
+    ]]]
+  name: Tür Windfang
+  show_state: false
+  show_name: true
+  show_icon: true
+  color: |
+    [[[
+      return entity.state === 'on'
+        ? 'var(--error-color, #F44336)'
+        : 'var(--success-color, #4CAF50)';
+    ]]]
+  styles:
+    card:
+      - padding: 6px 12px 6px 12px
+      - border-radius: 24px
+    grid:
+      - grid-template-areas: '"i n status"'
+      - grid-template-columns: min-content auto min-content
+      - grid-template-rows: auto
+    icon:
+      - width: 36px
+      - height: 36px
+      - margin-right: 12px
+    name:
+      - font-size: 0.85em
+      - font-weight: bold
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+    custom_fields:
+      status:
+        - font-size: 0.85em
+        - text-align: right
+        - justify-self: end
+        - align-self: center
+        - font-weight: 500
+        - padding-right: 4px
+  custom_fields:
+    status: |
+      [[[
+        const isOpen = entity.state === 'on';
+        const label = isOpen ? 'Geöffnet' : 'Geschlossen';
+        const color = isOpen
+          ? 'var(--error-color, #F44336)'
+          : 'var(--success-color, #4CAF50)';
+
+        return `
+          <span style="
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: ${color};
+          ">
+            <span style="
+              display: inline-block;
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              background: ${color};
+              flex-shrink: 0;
+            "></span>
+            ${label}
+          </span>
+        `;
+      ]]]
+
+# Weitere Fenster/Türen nach demselben Muster als conditional card ergänzen:
+# ---
+# type: conditional
+# conditions:
+#   - entity: input_boolean.fenster_turen_expanded
+#     state: "on"
+# card:
+#   type: custom:button-card
+#   entity: binary_sensor.fenster_wohnzimmer
+#   name: Fenster Wohnzimmer
+#   ...

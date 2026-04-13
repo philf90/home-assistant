@@ -1,0 +1,50 @@
+type: custom:button-card
+entity: valve.bewasserung_vorne
+name: Bewässerung Vorne
+icon: mdi:sprinkler-variant
+tap_action:
+  action: toggle
+layout: custom
+styles:
+  card:
+    - border-radius: 24px
+    - padding: 16px
+  grid:
+    - grid-template-areas: '"i n" "i info"'
+    - grid-template-columns: 64px 1fr
+    - grid-template-rows: 1fr 1fr
+    - justify-items: start
+  icon:
+    - width: 36px
+    - color: |
+        [[[
+          return entity.state === 'open'
+            ? 'var(--primary-color)'
+            : 'var(--disabled-color)';
+        ]]]
+  name:
+    - font-size: 14px
+    - font-weight: 600
+    - align-self: end
+    - justify-self: start
+  custom_fields:
+    info:
+      - font-size: 12px
+      - color: var(--secondary-text-color)
+      - align-self: start
+      - justify-self: start
+custom_fields:
+  info: |
+    [[[
+      const diff = Math.floor((Date.now() - new Date(entity.last_changed).getTime()) / 1000);
+      const since = diff < 60 ? `vor ${diff} Sek.`
+        : diff < 3600 ? `vor ${Math.floor(diff / 60)} Min.`
+        : diff < 86400 ? `vor ${Math.floor(diff / 3600)} Std.`
+        : `vor ${Math.floor(diff / 86400)} Tagen`;
+      if (entity.state !== 'open') return `geschlossen · ${since}`;
+      const flow = states['sensor.elv_sh_wsm_0052e3c0002f56_water_flow'];
+      const daily = states['sensor.garten_bewasserung_daily'];
+      const flowStr = flow ? `${parseFloat(flow.state).toFixed(2)} ${flow.attributes.unit_of_measurement || 'L/min'}` : '';
+      const dailyStr = daily ? `${daily.state} ${daily.attributes.unit_of_measurement || 'L'}` : '';
+      return [...[flowStr, dailyStr].filter(Boolean), since].join(' · ');
+    ]]]

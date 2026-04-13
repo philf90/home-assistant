@@ -1,0 +1,234 @@
+type: custom:button-card
+entity: sensor.owlet_smart_sock_heart_rate
+icon: mdi:baby-face-outline
+name: Owlet Smart Sock
+show_state: false
+show_name: true
+show_icon: true
+
+variables:
+  heart_rate_entity: sensor.owlet_smart_sock_heart_rate
+  oxygen_entity: sensor.owlet_smart_sock_oxygen_saturation
+  skin_temp_entity: sensor.owlet_smart_sock_skin_temperature
+  battery_entity: sensor.owlet_smart_sock_battery_level
+  sleep_state_entity: sensor.owlet_sock_ac000w042836543_sleep_state
+
+color: var(--primary-color)
+
+styles:
+  card:
+    - padding: 16px
+    - border-radius: 24px
+  grid:
+    - grid-template-areas: '"i n" "i sleep" "i heart" "i oxygen" "i temp" "i battery"'
+    - grid-template-columns: min-content auto
+    - grid-template-rows: auto auto auto auto auto auto
+  icon:
+    - width: 52px
+    - height: 52px
+    - margin-right: 14px
+  name:
+    - font-size: 1em
+    - font-weight: bold
+    - text-align: left
+    - justify-self: start
+    - align-self: end
+  custom_fields:
+    sleep:
+      - font-size: 0.85em
+      - color: var(--secondary-text-color)
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+      - padding-top: 4px
+    heart:
+      - font-size: 0.85em
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+      - padding-top: 2px
+    oxygen:
+      - font-size: 0.85em
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+      - padding-top: 2px
+    temp:
+      - font-size: 0.85em
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+      - padding-top: 2px
+    battery:
+      - font-size: 0.8em
+      - text-align: left
+      - justify-self: start
+      - align-self: start
+      - padding-top: 4px
+
+custom_fields:
+  # Schlafzustand
+  sleep: |
+    [[[
+      const sleepEntity = states[variables.sleep_state_entity];
+      if (!sleepEntity || sleepEntity.state === 'unavailable' || sleepEntity.state === 'unknown') {
+        return `
+          <span style="display:inline-flex; align-items:center; gap:4px; color:var(--disabled-color, #9E9E9E);">
+            <ha-icon icon="mdi:sleep" style="--mdc-icon-size:16px;"></ha-icon>
+            <span>–</span>
+          </span>
+        `;
+      }
+
+      const state = sleepEntity.state;
+      const stateMap = {
+        'awake':      { label: 'Wach',         icon: 'mdi:eye-outline',  color: 'var(--primary-color)' },
+        'light_sleep': { label: 'Leichter Schlaf', icon: 'mdi:sleep',    color: 'var(--info-color, #2196F3)' },
+        'deep_sleep':  { label: 'Tiefschlaf',  icon: 'mdi:bed',          color: 'var(--success-color, #4CAF50)' },
+      };
+      const info = stateMap[state] || { label: state, icon: 'mdi:sleep', color: 'var(--secondary-text-color)' };
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px;">
+          <ha-icon icon="${info.icon}" style="--mdc-icon-size:16px; color:${info.color};"></ha-icon>
+          <span style="color:var(--secondary-text-color);">${info.label}</span>
+        </span>
+      `;
+    ]]]
+
+  # Puls / Herzfrequenz mit farblicher Bewertung
+  heart: |
+    [[[
+      const hrEntity = states[variables.heart_rate_entity];
+      if (!hrEntity || hrEntity.state === 'unavailable' || hrEntity.state === 'unknown') {
+        return `
+          <span style="display:inline-flex; align-items:center; gap:4px; color:var(--disabled-color, #9E9E9E);">
+            <ha-icon icon="mdi:heart-pulse" style="--mdc-icon-size:16px;"></ha-icon>
+            <span>– bpm</span>
+          </span>
+        `;
+      }
+
+      const bpm = parseFloat(hrEntity.state) || 0;
+      let color;
+      if (bpm < 60 || bpm > 220) {
+        color = 'var(--error-color, #F44336)';
+      } else if (bpm < 80 || bpm > 180) {
+        color = 'var(--warning-color, #FF9800)';
+      } else {
+        color = 'var(--success-color, #4CAF50)';
+      }
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px;">
+          <ha-icon icon="mdi:heart-pulse" style="--mdc-icon-size:16px; color:${color};"></ha-icon>
+          <span style="color:var(--secondary-text-color);">${bpm.toFixed(0)} bpm</span>
+        </span>
+      `;
+    ]]]
+
+  # Sauerstoffsättigung (SpO2) mit farblicher Bewertung
+  oxygen: |
+    [[[
+      const o2Entity = states[variables.oxygen_entity];
+      if (!o2Entity || o2Entity.state === 'unavailable' || o2Entity.state === 'unknown') {
+        return `
+          <span style="display:inline-flex; align-items:center; gap:4px; color:var(--disabled-color, #9E9E9E);">
+            <ha-icon icon="mdi:lungs" style="--mdc-icon-size:16px;"></ha-icon>
+            <span>– %</span>
+          </span>
+        `;
+      }
+
+      const spo2 = parseFloat(o2Entity.state) || 0;
+      let color;
+      if (spo2 < 90) {
+        color = 'var(--error-color, #F44336)';
+      } else if (spo2 < 95) {
+        color = 'var(--warning-color, #FF9800)';
+      } else {
+        color = 'var(--success-color, #4CAF50)';
+      }
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px;">
+          <ha-icon icon="mdi:lungs" style="--mdc-icon-size:16px; color:${color};"></ha-icon>
+          <span style="color:var(--secondary-text-color);">SpO₂ ${spo2.toFixed(0)} %</span>
+        </span>
+      `;
+    ]]]
+
+  # Hauttemperatur
+  temp: |
+    [[[
+      const tempEntity = states[variables.skin_temp_entity];
+      if (!tempEntity || tempEntity.state === 'unavailable' || tempEntity.state === 'unknown') {
+        return `
+          <span style="display:inline-flex; align-items:center; gap:4px; color:var(--disabled-color, #9E9E9E);">
+            <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:16px;"></ha-icon>
+            <span>– °C</span>
+          </span>
+        `;
+      }
+
+      const temp = parseFloat(tempEntity.state) || 0;
+      let color;
+      if (temp < 34.0 || temp > 38.5) {
+        color = 'var(--error-color, #F44336)';
+      } else if (temp < 35.5 || temp > 37.5) {
+        color = 'var(--warning-color, #FF9800)';
+      } else {
+        color = 'var(--success-color, #4CAF50)';
+      }
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px;">
+          <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:16px; color:${color};"></ha-icon>
+          <span style="color:var(--secondary-text-color);">${temp.toFixed(1)} °C</span>
+        </span>
+      `;
+    ]]]
+
+  # Akkustand der Socke mit farbigem Icon
+  battery: |
+    [[[
+      const batteryEntity = states[variables.battery_entity];
+      if (!batteryEntity || batteryEntity.state === 'unavailable' || batteryEntity.state === 'unknown') {
+        return `
+          <span style="display:inline-flex; align-items:center; gap:4px; color:var(--disabled-color, #9E9E9E);">
+            <ha-icon icon="mdi:battery-unknown" style="--mdc-icon-size:16px;"></ha-icon>
+            <span>–</span>
+          </span>
+        `;
+      }
+
+      const level = parseFloat(batteryEntity.state) || 0;
+
+      let icon, color;
+      if (level >= 90) {
+        icon = 'mdi:battery';
+        color = 'var(--success-color, #4CAF50)';
+      } else if (level >= 70) {
+        icon = 'mdi:battery-80';
+        color = 'var(--success-color, #4CAF50)';
+      } else if (level >= 50) {
+        icon = 'mdi:battery-60';
+        color = 'var(--primary-color)';
+      } else if (level >= 30) {
+        icon = 'mdi:battery-40';
+        color = 'var(--warning-color, #FF9800)';
+      } else if (level >= 10) {
+        icon = 'mdi:battery-20';
+        color = 'var(--error-color, #F44336)';
+      } else {
+        icon = 'mdi:battery-alert';
+        color = 'var(--error-color, #F44336)';
+      }
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px; color:${color};">
+          <ha-icon icon="${icon}" style="--mdc-icon-size:16px;"></ha-icon>
+          <span style="color:var(--secondary-text-color);">${level.toFixed(0)} %</span>
+        </span>
+      `;
+    ]]]

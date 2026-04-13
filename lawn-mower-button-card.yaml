@@ -1,0 +1,114 @@
+type: custom:button-card
+entity: lawn_mower.a2
+icon: mdi:robot-mower
+name: Rasenmäher A2
+show_state: false
+show_name: true
+show_icon: true
+
+variables:
+  battery_entity: sensor.a2_battery_level
+
+# Dynamische Icon-Farbe je nach Status
+color: |
+  [[[
+    const state = entity.state;
+    if (state === 'mowing') return 'var(--primary-color)';
+    if (state === 'docked') return 'var(--success-color, #4CAF50)';
+    if (state === 'returning') return 'var(--info-color, #2196F3)';
+    if (state === 'paused') return 'var(--warning-color, #FF9800)';
+    if (state === 'error') return 'var(--error-color, #F44336)';
+    return 'var(--disabled-color, #9E9E9E)';
+  ]]]
+
+# Icon animieren wenn der Mäher aktiv mäht oder zurückfährt
+state:
+  - value: mowing
+    spin: true
+  - value: returning
+    spin: true
+
+styles:
+  card:
+    - padding: 16px
+    - border-radius: 24px
+  grid:
+    - grid-template-areas: '"i n" "i status" "i battery"'
+    - grid-template-columns: min-content auto
+    - grid-template-rows: auto auto auto
+  icon:
+    - width: 52px
+    - height: 52px
+    - margin-right: 14px
+  name:
+    - font-size: 1em
+    - font-weight: bold
+    - text-align: left
+    - justify-self: start
+    - align-self: end
+  custom_fields:
+    status:
+      - font-size: 0.85em
+      - color: var(--secondary-text-color)
+      - text-align: left
+      - justify-self: start
+      - align-self: center
+      - padding-top: 2px
+    battery:
+      - font-size: 0.8em
+      - text-align: left
+      - justify-self: start
+      - align-self: start
+      - padding-top: 4px
+
+custom_fields:
+  # Lesbarer Status
+  status: |
+    [[[
+      const stateMap = {
+        mowing:    'Mäht',
+        docked:    'Angedockt',
+        returning: 'Fährt zurück',
+        paused:    'Pausiert',
+        error:     'Fehler',
+        idle:      'Bereit',
+      };
+      return stateMap[entity.state] || entity.state;
+    ]]]
+
+  # Akkustand mit farbigem Icon
+  battery: |
+    [[[
+      const batteryEntity = states[variables.battery_entity];
+      if (!batteryEntity || batteryEntity.state === 'unavailable') return '';
+
+      const level = parseFloat(batteryEntity.state) || 0;
+
+      let icon, color;
+      if (level >= 90) {
+        icon = 'mdi:battery';
+        color = 'var(--success-color, #4CAF50)';
+      } else if (level >= 70) {
+        icon = 'mdi:battery-80';
+        color = 'var(--success-color, #4CAF50)';
+      } else if (level >= 50) {
+        icon = 'mdi:battery-60';
+        color = 'var(--primary-color)';
+      } else if (level >= 30) {
+        icon = 'mdi:battery-40';
+        color = 'var(--warning-color, #FF9800)';
+      } else if (level >= 10) {
+        icon = 'mdi:battery-20';
+        color = 'var(--error-color, #F44336)';
+      } else {
+        icon = 'mdi:battery-alert';
+        color = 'var(--error-color, #F44336)';
+      }
+
+      return `
+        <span style="display:inline-flex; align-items:center; gap:4px; color:${color};">
+          <ha-icon icon="${icon}" style="--mdc-icon-size:16px;"></ha-icon>
+          <span style="color:var(--secondary-text-color);">${level.toFixed(0)} %</span>
+        </span>
+      `;
+    ]]]
