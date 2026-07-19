@@ -1,0 +1,262 @@
+# Thermostate/Heizung im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+# Eine Sektion mit Kopfzeile + 2-spaltiges Raster aus Raum-Kacheln.
+# Jede Kachel: Icon (Heizt=Amber / Aus=gedaempft), Raumname, Ist-Temperatur
+# gross, darunter Status + Solltemperatur. Tap = more-info (mit +/--Regler).
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &header_styles, &climate_styles,
+# &lbl_temp, &fld_mode, &dyn_icon, &acc_color, &acc_bg.
+#
+# Voraussetzung: custom:button-card + card-mod (+ custom:decluttering-card
+# fuer die Top-Navigation).
+type: vertical-stack
+cards:
+  - type: custom:decluttering-card
+    template: top_navigation
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:radiator
+        name: Heizung
+        label: 8 Räume · Ist / Soll
+        show_icon: true
+        show_name: true
+        show_label: true
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 6px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: min-content 1fr
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          label:
+            - justify-self: start
+            - align-self: start
+            - font-size: 12.5px
+            - color: '#6e7988'
+            - margin-top: 1px
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: climate.heizung_wohnzimmer_int0000001
+            name: Wohnzimmer
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: &dyn_icon |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e) return 'mdi:radiator';
+                return (e.state==='off') ? 'mdi:radiator-off' : 'mdi:radiator';
+              ]]]
+            label: &lbl_temp |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                const c=(e&&e.attributes)?e.attributes.current_temperature:undefined;
+                if(c===undefined||c===null) return '–';
+                return `${Number(c).toFixed(1).replace('.',',')}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:1px;">°C</span>`;
+              ]]]
+            custom_fields:
+              mode: &fld_mode |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  if(!e) return '';
+                  const a=e.attributes||{}; const act=a.hvac_action; const st=e.state;
+                  let col='#6e7988', txt='Aus';
+                  if(act==='heating'){ col='#e6b566'; txt='Heizt'; }
+                  else if(act==='cooling'||st==='cool'){ col='#7fb3d5'; txt='Kühlt'; }
+                  else if(st==='off'){ col='#6e7988'; txt='Aus'; }
+                  else if(act==='idle'){ col='#a6d49e'; txt='Bereit'; }
+                  else { txt=st; }
+                  const tgt=a.temperature;
+                  const tstr=(tgt!==undefined&&tgt!==null)?`<span style="color:#6e7988;"> · Soll ${Number(tgt).toFixed(1).replace('.',',')}°</span>`:'';
+                  return `<span style="color:${col};font-weight:600;">${txt}</span>${tstr}`;
+                ]]]
+            styles: &climate_styles
+              card:
+                - border-radius: 16px
+                - padding: 13px 14px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i n" "i l" "i mode"'
+                - grid-template-rows: min-content min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: &acc_bg |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; if(!e) return 'rgba(135,148,165,0.14)';
+                      const a=e.attributes||{}; const act=a.hvac_action; const st=e.state;
+                      let c='#6e7988';
+                      if(act==='heating') c='#e6b566';
+                      else if(act==='cooling'||st==='cool') c='#7fb3d5';
+                      else if(act==='idle') c='#a6d49e';
+                      return c+'26';
+                    ]]]
+                - border: &acc_border |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; if(!e) return '1px solid rgba(135,148,165,0.24)';
+                      const a=e.attributes||{}; const act=a.hvac_action; const st=e.state;
+                      let c='#6e7988';
+                      if(act==='heating') c='#e6b566';
+                      else if(act==='cooling'||st==='cool') c='#7fb3d5';
+                      else if(act==='idle') c='#a6d49e';
+                      return '1px solid '+c+'3d';
+                    ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &acc_color |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; if(!e) return '#6e7988';
+                      const a=e.attributes||{}; const act=a.hvac_action; const st=e.state;
+                      if(act==='heating') return '#e6b566';
+                      if(act==='cooling'||st==='cool') return '#7fb3d5';
+                      if(act==='idle') return '#a6d49e';
+                      return '#6e7988';
+                    ]]]
+              name:
+                - justify-self: start
+                - align-self: end
+                - font-size: 14px
+                - font-weight: 700
+                - letter-spacing: -0.01em
+                - color: '#f2f5f8'
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+              label:
+                - justify-self: start
+                - align-self: center
+                - font-size: 22px
+                - font-weight: 750
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              custom_fields:
+                mode:
+                  - justify-self: start
+                  - align-self: start
+                  - font-size: 12px
+                  - margin-top: 1px
+                  - white-space: nowrap
+                  - overflow: hidden
+                  - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000002
+            name: Pauline
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000006
+            name: Schlafzimmer
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000004
+            name: Büro
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000003
+            name: Bad unten
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000005
+            name: Bad oben
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000007
+            name: Küche
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
+          - type: custom:button-card
+            entity: climate.hmip_heating_int0000008
+            name: Flur
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            icon: *dyn_icon
+            label: *lbl_temp
+            custom_fields: { mode: *fld_mode }
+            styles: *climate_styles
