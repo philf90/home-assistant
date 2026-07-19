@@ -1,19 +1,18 @@
 # Begrüßungs-Banner im Design der überarbeiteten Owlet-Smart-Sock-Karte
-# Gleiche Kartenhuelle, Palette (#a6d49e / #f2f5f8 / #6e7988), Typografie und
-# rundlich-quadratische Foto-Kacheln wie owlet-smart-sock-button-card.yaml.
+# Gleiche Kartenhuelle, Palette (#a6d49e / #f2f5f8 / #6e7988) und Typografie wie
+# owlet-smart-sock-button-card.yaml.
 #
 # Aufbau: Foto des angemeldeten Nutzers links, Begruessung "Hi, <Name>!" mit
-# statusabhaengigem Untertitel, rechts die Avatare der weiteren Haushalts-
-# mitglieder (variables.members) mit gruenem/grauem Praesenz-Punkt.
-# Nutzer selbst nicht zu Hause -> Foto in Graustufen, Untertitel wechselt.
+# statusabhaengigem Untertitel, rechts Wetter (Aussentemperatur + Zustand-Icon)
+# und darunter Wochentag/Datum.
+# Nutzer nicht zu Hause -> Foto in Graustufen, Untertitel wechselt.
 #
+# Anpassen: variables.weather_entity auf die eigene weather-Entitaet setzen.
 # Voraussetzung: custom:button-card (HACS).
 type: custom:button-card
 entity: '[[[ return "person." + user.name.toLowerCase() ]]]'
 variables:
-  # Weitere Haushaltsmitglieder, die rechts angezeigt werden:
-  members:
-    - person.annalena
+  weather_entity: weather.forecast_home
 tap_action:
   action: more-info
 show_name: false
@@ -41,7 +40,6 @@ custom_fields:
       const green = '#a6d49e';
       const value = '#f2f5f8';
       const muted = '#6e7988';
-      const cardBot = '#171d29';
 
       // ---------- Nutzer / Begruessung ----------
       const me = entity;
@@ -56,29 +54,57 @@ custom_fields:
       const meAccent = meHome ? green : 'rgba(255,255,255,0.08)';
       const meGray = meHome ? '' : 'filter:grayscale(100%);opacity:0.7;';
 
-      // ---------- Foto-Kachel des Nutzers ----------
       const meDim = 'width:52px;height:52px;flex:none;';
       const mePhoto = mePic
         ? `<img src="${mePic}" style="${meDim}border-radius:16px;object-fit:cover;box-sizing:border-box;border:2px solid ${meAccent};${meGray}"/>`
         : `<div style="${meDim}border-radius:16px;display:grid;place-items:center;font-size:21px;font-weight:700;color:#12161f;box-sizing:border-box;background:linear-gradient(160deg,#4a5a74,#33404f);border:2px solid ${meAccent};${meGray}">${meInit}</div>`;
 
-      // ---------- Weitere Mitglieder (rechts) ----------
-      const members = variables.members || [];
-      const memberTiles = members.map((id) => {
-        const m = states[id];
-        if (!m) return '';
-        const mh = m.state === 'home';
-        const mp = m.attributes ? m.attributes.entity_picture : null;
-        const mn = (m.attributes && m.attributes.friendly_name) || '';
-        const mi = mn ? mn.trim().charAt(0).toUpperCase() : '?';
-        const gray = mh ? '' : 'filter:grayscale(100%);opacity:0.55;';
-        const dim = 'width:42px;height:42px;flex:none;';
-        const tile = mp
-          ? `<img src="${mp}" style="${dim}border-radius:13px;object-fit:cover;box-sizing:border-box;${gray}"/>`
-          : `<div style="${dim}border-radius:13px;display:grid;place-items:center;font-size:17px;font-weight:700;color:#12161f;box-sizing:border-box;background:linear-gradient(160deg,#6d5480,#4a3a5c);${gray}">${mi}</div>`;
-        const dot = `<div style="position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:${mh ? green : muted};border:2px solid ${cardBot};"></div>`;
-        return `<div style="position:relative;flex:none;">${tile}${dot}</div>`;
-      }).join('');
+      // ---------- Datum ----------
+      const now = new Date();
+      const wd = now.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+      const dm = now.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' });
+      const dateStr = wd + ' · ' + dm;
+
+      // ---------- Wetter ----------
+      const w = states[variables.weather_entity];
+      const wBad = !w || w.state === 'unavailable' || w.state === 'unknown';
+      const cond = wBad ? '' : w.state;
+      const tAttr = (w && w.attributes && w.attributes.temperature !== undefined) ? w.attributes.temperature : null;
+      const tempTxt = (tAttr === null || tAttr === undefined || isNaN(tAttr)) ? '–' : Math.round(tAttr);
+
+      // Zustand -> Icon + Farbe (Owlet-Linienstil)
+      const wxIcon = (c) => {
+        const S = (inner, stroke) => `<svg viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;flex:none;">${inner}</svg>`;
+        const sun   = '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
+        const moon  = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>';
+        const cloud = '<path d="M7 18h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 9.4 3.8 3.8 0 0 0 7 18Z"/>';
+        const pcloud= '<circle cx="8.5" cy="7.5" r="3"/><path d="M8.5 2.5v1.4M13.5 7.5h-1.4M12 4l-1 1M5 4l1 1"/><path d="M9 19h8a3.2 3.2 0 0 0 .3-6.4A4.6 4.6 0 0 0 8.7 11 3.5 3.5 0 0 0 9 19Z"/>';
+        const rain  = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>';
+        const snow  = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>';
+        const bolt  = '<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>';
+        const fog   = '<path d="M5 9h14M4 13h16M6 17h12"/>';
+        const wind  = '<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>';
+        const warm='#e6b566', grey='#8794a5', blue='#7fb3d5', ice='#cfe3f2', night='#9aa7bd';
+        const map = {
+          'sunny':[sun,warm], 'clear-night':[moon,night], 'partlycloudy':[pcloud,warm],
+          'cloudy':[cloud,grey], 'fog':[fog,grey],
+          'rainy':[rain,blue], 'pouring':[rain,blue], 'lightning-rainy':[bolt,warm],
+          'hail':[snow,ice], 'snowy-rainy':[snow,ice], 'snowy':[snow,ice],
+          'lightning':[bolt,warm], 'windy':[wind,grey], 'windy-variant':[wind,grey],
+          'exceptional':[cloud,grey]
+        };
+        const e = map[c] || [cloud, grey];
+        return S(e[0], e[1]);
+      };
+
+      const weatherBlock = `
+        <div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-left:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${wxIcon(cond)}
+            <span style="font-size:26px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1;color:${value};">${tempTxt}°</span>
+          </div>
+          <div style="font-size:13px;color:${muted};line-height:1.2;white-space:nowrap;">${dateStr}</div>
+        </div>`;
 
       // ---------- Aufbau ----------
       return `
@@ -88,6 +114,6 @@ custom_fields:
             <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${greeting}</div>
             <div style="font-size:14.5px;color:${muted};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${subtitle}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;flex:none;padding:2px 2px 2px 0;">${memberTiles}</div>
+          ${weatherBlock}
         </div>`;
     ]]]
