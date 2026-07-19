@@ -60,8 +60,9 @@ cards:
           const netz=W('sensor.smart_meter_netzbezug');
           const netzColor = netz>0 ? red : green;
 
-          const live=(color,inner,v,u,label)=>`
-            <div style="padding:9px 11px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);min-width:0;">
+          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
+          const live=(color,inner,v,u,label,eid)=>`
+            <div ${mi(eid)} style="cursor:pointer;padding:9px 11px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);min-width:0;">
               <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:10px;color:${muted};font-weight:600;margin-left:2px;">${u}</span></div>
               <div style="font-size:11px;color:${muted};margin-top:1px;display:flex;align-items:center;gap:5px;">${ic(inner,color,12)}${label}</div>
             </div>`;
@@ -73,8 +74,8 @@ cards:
                 <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Jetzt</div>
               </div>
               <div style="display:flex;gap:18px;align-items:center;">
-                <div style="flex:none;position:relative;width:112px;height:112px;">
-                  <svg viewBox="0 0 100 100" style="transform:rotate(-90deg);width:112px;height:112px;">
+                <div ${mi('sensor.solarbank_3_e2700_pro_ladestand')} style="cursor:pointer;flex:none;position:relative;width:112px;height:112px;">
+                  <svg viewBox="0 0 100 100" style="transform:rotate(-90deg);width:112px;height:112px;pointer-events:none;">
                     <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="9"/>
                     <circle cx="50" cy="50" r="42" fill="none" stroke="${socColor}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
                   </svg>
@@ -84,10 +85,10 @@ cards:
                   </div>
                 </div>
                 <div style="flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:9px;min-width:0;">
-                  ${live(solar,pSolar,W('sensor.solarbank_3_e2700_pro_solarleistung'),'W','Solar')}
-                  ${live(netzColor,pHomeImp,netz,'W','Netzbezug')}
-                  ${live(blue,pHome,W('sensor.solarbank_3_e2700_pro_ac_hausabgabe'),'W','Hausabgabe')}
-                  ${live(akkuColor,pBolt,akkuTxt,'W','Akku')}
+                  ${live(solar,pSolar,W('sensor.solarbank_3_e2700_pro_solarleistung'),'W','Solar','sensor.solarbank_3_e2700_pro_solarleistung')}
+                  ${live(netzColor,pHomeImp,netz,'W','Netzbezug','sensor.smart_meter_netzbezug')}
+                  ${live(blue,pHome,W('sensor.solarbank_3_e2700_pro_ac_hausabgabe'),'W','Hausabgabe','sensor.solarbank_3_e2700_pro_ac_hausabgabe')}
+                  ${live(akkuColor,pBolt,akkuTxt,'W','Akku','sensor.solarbank_3_e2700_pro_akkuleistung')}
                 </div>
               </div>
             </div>`;
@@ -129,8 +130,9 @@ cards:
           const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
           const valN=(id,d,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':v.toFixed(d);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
           const W=(id)=>{const e=S(id);return e?Math.round(parseFloat(e.state)||0):0;};
-          const cell=(inner,vHtml,label,accent,full)=>`
-            <div style="${full?'grid-column:1 / -1;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
+          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
+          const cell=(inner,vHtml,label,accent,full,eid)=>`
+            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
@@ -159,12 +161,12 @@ cards:
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               ${header(pHomeBolt,'Stromverbrauch')}
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pBolt, valN('sensor.hmip_esi_stromzahler_energiezahler_ch2',2,'kWh'), 'Zählerstand', amber)}
-                ${cell(pMeter, valN('sensor.stromverbrauch_taglich',2,'kWh'), 'Verbrauch heute', blue)}
-                ${cell(pFeed, valN('sensor.hmip_esi_stromzahler_energiezahler_ch4',2,'kWh'), 'Einspeisung', green)}
-                ${cell(pHomeImp, valN('sensor.smart_meter_netzbezug',0,'W'), 'Leistung aktuell', netzColor)}
-                ${cell(pCal, valN('sensor.stromverbrauch_monthly',2,'kWh'), 'Verbrauch '+monatN, muted)}
-                ${cell(pCal, valN('sensor.stromverbrauch_yearly',2,'kWh'), 'Verbrauch '+jahrN, muted)}
+                ${cell(pBolt, valN('sensor.hmip_esi_stromzahler_energiezahler_ch2',2,'kWh'), 'Zählerstand', amber, false, 'sensor.hmip_esi_stromzahler_energiezahler_ch2')}
+                ${cell(pMeter, valN('sensor.stromverbrauch_taglich',2,'kWh'), 'Verbrauch heute', blue, false, 'sensor.stromverbrauch_taglich')}
+                ${cell(pFeed, valN('sensor.hmip_esi_stromzahler_energiezahler_ch4',2,'kWh'), 'Einspeisung', green, false, 'sensor.hmip_esi_stromzahler_energiezahler_ch4')}
+                ${cell(pHomeImp, valN('sensor.smart_meter_netzbezug',0,'W'), 'Leistung aktuell', netzColor, false, 'sensor.smart_meter_netzbezug')}
+                ${cell(pCal, valN('sensor.stromverbrauch_monthly',2,'kWh'), 'Verbrauch '+monatN, muted, false, 'sensor.stromverbrauch_monthly')}
+                ${cell(pCal, valN('sensor.stromverbrauch_yearly',2,'kWh'), 'Verbrauch '+jahrN, muted, false, 'sensor.stromverbrauch_yearly')}
               </div>
             </div>`;
         ]]]
@@ -206,8 +208,9 @@ cards:
           const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
           const valN=(id,d,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':v.toFixed(d);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
           const W=(id)=>{const e=S(id);return e?Math.round(parseFloat(e.state)||0):0;};
-          const cell=(inner,vHtml,label,accent,full)=>`
-            <div style="${full?'grid-column:1 / -1;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
+          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
+          const cell=(inner,vHtml,label,accent,full,eid)=>`
+            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
@@ -254,13 +257,13 @@ cards:
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               ${header(pBank,'Solarbank 3 Pro')}
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pFlow, bzTxt, 'Betriebszustand', blue, true)}
-                ${cell(pHome, valN('sensor.solarbank_3_e2700_pro_ac_hausabgabe',0,'W'), 'Hausabgabe', blue)}
-                ${cell(pBatt, valN('sensor.solarbank_3_e2700_pro_ladestand',0,'%'), 'Ladestand', socColor)}
-                ${cell(pEnergy, valN('sensor.solarbank_3_e2700_pro_akkuenergie',0,'Wh'), 'Akkuenergie', blue)}
-                ${cell(pBattChg, valN('sensor.solarbank_3_e2700_pro_akkuleistung',0,'W'), 'Akkuleistung', akkuColor)}
-                ${cell(pFeed, valN('sensor.system_muhlweg_tagliche_pv_hausabgabe',2,'kWh'), 'Hausabgabe heute', green)}
-                ${cell(pSolar, valN('sensor.system_muhlweg_taglicher_solarertrag',2,'kWh'), 'Solarertrag heute', solar)}
+                ${cell(pFlow, bzTxt, 'Betriebszustand', blue, true, 'sensor.solarbank_3_e2700_pro_betriebszustand')}
+                ${cell(pHome, valN('sensor.solarbank_3_e2700_pro_ac_hausabgabe',0,'W'), 'Hausabgabe', blue, false, 'sensor.solarbank_3_e2700_pro_ac_hausabgabe')}
+                ${cell(pBatt, valN('sensor.solarbank_3_e2700_pro_ladestand',0,'%'), 'Ladestand', socColor, false, 'sensor.solarbank_3_e2700_pro_ladestand')}
+                ${cell(pEnergy, valN('sensor.solarbank_3_e2700_pro_akkuenergie',0,'Wh'), 'Akkuenergie', blue, false, 'sensor.solarbank_3_e2700_pro_akkuenergie')}
+                ${cell(pBattChg, valN('sensor.solarbank_3_e2700_pro_akkuleistung',0,'W'), 'Akkuleistung', akkuColor, false, 'sensor.solarbank_3_e2700_pro_akkuleistung')}
+                ${cell(pFeed, valN('sensor.system_muhlweg_tagliche_pv_hausabgabe',2,'kWh'), 'Hausabgabe heute', green, false, 'sensor.system_muhlweg_tagliche_pv_hausabgabe')}
+                ${cell(pSolar, valN('sensor.system_muhlweg_taglicher_solarertrag',2,'kWh'), 'Solarertrag heute', solar, false, 'sensor.system_muhlweg_taglicher_solarertrag')}
               </div>
             </div>`;
         ]]]
@@ -300,8 +303,9 @@ cards:
           const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
           const valN=(id,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':Math.round(v);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
           const isOn=(id)=>{const e=S(id);return e?(parseFloat(e.state)||0)>0:false;};
-          const cell=(inner,vHtml,label,accent,full)=>`
-            <div style="${full?'grid-column:1 / -1;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
+          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
+          const cell=(inner,vHtml,label,accent,full,eid)=>`
+            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
@@ -318,13 +322,13 @@ cards:
               <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">PV Module</div>
             </div>`;
 
-          const pv=(id,label)=>cell(pPanel, valN(id,'W'), label, isOn(id)?solar:muted);
+          const pv=(id,label)=>cell(pPanel, valN(id,'W'), label, isOn(id)?solar:muted, false, id);
 
           return `
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               ${header}
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pSolar, valN('sensor.solarbank_3_e2700_pro_solarleistung','W'), 'Solarleistung', isOn('sensor.solarbank_3_e2700_pro_solarleistung')?solar:muted, true)}
+                ${cell(pSolar, valN('sensor.solarbank_3_e2700_pro_solarleistung','W'), 'Solarleistung', isOn('sensor.solarbank_3_e2700_pro_solarleistung')?solar:muted, true, 'sensor.solarbank_3_e2700_pro_solarleistung')}
                 ${pv('sensor.solarbank_3_e2700_pro_solar_pv1','PV1')}
                 ${pv('sensor.solarbank_3_e2700_pro_solar_pv2','PV2')}
                 ${pv('sensor.solarbank_3_e2700_pro_solar_pv3','PV3')}
