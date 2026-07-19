@@ -1,0 +1,380 @@
+# Garten-Ansicht (Pool / Garten / Maehroboter) im Design der ueberarbeiteten
+# Owlet-Smart-Sock-Karte. Drei Sektionen mit Kopfzeile + Owlet-Kacheln.
+#
+# Aktiv-Zustand (an/offen/maeht) faerbt Icon + Kachel:
+#   Pumpen -> gruen (accent_on #a6d49e), Wasser/Ventile -> blau (#7fb3d5).
+# Tap = Toggle (Schalter/Ventile/input_boolean); Maehroboter -> more-info.
+# Die Info-Logik der Bewaesserung (Durchfluss/Tagesmenge/"vor X") bleibt.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &row_styles,
+# &acc_icon, &acc_bg, &acc_border. Aktiv-Farbe je Kachel ueber
+# variables.accent_on.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+cards:
+  # ================================ POOL ================================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 9px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:pool
+        name: Pool
+        show_icon: true
+        show_name: true
+        show_label: false
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 6px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: min-content 1fr
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+      - type: custom:button-card
+        entity: switch.shelly_outdoor_plugs_pool_switch_0
+        name: Pool Pumpe
+        icon: phu:pool-filter
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#a6d49e' }
+        custom_fields:
+          sub: |
+            [[[
+              const t=states['sensor.shellyplus1_78ee4cd5f7b8_temperature'];
+              if(!t) return 'Pool Pumpe';
+              return `${parseFloat(t.state).toFixed(1).replace('.',',')} ${t.attributes.unit_of_measurement||'°C'}`;
+            ]]]
+        styles: &row_styles
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i n" "i sub"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: &acc_bg |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null; if(!e) return 'rgba(255,255,255,0.05)';
+                  const onc=variables.accent_on||'#a6d49e';
+                  const on=['on','open','mowing','returning','cleaning','running'].includes(e.state);
+                  return on ? onc+'22' : 'rgba(255,255,255,0.05)';
+                ]]]
+            - border: &acc_border |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null; if(!e) return '1px solid rgba(255,255,255,0.06)';
+                  const onc=variables.accent_on||'#a6d49e';
+                  const on=['on','open','mowing','returning','cleaning','running'].includes(e.state);
+                  return on ? '1px solid '+onc+'3d' : '1px solid rgba(255,255,255,0.06)';
+                ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: &acc_icon |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null; if(!e) return '#8794a5';
+                  const onc=variables.accent_on||'#a6d49e';
+                  const on=['on','open','mowing','returning','cleaning','running'].includes(e.state);
+                  return on ? onc : '#8794a5';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 14.5px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: '#f2f5f8'
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            sub:
+              - justify-self: start
+              - align-self: start
+              - font-size: 12.5px
+              - color: '#6e7988'
+              - margin-top: 2px
+              - white-space: nowrap
+              - overflow: hidden
+              - text-overflow: ellipsis
+
+  # ================================ GARTEN ================================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:grass
+        name: Garten
+        show_icon: true
+        show_name: true
+        show_label: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: custom:button-card
+        entity: switch.shelly_outdoor_plug_s_gen3_brunnenpumpe
+        name: Brunnenpumpe
+        icon: mdi:water-pump
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#a6d49e' }
+        custom_fields:
+          sub: |
+            [[[
+              const p=states['sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power'];
+              if(!p) return '';
+              return `${parseFloat(p.state).toFixed(1).replace('.',',')} ${p.attributes.unit_of_measurement||'W'}`;
+            ]]]
+        styles: *row_styles
+      - type: custom:button-card
+        entity: input_boolean.bewasserung_garten
+        name: Gartenbewässerung
+        icon: mdi:sprinkler-variant
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#7fb3d5' }
+        custom_fields:
+          sub: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              return (e&&e.state==='on') ? 'An' : 'Aus';
+            ]]]
+        styles: *row_styles
+      - type: custom:button-card
+        entity: valve.bewasserung_vorne
+        name: Bewässerung vorne
+        icon: mdi:water-well
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#7fb3d5' }
+        custom_fields:
+          sub: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const diff=Math.floor((Date.now()-new Date(e.last_changed).getTime())/1000);
+              const since= diff<60?`vor ${diff} Sek.`: diff<3600?`vor ${Math.floor(diff/60)} Min.`: diff<86400?`vor ${Math.floor(diff/3600)} Std.`:`vor ${Math.floor(diff/86400)} Tagen`;
+              if(e.state!=='open') return `geschlossen · ${since}`;
+              const flow=states['sensor.elv_sh_wsm_0052e3c0002f56_water_flow'];
+              const daily=states['sensor.garten_bewasserung_daily'];
+              const flowStr= flow?`${parseFloat(flow.state).toFixed(2).replace('.',',')} ${flow.attributes.unit_of_measurement||'L/min'}`:'';
+              const dailyStr= daily?`${daily.state} ${daily.attributes.unit_of_measurement||'L'}`:'';
+              return [...[flowStr,dailyStr].filter(Boolean),since].join(' · ');
+            ]]]
+        styles: *row_styles
+      - type: custom:button-card
+        entity: valve.bewasserung_mitte
+        name: Bewässerung mitte
+        icon: mdi:water-well
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#7fb3d5' }
+        custom_fields:
+          sub: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const diff=Math.floor((Date.now()-new Date(e.last_changed).getTime())/1000);
+              const since= diff<60?`vor ${diff} Sek.`: diff<3600?`vor ${Math.floor(diff/60)} Min.`: diff<86400?`vor ${Math.floor(diff/3600)} Std.`:`vor ${Math.floor(diff/86400)} Tagen`;
+              if(e.state!=='open') return `geschlossen · ${since}`;
+              const flow=states['sensor.bewasserung_mitte_wasser_durchfluss'];
+              const daily=states['sensor.garten_bewasserung_mitte_daily'];
+              const flowStr= flow?`${parseFloat(flow.state).toFixed(2).replace('.',',')} ${flow.attributes.unit_of_measurement||'L/min'}`:'';
+              const dailyStr= daily?`${daily.state} ${daily.attributes.unit_of_measurement||'L'}`:'';
+              return [...[flowStr,dailyStr].filter(Boolean),since].join(' · ');
+            ]]]
+        styles: *row_styles
+      - type: custom:button-card
+        entity: valve.elv_sh_wsm_0052e3c0003508
+        name: Bewässerung hinten
+        icon: mdi:water-well
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        variables: { accent_on: '#7fb3d5' }
+        custom_fields:
+          sub: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const diff=Math.floor((Date.now()-new Date(e.last_changed).getTime())/1000);
+              const since= diff<60?`vor ${diff} Sek.`: diff<3600?`vor ${Math.floor(diff/60)} Min.`: diff<86400?`vor ${Math.floor(diff/3600)} Std.`:`vor ${Math.floor(diff/86400)} Tagen`;
+              if(e.state!=='open') return `geschlossen · ${since}`;
+              const flow=states['sensor.elv_sh_wsm_0052e3c0003508_wasser_durchfluss'];
+              const daily=states['sensor.garten_bewasserung_hinten_daily'];
+              const flowStr= flow?`${parseFloat(flow.state).toFixed(2).replace('.',',')} ${flow.attributes.unit_of_measurement||'L/min'}`:'';
+              const dailyStr= daily?`${daily.state} ${daily.attributes.unit_of_measurement||'L'}`:'';
+              return [...[flowStr,dailyStr].filter(Boolean),since].join(' · ');
+            ]]]
+        styles: *row_styles
+
+  # ============================== MÄHROBOTER ==============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:robot-mower
+        name: Mähroboter
+        show_icon: true
+        show_name: true
+        show_label: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: custom:button-card
+        entity: lawn_mower.a2
+        icon: mdi:robot-mower
+        name: Lawn Solo
+        show_icon: true
+        show_name: true
+        show_state: false
+        variables: { battery_entity: sensor.a2_battery_level }
+        triggers_update: all
+        state:
+          - value: mowing
+            spin: true
+          - value: returning
+            spin: true
+        custom_fields:
+          status: |
+            [[[
+              const m={ mowing:'Mäht', docked:'Angedockt', returning:'Fährt zurück', paused:'Pausiert', error:'Fehler', idle:'Bereit' };
+              const e=(typeof entity!=='undefined')?entity:null;
+              return e?(m[e.state]||e.state):'';
+            ]]]
+          battery: |
+            [[[
+              const b=states[variables.battery_entity];
+              if(!b||b.state==='unavailable') return '';
+              const level=parseFloat(b.state)||0;
+              let icon,color;
+              if(level>=90){icon='mdi:battery';color='#a6d49e';}
+              else if(level>=70){icon='mdi:battery-80';color='#a6d49e';}
+              else if(level>=50){icon='mdi:battery-60';color='#a6d49e';}
+              else if(level>=30){icon='mdi:battery-40';color='#e6b566';}
+              else if(level>=10){icon='mdi:battery-20';color='#f0736a';}
+              else {icon='mdi:battery-alert';color='#f0736a';}
+              return `<span style="display:inline-flex;align-items:center;gap:5px;color:${color};"><ha-icon icon="${icon}" style="--mdc-icon-size:16px;"></ha-icon><span style="color:#6e7988;font-weight:600;">${level.toFixed(0)} %</span></span>`;
+            ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 13px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i n" "i status" "i battery"'
+            - grid-template-rows: min-content min-content min-content
+          img_cell:
+            - width: 46px
+            - height: 46px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: |
+                [[[
+                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
+                  let c='#8794a5';
+                  if(s==='mowing'||s==='docked') c='#a6d49e';
+                  else if(s==='returning') c='#7fb3d5';
+                  else if(s==='paused') c='#e6b566';
+                  else if(s==='error') c='#f0736a';
+                  return c+'22';
+                ]]]
+            - border: |
+                [[[
+                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
+                  let c='#8794a5';
+                  if(s==='mowing'||s==='docked') c='#a6d49e';
+                  else if(s==='returning') c='#7fb3d5';
+                  else if(s==='paused') c='#e6b566';
+                  else if(s==='error') c='#f0736a';
+                  return '1px solid '+c+'3d';
+                ]]]
+          icon:
+            - width: 26px
+            - height: 26px
+            - color: |
+                [[[
+                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
+                  if(s==='mowing'||s==='docked') return '#a6d49e';
+                  if(s==='returning') return '#7fb3d5';
+                  if(s==='paused') return '#e6b566';
+                  if(s==='error') return '#f0736a';
+                  return '#8794a5';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 15px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: '#f2f5f8'
+          custom_fields:
+            status:
+              - justify-self: start
+              - align-self: center
+              - font-size: 12.5px
+              - color: '#6e7988'
+              - padding-top: 2px
+            battery:
+              - justify-self: start
+              - align-self: start
+              - font-size: 12px
+              - padding-top: 3px
