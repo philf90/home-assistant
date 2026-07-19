@@ -1,0 +1,178 @@
+# Wetter-Ansicht im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+# Variante A: "Wetter" und "Wind" je als eine Owlet-Karte mit Kopfzeile +
+# Metrik-Raster (wie die Owlet-Basiskarte). Farben semantisch auf Icon-Kachel
+# + Wert: Temperatur nach Schwelle, Feuchte blau, Trocken gruen / Regen blau,
+# Wind teal. Werte/Einheiten/Labels wie im Original.
+#
+# Voraussetzung: custom:button-card (HACS).
+type: vertical-stack
+cards:
+  # =================== WETTER ===================
+  - type: custom:button-card
+    entity: weather.landau_pfalz
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    tap_action:
+      action: more-info
+    triggers_update:
+      - weather.landau_pfalz
+      - sensor.wetterstation_pro_temperatur
+      - sensor.wetterstation_pro_luftfeuchtigkeit
+      - binary_sensor.wetterstation_pro_regen
+      - sensor.regenmenge
+      - sensor.regen_aktuell
+    styles:
+      card:
+        - padding: 16px 18px
+        - border-radius: 22px
+        - border: 1px solid rgba(255, 255, 255, 0.05)
+        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
+        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - overflow: hidden
+      grid:
+        - grid-template-areas: '"body"'
+      custom_fields:
+        body:
+          - width: 100%
+    custom_fields:
+      body: |
+        [[[
+          const green='#a6d49e', value='#f2f5f8', muted='#6e7988', amber='#e6b566', red='#f0736a', blue='#7fb3d5', teal='#7fd0d5';
+          const S=(id)=>states[id];
+          const numOf=(id,d)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;return isNaN(v)?'–':v.toFixed(d===undefined?1:d);};
+          const unit=(u)=>`<span style="font-size:12px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;
+          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
+
+          const iSun=(c)=>svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',c);
+          const iThermo=(c)=>svg('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path d="M12 9.2v5.2"/><circle cx="12" cy="17.4" r="1.7" fill="'+c+'" stroke="none"/>',c);
+          const iDrop=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/>',c);
+          const iDropOff=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/><path d="M4 4l16 16"/>',c);
+          const iRain=(c)=>svg('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>',c);
+          const iCloud=(c)=>svg('<path d="M7 18h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 9.4 3.8 3.8 0 0 0 7 18Z"/>',c);
+          const iMoon=(c)=>svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',c);
+          const iSnow=(c)=>svg('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>',c);
+          const iBolt=(c)=>svg('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>',c);
+          const iFog=(c)=>svg('<path d="M5 9h14M4 13h16M6 17h12"/>',c);
+
+          const cell=(iconFn, valueHtml, label, accent)=>`
+            <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;">
+              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
+              <div style="min-width:0;">
+                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${valueHtml}</div>
+                <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+              </div>
+            </div>`;
+
+          // ---- Bedingung ----
+          const w=S('weather.landau_pfalz');
+          const cond=w?w.state:'';
+          const condMap={
+            'sunny':['Sonnig',iSun,amber],'clear-night':['Klar',iMoon,blue],
+            'partlycloudy':['Teils bewölkt',iSun,amber],'cloudy':['Bewölkt',iCloud,muted],
+            'fog':['Nebel',iFog,muted],'rainy':['Regnerisch',iRain,blue],'pouring':['Starkregen',iRain,blue],
+            'lightning':['Gewitter',iBolt,amber],'lightning-rainy':['Gewitter',iBolt,amber],
+            'snowy':['Schnee',iSnow,teal],'snowy-rainy':['Schneeregen',iSnow,teal],'hail':['Hagel',iSnow,teal],
+            'windy':['Windig',iCloud,teal],'windy-variant':['Windig',iCloud,teal],'exceptional':['Unwetter',iBolt,red]
+          };
+          const cInfo=condMap[cond]||[(cond||'–'),iCloud,muted];
+
+          // ---- Temperatur-Farbe ----
+          const tE=S('sensor.wetterstation_pro_temperatur');
+          const t=tE?parseFloat(tE.state):NaN;
+          const tColor=isNaN(t)?muted:(t>30?red:(t>20?amber:(t>15?green:(t>10?green:(t>5?teal:blue)))));
+
+          // ---- Regen (Wetterstation) ----
+          const rb=S('binary_sensor.wetterstation_pro_regen');
+          const raining=rb&&rb.state==='on';
+          const rainLabel=raining?'Regen':'Trocken';
+          const rainColor=raining?blue:green;
+          const rainIcon=raining?iRain:iDropOff;
+
+          // ---- Regenmenge ----
+          const rmName=S('sensor.regen_aktuell');
+          const rmLabel=rmName?rmName.state:'Regen';
+          const rmE=S('sensor.regenmenge');
+          const rmNum=(rmE&&!isNaN(parseFloat(rmE.state)))?parseFloat(rmE.state):0;
+          const rmColor=rmNum>0?blue:muted;
+
+          return `
+            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${iThermo(green)}</div>
+                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wetter</div>
+              </div>
+              ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2])}
+              <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                ${cell(iThermo, numOf('sensor.wetterstation_pro_temperatur',1)+unit('°C'), 'Temperatur', tColor)}
+                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', blue)}
+                ${cell(rainIcon, rainLabel, 'Wetterstation', rainColor)}
+                ${cell(iRain, rmNum.toFixed(1)+unit('l/m²'), rmLabel, rmColor)}
+              </div>
+            </div>`;
+        ]]]
+
+  # =================== WIND ===================
+  - type: custom:button-card
+    entity: sensor.wetterstation_pro_windgeschwindigkeit
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    tap_action:
+      action: more-info
+    triggers_update:
+      - sensor.windrichtung
+      - sensor.wetterstation_pro_windgeschwindigkeit
+      - sensor.windstarke_aktuell
+    styles:
+      card:
+        - padding: 16px 18px
+        - border-radius: 22px
+        - border: 1px solid rgba(255, 255, 255, 0.05)
+        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
+        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - overflow: hidden
+      grid:
+        - grid-template-areas: '"body"'
+      custom_fields:
+        body:
+          - width: 100%
+    custom_fields:
+      body: |
+        [[[
+          const green='#a6d49e', value='#f2f5f8', muted='#6e7988', teal='#7fd0d5';
+          const S=(id)=>states[id];
+          const numOf=(id,d)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;return isNaN(v)?'–':v.toFixed(d===undefined?1:d);};
+          const unit=(u)=>`<span style="font-size:12px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;
+          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
+          const iWind=(c)=>svg('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h9a2.5 2.5 0 1 1-2.5 2.5"/>',c);
+          const iSock=(c)=>svg('<path d="M6 21V4"/><path d="M6 5l11 2.4L6 10.6Z"/>',c);
+
+          const cell=(iconFn, valueHtml, label, accent)=>`
+            <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;">
+              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
+              <div style="min-width:0;">
+                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${valueHtml}</div>
+                <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+              </div>
+            </div>`;
+
+          const dirE=S('sensor.windrichtung');
+          const dir=dirE?dirE.state:'–';
+          const strName=S('sensor.windstarke_aktuell');
+          const strLabel=strName?strName.state:'Windgeschwindigkeit';
+
+          return `
+            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${iWind(green)}</div>
+                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wind</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                ${cell(iSock, dir, 'Windrichtung', teal)}
+                ${cell(iWind, numOf('sensor.wetterstation_pro_windgeschwindigkeit',1)+unit('km/h'), strLabel, teal)}
+              </div>
+            </div>`;
+        ]]]
