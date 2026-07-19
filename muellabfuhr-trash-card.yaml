@@ -1,94 +1,115 @@
 # Muellabfuhr im Design der ueberarbeiteten Owlet-Smart-Sock-Karte
 #
 # WICHTIG:
-# 1) Diese Karte liest einen Kalender (calendar.mull) mit mehreren Terminen.
-#    Ein button-card-Template kann Kalender-Events nicht abfragen -> trash-card
-#    bleibt und wird per card_mod gestylt. Jeder Termin ist eine eigene Karte
-#    (deshalb kein gemeinsamer Titel).
-# 2) Die trash-card akzeptiert im color_mode: background nur BENANNTE Farben
-#    (HA-Farbtokens wie green/blue/amber/grey/purple/pink) - Hex/rgba werden
-#    ignoriert (dann bleibt die Karte dunkel).
-#
-# Optik:
-#   - Benannte Typfarbe fuellt den Kartenhintergrund.
-#   - card_mod legt einen dunklen Schleier darueber -> aus der kraeftigen Farbe
-#     wird eine dezente Owlet-Toenung; Text + Icons werden hell.
-#   - Schleier-Deckkraft anpassen, um die Toenung staerker/schwaecher zu machen.
+# 1) Die trash-card liest einen Kalender (calendar.mull) mit mehreren Terminen.
+#    Jeder Termin ist eine eigene Karte -> ueber einen vertical-stack setzen wir
+#    EINE gemeinsame Ueberschrift "Muellabfuhr" darueber.
+# 2) Im color_mode: background akzeptiert die trash-card nur BENANNTE Farben
+#    (green/blue/amber/grey/purple/pink) - Hex/rgba werden ignoriert.
+# 3) Textfarbe wird ueber CSS-Variablen gesetzt (die durchdringen das
+#    Shadow-DOM der Karte), nicht ueber color am Element.
 #
 # Voraussetzung: custom:trash-card + card-mod (HACS).
-type: custom:trash-card
-entities:
-  - calendar.mull
-event_grouping: true
-drop_todayevents_from: '10:00:00'
-next_days: 7
-day_style: default
-day_style_format: yyyy.MM.dd
-card_style: card
-alignment_style: left
-color_mode: background
-items_per_row: 1
-refresh_rate: 60
-with_label: true
-layout: default
-use_summary: false
-hide_time_range: false
-filter_events: true
-pattern:
-  - icon: mdi:flower-outline
-    color: green
-    type: organic
-    pattern: Biotonne in VG Offenbach
-  - icon: mdi:newspaper-variant-outline
-    color: blue
-    type: paper
-    pattern: Papiertonne in VG Offenbach
-  - icon: mdi:recycle
-    color: amber
-    type: recycle
-    pattern: Wertstoffsack in VG Offenbach
-  - icon: mdi:trash-can-outline
-    color: grey
-    type: waste
-    pattern: Restmüll in VG Offenbach
-  - icon: mdi:dump-truck
-    color: purple
-    type: others
-  - label: Problemabfall
-    icon: mdi:dump-truck
-    color: pink
-    type: custom
-    pattern: Problemabfall in VG Offenbach
-  - label: Sperrmüll
-    icon: mdi:dump-truck
-    color: pink
-    type: custom
-    pattern: Sperrmüll
-card_mod:
-  style: |
-    ha-card {
-      border-radius: 20px !important;
-      border: 1px solid rgba(255, 255, 255, 0.06) !important;
-      box-shadow: 0 16px 40px -24px rgba(0,0,0,0.7) !important;
-      padding: 14px 16px !important;
-      overflow: hidden !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
-      /* Dunkler Schleier UEBER der benannten Typfarbe -> dezente Toenung.
-         Deckkraft hoeher = dunkler/dezenter, niedriger = kraeftiger. */
-      background-image: linear-gradient(180deg, rgba(21,26,38,0.62) 0%, rgba(21,26,38,0.70) 100%) !important;
-    }
-    /* Text hell, Datum dezent */
-    ha-card, ha-card * { color: #f2f5f8 !important; }
-    ha-card .secondary,
-    ha-card [class*="secondary"],
-    ha-card [class*="date"],
-    ha-card [class*="time"] {
-      color: rgba(242,245,248,0.62) !important;
-    }
-    /* Icons hell */
-    ha-card ha-icon,
-    ha-card ha-svg-icon,
-    ha-card svg {
-      color: #f2f5f8 !important;
-      --mdc-icon-size: 26px;
-    }
+type: vertical-stack
+cards:
+  # ---------- Ueberschrift (einmal, oben) ----------
+  - type: markdown
+    content: Müllabfuhr
+    card_mod:
+      style: |
+        ha-card {
+          background: none !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 4px 6px 10px !important;
+        }
+        ha-card .card-content,
+        ha-card p {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif !important;
+          font-size: 17px !important;
+          font-weight: 700 !important;
+          letter-spacing: -0.02em !important;
+          color: #f2f5f8 !important;
+          margin: 0 !important;
+        }
+
+  # ---------- Muellabfuhr-Termine ----------
+  - type: custom:trash-card
+    entities:
+      - calendar.mull
+    event_grouping: true
+    drop_todayevents_from: '10:00:00'
+    next_days: 7
+    day_style: default
+    day_style_format: yyyy.MM.dd
+    card_style: card
+    alignment_style: left
+    color_mode: background
+    items_per_row: 1
+    refresh_rate: 60
+    with_label: true
+    layout: default
+    use_summary: false
+    hide_time_range: false
+    filter_events: true
+    pattern:
+      - icon: mdi:flower-outline
+        color: green
+        type: organic
+        pattern: Biotonne in VG Offenbach
+      - icon: mdi:newspaper-variant-outline
+        color: blue
+        type: paper
+        pattern: Papiertonne in VG Offenbach
+      - icon: mdi:recycle
+        color: amber
+        type: recycle
+        pattern: Wertstoffsack in VG Offenbach
+      - icon: mdi:trash-can-outline
+        color: grey
+        type: waste
+        pattern: Restmüll in VG Offenbach
+      - icon: mdi:dump-truck
+        color: purple
+        type: others
+      - label: Problemabfall
+        icon: mdi:dump-truck
+        color: pink
+        type: custom
+        pattern: Problemabfall in VG Offenbach
+      - label: Sperrmüll
+        icon: mdi:dump-truck
+        color: pink
+        type: custom
+        pattern: Sperrmüll
+    card_mod:
+      style: |
+        ha-card {
+          border-radius: 20px !important;
+          border: 1px solid rgba(255, 255, 255, 0.06) !important;
+          box-shadow: 0 16px 40px -24px rgba(0,0,0,0.7) !important;
+          padding: 14px 16px !important;
+          overflow: hidden !important;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+          /* Dunkler Schleier ueber der benannten Typfarbe -> dezente Toenung.
+             Deckkraft hoeher = dezenter, niedriger = kraeftiger. */
+          background-image: linear-gradient(180deg, rgba(21,26,38,0.62) 0%, rgba(21,26,38,0.70) 100%) !important;
+          /* Textfarben ueber Variablen (durchdringen das Shadow-DOM) */
+          --primary-text-color: #ffffff !important;
+          --secondary-text-color: rgba(255,255,255,0.66) !important;
+          --mdc-theme-text-primary-on-background: #ffffff !important;
+        }
+        /* Belt & Suspenders: direkt erreichbare Elemente ebenfalls hell */
+        ha-card, ha-card * { color: #ffffff !important; }
+        ha-card .secondary,
+        ha-card [class*="secondary"],
+        ha-card [class*="date"],
+        ha-card [class*="time"] {
+          color: rgba(255,255,255,0.66) !important;
+        }
+        ha-card ha-icon,
+        ha-card ha-svg-icon,
+        ha-card svg {
+          color: #ffffff !important;
+          --mdc-icon-size: 26px;
+        }
