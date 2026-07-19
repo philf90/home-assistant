@@ -1,0 +1,93 @@
+# Begrüßungs-Banner im Design der überarbeiteten Owlet-Smart-Sock-Karte
+# Gleiche Kartenhuelle, Palette (#a6d49e / #f2f5f8 / #6e7988), Typografie und
+# rundlich-quadratische Foto-Kacheln wie owlet-smart-sock-button-card.yaml.
+#
+# Aufbau: Foto des angemeldeten Nutzers links, Begruessung "Hi, <Name>!" mit
+# statusabhaengigem Untertitel, rechts die Avatare der weiteren Haushalts-
+# mitglieder (variables.members) mit gruenem/grauem Praesenz-Punkt.
+# Nutzer selbst nicht zu Hause -> Foto in Graustufen, Untertitel wechselt.
+#
+# Voraussetzung: custom:button-card (HACS).
+type: custom:button-card
+entity: '[[[ return "person." + user.name.toLowerCase() ]]]'
+variables:
+  # Weitere Haushaltsmitglieder, die rechts angezeigt werden:
+  members:
+    - person.annalena
+tap_action:
+  action: more-info
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 24px
+    - border: 1px solid rgba(255, 255, 255, 0.05)
+    - background: linear-gradient(180deg, #1b2231 0%, #171d29 55%)
+    - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+    - overflow: hidden
+  grid:
+    - grid-template-areas: '"body"'
+  custom_fields:
+    body:
+      - width: 100%
+      - min-width: 0
+custom_fields:
+  body: |
+    [[[
+      // ---------- Palette (identisch zur Owlet-Karte) ----------
+      const green = '#a6d49e';
+      const value = '#f2f5f8';
+      const muted = '#6e7988';
+      const cardBot = '#171d29';
+
+      // ---------- Nutzer / Begruessung ----------
+      const me = entity;
+      const meHome = me && me.state === 'home';
+      const uname = (typeof user !== 'undefined' && user && user.name)
+        ? user.name
+        : ((me && me.attributes && me.attributes.friendly_name) || '');
+      const greeting = 'Hi, ' + uname + '!';
+      const subtitle = meHome ? 'Willkommen zu Hause' : 'Aktuell unterwegs';
+      const mePic  = me && me.attributes ? me.attributes.entity_picture : null;
+      const meInit = uname ? uname.trim().charAt(0).toUpperCase() : '?';
+      const meAccent = meHome ? green : 'rgba(255,255,255,0.08)';
+      const meGray = meHome ? '' : 'filter:grayscale(100%);opacity:0.7;';
+
+      // ---------- Foto-Kachel des Nutzers ----------
+      const meDim = 'width:52px;height:52px;flex:none;';
+      const mePhoto = mePic
+        ? `<img src="${mePic}" style="${meDim}border-radius:16px;object-fit:cover;box-sizing:border-box;border:2px solid ${meAccent};${meGray}"/>`
+        : `<div style="${meDim}border-radius:16px;display:grid;place-items:center;font-size:21px;font-weight:700;color:#12161f;box-sizing:border-box;background:linear-gradient(160deg,#4a5a74,#33404f);border:2px solid ${meAccent};${meGray}">${meInit}</div>`;
+
+      // ---------- Weitere Mitglieder (rechts) ----------
+      const members = variables.members || [];
+      const memberTiles = members.map((id) => {
+        const m = states[id];
+        if (!m) return '';
+        const mh = m.state === 'home';
+        const mp = m.attributes ? m.attributes.entity_picture : null;
+        const mn = (m.attributes && m.attributes.friendly_name) || '';
+        const mi = mn ? mn.trim().charAt(0).toUpperCase() : '?';
+        const gray = mh ? '' : 'filter:grayscale(100%);opacity:0.55;';
+        const dim = 'width:42px;height:42px;flex:none;';
+        const tile = mp
+          ? `<img src="${mp}" style="${dim}border-radius:13px;object-fit:cover;box-sizing:border-box;${gray}"/>`
+          : `<div style="${dim}border-radius:13px;display:grid;place-items:center;font-size:17px;font-weight:700;color:#12161f;box-sizing:border-box;background:linear-gradient(160deg,#6d5480,#4a3a5c);${gray}">${mi}</div>`;
+        const dot = `<div style="position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;background:${mh ? green : muted};border:2px solid ${cardBot};"></div>`;
+        return `<div style="position:relative;flex:none;">${tile}${dot}</div>`;
+      }).join('');
+
+      // ---------- Aufbau ----------
+      return `
+        <div style="display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;overflow:hidden;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+          ${mePhoto}
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto;">
+            <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${greeting}</div>
+            <div style="font-size:14.5px;color:${muted};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${subtitle}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex:none;">${memberTiles}</div>
+        </div>`;
+    ]]]
