@@ -234,7 +234,21 @@ cards:
           const akku=W('sensor.solarbank_3_e2700_pro_akkuleistung');
           const akkuColor = akku>0 ? green : (akku<0 ? red : muted);
           const bz=S('sensor.solarbank_3_e2700_pro_betriebszustand');
-          const bzTxt = bz ? bz.state : '–';
+          const bzMap={
+            'detection':'Erkennung','bypass':'Nulleinspeisung','discharge':'Entladen',
+            'charge':'Laden','charge_bypass':'Überschussladung','charge_priority':'Vorrangladung',
+            'full_bypass':'Voller Bypass','wakeup':'Aufwachen','standby':'Standby',
+            'protection_charge':'Schutzladung','output':'Ausgabe'
+          };
+          let bzTxt = bz ? bz.state : '–';
+          if (bz) {
+            try {
+              const f = (typeof hass!=='undefined' && hass && typeof hass.formatEntityState==='function') ? hass.formatEntityState(bz) : null;
+              if (f && f !== bz.state) bzTxt = f;
+            } catch(e) {}
+            if (bzTxt === bz.state && bzMap[bz.state]) bzTxt = bzMap[bz.state];
+            if (bzTxt === bz.state) bzTxt = String(bz.state).replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+          }
 
           return `
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
