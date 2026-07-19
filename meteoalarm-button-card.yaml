@@ -1,0 +1,128 @@
+# DWD-Wetterwarnung im Design der ueberarbeiteten Owlet-Smart-Sock-Karte
+# Ersetzt die custom:meteoalarm-card durch einen custom:button-card-Nachbau,
+# damit dieselbe Owlet-Huelle, Palette und Typografie greift.
+#
+# - conditional-Wrapper blendet die Karte aus, wenn keine Warnung aktiv ist
+#   (entspricht hide_when_no_warning: true der alten Karte).
+# - Icon-Kachel und "Stufe"-Pille faerben sich in der offiziellen DWD-Warnfarbe
+#   (Attribut warning_1_color), Icon je nach Warnungstyp (Wind/Gewitter/...).
+# - Liegt mehr als eine Warnung an, wird "+N weitere" angezeigt.
+#
+# Voraussetzung: custom:button-card (HACS). Sensor der DWD-Integration
+# (dwd_weather_warnings) -> "aktuelle Warnstufe".
+type: conditional
+conditions:
+  - entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
+    state_not: '0'
+  - entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
+    state_not: unavailable
+  - entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
+    state_not: unknown
+card:
+  type: custom:button-card
+  entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
+  tap_action:
+    action: more-info
+  show_name: false
+  show_state: false
+  show_icon: false
+  show_label: false
+  styles:
+    card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - border: 1px solid rgba(255, 255, 255, 0.05)
+      - background: linear-gradient(180deg, #1b2231 0%, #171d29 55%)
+      - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+      - overflow: hidden
+    grid:
+      - grid-template-areas: '"body"'
+    custom_fields:
+      body:
+        - width: 100%
+        - min-width: 0
+  custom_fields:
+    body: |
+      [[[
+        // ---------- Palette (identisch zur Owlet-Karte) ----------
+        const value = '#f2f5f8';
+        const muted = '#6e7988';
+        const cardBot = '#171d29';
+
+        const e = entity;
+        const a = (e && e.attributes) ? e.attributes : {};
+        const lvl = parseInt(e ? e.state : '0') || 0;
+        const count = parseInt(a.warning_count) || 0;
+        if (lvl <= 0 || count <= 0) return '';
+
+        // ---------- Warnungsdaten (erste/hoechste Warnung) ----------
+        const name = a.warning_1_name || a.warning_1_headline || 'Wetterwarnung';
+        const wlvl = parseInt(a.warning_1_level) || lvl;
+
+        // Offizielle DWD-Farbe, sonst Fallback nach Stufe
+        const lvlColor = { 1:'#f2c500', 2:'#fb9a12', 3:'#e6480e', 4:'#c0392b' };
+        const color = a.warning_1_color || lvlColor[wlvl] || '#fb9a12';
+        const lvlLabel = { 1:'Wetterwarnung', 2:'Markante Warnung', 3:'Unwetterwarnung', 4:'Extreme Warnung' }[wlvl] || ('Stufe ' + wlvl);
+
+        // ---------- Zeitraum ----------
+        const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+        const start = toDate(a.warning_1_start_time);
+        const end   = toDate(a.warning_1_end_time);
+        const fmtT = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        const dayLabel = (d) => {
+          const t0 = new Date(); t0.setHours(0,0,0,0);
+          const dd = new Date(d); dd.setHours(0,0,0,0);
+          const diff = Math.round((dd - t0) / 86400000);
+          if (diff === 0) return 'Heute';
+          if (diff === 1) return 'Morgen';
+          if (diff === -1) return 'Gestern';
+          return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+        };
+        let range = '';
+        if (start && end) {
+          const sameDay = start.toDateString() === end.toDateString();
+          range = sameDay
+            ? `${dayLabel(start)} ${fmtT(start)}–${fmtT(end)} Uhr`
+            : `${dayLabel(start)} ${fmtT(start)} – ${dayLabel(end)} ${fmtT(end)}`;
+        } else if (start) {
+          range = `ab ${dayLabel(start)} ${fmtT(start)} Uhr`;
+        }
+
+        // ---------- Icon nach Warnungstyp ----------
+        const iconFor = (n) => {
+          const s = (n || '').toLowerCase();
+          const S = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;flex:none;">${inner}</svg>`;
+          if (/(wind|böen|boen|sturm|orkan)/.test(s)) return S('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
+          if (/(gewitter|blitz)/.test(s))            return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>');
+          if (/(stark ?regen|dauerregen|regen)/.test(s)) return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>');
+          if (/(schnee|schneefall)/.test(s))         return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>');
+          if (/(glätte|glaette|frost|eis)/.test(s))  return S('<path d="M12 3v18M4.5 7.5 12 12l7.5-4.5M4.5 16.5 12 12l7.5 4.5M12 3l-2.5 2M12 3l2.5 2M12 21l-2.5-2M12 21l2.5-2"/>');
+          if (/(hitze|wärme|waerme)/.test(s))        return S('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><circle cx="12" cy="17.4" r="1.8" fill="'+color+'" stroke="none"/>');
+          if (/(nebel)/.test(s))                     return S('<path d="M5 9h14M4 13h16M6 17h12"/>');
+          // Fallback: Warndreieck
+          return S('<path d="M12 3.5 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.6" fill="'+color+'" stroke="none"/>');
+        };
+
+        const iconTile = `
+          <div style="flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;box-sizing:border-box;background:${color}22;border:1px solid ${color}55;">
+            ${iconFor(name)}
+          </div>`;
+
+        const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;color:${color};background:${color}1f;border:1px solid ${color}4d;border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
+        const more = count > 1 ? `<span style="font-size:12px;color:${muted};white-space:nowrap;">+${count - 1} weitere</span>` : '';
+        const subLine = [range, ''].filter(Boolean);
+
+        // ---------- Aufbau ----------
+        return `
+          <div style="display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;overflow:hidden;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+            ${iconTile}
+            <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;">
+              <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+              <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                ${pill}
+                <span style="font-size:12.5px;color:${muted};line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${range}</span>
+              </div>
+              ${more ? `<div style="margin-top:1px;">${more}</div>` : ''}
+            </div>
+          </div>`;
+      ]]]
