@@ -1,252 +1,21 @@
 # Energie- & PV-Ansicht im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
-# Variante B: kompakter Hero "Jetzt" (Akku-Ring links + Live-Kacheln rechts) +
-# drei Detail-Sektionen (Stromverbrauch, Solarbank, PV).
+# Variante B: kompakter Hero "Jetzt" (Akku-Ring links + 2x2 Live-Kacheln rechts)
+# + drei Detail-Sektionen (Stromverbrauch, Solarbank, PV).
 #
-# Jede Kachel ist eine EIGENE button-card -> nativ klickbar (Tap = more-info).
-# (Inline-onclick wird von HAs CSP blockiert.) Der Hero nutzt eine button-card
-# als Container mit grid-template-columns: min-content 1fr, damit der Ring schmal
-# links und die (weiterhin klickbaren) Kacheln flexibel rechts sitzen.
+# WICHTIG: Ring und Kacheln sind DIREKTE Kinder von Stacks/Grids (nicht in einer
+# button-card verschachtelt) - nur so bekommen die button-card-Templates ihren
+# Kontext (entity/states). Jede Kachel ist eine eigene button-card -> klickbar
+# (Tap = more-info).
 #
-# Gemeinsame Optik ueber YAML-Anker: &tile_styles, &lbl_num, &shell,
-# &header_styles. Farbe pro Kachel ueber variables.accent bzw. variables.kind
+# Gemeinsame Optik ueber YAML-Anker: &shell, &header_styles, &lbl_num,
+# &live_styles (Hero-Kacheln), &tile_styles (Sektions-Kacheln).
+# Farbe pro Kachel ueber variables.accent bzw. variables.kind
 # (battery / signed / netz / pv).
 #
 # Voraussetzung: custom:button-card + card-mod (HACS).
 type: vertical-stack
 cards:
   # ============================ JETZT (kompakter Hero) ============================
-  - type: custom:button-card
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    tap_action:
-      action: none
-    triggers_update:
-      - sensor.solarbank_3_e2700_pro_ladestand
-      - sensor.solarbank_3_e2700_pro_akkuleistung
-      - sensor.solarbank_3_e2700_pro_solarleistung
-      - sensor.solarbank_3_e2700_pro_ac_hausabgabe
-      - sensor.smart_meter_netzbezug
-    styles:
-      card:
-        - padding: 16px 18px
-        - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
-        - overflow: hidden
-      grid:
-        - grid-template-areas: '"h h" "r t"'
-        - grid-template-columns: min-content 1fr
-        - grid-template-rows: min-content min-content
-        - column-gap: 16px
-        - row-gap: 14px
-      custom_fields:
-        h:
-          - align-self: start
-          - padding-bottom: 2px
-        r:
-          - align-self: center
-        t:
-          - align-self: center
-    custom_fields:
-      h: |
-        [[[
-          return `<div style="display:flex;align-items:center;gap:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-            <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:rgba(166,212,158,0.12);border:1px solid rgba(166,212,158,0.2);">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#a6d49e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:23px;height:23px;"><path d="M13 3 4 14h6l-1 7 9-11h-6z"/></svg>
-            </div>
-            <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">Jetzt</div>
-          </div>`;
-        ]]]
-      # ---- Ring (schmal links, klickbar -> Ladestand) ----
-      r:
-        card:
-          type: custom:button-card
-          entity: sensor.solarbank_3_e2700_pro_ladestand
-          show_name: false
-          show_state: false
-          show_icon: false
-          show_label: false
-          triggers_update:
-            - sensor.solarbank_3_e2700_pro_ladestand
-            - sensor.solarbank_3_e2700_pro_akkuleistung
-          styles:
-            card:
-              - background: none
-              - box-shadow: none
-              - border: none
-              - padding: 0
-            grid:
-              - grid-template-areas: '"body"'
-            custom_fields:
-              body:
-                - width: 100%
-          custom_fields:
-            body: |
-              [[[
-                const green='#a6d49e', red='#f0736a', muted='#6e7988', value='#f2f5f8';
-                const soc=(()=>{const e=states['sensor.solarbank_3_e2700_pro_ladestand'];return e?Math.round(parseFloat(e.state)||0):0;})();
-                const socColor= soc<=10 ? red : green;
-                const akku=(()=>{const e=states['sensor.solarbank_3_e2700_pro_akkuleistung'];return e?Math.round(parseFloat(e.state)||0):0;})();
-                const akkuColor= akku>0 ? green : (akku<0 ? red : muted);
-                const circ=238.76, off=Math.max(0, circ*(1-soc/100));
-                return `
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-                    <div style="position:relative;width:90px;height:90px;">
-                      <svg viewBox="0 0 100 100" style="width:90px;height:90px;transform:rotate(-90deg);">
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10"/>
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="${socColor}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
-                      </svg>
-                      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${value};font-size:23px;font-weight:750;letter-spacing:-0.02em;">${soc}<span style="font-size:12px;margin-left:1px;">%</span></div>
-                    </div>
-                    <div style="font-size:12px;font-weight:600;color:${akkuColor};white-space:nowrap;">${akku} W</div>
-                  </div>`;
-              ]]]
-      # ---- Live-Kacheln (rechts, flexibel, klickbar) ----
-      t:
-        card:
-          type: grid
-          columns: 2
-          square: false
-          cards:
-            - type: custom:button-card
-              entity: sensor.solarbank_3_e2700_pro_solarleistung
-              icon: mdi:solar-power
-              name: Solar
-              show_icon: true
-              show_name: true
-              show_label: true
-              show_state: false
-              variables: { kind: pv, decimals: 0, unit: W }
-              label: &lbl_num |
-                [[[
-                  const e=(typeof entity!=='undefined')?entity:null; let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
-                  let n;
-                  if(isNaN(v)) n='–';
-                  else { const d=(variables.decimals===undefined?0:variables.decimals); n=v.toFixed(d); if(variables.signed && v>0) n='+'+n; }
-                  return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
-                ]]]
-              styles: &tile_styles
-                card:
-                  - border-radius: 16px
-                  - padding: 11px 13px
-                  - box-shadow: none
-                  - background: |
-                      [[[
-                        const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
-                        let a=variables.accent||'#7fb3d5';
-                        if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
-                        else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
-                        else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
-                        else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
-                        return a+'14';
-                      ]]]
-                  - border: |
-                      [[[
-                        const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
-                        let a=variables.accent||'#7fb3d5';
-                        if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
-                        else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
-                        else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
-                        else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
-                        return '1px solid '+a+'26';
-                      ]]]
-                grid:
-                  - grid-template-columns: min-content 1fr
-                  - grid-template-areas: '"i l" "i n"'
-                  - grid-template-rows: min-content min-content
-                img_cell:
-                  - width: 40px
-                  - height: 40px
-                  - border-radius: 12px
-                  - margin-right: 11px
-                  - align-self: center
-                  - background: |
-                      [[[
-                        const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
-                        let a=variables.accent||'#7fb3d5';
-                        if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
-                        else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
-                        else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
-                        else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
-                        return a+'22';
-                      ]]]
-                  - border: |
-                      [[[
-                        const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
-                        let a=variables.accent||'#7fb3d5';
-                        if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
-                        else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
-                        else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
-                        else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
-                        return '1px solid '+a+'3d';
-                      ]]]
-                icon:
-                  - width: 21px
-                  - height: 21px
-                  - color: |
-                      [[[
-                        const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
-                        let a=variables.accent||'#7fb3d5';
-                        if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
-                        else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
-                        else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
-                        else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
-                        return a;
-                      ]]]
-                label:
-                  - justify-self: start
-                  - align-self: end
-                  - font-size: 18px
-                  - font-weight: 700
-                  - letter-spacing: -0.02em
-                  - color: '#f2f5f8'
-                name:
-                  - justify-self: start
-                  - align-self: start
-                  - font-size: 11.5px
-                  - color: '#6e7988'
-                  - margin-top: 2px
-                  - white-space: nowrap
-                  - overflow: hidden
-                  - text-overflow: ellipsis
-            - type: custom:button-card
-              entity: sensor.smart_meter_netzbezug
-              icon: mdi:transmission-tower
-              name: Netz
-              show_icon: true
-              show_name: true
-              show_label: true
-              show_state: false
-              variables: { kind: netz, decimals: 0, unit: W }
-              label: *lbl_num
-              styles: *tile_styles
-            - type: custom:button-card
-              entity: sensor.solarbank_3_e2700_pro_ac_hausabgabe
-              icon: mdi:home-import-outline
-              name: Haus
-              show_icon: true
-              show_name: true
-              show_label: true
-              show_state: false
-              variables: { accent: '#7fb3d5', decimals: 0, unit: W }
-              label: *lbl_num
-              styles: *tile_styles
-            - type: custom:button-card
-              entity: sensor.solarbank_3_e2700_pro_akkuleistung
-              icon: mdi:battery-charging
-              name: Akku
-              show_icon: true
-              show_name: true
-              show_label: true
-              show_state: false
-              variables: { kind: signed, decimals: 0, unit: W, signed: true }
-              label: *lbl_num
-              styles: *tile_styles
-
-  # ============================ STROMVERBRAUCH ============================
   - type: vertical-stack
     card_mod: &shell
       style: |
@@ -256,12 +25,12 @@ cards:
           border-radius: 22px !important;
           box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
           padding: 16px 18px !important;
-          gap: 10px !important;
+          gap: 12px !important;
         }
     cards:
       - type: custom:button-card
-        icon: mdi:home-lightning-bolt
-        name: Stromverbrauch
+        icon: mdi:flash
+        name: Jetzt
         show_icon: true
         show_name: true
         tap_action:
@@ -271,7 +40,7 @@ cards:
             - background: none
             - box-shadow: none
             - border: none
-            - padding: 2px 2px 6px
+            - padding: 2px 2px 4px
           grid:
             - grid-template-areas: '"i n"'
             - grid-template-columns: min-content 1fr
@@ -293,6 +62,194 @@ cards:
             - font-weight: 700
             - letter-spacing: -0.02em
             - color: '#f2f5f8'
+      - type: horizontal-stack
+        cards:
+          # ---- Ring (klickbar -> Ladestand) ----
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_ladestand
+            show_name: false
+            show_state: false
+            show_icon: false
+            show_label: false
+            triggers_update:
+              - sensor.solarbank_3_e2700_pro_ladestand
+              - sensor.solarbank_3_e2700_pro_akkuleistung
+            styles:
+              card:
+                - background: none
+                - box-shadow: none
+                - border: none
+                - padding: 4px 0
+              grid:
+                - grid-template-areas: '"body"'
+              custom_fields:
+                body:
+                  - width: 100%
+            custom_fields:
+              body: |
+                [[[
+                  const green='#a6d49e', red='#f0736a', muted='#6e7988', value='#f2f5f8';
+                  const socE=states['sensor.solarbank_3_e2700_pro_ladestand'];
+                  const soc= socE ? Math.round(parseFloat(socE.state)||0) : 0;
+                  const socColor= soc<=10 ? red : green;
+                  const akkuE=states['sensor.solarbank_3_e2700_pro_akkuleistung'];
+                  const akku= akkuE ? Math.round(parseFloat(akkuE.state)||0) : 0;
+                  const akkuColor= akku>0 ? green : (akku<0 ? red : muted);
+                  const cap= akku>0 ? 'lädt' : (akku<0 ? 'entlädt' : 'bereit');
+                  const circ=238.76, off=Math.max(0, circ*(1-soc/100));
+                  return `
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                      <div style="position:relative;width:104px;height:104px;">
+                        <svg viewBox="0 0 100 100" style="width:104px;height:104px;transform:rotate(-90deg);">
+                          <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10"/>
+                          <circle cx="50" cy="50" r="38" fill="none" stroke="${socColor}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                        </svg>
+                        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${value};font-size:25px;font-weight:750;letter-spacing:-0.02em;">${soc}<span style="font-size:13px;margin-left:1px;">%</span></div>
+                      </div>
+                      <div style="font-size:12.5px;color:${akkuColor};white-space:nowrap;">Akku ${cap} · ${akku} W</div>
+                    </div>`;
+                ]]]
+          # ---- 2x2 Live-Kacheln (klickbar) ----
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: sensor.solarbank_3_e2700_pro_solarleistung
+                icon: mdi:solar-power
+                name: Solar
+                show_icon: true
+                show_name: true
+                show_label: true
+                show_state: false
+                variables: { kind: pv, decimals: 0, unit: W }
+                label: &lbl_num |
+                  [[[
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                    let n;
+                    if(isNaN(v)) n='–';
+                    else { const d=(variables.decimals===undefined?0:variables.decimals); n=v.toFixed(d); if(variables.signed && v>0) n='+'+n; }
+                    return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+                  ]]]
+                styles: &live_styles
+                  card:
+                    - border-radius: 14px
+                    - padding: 10px 12px
+                    - box-shadow: none
+                    - background: |
+                        [[[
+                          const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                          let a=variables.accent||'#7fb3d5';
+                          if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                          else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                          else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                          else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                          return a+'14';
+                        ]]]
+                    - border: |
+                        [[[
+                          const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                          let a=variables.accent||'#7fb3d5';
+                          if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                          else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                          else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                          else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                          return '1px solid '+a+'26';
+                        ]]]
+                  grid:
+                    - grid-template-columns: min-content 1fr
+                    - grid-template-areas: '"l l" "i n"'
+                    - grid-template-rows: min-content min-content
+                  img_cell:
+                    - width: 16px
+                    - height: 16px
+                    - margin-right: 6px
+                    - align-self: center
+                  icon:
+                    - width: 16px
+                    - height: 16px
+                    - color: |
+                        [[[
+                          const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                          let a=variables.accent||'#7fb3d5';
+                          if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                          else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                          else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                          else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                          return a;
+                        ]]]
+                  label:
+                    - justify-self: start
+                    - align-self: end
+                    - font-size: 17px
+                    - font-weight: 700
+                    - letter-spacing: -0.02em
+                    - color: |
+                        [[[
+                          const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                          let a=variables.accent||'#7fb3d5';
+                          if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                          else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                          else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                          else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                          return a;
+                        ]]]
+                  name:
+                    - justify-self: start
+                    - align-self: start
+                    - font-size: 11px
+                    - color: '#6e7988'
+                    - margin-top: 1px
+                    - white-space: nowrap
+                    - overflow: hidden
+                    - text-overflow: ellipsis
+              - type: custom:button-card
+                entity: sensor.smart_meter_netzbezug
+                icon: mdi:transmission-tower
+                name: Netz
+                show_icon: true
+                show_name: true
+                show_label: true
+                show_state: false
+                variables: { kind: netz, decimals: 0, unit: W }
+                label: *lbl_num
+                styles: *live_styles
+              - type: custom:button-card
+                entity: sensor.solarbank_3_e2700_pro_ac_hausabgabe
+                icon: mdi:home-import-outline
+                name: Haus
+                show_icon: true
+                show_name: true
+                show_label: true
+                show_state: false
+                variables: { accent: '#7fb3d5', decimals: 0, unit: W }
+                label: *lbl_num
+                styles: *live_styles
+              - type: custom:button-card
+                entity: sensor.solarbank_3_e2700_pro_akkuleistung
+                icon: mdi:battery-charging
+                name: Akku
+                show_icon: true
+                show_name: true
+                show_label: true
+                show_state: false
+                variables: { kind: signed, decimals: 0, unit: W, signed: true }
+                label: *lbl_num
+                styles: *live_styles
+
+  # ============================ STROMVERBRAUCH ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:home-lightning-bolt
+        name: Stromverbrauch
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: *header_styles
       - type: grid
         columns: 2
         square: false
@@ -307,7 +264,90 @@ cards:
             show_state: false
             variables: { accent: '#e6b566', decimals: 2, unit: kWh }
             label: *lbl_num
-            styles: *tile_styles
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 12px 14px
+                - box-shadow: none
+                - background: |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a+'14';
+                    ]]]
+                - border: |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return '1px solid '+a+'26';
+                    ]]]
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a+'22';
+                    ]]]
+                - border: |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return '1px solid '+a+'3d';
+                    ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null; const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a;
+                    ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 12px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
           - type: custom:button-card
             entity: sensor.stromverbrauch_taglich
             icon: mdi:home-lightning-bolt-outline
