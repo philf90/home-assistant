@@ -1,0 +1,227 @@
+# Raum-Temperaturen im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+# Eine Sektion mit Kopfzeile + Durchschnitts-Badge, darunter eine Raumliste.
+# Pro Zeile: Raum-Icon, Name, Temperatur-Pille (Amber) + Luftfeuchte-Pille
+# (Blau). Jede Zeile ist eine eigene button-card -> Tap = more-info
+# (auf den Temperatursensor).
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &row_styles, &temp_pill, &hum_pill.
+# Luftfeuchte-Sensor je Zeile ueber variables.hum_entity.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 8px !important;
+    }
+cards:
+  # ---- Kopfzeile mit Durchschnitts-Badge ----
+  - type: custom:button-card
+    icon: mdi:home-thermometer
+    name: Temperaturen
+    show_icon: true
+    show_name: true
+    show_label: false
+    tap_action:
+      action: none
+    custom_fields:
+      avg: |
+        [[[
+          const e=states['sensor.temperatur_durchschnitt'];
+          const v=e?parseFloat(e.state):NaN;
+          const t=isNaN(v)?'–':`${v.toFixed(1).replace('.',',')} °C`;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(230,181,102,0.15);border:1px solid rgba(230,181,102,0.28);color:#e6b566;padding:6px 12px;border-radius:12px;font-weight:700;font-size:14px;white-space:nowrap;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#e6b566" stroke-width="2" stroke-linecap="round"><path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0Z"/></svg>Ø ${t}</span>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n avg"'
+        - grid-template-columns: min-content 1fr min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        avg:
+          - justify-self: end
+          - align-self: center
+  # ---- Raumzeilen ----
+  - type: custom:button-card
+    entity: sensor.temperatur_wohnzimmer_temperatur
+    icon: mdi:sofa
+    name: Wohnzimmer
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_wohnzimmer_luftfeuchtigkeit }
+    custom_fields:
+      temp: &temp_pill |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+          const t=isNaN(v)?'–':`${v.toFixed(1).replace('.',',')} °C`;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(230,181,102,0.15);border:1px solid rgba(230,181,102,0.28);color:#e6b566;padding:5px 10px;border-radius:11px;font-weight:700;font-size:13.5px;white-space:nowrap;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#e6b566" stroke-width="2" stroke-linecap="round"><path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0Z"/></svg>${t}</span>`;
+        ]]]
+      hum: &hum_pill |
+        [[[
+          const he=variables.hum_entity?states[variables.hum_entity]:null;
+          const v=(he&&he.state!==undefined&&he.state!==null)?parseFloat(he.state):NaN;
+          const t=isNaN(v)?'–':`${Math.round(v)} %`;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(127,179,213,0.15);border:1px solid rgba(127,179,213,0.28);color:#7fb3d5;padding:5px 10px;border-radius:11px;font-weight:700;font-size:13.5px;white-space:nowrap;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#7fb3d5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.5 4 6 6.5 6 9.5a6 6 0 0 1-12 0C6 9.5 8.5 7 12 3Z"/></svg>${t}</span>`;
+        ]]]
+    styles: &row_styles
+      card:
+        - border-radius: 14px
+        - padding: 9px 12px
+        - box-shadow: none
+        - background: 'rgba(255,255,255,0.028)'
+        - border: 1px solid rgba(255,255,255,0.06)
+      grid:
+        - grid-template-columns: min-content 1fr min-content min-content
+        - grid-template-areas: '"i n temp hum"'
+        - grid-column-gap: 8px
+      img_cell:
+        - width: 38px
+        - height: 38px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'rgba(255,255,255,0.05)'
+      icon:
+        - width: 20px
+        - height: 20px
+        - color: '#b4c0cf'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 14.5px
+        - font-weight: 600
+        - color: '#e7ecf3'
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+      custom_fields:
+        temp:
+          - justify-self: end
+          - align-self: center
+        hum:
+          - justify-self: end
+          - align-self: center
+          - margin-left: 6px
+  - type: custom:button-card
+    entity: sensor.temperatur_schlafzimmer_temperatur
+    icon: mdi:bed-king
+    name: Schlafzimmer
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_schlafzimmer_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_pauline_temperatur
+    icon: mdi:teddy-bear
+    name: Pauline
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_pauline_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_buro_temperatur
+    icon: mdi:chair-rolling
+    name: Büro
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_buro_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_kuche_temperatur
+    icon: fas:kitchen-set
+    name: Küche
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_kuche_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_bad_unten_temperatur
+    icon: mdi:shower
+    name: Bad unten
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_bad_unten_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.hmip_sthd_000ea0c9a9ac57_temperatur
+    icon: mdi:shower-head
+    name: Bad oben
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.hmip_sthd_000ea0c9a9ac57_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_windfang_temperatur
+    icon: mdi:greenhouse
+    name: Windfang
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_windfang_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_keller_temperatur
+    icon: hue:room-stairs
+    name: Keller
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.temperatur_keller_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.hmip_sth_000e62699c1078_temperatur
+    icon: mdi:garage
+    name: Garage
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { hum_entity: sensor.hmip_sth_000e62699c1078_luftfeuchtigkeit }
+    custom_fields: { temp: *temp_pill, hum: *hum_pill }
+    styles: *row_styles
