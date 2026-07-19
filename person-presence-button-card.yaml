@@ -1,10 +1,11 @@
 # Personen-Präsenzkarte im Design der überarbeiteten Owlet-Smart-Sock-Karte
 # Gleiche Kartenhülle, Palette (#a6d49e / #f2f5f8 / #6e7988), Linien-Icons und
-# große, fette Ziffern mit Schwellenwert-Färbung wie owlet-smart-sock-button-card.yaml.
+# fette Ziffern mit Schwellenwert-Färbung wie owlet-smart-sock-button-card.yaml.
 #
-# Zwei Personen nebeneinander (horizontal-stack). Zustand "home" -> grüner Ring +
-# grüner Home-Badge, "not_home" -> Graustufen-Foto + roter Home-Export-Badge.
-# Akku: grün >= 30 %, gelb 15-29 %, rot < 15 %.
+# Kompakte Variante: passt als horizontal-stack (zwei Karten nebeneinander) auf
+# einen iPhone-Screen, ohne dass Name/Akku abgeschnitten werden.
+# Zustand "home" -> grüner Ring + grüner Home-Badge, "not_home" -> Graustufen-Foto
+# + roter Home-Export-Badge. Akku: grün >= 30 %, gelb 15-29 %, rot < 15 %.
 #
 # Voraussetzung: custom:button-card (HACS).
 type: horizontal-stack
@@ -13,6 +14,7 @@ cards:
     entity: person.philipp
     variables:
       battery_entity: sensor.philipps_iphone17pro_battery_level
+      avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
     tap_action:
       action: more-info
     show_name: false
@@ -21,18 +23,20 @@ cards:
     show_label: false
     styles:
       card:
-        - padding: 18px 20px
-        - border-radius: 26px
+        - padding: 12px 13px
+        - border-radius: 22px
         - border: 1px solid rgba(255, 255, 255, 0.05)
         - background: linear-gradient(180deg, #1b2231 0%, #171d29 55%)
-        - box-shadow: 0 24px 60px -24px rgba(0,0,0,0.7)
+        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - overflow: hidden
       grid:
         - grid-template-areas: '"body"'
       custom_fields:
         body:
           - width: 100%
+          - min-width: 0
     custom_fields:
-      body: |
+      body: &body_tpl |
         [[[
           // ---------- Palette (identisch zur Owlet-Karte) ----------
           const green = '#a6d49e';
@@ -52,6 +56,7 @@ cards:
           const name = (e && e.attributes && e.attributes.friendly_name) || '';
           const initial = name ? name.trim().charAt(0).toUpperCase() : '?';
           const accent = home ? green : muted;
+          const fb = variables.avatar_fallback || 'linear-gradient(160deg,#4a5a74,#33404f)';
 
           // ---------- Akku ----------
           const bat = states[variables.battery_entity];
@@ -59,50 +64,52 @@ cards:
           const batVal = batBad ? null : parseFloat(bat.state);
           const batColor = batBad ? muted : (batVal < 15 ? bad : (batVal < 30 ? warn : green));
           const batTxt = batBad ? '–' : Math.round(batVal);
-          // Füllstand-Balken innerhalb des Icons (max. 10.6 breit)
           const fill = batBad ? 0 : Math.max(1, Math.min(10.6, (batVal / 100) * 10.6));
 
           // ---------- Icons ----------
-          const icoHomeStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+          const icoHomeStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex:none;">
             <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
-          const icoAwayStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+          const icoAwayStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;flex:none;">
             <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
           const statusIcon = home ? icoHomeStatus : icoAwayStatus;
 
-          const badgeHome = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+          const badgeHome = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;">
             <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
-          const badgeAway = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+          const badgeAway = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;">
             <path d="M4 11.5 11 5.7V19h-5v-8.4"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/></svg>`;
           const badgeBg   = home ? green : bad;
           const badgeIcon = home ? badgeHome : badgeAway;
 
-          const icoBat = `<svg viewBox="0 0 24 24" fill="none" stroke="${batColor}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;">
+          const icoBat = `<svg viewBox="0 0 24 24" fill="none" stroke="${batColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;flex:none;">
             <rect x="2.5" y="8" width="16.5" height="8" rx="2.4"/>
             <rect x="4.4" y="9.9" width="${fill}" height="4.2" rx="1.2" fill="${batColor}" stroke="none"/>
             <path d="M21.4 10.7v2.6"/></svg>`;
 
           // ---------- Avatar ----------
+          const dim = 'width:44px;height:44px;flex:none;';
           const photo = pic
-            ? `<img src="${pic}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}"/>`
-            : `<div style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:700;color:#12161f;background:linear-gradient(160deg,#4a5a74,#33404f);border:2.5px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}">${initial}</div>`;
+            ? `<img src="${pic}" style="${dim}border-radius:50%;object-fit:cover;box-sizing:border-box;border:2px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}"/>`
+            : `<div style="${dim}border-radius:50%;display:grid;place-items:center;font-size:17px;font-weight:700;color:#12161f;box-sizing:border-box;background:${fb};border:2px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}">${initial}</div>`;
 
           const avatar = `
-            <div style="position:relative;flex:0 0 auto;width:64px;height:64px;">
+            <div style="position:relative;flex:none;width:44px;height:44px;">
               ${photo}
-              <div style="position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:${badgeBg};display:grid;place-items:center;border:2px solid ${cardBot};">${badgeIcon}</div>
+              <div style="position:absolute;right:-1px;bottom:-1px;width:17px;height:17px;border-radius:50%;background:${badgeBg};display:grid;place-items:center;border:2px solid ${cardBot};">${badgeIcon}</div>
             </div>`;
 
           // ---------- Aufbau ----------
           return `
-            <div style="display:flex;align-items:center;gap:16px;width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+            <div style="display:flex;align-items:center;gap:11px;width:100%;box-sizing:border-box;overflow:hidden;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               ${avatar}
-              <div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 auto;">
-                <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
-                <div style="display:inline-flex;align-items:center;gap:7px;color:${muted};font-size:15px;">${statusIcon}<span>${statusLabel}</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;">
+                <div style="font-size:14.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+                <div style="display:flex;align-items:center;gap:5px;color:${muted};font-size:11.5px;line-height:1.15;min-width:0;">
+                  ${statusIcon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${statusLabel}</span>
+                </div>
               </div>
-              <div style="flex:0 0 auto;display:flex;align-items:center;gap:9px;">
-                <div style="width:26px;height:26px;display:grid;place-items:center;">${icoBat}</div>
-                <span style="font-size:20px;font-weight:700;color:${value};font-variant-numeric:tabular-nums;line-height:1;">${batTxt}<span style="font-size:13px;color:${muted};font-weight:600;margin-left:1px;">%</span></span>
+              <div style="flex:none;display:flex;align-items:center;gap:4px;">
+                ${icoBat}
+                <span style="font-size:14.5px;font-weight:700;color:${value};font-variant-numeric:tabular-nums;line-height:1;">${batTxt}<span style="font-size:10px;color:${muted};font-weight:600;margin-left:1px;">%</span></span>
               </div>
             </div>`;
         ]]]
@@ -111,6 +118,7 @@ cards:
     entity: person.annalena
     variables:
       battery_entity: sensor.samsung_s25_battery_level
+      avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
     tap_action:
       action: more-info
     show_name: false
@@ -119,87 +127,17 @@ cards:
     show_label: false
     styles:
       card:
-        - padding: 18px 20px
-        - border-radius: 26px
+        - padding: 12px 13px
+        - border-radius: 22px
         - border: 1px solid rgba(255, 255, 255, 0.05)
         - background: linear-gradient(180deg, #1b2231 0%, #171d29 55%)
-        - box-shadow: 0 24px 60px -24px rgba(0,0,0,0.7)
+        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - overflow: hidden
       grid:
         - grid-template-areas: '"body"'
       custom_fields:
         body:
           - width: 100%
+          - min-width: 0
     custom_fields:
-      body: |
-        [[[
-          // ---------- Palette (identisch zur Owlet-Karte) ----------
-          const green = '#a6d49e';
-          const value = '#f2f5f8';
-          const muted = '#6e7988';
-          const warn  = '#e6b566';
-          const bad   = '#f0736a';
-          const cardBot = '#171d29';
-
-          // ---------- Person ----------
-          const e = entity;
-          const home = e && e.state === 'home';
-          const stateMap = { home: 'Zuhause', not_home: 'Unterwegs' };
-          const raw = e ? e.state : 'unknown';
-          const statusLabel = stateMap[raw] || (raw.charAt(0).toUpperCase() + raw.slice(1));
-          const pic  = e && e.attributes ? e.attributes.entity_picture : null;
-          const name = (e && e.attributes && e.attributes.friendly_name) || '';
-          const initial = name ? name.trim().charAt(0).toUpperCase() : '?';
-          const accent = home ? green : muted;
-
-          // ---------- Akku ----------
-          const bat = states[variables.battery_entity];
-          const batBad = !bat || bat.state === 'unavailable' || bat.state === 'unknown';
-          const batVal = batBad ? null : parseFloat(bat.state);
-          const batColor = batBad ? muted : (batVal < 15 ? bad : (batVal < 30 ? warn : green));
-          const batTxt = batBad ? '–' : Math.round(batVal);
-          const fill = batBad ? 0 : Math.max(1, Math.min(10.6, (batVal / 100) * 10.6));
-
-          // ---------- Icons ----------
-          const icoHomeStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-            <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
-          const icoAwayStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="${muted}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-            <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
-          const statusIcon = home ? icoHomeStatus : icoAwayStatus;
-
-          const badgeHome = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
-            <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
-          const badgeAway = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
-            <path d="M4 11.5 11 5.7V19h-5v-8.4"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/></svg>`;
-          const badgeBg   = home ? green : bad;
-          const badgeIcon = home ? badgeHome : badgeAway;
-
-          const icoBat = `<svg viewBox="0 0 24 24" fill="none" stroke="${batColor}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;">
-            <rect x="2.5" y="8" width="16.5" height="8" rx="2.4"/>
-            <rect x="4.4" y="9.9" width="${fill}" height="4.2" rx="1.2" fill="${batColor}" stroke="none"/>
-            <path d="M21.4 10.7v2.6"/></svg>`;
-
-          // ---------- Avatar ----------
-          const photo = pic
-            ? `<img src="${pic}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}"/>`
-            : `<div style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:24px;font-weight:700;color:#12161f;background:linear-gradient(160deg,#6d5480,#4a3a5c);border:2.5px solid ${accent};${home ? '' : 'filter:grayscale(100%);opacity:0.82;'}">${initial}</div>`;
-
-          const avatar = `
-            <div style="position:relative;flex:0 0 auto;width:64px;height:64px;">
-              ${photo}
-              <div style="position:absolute;right:-2px;bottom:-2px;width:22px;height:22px;border-radius:50%;background:${badgeBg};display:grid;place-items:center;border:2px solid ${cardBot};">${badgeIcon}</div>
-            </div>`;
-
-          // ---------- Aufbau ----------
-          return `
-            <div style="display:flex;align-items:center;gap:16px;width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
-              ${avatar}
-              <div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 auto;">
-                <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
-                <div style="display:inline-flex;align-items:center;gap:7px;color:${muted};font-size:15px;">${statusIcon}<span>${statusLabel}</span></div>
-              </div>
-              <div style="flex:0 0 auto;display:flex;align-items:center;gap:9px;">
-                <div style="width:26px;height:26px;display:grid;place-items:center;">${icoBat}</div>
-                <span style="font-size:20px;font-weight:700;color:${value};font-variant-numeric:tabular-nums;line-height:1;">${batTxt}<span style="font-size:13px;color:${muted};font-weight:600;margin-left:1px;">%</span></span>
-              </div>
-            </div>`;
-        ]]]
+      body: *body_tpl
