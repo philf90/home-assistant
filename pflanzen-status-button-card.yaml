@@ -91,11 +91,30 @@ cards:
       status: &status_pill |
         [[[
           const e=(typeof entity!=='undefined')?entity:null;
-          const problem = e && e.state==='problem';
+          if(!e) return '';
+          const A=e.attributes||{};
+          const problem = e.state==='problem';
+          // Metrik-Werte + Grenzwerte stehen als Attribute am plant-Entity.
+          // Wert kann direkt (Zahl) oder als referenzierte sensor.*-Entity vorliegen.
+          const labels={moisture:'Feuchtigkeit',temperature:'Temperatur',conductivity:'Leitfähigkeit',humidity:'Luftfeuchte',illuminance:'Licht',brightness:'Licht',soil_temperature:'Bodentemp.'};
+          const metrics=['moisture','temperature','conductivity','humidity','illuminance','brightness','soil_temperature'];
+          let reasons=[];
+          metrics.forEach(m=>{
+            let raw=A[m], val;
+            if(typeof raw==='string' && raw.indexOf('.')>-1){ const st=states[raw]; val= st?parseFloat(st.state):NaN; }
+            else val=parseFloat(raw);
+            const mn=parseFloat(A['min_'+m]), mx=parseFloat(A['max_'+m]);
+            if(!isNaN(val)){
+              if(!isNaN(mn) && val<mn) reasons.push((labels[m]||m)+' niedrig');
+              else if(!isNaN(mx) && val>mx) reasons.push((labels[m]||m)+' hoch');
+            }
+          });
           const col = problem?'#f0736a':'#a6d49e';
           const bg  = problem?'rgba(240,115,106,0.13)':'rgba(166,212,158,0.13)';
           const bd  = problem?'rgba(240,115,106,0.26)':'rgba(166,212,158,0.24)';
-          const txt = problem?'Aufmerksamkeit':'Alles gut';
+          let txt;
+          if(reasons.length) txt = reasons[0] + (reasons.length>1?` +${reasons.length-1}`:'');
+          else txt = problem?'Aufmerksamkeit':'Alles gut';
           const ico = problem
             ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16v.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'
             : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
