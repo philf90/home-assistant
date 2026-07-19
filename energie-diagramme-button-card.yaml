@@ -1,0 +1,370 @@
+# Energie-Diagramme (Sankey + Power-Flow) im Design der ueberarbeiteten
+# Owlet-Smart-Sock-Karte.
+#
+# Sankey-Chart und Power-Flow-Card-Plus sind Spezial-Visualisierungen und
+# lassen sich nicht als button-card nachbauen. Sie behalten daher ihren
+# Inhalt (und die funktionalen Fluss-Farben), bekommen aber die Owlet-Huelle
+# (dunkler Verlauf, runde Ecken, Schatten) + eine Kopfzeile. Die Diagramm-
+# Karte selbst wird transparent gemacht, damit sie auf dem Owlet-Grund sitzt.
+#
+# Voraussetzung: custom:button-card + card-mod + custom:sankey-chart +
+# custom:power-flow-card-plus (HACS).
+type: vertical-stack
+cards:
+  # ============================ ENERGIEVERTEILUNG (Sankey) ============================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 6px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:transit-connection-variant
+        name: Energieverteilung
+        label: heute · nach Verbraucher
+        show_icon: true
+        show_name: true
+        show_label: true
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 8px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: min-content 1fr
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          label:
+            - justify-self: start
+            - align-self: start
+            - font-size: 12.5px
+            - color: '#6e7988'
+            - margin-top: 1px
+      - type: custom:sankey-chart
+        card_mod: &transparent
+          style: |
+            ha-card {
+              background: none !important;
+              border: none !important;
+              box-shadow: none !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+        layout: horizontal
+        height: 200
+        unit_prefix: k
+        round: 2
+        convert_units_to: ""
+        co2_intensity_entity: sensor.electricity_maps_co2_intensitat
+        gas_co2_intensity: 2351.6459999999997
+        min_box_size: 3
+        min_box_distance: 5
+        show_states: true
+        show_units: true
+        min_state: 0
+        show_names: true
+        sections:
+          - entities:
+              - type: entity
+                children:
+                  - sensor.bkw_netz
+                name: Balkonkraftwerk
+                color: greenyellow
+                entity_id: sensor.system_muhlweg_tagliche_pv_hausabgabe
+              - type: entity
+                children:
+                  - sensor.bkw_netz
+                name: Bedarf Netz
+                color: blueviolet
+                entity_id: sensor.stromverbrauch_taglich
+          - entities:
+              - type: entity
+                children:
+                  - sensor.stromverbrauch_hausgerate_daily
+                  - sensor.stromverbrauch_poe_power_daily
+                  - sensor.stromverbrauch_heizung_daily
+                  - sensor.stromverbrauch_schreibtisch_daily
+                  - sensor.stromverbrauch_server_daily
+                  - sensor.stromverbrauch_fernseher_daily
+                  - sensor.stromverbrauch_pool_daily
+                  - >-
+                    sensor.schlafzimmer_shelly_plugin_g3_klimaanlage_stromverbrauch_klimaanlage_daily
+                  - sensor.stromverbrauch_gartenpumpe_daily
+                  - sensor.heizlufter_stromverbrauch_heizlufter_daily
+                  - untracked
+                  - sensor.solar_uberschuss_daily
+                name: Bedarf BKW + Netz
+                color: royalblue
+                entity_id: sensor.bkw_netz
+            sort_group_by_parent: false
+          - entities:
+              - type: entity
+                children: []
+                name: Heizung
+                color: dimgray
+                entity_id: sensor.stromverbrauch_heizung_daily
+              - type: entity
+                children:
+                  - sensor.waschmaschine_stromverbrauch_daily
+                  - sensor.trockner_stromverbrauch_daily
+                  - sensor.stromverbrauch_kuhlschrank_daily
+                  - sensor.stromverbrauch_spulmaschine_daily
+                  - sensor.stromverbrauch_backofen_daily
+                name: Hausgeräte
+                color: orange
+                entity_id: sensor.stromverbrauch_hausgerate_daily
+              - type: entity
+                children:
+                  - sensor.stromverbrauch_unas_pro_daily
+                  - sensor.stromverbrauch_proxmox_daily
+                  - sensor.stromverbrauch_jellyfin_daily
+                name: Server
+                color: mediumseagreen
+                entity_id: sensor.stromverbrauch_server_daily
+              - type: entity
+                children:
+                  - sensor.stromverbrauch_poe_power_udmse_daily
+                  - sensor.stromverbrauch_poe_power_usw_pro_max_24_poe_daily
+                  - sensor.stromverbrauch_poe_power_usw_lite_8_wohnzimmer
+                  - sensor.stromverbrauch_poe_power_usw_lite_8_buro
+                name: PoE Infrastruktur
+                color: magenta
+                entity_id: sensor.stromverbrauch_poe_power_daily
+              - type: entity
+                children: []
+                name: Schreibtisch
+                color: indianred
+                entity_id: sensor.stromverbrauch_schreibtisch_daily
+              - type: entity
+                children: []
+                name: Fernseher
+                color: indigo
+                entity_id: sensor.stromverbrauch_fernseher_daily
+              - type: entity
+                children: []
+                name: Pool
+                color: aqua
+                entity_id: sensor.stromverbrauch_pool_daily
+              - type: entity
+                children: []
+                name: Klimaanlage
+                color: blue
+                entity_id: >-
+                  sensor.schlafzimmer_shelly_plugin_g3_klimaanlage_stromverbrauch_klimaanlage_daily
+              - type: entity
+                children: []
+                name: Heizlüfter
+                color: indianred
+                entity_id: sensor.heizlufter_stromverbrauch_heizlufter_daily
+              - type: entity
+                children: []
+                name: Pumpe
+                color: bisque
+                entity_id: sensor.stromverbrauch_gartenpumpe_daily
+              - type: remaining_parent_state
+                entity_id: untracked
+                name: Untracked
+                color: ghostwhite
+              - type: entity
+                children: []
+                color: greenyellow
+                name: Solar Überschuss
+                entity_id: sensor.solar_uberschuss_daily
+          - entities:
+              - type: entity
+                children: []
+                name: Waschmaschine
+                color: darkorange
+                entity_id: sensor.waschmaschine_stromverbrauch_daily
+              - type: entity
+                children: []
+                name: Trockner
+                color: darkorange
+                entity_id: sensor.trockner_stromverbrauch_daily
+              - type: entity
+                children: []
+                name: Kühlschrank
+                color: darkorange
+                entity_id: sensor.stromverbrauch_kuhlschrank_daily
+              - type: entity
+                children: []
+                name: Spülmaschine
+                color: darkorange
+                entity_id: sensor.stromverbrauch_spulmaschine_daily
+              - type: entity
+                children: []
+                name: Backofen & Herd
+                color: darkorange
+                entity_id: sensor.stromverbrauch_backofen_daily
+              - type: entity
+                children: []
+                name: UNAS Pro
+                color: mediumturquoise
+                entity_id: sensor.stromverbrauch_unas_pro_daily
+              - type: entity
+                children: []
+                name: Proxmox
+                color: mediumturquoise
+                entity_id: sensor.stromverbrauch_proxmox_daily
+              - type: entity
+                children: []
+                name: Proxmox Backup Server
+                color: mediumturquoise
+                entity_id: sensor.stromverbrauch_jellyfin_daily
+              - type: entity
+                children: []
+                name: UDMSE
+                color: darkmagenta
+                entity_id: sensor.stromverbrauch_poe_power_udmse_daily
+              - type: entity
+                children: []
+                name: USW Pro Max 24 POE
+                color: darkmagenta
+                entity_id: sensor.stromverbrauch_poe_power_usw_pro_max_24_poe_daily
+              - type: entity
+                children: []
+                name: USW Lite 8 Wohnzimmer
+                color: darkmagenta
+                entity_id: sensor.stromverbrauch_poe_power_usw_lite_8_wohnzimmer
+              - type: entity
+                children: []
+                name: USW Lite 8 Büro
+                color: darkmagenta
+                entity_id: sensor.stromverbrauch_poe_power_usw_lite_8_buro
+
+  # ============================ LEISTUNGSFLUSS (Power-Flow) ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:transmission-tower
+        name: Leistungsfluss
+        label: live
+        show_icon: true
+        show_name: true
+        show_label: true
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: custom:power-flow-card-plus
+        card_mod: *transparent
+        entities:
+          battery:
+            entity:
+              production: sensor.solarbank_3_e2700_pro_aufladeleistung
+              consumption: sensor.solarbank_3_e2700_pro_entladeleistung
+            state_of_charge: sensor.solarbank_3_e2700_pro_ladestand
+            color_icon: true
+          solar:
+            display_zero_state: true
+            secondary_info:
+              entity: sensor.stromerzeugung_balkonkraftwerk_daily
+              accept_negative: false
+              unit_of_measurement: kW
+              display_zero: false
+              decimals: 2
+            invert_state: false
+            entity: sensor.solarbank_3_e2700_pro_solarleistung
+            display_zero: true
+            color_icon: true
+          grid:
+            secondary_info:
+              entity: sensor.stromverbrauch_taglich
+              decimals: 2
+              unit_of_measurement: kW
+            entity:
+              consumption: sensor.smart_meter_netzbezug
+              production: sensor.smart_meter_netzeinspeisung
+          home:
+            secondary_info:
+              accept_negative: false
+              display_zero: false
+              unit_of_measurement: kW
+              decimals: 2
+              entity: sensor.bkw_netz
+            override_state: true
+            circle_animation: true
+            subtract_individual: false
+            hide: false
+            color_icon: true
+            color_value: true
+          fossil_fuel_percentage:
+            secondary_info: {}
+          individual:
+            - entity: sensor.poe_power_total
+              secondary_info: {}
+              name: PoE
+              icon: mdi:ethernet
+              calculate_flow_rate: true
+              show_direction: false
+              display_zero: true
+              display_zero_state: true
+            - entity: sensor.stromverbrauch_hausgerate_aktuell
+              secondary_info: {}
+              icon: mdi:dishwasher
+              calculate_flow_rate: true
+              name: Hausgeräte
+              show_direction: false
+              display_zero_state: true
+              display_zero: true
+            - entity: sensor.stromverbrauch_server_aktuell
+              secondary_info: {}
+              icon: mdi:server
+              display_zero: true
+              display_zero_state: true
+              calculate_flow_rate: true
+              show_direction: false
+              name: Server
+            - entity: sensor.shelly_plugs_fernseher_switch_0_power
+              secondary_info: {}
+              name: TV
+              icon: mdi:television
+              show_direction: false
+              inverted_animation: false
+              calculate_flow_rate: true
+              display_zero_state: true
+              display_zero: true
+            - entity: sensor.shelly_outdoor_plugs_pool_switch_0_power
+              secondary_info: {}
+              name: Pool
+              show_direction: true
+        clickable_entities: true
+        display_zero_lines: true
+        use_new_flow_rate_model: true
+        w_decimals: 0
+        kw_decimals: 1
+        min_flow_rate: 0.75
+        max_flow_rate: 6
+        max_expected_power: 2000
+        min_expected_power: 0.01
+        watt_threshold: 1000
+        transparency_zero_lines: 0
+        sort_individual_devices: false
