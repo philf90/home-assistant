@@ -1,0 +1,190 @@
+# Gas- & Wasserverbrauch im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+# Zwei Owlet-Sektionen (Gasverbrauch, Wasserverbrauch) mit Kopfzeile +
+# klickbaren Kacheln (jede Kachel eine eigene button-card -> Tap = more-info).
+# Gemeinsame Optik ueber YAML-Anker: &shell, &header_styles, &lbl_num,
+# &tile_styles. Farbe pro Kachel ueber variables.accent.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+cards:
+  # ============================ GASVERBRAUCH ============================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:meter-gas
+        name: Gasverbrauch
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 6px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: min-content 1fr
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.hmip_esi_gaszahler_gas_volumen
+            icon: mdi:meter-gas
+            name: Gasverbrauch
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', decimals: 2, unit: "m³" }
+            label: &lbl_num |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                let n;
+                if(isNaN(v)) n='–';
+                else { const d=(variables.decimals===undefined?0:variables.decimals); n=v.toFixed(d); if(variables.signed && v>0) n='+'+n; }
+                return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 12px 14px
+                - box-shadow: none
+                - background: |
+                    [[[ return (variables.accent||'#7fb3d5')+'14'; ]]]
+                - border: |
+                    [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'26'; ]]]
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[ return (variables.accent||'#7fb3d5')+'22'; ]]]
+                - border: |
+                    [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[ return variables.accent||'#7fb3d5'; ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 12px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.gasverbrauch_taglich
+            icon: mdi:fire
+            name: Verbrauch heute
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', decimals: 2, unit: "m³" }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.hmip_esi_gaszahler_gas_fluss
+            icon: mdi:pipe-valve
+            name: Flussrate
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', decimals: 2, unit: "m³/h" }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.gasverbrauch_monthly
+            icon: mdi:calendar-month
+            name: "[[[ return 'Verbrauch ' + (states['sensor.aktueller_monat'] ? states['sensor.aktueller_monat'].state : 'Monat'); ]]]"
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', decimals: 2, unit: "m³" }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.gasverbrauch_yearly
+            icon: mdi:calendar
+            name: "[[[ return 'Verbrauch ' + (states['sensor.aktuelles_jahr'] ? states['sensor.aktuelles_jahr'].state : 'Jahr'); ]]]"
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', decimals: 2, unit: "m³" }
+            label: *lbl_num
+            styles: *tile_styles
+
+  # ============================ WASSERVERBRAUCH ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:water
+        name: Wasserverbrauch
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: custom:button-card
+        entity: sensor.watermeter_value
+        icon: mdi:gauge
+        name: Zählerstand
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fb3d5', decimals: 2, unit: "m³" }
+        label: *lbl_num
+        styles: *tile_styles
