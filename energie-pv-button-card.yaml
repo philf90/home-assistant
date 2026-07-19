@@ -1,338 +1,513 @@
 # Energie- & PV-Ansicht im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
-# Variante B: Hero-Karte "Jetzt" (Akku-Ladestand als Ring + aktuelle Leistungen)
-# oben, darunter drei Detail-Sektionen (Stromverbrauch, Solarbank, PV) als
-# Owlet-Karten mit Metrik-Raster.
+# Variante B: Hero "Jetzt" (Akku-Ring + Live-Leistungen) + drei Detail-Sektionen.
 #
-# Farben semantisch: Verbrauch/Zaehlerstand amber, Einspeisung & Akku-Laden gruen,
-# Netzbezug rot, Solar/PV gelb, Zwischensummen gedaempft, Akku <=10% rot.
+# Jede Kachel ist eine EIGENE button-card -> nativ klickbar (Tap = more-info).
+# (Inline-onclick wird von HAs CSP blockiert und funktioniert nicht.)
+# Gemeinsame Optik ueber YAML-Anker: &shell (Owlet-Huelle), &header_styles,
+# &tile_styles, &lbl_num. Farbe pro Kachel ueber variables.accent bzw.
+# variables.kind (battery / signed / netz / pv) fuer dynamische Faerbung.
 #
-# Voraussetzung: custom:button-card (HACS).
+# Voraussetzung: custom:button-card + card-mod (HACS).
 type: vertical-stack
 cards:
-  # =================== HERO: JETZT ===================
-  - type: custom:button-card
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    tap_action:
-      action: none
-    triggers_update:
-      - sensor.solarbank_3_e2700_pro_ladestand
-      - sensor.solarbank_3_e2700_pro_akkuleistung
-      - sensor.solarbank_3_e2700_pro_solarleistung
-      - sensor.solarbank_3_e2700_pro_ac_hausabgabe
-      - sensor.smart_meter_netzbezug
-    styles:
-      card:
-        - padding: 16px 18px
-        - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
-        - overflow: hidden
-      grid:
-        - grid-template-areas: '"body"'
-      custom_fields:
-        body:
-          - width: 100%
-    custom_fields:
-      body: |
-        [[[
-          const green='#a6d49e', red='#f0736a', blue='#7fb3d5', solar='#e6c15a', muted='#6e7988', value='#f2f5f8';
-          const S=(id)=>states[id];
-          const W=(id)=>{const e=S(id);return e?Math.round(parseFloat(e.state)||0):0;};
-          const ic=(inner,c,sz)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:${sz||22}px;height:${sz||22}px;">${inner}</svg>`;
-          const pBolt='<path d="M13 3 4 14h6l-1 7 9-11h-6z"/>';
-          const pSolar='<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
-          const pHomeImp='<path d="M4 11.5 12 5l8 6.5V20H4z"/><path d="M12 20v-5m0 0-2 2m2-2 2 2"/>';
-          const pHome='<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/>';
+  # ============================ JETZT (Hero) ============================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:flash
+        name: Jetzt
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 6px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: min-content 1fr
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
 
-          const soc=(()=>{const e=S('sensor.solarbank_3_e2700_pro_ladestand');return e?Math.round(parseFloat(e.state)||0):0;})();
-          const socColor = soc<=10 ? red : green;
-          const circ=264, off=Math.max(0, circ*(1-soc/100));
-
-          const akku=W('sensor.solarbank_3_e2700_pro_akkuleistung');
-          const akkuColor = akku>0 ? green : (akku<0 ? red : muted);
-          const akkuTxt = (akku>0?'+':'') + akku;
-          const akkuCap = akku>0 ? 'Akku lädt' : (akku<0 ? 'Akku entlädt' : 'Akku');
-
-          const netz=W('sensor.smart_meter_netzbezug');
-          const netzColor = netz>0 ? red : green;
-
-          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
-          const live=(color,inner,v,u,label,eid)=>`
-            <div ${mi(eid)} style="cursor:pointer;padding:9px 11px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);min-width:0;">
-              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:10px;color:${muted};font-weight:600;margin-left:2px;">${u}</span></div>
-              <div style="font-size:11px;color:${muted};margin-top:1px;display:flex;align-items:center;gap:5px;">${ic(inner,color,12)}${label}</div>
-            </div>`;
-
-          return `
-            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
-              <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${ic(pBolt,green,22)}</div>
-                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Jetzt</div>
-              </div>
-              <div style="display:flex;gap:18px;align-items:center;">
-                <div ${mi('sensor.solarbank_3_e2700_pro_ladestand')} style="cursor:pointer;flex:none;position:relative;width:112px;height:112px;">
-                  <svg viewBox="0 0 100 100" style="transform:rotate(-90deg);width:112px;height:112px;pointer-events:none;">
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="9"/>
-                    <circle cx="50" cy="50" r="42" fill="none" stroke="${socColor}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
-                  </svg>
-                  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                    <div style="font-size:25px;font-weight:750;letter-spacing:-0.02em;">${soc}<span style="font-size:14px">%</span></div>
-                    <div style="font-size:11px;color:${muted};margin-top:1px;display:flex;align-items:center;gap:4px;">${ic(pBolt,akkuColor,12)}${akkuCap}</div>
+      # ---- Ladestand-Ring (ganze Breite, Tap -> Ladestand) ----
+      - type: custom:button-card
+        entity: sensor.solarbank_3_e2700_pro_ladestand
+        show_name: false
+        show_state: false
+        show_icon: false
+        show_label: false
+        triggers_update:
+          - sensor.solarbank_3_e2700_pro_ladestand
+          - sensor.solarbank_3_e2700_pro_akkuleistung
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'rgba(166, 212, 158, 0.10)'
+            - border: 1px solid rgba(166, 212, 158, 0.20)
+          grid:
+            - grid-template-areas: '"body"'
+          custom_fields:
+            body:
+              - width: 100%
+        custom_fields:
+          body: |
+            [[[
+              const green='#a6d49e', red='#f0736a', muted='#6e7988', value='#f2f5f8';
+              const soc=(()=>{const e=states['sensor.solarbank_3_e2700_pro_ladestand'];return e?Math.round(parseFloat(e.state)||0):0;})();
+              const socColor= soc<=10 ? red : green;
+              const akku=(()=>{const e=states['sensor.solarbank_3_e2700_pro_akkuleistung'];return e?Math.round(parseFloat(e.state)||0):0;})();
+              const akkuColor= akku>0 ? green : (akku<0 ? red : muted);
+              const cap= akku>0 ? 'Akku lädt' : (akku<0 ? 'Akku entlädt' : 'Akku bereit');
+              const circ=238.76, off=Math.max(0, circ*(1-soc/100));
+              return `
+                <div style="display:flex;align-items:center;gap:16px;width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+                  <div style="flex:none;position:relative;width:84px;height:84px;">
+                    <svg viewBox="0 0 100 100" style="width:84px;height:84px;transform:rotate(-90deg);">
+                      <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10"/>
+                      <circle cx="50" cy="50" r="38" fill="none" stroke="${socColor}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:750;letter-spacing:-0.02em;">${soc}<span style="font-size:12px;margin-left:1px;">%</span></div>
                   </div>
-                </div>
-                <div style="flex:1 1 auto;display:grid;grid-template-columns:1fr 1fr;gap:9px;min-width:0;">
-                  ${live(solar,pSolar,W('sensor.solarbank_3_e2700_pro_solarleistung'),'W','Solar','sensor.solarbank_3_e2700_pro_solarleistung')}
-                  ${live(netzColor,pHomeImp,netz,'W','Netzbezug','sensor.smart_meter_netzbezug')}
-                  ${live(blue,pHome,W('sensor.solarbank_3_e2700_pro_ac_hausabgabe'),'W','Hausabgabe','sensor.solarbank_3_e2700_pro_ac_hausabgabe')}
-                  ${live(akkuColor,pBolt,akkuTxt,'W','Akku','sensor.solarbank_3_e2700_pro_akkuleistung')}
-                </div>
-              </div>
-            </div>`;
-        ]]]
+                  <div style="min-width:0;">
+                    <div style="font-size:16px;font-weight:700;letter-spacing:-0.01em;">Ladestand</div>
+                    <div style="font-size:13px;color:${akkuColor};margin-top:3px;">${cap} · ${akku} W</div>
+                  </div>
+                </div>`;
+            ]]]
 
-  # =================== STROMVERBRAUCH ===================
-  - type: custom:button-card
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    tap_action:
-      action: none
-    triggers_update:
-      - sensor.hmip_esi_stromzahler_energiezahler_ch2
-      - sensor.stromverbrauch_taglich
-      - sensor.hmip_esi_stromzahler_energiezahler_ch4
-      - sensor.smart_meter_netzbezug
-      - sensor.stromverbrauch_monthly
-      - sensor.stromverbrauch_yearly
-    styles:
-      card:
-        - padding: 16px 18px
-        - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
-        - overflow: hidden
-      grid:
-        - grid-template-areas: '"body"'
-      custom_fields:
-        body:
-          - width: 100%
-    custom_fields:
-      body: &metric_body |
-        [[[
-          const amber='#e6b566', green='#a6d49e', red='#f0736a', blue='#7fb3d5', solar='#e6c15a', muted='#6e7988', value='#f2f5f8';
-          const S=(id)=>states[id];
-          const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
-          const valN=(id,d,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':v.toFixed(d);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
-          const W=(id)=>{const e=S(id);return e?Math.round(parseFloat(e.state)||0):0;};
-          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
-          const cell=(inner,vHtml,label,accent,full,eid)=>`
-            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
-              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
-              <div style="min-width:0;">
-                <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
-                <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
-              </div>
-            </div>`;
-          const header=(inner,title)=>`
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-              <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${ic(inner,green)}</div>
-              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">${title}</div>
-            </div>`;
+      # ---- Live-Leistungen (klickbar) ----
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_solarleistung
+            icon: mdi:solar-power
+            name: Solar
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: pv, decimals: 0, unit: W }
+            label: &lbl_num |
+              [[[
+                const e=states[entity.entity_id]; let v=e?parseFloat(e.state):NaN;
+                let n;
+                if(isNaN(v)) n='–';
+                else { const d=(variables.decimals===undefined?0:variables.decimals); n=v.toFixed(d); if(variables.signed && v>0) n='+'+n; }
+                return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 12px 14px
+                - box-shadow: none
+                - background: |
+                    [[[
+                      const e=states[entity.entity_id]; const v=e?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a+'14';
+                    ]]]
+                - border: |
+                    [[[
+                      const e=states[entity.entity_id]; const v=e?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return '1px solid '+a+'26';
+                    ]]]
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[
+                      const e=states[entity.entity_id]; const v=e?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a+'22';
+                    ]]]
+                - border: |
+                    [[[
+                      const e=states[entity.entity_id]; const v=e?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return '1px solid '+a+'3d';
+                    ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[
+                      const e=states[entity.entity_id]; const v=e?parseFloat(e.state):NaN; const k=variables.kind;
+                      let a=variables.accent||'#7fb3d5';
+                      if(k==='battery')a=v<=10?'#f0736a':'#a6d49e';
+                      else if(k==='signed')a=v>0?'#a6d49e':(v<0?'#f0736a':'#6e7988');
+                      else if(k==='netz')a=v>0?'#f0736a':'#a6d49e';
+                      else if(k==='pv')a=v>0?'#e6c15a':'#6e7988';
+                      return a;
+                    ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 12px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.smart_meter_netzbezug
+            icon: mdi:transmission-tower
+            name: Netzbezug
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: netz, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_ac_hausabgabe
+            icon: mdi:home-import-outline
+            name: Hausabgabe
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_akkuleistung
+            icon: mdi:battery-charging
+            name: Akku
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: signed, decimals: 0, unit: W, signed: true }
+            label: *lbl_num
+            styles: *tile_styles
 
-          const pHomeBolt='<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/><path d="M12 9l-1.5 3h3L12 15"/>';
-          const pBolt='<path d="M13 3 4 14h6l-1 7 9-11h-6z"/>';
-          const pMeter='<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h6M7 12h4"/>';
-          const pFeed='<path d="M4 11.5 11 6v13H5"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/>';
-          const pHomeImp='<path d="M4 11.5 12 5l8 6.5V20H4z"/><path d="M12 20v-5m0 0-2 2m2-2 2 2"/>';
-          const pCal='<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9h17M8 3v4M16 3v4"/>';
+  # ============================ STROMVERBRAUCH ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:home-lightning-bolt
+        name: Stromverbrauch
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
+            icon: mdi:counter
+            name: Zählerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.stromverbrauch_taglich
+            icon: mdi:home-lightning-bolt-outline
+            name: Verbrauch heute
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.hmip_esi_stromzahler_energiezahler_ch4
+            icon: mdi:transmission-tower-export
+            name: Einspeisung
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.smart_meter_netzbezug
+            icon: mdi:flash
+            name: Leistung aktuell
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: netz, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.stromverbrauch_monthly
+            icon: mdi:calendar-month
+            name: "[[[ return 'Verbrauch ' + (states['sensor.aktueller_monat'] ? states['sensor.aktueller_monat'].state : 'Monat'); ]]]"
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.stromverbrauch_yearly
+            icon: mdi:calendar
+            name: "[[[ return 'Verbrauch ' + (states['sensor.aktuelles_jahr'] ? states['sensor.aktuelles_jahr'].state : 'Jahr'); ]]]"
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
 
-          const netz=W('sensor.smart_meter_netzbezug');
-          const netzColor = netz>0 ? red : green;
-          const monat=S('sensor.aktueller_monat'); const monatN=monat?monat.state:'Monat';
-          const jahr=S('sensor.aktuelles_jahr'); const jahrN=jahr?jahr.state:'Jahr';
+  # ============================ SOLARBANK 3 PRO ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:battery-charging-high
+        name: Solarbank 3 Pro
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: *header_styles
+      # Betriebszustand (ganze Breite, lokalisiert)
+      - type: custom:button-card
+        entity: sensor.solarbank_3_e2700_pro_betriebszustand
+        icon: mdi:state-machine
+        name: Betriebszustand
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fb3d5' }
+        label: |
+          [[[
+            const bz=states[entity.entity_id];
+            const bzMap={
+              'detection':'Erkennung','bypass':'Nulleinspeisung','discharge':'Entladen',
+              'charge':'Laden','charge_bypass':'Überschussladung','charge_priority':'Vorrangladung',
+              'full_bypass':'Voller Bypass','wakeup':'Aufwachen','standby':'Standby',
+              'protection_charge':'Schutzladung','output':'Ausgabe'
+            };
+            let t = bz ? bz.state : '–';
+            if (bz) {
+              try { const f=(typeof hass!=='undefined'&&hass&&typeof hass.formatEntityState==='function')?hass.formatEntityState(bz):null; if(f&&f!==bz.state) t=f; } catch(e){}
+              if (t===bz.state && bzMap[bz.state]) t=bzMap[bz.state];
+              if (t===bz.state) t=String(bz.state).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+            }
+            return t;
+          ]]]
+        styles: *tile_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_ac_hausabgabe
+            icon: mdi:home-import-outline
+            name: Hausabgabe
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_ladestand
+            icon: mdi:battery-50
+            name: Ladestand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: battery, decimals: 0, unit: "%" }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_akkuenergie
+            icon: mdi:home-battery-outline
+            name: Akkuenergie
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', decimals: 0, unit: Wh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_akkuleistung
+            icon: mdi:battery-charging
+            name: Akkuleistung
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: signed, decimals: 0, unit: W, signed: true }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.system_muhlweg_tagliche_pv_hausabgabe
+            icon: mdi:transmission-tower-import
+            name: Hausabgabe heute
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.system_muhlweg_taglicher_solarertrag
+            icon: mdi:solar-power
+            name: Solarertrag heute
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6c15a', decimals: 2, unit: kWh }
+            label: *lbl_num
+            styles: *tile_styles
 
-          return `
-            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
-              ${header(pHomeBolt,'Stromverbrauch')}
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pBolt, valN('sensor.hmip_esi_stromzahler_energiezahler_ch2',2,'kWh'), 'Zählerstand', amber, false, 'sensor.hmip_esi_stromzahler_energiezahler_ch2')}
-                ${cell(pMeter, valN('sensor.stromverbrauch_taglich',2,'kWh'), 'Verbrauch heute', blue, false, 'sensor.stromverbrauch_taglich')}
-                ${cell(pFeed, valN('sensor.hmip_esi_stromzahler_energiezahler_ch4',2,'kWh'), 'Einspeisung', green, false, 'sensor.hmip_esi_stromzahler_energiezahler_ch4')}
-                ${cell(pHomeImp, valN('sensor.smart_meter_netzbezug',0,'W'), 'Leistung aktuell', netzColor, false, 'sensor.smart_meter_netzbezug')}
-                ${cell(pCal, valN('sensor.stromverbrauch_monthly',2,'kWh'), 'Verbrauch '+monatN, muted, false, 'sensor.stromverbrauch_monthly')}
-                ${cell(pCal, valN('sensor.stromverbrauch_yearly',2,'kWh'), 'Verbrauch '+jahrN, muted, false, 'sensor.stromverbrauch_yearly')}
-              </div>
-            </div>`;
-        ]]]
-
-  # =================== SOLARBANK 3 PRO ===================
-  - type: custom:button-card
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    tap_action:
-      action: none
-    triggers_update:
-      - sensor.solarbank_3_e2700_pro_betriebszustand
-      - sensor.solarbank_3_e2700_pro_ac_hausabgabe
-      - sensor.solarbank_3_e2700_pro_ladestand
-      - sensor.solarbank_3_e2700_pro_akkuenergie
-      - sensor.solarbank_3_e2700_pro_akkuleistung
-      - sensor.system_muhlweg_tagliche_pv_hausabgabe
-      - sensor.system_muhlweg_taglicher_solarertrag
-    styles:
-      card:
-        - padding: 16px 18px
-        - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
-        - overflow: hidden
-      grid:
-        - grid-template-areas: '"body"'
-      custom_fields:
-        body:
-          - width: 100%
-    custom_fields:
-      body: |
-        [[[
-          const amber='#e6b566', green='#a6d49e', red='#f0736a', blue='#7fb3d5', solar='#e6c15a', muted='#6e7988', value='#f2f5f8';
-          const S=(id)=>states[id];
-          const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
-          const valN=(id,d,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':v.toFixed(d);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
-          const W=(id)=>{const e=S(id);return e?Math.round(parseFloat(e.state)||0):0;};
-          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
-          const cell=(inner,vHtml,label,accent,full,eid)=>`
-            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
-              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
-              <div style="min-width:0;">
-                <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
-                <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
-              </div>
-            </div>`;
-          const header=(inner,title)=>`
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-              <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${ic(inner,green)}</div>
-              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">${title}</div>
-            </div>`;
-
-          const pBank='<rect x="3" y="6" width="11" height="12" rx="1"/><path d="M5.5 9h6M5.5 12h6"/><rect x="16.5" y="8" width="4.5" height="10" rx="1"/><path d="M18 7V6h1.5v1"/>';
-          const pFlow='<path d="M4 11.5 11 6v13H5v-7.5"/><rect x="14" y="8" width="6" height="11" rx="1"/><path d="M15.5 7V6h3v1"/>';
-          const pHome='<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/>';
-          const pBatt='<rect x="3" y="8" width="16" height="9" rx="2"/><path d="M21 11v3"/><path d="M6 12.5h8"/>';
-          const pEnergy='<rect x="3" y="7" width="18" height="11" rx="2"/><path d="M8 7V5h8v2"/><path d="M12 10v5M9.5 12.5h5"/>';
-          const pBattChg='<rect x="3" y="8" width="16" height="9" rx="2"/><path d="M21 11v3"/><path d="M11 10 8.5 13H11l-.5 3 2.5-3H11z"/>';
-          const pFeed='<path d="M4 11.5 11 6v13H5"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/>';
-          const pSolar='<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
-
-          const soc=(()=>{const e=S('sensor.solarbank_3_e2700_pro_ladestand');return e?Math.round(parseFloat(e.state)||0):0;})();
-          const socColor = soc<=10 ? red : green;
-          const akku=W('sensor.solarbank_3_e2700_pro_akkuleistung');
-          const akkuColor = akku>0 ? green : (akku<0 ? red : muted);
-          const bz=S('sensor.solarbank_3_e2700_pro_betriebszustand');
-          const bzMap={
-            'detection':'Erkennung','bypass':'Nulleinspeisung','discharge':'Entladen',
-            'charge':'Laden','charge_bypass':'Überschussladung','charge_priority':'Vorrangladung',
-            'full_bypass':'Voller Bypass','wakeup':'Aufwachen','standby':'Standby',
-            'protection_charge':'Schutzladung','output':'Ausgabe'
-          };
-          let bzTxt = bz ? bz.state : '–';
-          if (bz) {
-            try {
-              const f = (typeof hass!=='undefined' && hass && typeof hass.formatEntityState==='function') ? hass.formatEntityState(bz) : null;
-              if (f && f !== bz.state) bzTxt = f;
-            } catch(e) {}
-            if (bzTxt === bz.state && bzMap[bz.state]) bzTxt = bzMap[bz.state];
-            if (bzTxt === bz.state) bzTxt = String(bz.state).replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-          }
-
-          return `
-            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
-              ${header(pBank,'Solarbank 3 Pro')}
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pFlow, bzTxt, 'Betriebszustand', blue, true, 'sensor.solarbank_3_e2700_pro_betriebszustand')}
-                ${cell(pHome, valN('sensor.solarbank_3_e2700_pro_ac_hausabgabe',0,'W'), 'Hausabgabe', blue, false, 'sensor.solarbank_3_e2700_pro_ac_hausabgabe')}
-                ${cell(pBatt, valN('sensor.solarbank_3_e2700_pro_ladestand',0,'%'), 'Ladestand', socColor, false, 'sensor.solarbank_3_e2700_pro_ladestand')}
-                ${cell(pEnergy, valN('sensor.solarbank_3_e2700_pro_akkuenergie',0,'Wh'), 'Akkuenergie', blue, false, 'sensor.solarbank_3_e2700_pro_akkuenergie')}
-                ${cell(pBattChg, valN('sensor.solarbank_3_e2700_pro_akkuleistung',0,'W'), 'Akkuleistung', akkuColor, false, 'sensor.solarbank_3_e2700_pro_akkuleistung')}
-                ${cell(pFeed, valN('sensor.system_muhlweg_tagliche_pv_hausabgabe',2,'kWh'), 'Hausabgabe heute', green, false, 'sensor.system_muhlweg_tagliche_pv_hausabgabe')}
-                ${cell(pSolar, valN('sensor.system_muhlweg_taglicher_solarertrag',2,'kWh'), 'Solarertrag heute', solar, false, 'sensor.system_muhlweg_taglicher_solarertrag')}
-              </div>
-            </div>`;
-        ]]]
-
-  # =================== PV MODULE ===================
-  - type: custom:button-card
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    tap_action:
-      action: none
-    triggers_update:
-      - sensor.solarbank_3_e2700_pro_solarleistung
-      - sensor.solarbank_3_e2700_pro_solar_pv1
-      - sensor.solarbank_3_e2700_pro_solar_pv2
-      - sensor.solarbank_3_e2700_pro_solar_pv3
-      - sensor.solarbank_3_e2700_pro_solar_pv4
-    styles:
-      card:
-        - padding: 16px 18px
-        - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
-        - overflow: hidden
-      grid:
-        - grid-template-areas: '"body"'
-      custom_fields:
-        body:
-          - width: 100%
-    custom_fields:
-      body: |
-        [[[
-          const solar='#e6c15a', green='#a6d49e', muted='#6e7988', value='#f2f5f8';
-          const S=(id)=>states[id];
-          const ic=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
-          const valN=(id,u)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;const n=isNaN(v)?'–':Math.round(v);return `${n}<span style="font-size:11px;color:${muted};font-weight:600;margin-left:3px;">${u}</span>`;};
-          const isOn=(id)=>{const e=S(id);return e?(parseFloat(e.state)||0)>0:false;};
-          const mi=(eid)=> eid ? `onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${eid}'},bubbles:true,composed:true}))"` : '';
-          const cell=(inner,vHtml,label,accent,full,eid)=>`
-            <div ${mi(eid)} style="${full?'grid-column:1 / -1;':''}${eid?'cursor:pointer;':''}display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}26;min-width:0;">
-              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${ic(inner,accent)}</div>
-              <div style="min-width:0;">
-                <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${vHtml}</div>
-                <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
-              </div>
-            </div>`;
-
-          const pSolar='<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
-          const pPanel='<rect x="4" y="5" width="16" height="10" rx="1"/><path d="M4 8.3h16M4 11.6h16M9.3 5v10M14.6 5v10"/><path d="M12 15v4M9 19h6"/>';
-
-          const header=`
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-              <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${ic(pPanel,green)}</div>
-              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">PV Module</div>
-            </div>`;
-
-          const pv=(id,label)=>cell(pPanel, valN(id,'W'), label, isOn(id)?solar:muted, false, id);
-
-          return `
-            <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
-              ${header}
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(pSolar, valN('sensor.solarbank_3_e2700_pro_solarleistung','W'), 'Solarleistung', isOn('sensor.solarbank_3_e2700_pro_solarleistung')?solar:muted, true, 'sensor.solarbank_3_e2700_pro_solarleistung')}
-                ${pv('sensor.solarbank_3_e2700_pro_solar_pv1','PV1')}
-                ${pv('sensor.solarbank_3_e2700_pro_solar_pv2','PV2')}
-                ${pv('sensor.solarbank_3_e2700_pro_solar_pv3','PV3')}
-                ${pv('sensor.solarbank_3_e2700_pro_solar_pv4','PV4')}
-              </div>
-            </div>`;
-        ]]]
+  # ============================ PV MODULE ============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:solar-panel
+        name: PV Module
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: custom:button-card
+        entity: sensor.solarbank_3_e2700_pro_solarleistung
+        icon: mdi:solar-power-variant
+        name: Solarleistung
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { kind: pv, decimals: 0, unit: W }
+        label: *lbl_num
+        styles: *tile_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_solar_pv1
+            icon: mdi:solar-panel
+            name: PV1
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: pv, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_solar_pv2
+            icon: mdi:solar-panel
+            name: PV2
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: pv, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_solar_pv3
+            icon: mdi:solar-panel
+            name: PV3
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: pv, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.solarbank_3_e2700_pro_solar_pv4
+            icon: mdi:solar-panel
+            name: PV4
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { kind: pv, decimals: 0, unit: W }
+            label: *lbl_num
+            styles: *tile_styles
