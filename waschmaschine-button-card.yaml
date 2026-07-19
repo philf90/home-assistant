@@ -1,0 +1,189 @@
+# Waschmaschine (Home Connect / BSH) im Design der ueberarbeiteten
+# Owlet-Smart-Sock-Karte.
+#
+# Icon in rundlich-quadratischer Kachel (Farbe nach Zustand), Owlet-Huelle,
+# Fortschrittsbalken + Restzeit in der Owlet-Palette. Zustandsfarben:
+# laeuft/fertig -> gruen, pausiert -> amber, Fehler -> rot, sonst gedaempft.
+#
+# Voraussetzung: custom:button-card (HACS).
+type: custom:button-card
+entity: sensor.484090394196000250_bsh_common_status_operationstate
+icon: mdi:washing-machine
+name: Waschmaschine
+show_state: false
+show_name: true
+show_icon: true
+variables:
+  progress_entity: sensor.484090394196000250_bsh_common_option_programprogress
+  time_entity: sensor.484090394196000250_bsh_common_option_estimatedtotalprogramtime
+  program_entity: sensor.484090394196000250_active_program
+state:
+  - value: BSH.Common.EnumType.OperationState.Run
+    spin: true
+styles:
+  card:
+    - padding: 14px 16px
+    - border-radius: 22px
+    - border: 1px solid rgba(255, 255, 255, 0.05)
+    - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
+    - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+    - overflow: hidden
+  grid:
+    - grid-template-areas: '"i n" "i status" "i progress" "i time"'
+    - grid-template-columns: min-content auto
+    - grid-template-rows: auto auto auto auto
+  img_cell:
+    - width: 52px
+    - height: 52px
+    - border-radius: 15px
+    - margin-right: 14px
+    - align-self: center
+    - background: |
+        [[[
+          const s = entity.state;
+          let a = '#6e7988';
+          if (s.includes('Run') || s.includes('Finished')) a = '#a6d49e';
+          else if (s.includes('Error')) a = '#f0736a';
+          else if (s.includes('Pause')) a = '#e6b566';
+          return a + '20';
+        ]]]
+    - border: |
+        [[[
+          const s = entity.state;
+          let a = '#6e7988';
+          if (s.includes('Run') || s.includes('Finished')) a = '#a6d49e';
+          else if (s.includes('Error')) a = '#f0736a';
+          else if (s.includes('Pause')) a = '#e6b566';
+          return '1px solid ' + a + '40';
+        ]]]
+  icon:
+    - width: 28px
+    - height: 28px
+    - color: |
+        [[[
+          const s = entity.state;
+          if (s.includes('Run') || s.includes('Finished')) return '#a6d49e';
+          if (s.includes('Error')) return '#f0736a';
+          if (s.includes('Pause')) return '#e6b566';
+          return '#6e7988';
+        ]]]
+  name:
+    - font-size: 16px
+    - font-weight: 700
+    - letter-spacing: -0.01em
+    - color: '#f2f5f8'
+    - text-align: left
+    - justify-self: start
+    - align-self: end
+  custom_fields:
+    status:
+      - font-size: 13px
+      - color: '#6e7988'
+      - text-align: left
+      - justify-self: start
+      - align-self: start
+      - margin-top: 2px
+      - padding-bottom: 8px
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
+    progress:
+      - width: 100%
+      - padding: 2px 0
+    time:
+      - font-size: 12px
+      - color: '#6e7988'
+      - text-align: right
+      - width: 100%
+      - padding-top: 4px
+custom_fields:
+  status: |
+    [[[
+      const state = entity.state;
+      const stateMap = {
+        'BSH.Common.EnumType.OperationState.Inactive':       'Inaktiv',
+        'BSH.Common.EnumType.OperationState.Ready':          'Bereit',
+        'BSH.Common.EnumType.OperationState.DelayedStart':   'Startverzögerung',
+        'BSH.Common.EnumType.OperationState.Run':            'Läuft',
+        'BSH.Common.EnumType.OperationState.Pause':          'Pausiert',
+        'BSH.Common.EnumType.OperationState.ActionRequired': 'Eingriff erforderlich',
+        'BSH.Common.EnumType.OperationState.Finished':       'Fertig',
+        'BSH.Common.EnumType.OperationState.Error':          'Fehler',
+        'BSH.Common.EnumType.OperationState.Aborting':       'Wird abgebrochen',
+      };
+      const statusLabel = stateMap[state] || state;
+
+      const isRunning = state.includes('Run');
+      const programEntity = states[variables.program_entity];
+      const programRaw = programEntity ? programEntity.state : null;
+
+      // BSH-Programmnamen kürzen: letztes Segment nach dem letzten Punkt
+      let programLabel = '';
+      if (isRunning && programRaw && programRaw !== 'unavailable' && programRaw !== 'unknown') {
+        const parts = programRaw.split('.');
+        programLabel = parts[parts.length - 1]
+          .replace(/([A-Z])/g, ' $1').trim(); // CamelCase → lesbar
+      }
+
+      if (programLabel) {
+        return `${statusLabel} <span style="opacity:0.5">·</span> ${programLabel}`;
+      }
+      return statusLabel;
+    ]]]
+  progress: |
+    [[[
+      const progressEntity = states[variables.progress_entity];
+      const progress = progressEntity ? parseFloat(progressEntity.state) || 0 : 0;
+
+      const operationState = entity.state;
+      const isActive = operationState.includes('Run') || operationState.includes('Pause');
+
+      if (!isActive) return '';
+
+      const color = operationState.includes('Pause') ? '#e6b566' : '#a6d49e';
+
+      return `
+        <div style="
+          width: 100%;
+          background: rgba(255,255,255,0.08);
+          border-radius: 5px;
+          height: 6px;
+          overflow: hidden;
+        ">
+          <div style="
+            width: ${progress}%;
+            background: ${color};
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.5s ease;
+          "></div>
+        </div>
+      `;
+    ]]]
+  time: |
+    [[[
+      const timeEntity = states[variables.time_entity];
+      const progressEntity = states[variables.progress_entity];
+
+      const operationState = entity.state;
+      const isActive = operationState.includes('Run') || operationState.includes('Pause');
+
+      if (!isActive || !timeEntity) return '';
+
+      // Entität liefert Restzeit direkt im Format HH:mm
+      const timeRaw = timeEntity.state;
+      const progress = parseFloat(progressEntity ? progressEntity.state : 0) || 0;
+
+      let timeStr = '';
+      const match = timeRaw.match(/^(\d+):(\d{2})$/);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        if (h > 0) timeStr += `${h} h `;
+        timeStr += `${m} min`;
+      } else {
+        timeStr = timeRaw;
+      }
+
+      return `${progress.toFixed(0)}% &nbsp;<span style="opacity:0.5">·</span>&nbsp; noch ca. ${timeStr}`;
+    ]]]
