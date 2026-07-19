@@ -1,0 +1,189 @@
+# Autarkie-Ring (Eigenversorgung) im Design der ueberarbeiteten
+# Owlet-Smart-Sock-Karte. Eigenstaendige Karte.
+#
+# Ring zeigt den Autarkie-Anteil heute = Solar-Eigenverbrauch /
+# (Solar-Eigenverbrauch + Netzbezug). Daneben eine klickbare Legende
+# (Solar/BKW, Netzbezug, Einspeisung) in kWh -> Tap = more-info.
+#
+# Sensor-Zuordnung (bei Bedarf oben in variables anpassen):
+#   solar       = sensor.system_muhlweg_tagliche_pv_hausabgabe  (PV ins Haus)
+#   grid        = sensor.stromverbrauch_taglich                 (Netzbezug)
+#   feedin      = sensor.solar_uberschuss_daily                 (Einspeisung/Ueberschuss)
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    icon: mdi:sync
+    name: Eigenversorgung
+    label: heute · Solar vs. Netz
+    show_icon: true
+    show_name: true
+    show_label: true
+    tap_action:
+      action: none
+    styles: &header_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+  - type: horizontal-stack
+    cards:
+      # ---- Ring (klickbar -> Solar-Sensor) ----
+      - type: custom:button-card
+        entity: sensor.system_muhlweg_tagliche_pv_hausabgabe
+        show_icon: false
+        show_name: false
+        show_state: false
+        show_label: false
+        variables:
+          solar_entity: sensor.system_muhlweg_tagliche_pv_hausabgabe
+          grid_entity: sensor.stromverbrauch_taglich
+        triggers_update: all
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 4px 0
+          grid:
+            - grid-template-areas: '"ring"'
+          custom_fields:
+            ring:
+              - width: 100%
+        custom_fields:
+          ring: |
+            [[[
+              const green='#a6d49e', value='#f2f5f8', muted='#6e7988';
+              const s=parseFloat(states[variables.solar_entity]?.state)||0;
+              const g=parseFloat(states[variables.grid_entity]?.state)||0;
+              const tot=s+g;
+              const pct= tot>0 ? Math.round(s/tot*100) : 0;
+              const circ=314.16, off=Math.max(0, circ*(1-pct/100));
+              return `
+                <div style="display:flex;justify-content:center;">
+                  <div style="position:relative;width:132px;height:132px;">
+                    <svg viewBox="0 0 120 120" style="width:132px;height:132px;transform:rotate(-90deg);">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12"/>
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="${green}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                      <div style="color:${value};font-size:30px;font-weight:750;letter-spacing:-0.03em;line-height:1;">${pct}<span style="font-size:17px;">%</span></div>
+                      <div style="color:${muted};font-size:11px;margin-top:3px;">autark</div>
+                    </div>
+                  </div>
+                </div>`;
+            ]]]
+      # ---- Legende (jede Zeile klickbar) ----
+      - type: vertical-stack
+        cards:
+          - type: custom:button-card
+            entity: sensor.system_muhlweg_tagliche_pv_hausabgabe
+            icon: mdi:square-rounded
+            name: Solar / BKW
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: kWh }
+            label: &lbl_leg |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                if(isNaN(v)) return '–';
+                return `${v.toFixed(2).replace('.',',')}<span style="color:#6e7988;font-size:0.72em;font-weight:600;margin-left:4px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &leg_styles
+              card:
+                - border-radius: 13px
+                - padding: 9px 11px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i n l"'
+                - grid-template-columns: min-content 1fr min-content
+              img_cell:
+                - width: 12px
+                - height: 12px
+                - margin-right: 10px
+                - align-self: center
+              icon:
+                - width: 12px
+                - height: 12px
+                - color: |
+                    [[[ return variables.accent||'#7fb3d5'; ]]]
+              name:
+                - justify-self: start
+                - align-self: center
+                - font-size: 13px
+                - color: '#e7ecf3'
+              label:
+                - justify-self: end
+                - align-self: center
+                - font-size: 14px
+                - font-weight: 700
+                - letter-spacing: -0.01em
+                - color: '#f2f5f8'
+          - type: custom:button-card
+            entity: sensor.stromverbrauch_taglich
+            icon: mdi:square-rounded
+            name: Netzbezug
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#b399d4', unit: kWh }
+            label: *lbl_leg
+            styles: *leg_styles
+          - type: custom:button-card
+            entity: sensor.solar_uberschuss_daily
+            icon: mdi:square-rounded
+            name: Einspeisung
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6c15a', unit: kWh }
+            label: *lbl_leg
+            styles: *leg_styles
