@@ -147,13 +147,13 @@ cards:
           const MUTED='#6e7988', TEXT='#f2f5f8', RED='#f0736a', SUB='rgba(255,255,255,0.55)';
           const font="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
 
-          // ---------- Icons (inline SVG paths) ----------
+          // ---------- Icons (mdi, exakt wie v1) ----------
           const ICONS={
-            waste:  '<path d="M4 6h16l-1.2 15H5.2L4 6ZM7 6V4h10v2M10 10v7M14 10v7"/>',
-            organic:'<path d="M20 5c0 8-5.5 13-13 13 0-8 5.5-13 13-13ZM7 18c2.5-4 5-6 9-7.5"/>',
-            paper:  '<path d="M6 3h8l5 5v13H6zM14 3v5h5M9 12h7M9 16h7"/>',
-            recycle:'<path d="M9 4h6l2.5 4M15 20H9l-3-4M8.2 8 5.5 12l2.5 4M15.8 8l2.7 4-2.5 4M9 4 6 8m9-4 3 4"/>',
-            hazard: '<path d="M12 3 2 20h20L12 3ZM12 9v5M12 17.5v.01"/>'
+            waste:  'mdi:trash-can-outline',
+            organic:'mdi:flower-outline',
+            paper:  'mdi:newspaper-variant-outline',
+            recycle:'mdi:recycle',
+            hazard: 'mdi:dump-truck'
           };
           // Typ-Erkennung ueber den Kalender-Summary (wie die v1-"pattern"-Liste)
           const RULES=[
@@ -176,7 +176,7 @@ cards:
             const dt=new Date(p[0],p[1]-1,p[2]);
             return { wd:WD[dt.getDay()], txt:`${p[2]}. ${MO[p[1]-1]}` };
           };
-          const svg=(name,color,px)=>`<svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.waste}</svg>`;
+          const ico=(name,color,px)=>`<ha-icon icon="${ICONS[name]||ICONS.waste}" style="color:${color};--mdc-icon-size:${px}px;width:${px}px;height:${px}px;"></ha-icon>`;
 
           // ---------- Daten einlesen ----------
           const S=states[variables.src_entity];
@@ -187,7 +187,7 @@ cards:
           // Sensor fehlt -> Hinweis (statt leerer Karte)
           if(raw===null){
             return shell(`<div style="display:flex;align-items:center;gap:12px;background:rgba(240,115,106,0.09);border:1px solid rgba(240,115,106,0.22);border-radius:16px;padding:14px 16px;">
-              ${svg('hazard',RED,22)}
+              ${ico('hazard',RED,22)}
               <div><div style="font-weight:700;font-size:14px;color:${TEXT};">Sensor fehlt</div>
               <div style="font-size:12.5px;color:${MUTED};margin-top:2px;">Bitte <b>${variables.src_entity}</b> anlegen (siehe Kopf der YAML-Datei).</div></div></div>`);
           }
@@ -204,7 +204,7 @@ cards:
           // Keine Termine -> ruhiger Leerzustand
           if(items.length===0){
             return shell(`<div style="display:flex;align-items:center;gap:12px;background:rgba(166,212,158,0.08);border:1px solid rgba(166,212,158,0.2);border-radius:16px;padding:16px;">
-              ${svg('organic','#a6d49e',22)}
+              ${ico('organic','#a6d49e',22)}
               <div style="font-size:14px;color:${TEXT};font-weight:600;">Keine Abholung in den nächsten 7 Tagen</div></div>`);
           }
 
@@ -227,26 +227,42 @@ cards:
                    <span style="font-size:50px;font-weight:800;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;">${minDays}</span>
                    <span style="font-size:19px;font-weight:600;color:${MUTED};">Tage</span></div>`;
 
-          // Titelzeile: eine oder mehrere Tonnen ("Restmüll + Bio")
-          const heroTitle=heroItems.map(i=>i.label).join(' + ');
           const heroWhen=`${heroItems[0].wd}, ${heroItems[0].dtxt}`;
           const heroHint = minDays<=1 ? ' · abends rausstellen' : '';
+          const multi = heroItems.length>1;   // mehrere Tonnen am selben Tag?
 
-          // Rechte Seite: ein Icon-Chip je Tonne des Hero-Tags (dynamisch 1..n)
-          const heroChips=heroItems.map(i=>`
-            <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:0 0 auto;background:${i.color}22;border:1px solid ${i.color}3d;">
-              ${svg(i.icon,i.color,24)}
-            </div>`).join('');
-
-          const hero=`
-            <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
-              <div style="flex:0 0 auto;min-width:74px;">${big}</div>
-              <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;">
-                <div style="font-size:18px;font-weight:750;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${heroTitle}</div>
-                <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
-              </div>
-              <div style="display:flex;gap:8px;margin-left:auto;">${heroChips}</div>
-            </div>`;
+          let hero;
+          if(!multi){
+            // EINE Abholung: grosse Titelzeile + eine Icon-Kachel rechts.
+            const i0=heroItems[0];
+            hero=`
+              <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
+                <div style="flex:0 0 auto;min-width:74px;">${big}</div>
+                <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;">
+                  <div style="font-size:18px;font-weight:750;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i0.label}</div>
+                  <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
+                </div>
+                <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:0 0 auto;background:${i0.color}22;border:1px solid ${i0.color}3d;margin-left:auto;">
+                  ${ico(i0.icon,i0.color,24)}
+                </div>
+              </div>`;
+          } else {
+            // MEHRERE Abholungen am selben Tag: Datum oben, darunter je Tonne
+            // eine eigene Pille (Icon + voller Name). Bricht um -> nichts wird
+            // abgeschnitten, alle Namen bleiben vollstaendig lesbar.
+            const pills=heroItems.map(i=>`
+              <span style="display:inline-flex;align-items:center;gap:6px;background:${i.color}1e;border:1px solid ${i.color}3d;color:${TEXT};font-size:13px;font-weight:700;padding:5px 10px;border-radius:11px;white-space:nowrap;">
+                ${ico(i.icon,i.color,15)}${i.label}
+              </span>`).join('');
+            hero=`
+              <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
+                <div style="flex:0 0 auto;min-width:74px;">${big}</div>
+                <div style="display:flex;flex-direction:column;gap:9px;min-width:0;flex:1;">
+                  <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;">${pills}</div>
+                </div>
+              </div>`;
+          }
 
           // ---------- Folgetermin-Chips (dynamisch; leer => nichts) ----------
           let chips='';
@@ -254,7 +270,7 @@ cards:
             const chip=(i)=>{
               const when = i.days===1 ? 'morgen' : `+${i.days} Tg`;
               return `<div style="flex:1 1 92px;min-width:92px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:13px;padding:11px 10px;text-align:center;">
-                <div style="width:28px;height:28px;border-radius:9px;display:inline-grid;place-items:center;background:${i.color}22;margin-bottom:6px;">${svg(i.icon,i.color,16)}</div>
+                <div style="width:28px;height:28px;border-radius:9px;display:inline-grid;place-items:center;background:${i.color}22;margin-bottom:6px;">${ico(i.icon,i.color,16)}</div>
                 <div style="font-size:14px;font-weight:700;color:${TEXT};font-variant-numeric:tabular-nums;">${when}</div>
                 <div style="font-size:11px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.label}</div>
               </div>`;
