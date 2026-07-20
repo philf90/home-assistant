@@ -1,0 +1,433 @@
+# Autos (Passat + Touran) im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+#
+# Pro Fahrzeug eine Owlet-Sektion: Kopf mit Kennzeichen, Fahrzeugbild
+# (Owlet-gerahmt), Status-Chips (Bewegung, Standheizung, Tueren, Fenster) und
+# Owlet-Kennzahl-Kacheln. Am Ende eine gemeinsame Standort-Karte.
+#
+# HINWEIS: Alle Entitaeten sind 1:1 aus dem urspruenglichen Code uebernommen
+# und lassen sich nach dem Integrations-Wechsel einfach tauschen (jede Kachel
+# ist eine eigene button-card). Bitte auch die on/off-Semantik der Status-Chips
+# (variables.on_txt/off_txt/on_col/off_col) nach dem Wechsel pruefen.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &frame,
+# &chip_styles, &chip_name, &chip_icon, &lbl_val, &tile_styles.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+cards:
+  # ================================ PASSAT ================================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 11px !important;
+        }
+    cards:
+      - type: custom:button-card
+        icon: mdi:car-estate
+        name: OF - LC 728
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 2px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: min-content 1fr
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+      - type: picture
+        image: /local/auto/passat/passat_b8.png
+        card_mod: &frame
+          style: |
+            ha-card {
+              border-radius: 16px !important;
+              overflow: hidden !important;
+              border: 1px solid rgba(255,255,255,0.06) !important;
+              box-shadow: none !important;
+              background: rgba(255,255,255,0.02) !important;
+            }
+      # ---- Status-Chips ----
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_vehicle_moving
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fährt, off_txt: Steht, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-arrow-right, off_icon: mdi:car-brake-parking }
+            name: &chip_name |
+              [[[ const e=(typeof entity!=='undefined')?entity:null; return (e&&e.state==='on')?variables.on_txt:variables.off_txt; ]]]
+            icon: &chip_icon |
+              [[[ const e=(typeof entity!=='undefined')?entity:null; return (e&&e.state==='on')?variables.on_icon:variables.off_icon; ]]]
+            styles: &chip_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 6px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i" "n"'
+                - grid-template-columns: 1fr
+                - justify-items: center
+              img_cell:
+                - width: 28px
+                - height: 28px
+                - margin: 0
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &chip_col |
+                    [[[ const e=(typeof entity!=='undefined')?entity:null; return (e&&e.state==='on')?variables.on_col:variables.off_col; ]]]
+              name:
+                - font-size: 11px
+                - margin-top: 5px
+                - text-align: center
+                - white-space: normal
+                - line-height: 1.2
+                - color: *chip_col
+          - type: custom:button-card
+            entity: switch.wvwzzz3czpe076722_auxiliary_climatisation
+            show_icon: true
+            show_name: true
+            show_state: false
+            tap_action: { action: toggle }
+            variables: { on_txt: Heizung an, off_txt: Heizung aus, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-seat-heater, off_icon: mdi:car-seat-heater }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_doors_locked
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Verriegelt, off_txt: Offen, on_col: '#a6d49e', off_col: '#f0736a', on_icon: mdi:car-door-lock, off_icon: mdi:car-door }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_windows_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fenster zu, off_txt: Fenster auf, on_col: '#a6d49e', off_col: '#e6b566', on_icon: mdi:car-door, off_icon: mdi:car-door }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+      # ---- Kennzahl-Kacheln ----
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_odometer
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: &lbl_val |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                let n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                const pre=variables.prefix?`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-right:2px;">${variables.prefix}</span>`:'';
+                return `${pre}${n}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 11px 13px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[ return (variables.accent||'#7fb3d5')+'29'; ]]]
+                - border: |
+                    [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[ return variables.accent||'#7fb3d5'; ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 750
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 11.5px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_fuel_range
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', unit: km, decimals: 0 }
+            name: "[[[ return 'Tank: ' + states['sensor.wvwzzz3czpe076722_fuel_level'].state + ' %'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_service_inspection_days
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', unit: Tage, decimals: 0 }
+            name: "[[[ return 'Inspektion: ' + states['sensor.wvwzzz3czpe076722_service_inspection_distance'].state + ' km'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_adblue_level
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_last_trip_length_2
+            icon: mdi:map-marker-distance
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#b399d4', unit: km, decimals: 0 }
+            name: "[[[ return 'Trip: ' + states['sensor.wvwzzz3czpe076722_last_trip_duration_2'].state + ' min'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_last_trip_average_speed_2
+            icon: mdi:speedometer
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km/h, decimals: 0, prefix: 'Ø' }
+            name: "[[[ return 'Verbrauch: ' + states['sensor.wvwzzz3czpe076722_last_trip_average_fuel_consumption_2'].state + ' L/100 km'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.wvwzzz3czpe076722_auxiliary_remaining_climatisation_time
+                above: 0
+            card:
+              type: custom:button-card
+              entity: sensor.wvwzzz3czpe076722_auxiliary_remaining_climatisation_time
+              icon: mdi:car-seat-heater
+              name: Standheizung
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              variables: { accent: '#e6b566', unit: min, decimals: 0 }
+              label: *lbl_val
+              styles: *tile_styles
+
+  # ================================ TOURAN ================================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:car-estate
+        name: SÜW - PM 226
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: picture
+        image: /local/auto/touran/touran.png
+        card_mod: *frame
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.touran_vehicle_moving
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fährt, off_txt: Steht, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-arrow-right, off_icon: mdi:car-brake-parking }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_doors_locked
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Verriegelt, off_txt: Offen, on_col: '#a6d49e', off_col: '#f0736a', on_icon: mdi:car-door-lock, off_icon: mdi:car-door }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_windows_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fenster zu, off_txt: Fenster auf, on_col: '#a6d49e', off_col: '#e6b566', on_icon: mdi:car-door, off_icon: mdi:car-door }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_odometer
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_fuel_range
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#e6b566', unit: km, decimals: 0 }
+            name: "[[[ return 'Tank: ' + states['sensor.touran_fuel_level'].state + ' %'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_service_inspection_days
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fb3d5', unit: Tage, decimals: 0 }
+            name: "[[[ return 'Inspektion: ' + states['sensor.touran_service_inspection_distance'].state + ' km'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_adblue_level
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_oil_inspection_days
+            icon: mdi:oil
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#b399d4', unit: Tage, decimals: 0 }
+            name: "[[[ return 'Öl-Inspektion: ' + states['sensor.touran_oil_inspection_distance'].state + ' km'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_last_trip_length_2
+            icon: mdi:map-marker-distance
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            name: "[[[ return 'Trip: ' + states['sensor.touran_last_trip_duration_2'].state + ' min'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_last_trip_average_speed_2
+            icon: mdi:speedometer
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km/h, decimals: 0, prefix: 'Ø' }
+            name: "[[[ return 'Verbrauch: ' + states['sensor.touran_last_trip_average_fuel_consumption_2'].state + ' L/100 km'; ]]]"
+            label: *lbl_val
+            styles: *tile_styles
+
+  # ============================== STANDORTE ==============================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:map-marker-radius
+        name: Standorte
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: map
+        entities:
+          - entity: device_tracker.wvwzzz3czpe076722_position
+          - entity: device_tracker.touran_position
+        theme_mode: auto
+        card_mod: *frame
