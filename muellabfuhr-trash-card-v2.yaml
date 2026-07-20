@@ -1,0 +1,266 @@
+# Muellabfuhr v2 - "Countdown-Hero" im Owlet-Look
+# ============================================================================
+# Unterschied zur v1 (muellabfuhr-trash-card.yaml, bleibt unveraendert):
+#   v1 = custom:trash-card, gleichrangige Zeilen je Termin.
+#   v2 = custom:button-card, EIN grosser Hero fuer die naechste(n) Abholung(en)
+#        + kompakte "+N Tage"-Chips fuer die Folgetermine.
+#
+# WARUM EIN ZUSAETZLICHER SENSOR?
+#   button-card kann NICHT asynchron den Kalender abfragen. Eine calendar-Entity
+#   liefert als Attribut nur den EINEN naechsten Termin. Deshalb liest ein
+#   trigger-basierter Template-Sensor per calendar.get_events die naechsten Tage
+#   in ein Listen-Attribut "events". Die Karte rendert daraus alles selbst.
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICHER SENSOR  (configuration.yaml bzw. packages/) - EINMALIG:
+# ---------------------------------------------------------------------------
+# template:
+#   - trigger:
+#       - platform: homeassistant
+#         event: start
+#       - platform: time_pattern
+#         hours: "/1"                 # stuendlich aktualisieren
+#     action:
+#       - service: calendar.get_events
+#         target:
+#           entity_id: calendar.mull
+#         data:
+#           start_date_time: "{{ today_at('00:00') }}"
+#           duration: { days: 7 }      # = "next_days" der v1
+#         response_variable: agenda
+#     sensor:
+#       - name: "Muell Termine"
+#         unique_id: muell_termine
+#         icon: mdi:recycle
+#         state: >
+#           {{ agenda['calendar.mull'].events | count }}
+#         attributes:
+#           events: >
+#             {% set today = now().date() %}
+#             {% set ns = namespace(list=[]) %}
+#             {% for e in agenda['calendar.mull'].events %}
+#               {% set d = strptime(e.start[:10], '%Y-%m-%d').date() %}
+#               {% set ns.list = ns.list + [{
+#                   'summary': e.summary,
+#                   'date': d | string,
+#                   'days': (d - today).days }] %}
+#             {% endfor %}
+#             {{ ns.list }}
+#
+#   -> Ergebnis: sensor.muell_termine.attributes.events =
+#      [ {summary:'Restmuell in VG Offenbach', date:'2026-07-22', days:2}, ... ]
+#      (nach Datum aufsteigend; die Karte sortiert zur Sicherheit erneut).
+#
+# HINWEIS: In der Karte unten nur den Sensor-Namen anpassen, falls abweichend:
+#          variables.src_entity.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS) + obiger Template-Sensor.
+# ============================================================================
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 16px 14px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------- Kopfzeile (wie v1) ----------
+  - type: custom:button-card
+    entity: calendar.mull
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    icon: mdi:recycle
+    name: Müllabfuhr
+    label: Nächste Abholungen
+    tap_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 2px
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 46px
+        - height: 46px
+        - border-radius: 14px
+        - background: 'rgba(166, 212, 158, 0.14)'
+        - border: 1px solid rgba(166, 212, 158, 0.22)
+        - margin-right: 15px
+      icon:
+        - width: 24px
+        - height: 24px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 18px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 13px
+        - color: '#6e7988'
+        - margin-top: 2px
+
+  # ---------- Countdown-Hero + Folgetermin-Chips ----------
+  - type: custom:button-card
+    entity: sensor.muell_termine
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    variables:
+      src_entity: sensor.muell_termine
+    triggers_update:
+      - sensor.muell_termine
+    tap_action:
+      action: more-info
+      entity: calendar.mull
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0
+      grid:
+        - grid-template-areas: '"body"'
+      custom_fields:
+        body:
+          - width: 100%
+    custom_fields:
+      body: |
+        [[[
+          // ---------- Palette ----------
+          const MUTED='#6e7988', TEXT='#f2f5f8', RED='#f0736a', SUB='rgba(255,255,255,0.55)';
+          const font="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
+
+          // ---------- Icons (inline SVG paths) ----------
+          const ICONS={
+            waste:  '<path d="M4 6h16l-1.2 15H5.2L4 6ZM7 6V4h10v2M10 10v7M14 10v7"/>',
+            organic:'<path d="M20 5c0 8-5.5 13-13 13 0-8 5.5-13 13-13ZM7 18c2.5-4 5-6 9-7.5"/>',
+            paper:  '<path d="M6 3h8l5 5v13H6zM14 3v5h5M9 12h7M9 16h7"/>',
+            recycle:'<path d="M9 4h6l2.5 4M15 20H9l-3-4M8.2 8 5.5 12l2.5 4M15.8 8l2.7 4-2.5 4M9 4 6 8m9-4 3 4"/>',
+            hazard: '<path d="M12 3 2 20h20L12 3ZM12 9v5M12 17.5v.01"/>'
+          };
+          // Typ-Erkennung ueber den Kalender-Summary (wie die v1-"pattern"-Liste)
+          const RULES=[
+            {re:/bio|organic/i,        label:'Bio',          color:'#a6d49e', icon:'organic'},
+            {re:/papier|paper/i,       label:'Papier',       color:'#7fb3d5', icon:'paper'},
+            {re:/wertstoff|gelb|recyc/i,label:'Gelber Sack',  color:'#e6b566', icon:'recycle'},
+            {re:/restm|waste/i,        label:'Restmüll',     color:'#8794a5', icon:'waste'},
+            {re:/problem/i,            label:'Problemabfall',color:'#b399d4', icon:'hazard'},
+            {re:/sperr/i,              label:'Sperrmüll',    color:'#b399d4', icon:'hazard'}
+          ];
+          const classify=(sum)=>{
+            for(const r of RULES){ if(r.re.test(sum||'')) return r; }
+            return {label:(sum||'Termin'), color:'#8794a5', icon:'waste'};
+          };
+          const WD=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+          const MO=['Jan.','Feb.','März','Apr.','Mai','Juni','Juli','Aug.','Sep.','Okt.','Nov.','Dez.'];
+          const dateFmt=(iso)=>{
+            const p=(iso||'').split('-').map(Number);
+            if(p.length<3) return {wd:'',txt:''};
+            const dt=new Date(p[0],p[1]-1,p[2]);
+            return { wd:WD[dt.getDay()], txt:`${p[2]}. ${MO[p[1]-1]}` };
+          };
+          const svg=(name,color,px)=>`<svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.waste}</svg>`;
+
+          // ---------- Daten einlesen ----------
+          const S=states[variables.src_entity];
+          let raw=(S && S.attributes && Array.isArray(S.attributes.events)) ? S.attributes.events.slice() : null;
+
+          const shell=(inner)=>`<div style="width:100%;font-family:${font};text-align:left;color:${TEXT};">${inner}</div>`;
+
+          // Sensor fehlt -> Hinweis (statt leerer Karte)
+          if(raw===null){
+            return shell(`<div style="display:flex;align-items:center;gap:12px;background:rgba(240,115,106,0.09);border:1px solid rgba(240,115,106,0.22);border-radius:16px;padding:14px 16px;">
+              ${svg('hazard',RED,22)}
+              <div><div style="font-weight:700;font-size:14px;color:${TEXT};">Sensor fehlt</div>
+              <div style="font-size:12.5px;color:${MUTED};margin-top:2px;">Bitte <b>${variables.src_entity}</b> anlegen (siehe Kopf der YAML-Datei).</div></div></div>`);
+          }
+
+          // Normalisieren + sortieren (Tage; Fallback aus date berechnen)
+          const today=new Date(); today.setHours(0,0,0,0);
+          const items=raw.map(e=>{
+            let days=(e.days!==undefined&&e.days!==null)?parseInt(e.days):null;
+            if(days===null && e.date){ const p=e.date.split('-').map(Number); const d=new Date(p[0],p[1]-1,p[2]); days=Math.round((d-today)/86400000); }
+            const f=dateFmt(e.date);
+            return Object.assign({days:days, wd:f.wd, dtxt:f.txt}, classify(e.summary));
+          }).filter(x=>x.days!==null && x.days>=0).sort((a,b)=>a.days-b.days);
+
+          // Keine Termine -> ruhiger Leerzustand
+          if(items.length===0){
+            return shell(`<div style="display:flex;align-items:center;gap:12px;background:rgba(166,212,158,0.08);border:1px solid rgba(166,212,158,0.2);border-radius:16px;padding:16px;">
+              ${svg('organic','#a6d49e',22)}
+              <div style="font-size:14px;color:${TEXT};font-weight:600;">Keine Abholung in den nächsten 7 Tagen</div></div>`);
+          }
+
+          // ---------- Gruppierung: gleicher Tag = ein Hero ----------
+          const minDays=items[0].days;
+          const heroItems=items.filter(i=>i.days===minDays);   // >1 => mehrere Tonnen am selben Tag
+          const rest=items.filter(i=>i.days>minDays);
+
+          // Dringlichkeit faerbt den Hero: heute=rot, morgen=amber, sonst Typfarbe
+          const urgent = minDays===0 ? RED : (minDays===1 ? '#e6b566' : heroItems[0].color);
+          const heroBg = minDays===0 ? 'rgba(240,115,106,0.10)' : (minDays===1 ? 'rgba(230,181,102,0.10)' : heroItems[0].color+'19');
+          const heroBd = minDays===0 ? 'rgba(240,115,106,0.24)' : (minDays===1 ? 'rgba(230,181,102,0.24)' : heroItems[0].color+'3d');
+
+          // Grosse Countdown-Anzeige
+          const big = minDays===0
+            ? `<div style="font-size:34px;font-weight:800;letter-spacing:-0.03em;line-height:.9;color:${urgent};">Heute</div>`
+            : minDays===1
+              ? `<div style="font-size:34px;font-weight:800;letter-spacing:-0.03em;line-height:.9;color:${urgent};">Morgen</div>`
+              : `<div style="display:flex;align-items:baseline;gap:6px;color:${urgent};line-height:.85;">
+                   <span style="font-size:50px;font-weight:800;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;">${minDays}</span>
+                   <span style="font-size:19px;font-weight:600;color:${MUTED};">Tage</span></div>`;
+
+          // Titelzeile: eine oder mehrere Tonnen ("Restmüll + Bio")
+          const heroTitle=heroItems.map(i=>i.label).join(' + ');
+          const heroWhen=`${heroItems[0].wd}, ${heroItems[0].dtxt}`;
+          const heroHint = minDays<=1 ? ' · abends rausstellen' : '';
+
+          // Rechte Seite: ein Icon-Chip je Tonne des Hero-Tags (dynamisch 1..n)
+          const heroChips=heroItems.map(i=>`
+            <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:0 0 auto;background:${i.color}22;border:1px solid ${i.color}3d;">
+              ${svg(i.icon,i.color,24)}
+            </div>`).join('');
+
+          const hero=`
+            <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
+              <div style="flex:0 0 auto;min-width:74px;">${big}</div>
+              <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;">
+                <div style="font-size:18px;font-weight:750;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${heroTitle}</div>
+                <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
+              </div>
+              <div style="display:flex;gap:8px;margin-left:auto;">${heroChips}</div>
+            </div>`;
+
+          // ---------- Folgetermin-Chips (dynamisch; leer => nichts) ----------
+          let chips='';
+          if(rest.length>0){
+            const chip=(i)=>{
+              const when = i.days===1 ? 'morgen' : `+${i.days} Tg`;
+              return `<div style="flex:1 1 92px;min-width:92px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:13px;padding:11px 10px;text-align:center;">
+                <div style="width:28px;height:28px;border-radius:9px;display:inline-grid;place-items:center;background:${i.color}22;margin-bottom:6px;">${svg(i.icon,i.color,16)}</div>
+                <div style="font-size:14px;font-weight:700;color:${TEXT};font-variant-numeric:tabular-nums;">${when}</div>
+                <div style="font-size:11px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.label}</div>
+              </div>`;
+            };
+            chips=`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">${rest.map(chip).join('')}</div>`;
+          }
+
+          return shell(hero+chips);
+        ]]]
