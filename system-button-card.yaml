@@ -1,0 +1,428 @@
+# System (Home Assistant / VM) im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+#
+# Aufbau wie die UniFi-Ansicht:
+#   Kopf            -> Online-Badge (uptimekuma_home_assistant), Icon + Name.
+#   Status-Raster   -> 2-spaltige Kacheln: Status/Gesundheit (Punkt gruen/rot),
+#                      Knoten und IPv4-Adresse.
+#   Verlaeufe       -> CPU, Arbeitsspeicher, Swap, Traffic als Owlet-gerahmte
+#                      mini-graph-cards mit Palette-Farben.
+#   Uptime          -> custom:uptime-card (Owlet-gerahmt) als Verfuegbarkeits-Historie.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &head_styles, &online_badge,
+# &tile_styles, &tile_val, &state_styles, &state_dot, &graph, &frame.
+#
+# Voraussetzung: custom:button-card + custom:mini-graph-card + custom:uptime-card
+# + card-mod (HACS).
+type: vertical-stack
+card_mod: &shell
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---- Kopf mit Online-Badge ----
+  - type: custom:button-card
+    entity: binary_sensor.uptimekuma_home_assistant
+    icon: mdi:home-assistant
+    name: Home Assistant
+    show_icon: true
+    show_name: true
+    show_state: false
+    tap_action:
+      action: more-info
+    custom_fields:
+      badge: &online_badge |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const on=e&&e.state==='on';
+          const c=on?'#a6d49e':'#f0736a';
+          const txt=on?'online':'offline';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}22;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>${txt}</span>`;
+        ]]]
+    styles: &head_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n badge"'
+        - grid-template-columns: min-content 1fr min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+
+  # ---- Status-Raster (Status / Gesundheit / Knoten / IP) ----
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      # Status (Punkt + Icon gruen/rot je nach Zustand)
+      - type: custom:button-card
+        entity: sensor.qemu_homeassistant_102_status
+        icon: mdi:server
+        name: Status
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        label: &state_val |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const map={running:'Läuft',on:'An',off:'Aus',stopped:'Gestoppt',
+                       unavailable:'—',unknown:'—',idle:'Bereit',healthy:'OK'};
+            const s=e?String(e.state):'';
+            return map[s.toLowerCase()]||s||'—';
+          ]]]
+        custom_fields:
+          dot: &state_dot |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const st=e?String(e.state).toLowerCase():'';
+              const bad=['off','unavailable','unknown','none','','error','problem',
+                         'critical','kritisch','offline','stopped','disconnected'].includes(st);
+              const c=bad?'#f0736a':'#a6d49e';
+              return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}28;"></span>`;
+            ]]]
+        styles: &state_styles
+          card:
+            - border-radius: 16px
+            - padding: 11px 13px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr min-content
+            - grid-template-areas: '"i l dot" "i n dot"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: &state_bg |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  const st=e?String(e.state).toLowerCase():'';
+                  const bad=['off','unavailable','unknown','none','','error','problem',
+                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
+                  return (bad?'#f0736a':'#a6d49e')+'22';
+                ]]]
+            - border: &state_border |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  const st=e?String(e.state).toLowerCase():'';
+                  const bad=['off','unavailable','unknown','none','','error','problem',
+                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
+                  return '1px solid '+(bad?'#f0736a':'#a6d49e')+'3a';
+                ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: &state_col |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  const st=e?String(e.state).toLowerCase():'';
+                  const bad=['off','unavailable','unknown','none','','error','problem',
+                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
+                  return bad?'#f0736a':'#a6d49e';
+                ]]]
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 2px
+          custom_fields:
+            dot:
+              - justify-self: end
+              - align-self: center
+      # Gesundheit
+      - type: custom:button-card
+        entity: binary_sensor.qemu_homeassistant_102_gesundheit
+        icon: mdi:heart-pulse
+        name: Gesundheit
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        label: *state_val
+        custom_fields: { dot: *state_dot }
+        styles: *state_styles
+      # Knoten (Zahl)
+      - type: custom:button-card
+        entity: sensor.qemu_homeassistant_102_knoten
+        icon: mdi:file-tree
+        name: Knoten
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { unit: '', decimals: 0 }
+        tap_action:
+          action: more-info
+        label: &tile_val |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const d=(variables.decimals===undefined?0:variables.decimals);
+            let n=isNaN(v)?((e&&e.state)?e.state:'–'):v.toFixed(d);
+            const u=variables.unit?`<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit}</span>`:'';
+            return `${n}${u}`;
+          ]]]
+        styles: &tile_styles
+          card:
+            - border-radius: 16px
+            - padding: 11px 13px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: 'rgba(127,179,213,0.16)'
+            - border: 1px solid rgba(127,179,213,0.3)
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: '#7fb3d5'
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 19px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 2px
+      # IPv4-Adresse (Text, kleiner)
+      - type: custom:button-card
+        entity: sensor.system_monitor_ipv4_adresse_enp0s18
+        icon: mdi:ip-network
+        name: IPv4-Adresse
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: more-info
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            return (e&&e.state&&e.state!=='unavailable')?e.state:'–';
+          ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 11px 13px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: 'rgba(127,179,213,0.16)'
+            - border: 1px solid rgba(127,179,213,0.3)
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: '#7fb3d5'
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 14px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: '#f2f5f8'
+            - font-variant-numeric: tabular-nums
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 2px
+
+  # ---- CPU-Auslastung (Owlet-gerahmter Verlauf) ----
+  - type: custom:mini-graph-card
+    name: CPU-Auslastung
+    icon: mdi:cpu-64-bit
+    line_width: 3
+    animate: true
+    hours_to_show: 48
+    points_per_hour: 1
+    font_size: 75
+    line_color: '#7fb3d5'
+    color_thresholds:
+      - value: 0
+        color: '#a6d49e'
+      - value: 60
+        color: '#e6b566'
+      - value: 85
+        color: '#f0736a'
+    entities:
+      - entity: sensor.qemu_homeassistant_102_cpu_auslastung
+        name: CPU-Auslastung
+    show:
+      state: true
+      legend: false
+      average: true
+      extrema: true
+      labels: true
+    card_mod: &frame
+      style: |
+        ha-card {
+          background: rgba(255,255,255,0.02) !important;
+          border: 1px solid rgba(255,255,255,0.06) !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+          padding: 6px 10px !important;
+        }
+
+  # ---- Arbeitsspeicher (genutzt / frei) ----
+  - type: custom:mini-graph-card
+    name: Arbeitsspeicher in Nutzung
+    icon: mdi:memory
+    line_width: 3
+    animate: true
+    hours_to_show: 48
+    update_interval: 60
+    hour24: true
+    font_size: 75
+    line_color:
+      - '#a6d49e'
+      - '#6e7988'
+    entities:
+      - entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
+        name: Genutzt
+      - entity: sensor.qemu_homeassistant_102_freier_arbeitsspeicher
+        name: Frei
+    show:
+      state: true
+      legend: false
+      average: false
+      extrema: true
+      labels: true
+    card_mod: *frame
+
+  # ---- Swap (belegt / frei) ----
+  - type: custom:mini-graph-card
+    name: Swap
+    icon: mdi:harddisk
+    line_width: 3
+    animate: true
+    hours_to_show: 48
+    font_size: 75
+    line_color:
+      - '#e6b566'
+      - '#6e7988'
+    entities:
+      - entity: sensor.system_monitor_swap_verwendung
+        name: Belegt
+      - entity: sensor.system_monitor_swap_frei
+        name: Frei
+    show:
+      state: false
+      legend: false
+      average: true
+      extrema: true
+      labels: true
+    card_mod: *frame
+
+  # ---- Traffic (ausgehend / eingehend) ----
+  - type: custom:mini-graph-card
+    name: Traffic
+    icon: mdi:swap-vertical
+    line_width: 3
+    animate: true
+    hours_to_show: 48
+    font_size: 75
+    line_color:
+      - '#7fb3d5'
+      - '#a6d49e'
+    entities:
+      - entity: sensor.system_monitor_ausgehender_netzwerkdurchsatz_enp0s18
+        name: Ausgehend
+      - entity: sensor.system_monitor_eingehender_netzwerkdurchsatz_enp0s18
+        name: Eingehend
+    show:
+      state: false
+      legend: false
+      average: true
+      extrema: true
+      labels: true
+    card_mod: *frame
+
+  # ---- Verfuegbarkeit (Owlet-gerahmte uptime-card) ----
+  - type: custom:uptime-card
+    entity: binary_sensor.uptimekuma_home_assistant
+    icon: si:homeassistant
+    title: Home Assistant
+    tooltip_adaptive_color: true
+    icon_adaptive_color: true
+    status_adaptive_color: true
+    title_adaptive_color: true
+    alias: { ok: online, ko: offline }
+    color: { icon: '#a6d49e', ok: '#a6d49e', ko: '#f0736a', title: '#e7ecf3' }
+    bar: { spacing: 4, height: 10, round: 4 }
+    show: { average: true, status: true }
+    alignment: { status: spaced, header: left, icon_first: true }
+    tap_action: { action: more-info }
+    duration: { quantity: 1, unit: day }
+    card_mod: *frame
