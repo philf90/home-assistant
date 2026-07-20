@@ -1,17 +1,13 @@
 # System (Home Assistant / VM) im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+# Variante B ("Grafana-Hero"): Kopf mit Online-Badge, schlanke Statuszeile,
+# KPI-Leiste (CPU/RAM/Swap/Netz) als ApexCharts-Sparklines und eine grosse
+# Flaechenkurve (CPU + RAM) mit Verlaufsfuellung. Abschluss: Owlet-gerahmte
+# uptime-card als Verfuegbarkeits-Historie.
 #
-# Aufbau wie die UniFi-Ansicht:
-#   Kopf            -> Online-Badge (uptimekuma_home_assistant), Icon + Name.
-#   Status-Raster   -> 2-spaltige Kacheln: Status/Gesundheit (Punkt gruen/rot),
-#                      Knoten und IPv4-Adresse.
-#   Verlaeufe       -> CPU, Arbeitsspeicher, Swap, Traffic als Owlet-gerahmte
-#                      mini-graph-cards mit Palette-Farben.
-#   Uptime          -> custom:uptime-card (Owlet-gerahmt) als Verfuegbarkeits-Historie.
+# Gemeinsame Optik ueber YAML-Anker: &shell, &head_styles, &online_badge,
+# &kpi_apex, &kpi_frame, &frame.
 #
-# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &head_styles, &online_badge,
-# &tile_styles, &tile_val, &state_styles, &state_dot, &graph, &frame.
-#
-# Voraussetzung: custom:button-card + custom:mini-graph-card + custom:uptime-card
+# Voraussetzung: custom:button-card + custom:apexcharts-card + custom:uptime-card
 # + card-mod (HACS).
 type: vertical-stack
 card_mod: &shell
@@ -77,254 +73,210 @@ cards:
           - justify-self: end
           - align-self: center
 
-  # ---- Status-Raster (Status / Gesundheit / Knoten / IP) ----
+  # ---- Statuszeile (Status / Gesundheit / Knoten / IP) ----
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_label: false
+    triggers_update: all
+    tap_action:
+      action: none
+    custom_fields:
+      chips: |
+        [[[
+          const S=(id)=>states[id];
+          const bad=['off','unavailable','unknown','none','','error','problem',
+                     'critical','kritisch','offline','stopped','disconnected'];
+          const isBad=(s)=>!s||bad.includes(String(s.state).toLowerCase());
+          const map={running:'Läuft',on:'An',off:'Aus',stopped:'Gestoppt',
+                     idle:'Bereit',healthy:'OK',unavailable:'—',unknown:'—'};
+          const txt=(s)=>{const v=s?String(s.state):''; return map[v.toLowerCase()]||v||'—';};
+          const dotChip=(s,label)=>{
+            const c=isBad(s)?'#f0736a':'#a6d49e';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#c7d0dd;padding:6px 11px;border-radius:20px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}28;"></span>${label}</span>`;
+          };
+          const iconChip=(svg,val)=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:#c7d0dd;padding:6px 11px;border-radius:20px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);white-space:nowrap;">${svg}<span>${val}</span></span>`;
+          const st=S('sensor.qemu_homeassistant_102_status');
+          const hp=S('binary_sensor.qemu_homeassistant_102_gesundheit');
+          const kn=S('sensor.qemu_homeassistant_102_knoten');
+          const ip=S('sensor.system_monitor_ipv4_adresse_enp0s18');
+          const icoNode=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#6e7988" stroke-width="1.7"><circle cx="12" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M12 7.2V13M12 13H6v3.8M12 13h6v3.8" stroke-linecap="round"/></svg>`;
+          const icoIp=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#6e7988" stroke-width="1.7"><rect x="2" y="9" width="20" height="6" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h4" stroke-linecap="round"/></svg>`;
+          const knTxt=kn&&kn.state&&kn.state!=='unavailable'?kn.state:'–';
+          const ipTxt=ip&&ip.state&&ip.state!=='unavailable'?ip.state:'–';
+          return `<div style="display:flex;flex-wrap:wrap;gap:7px;">
+            ${dotChip(st, txt(st))}
+            ${dotChip(hp, 'Gesundheit')}
+            ${iconChip(icoNode, knTxt+' Knoten')}
+            ${iconChip(icoIp, ipTxt)}
+          </div>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0 2px 2px
+      grid:
+        - grid-template-areas: '"chips"'
+      custom_fields:
+        chips:
+          - justify-self: start
+
+  # ---- KPI-Leiste: ApexCharts-Sparklines mit aktuellem Wert ----
   - type: grid
     columns: 2
     square: false
     cards:
-      # Status (Punkt + Icon gruen/rot je nach Zustand)
-      - type: custom:button-card
-        entity: sensor.qemu_homeassistant_102_status
-        icon: mdi:server
-        name: Status
-        show_icon: true
-        show_name: true
-        show_label: true
-        show_state: false
-        triggers_update: all
-        tap_action:
-          action: more-info
-        label: &state_val |
-          [[[
-            const e=(typeof entity!=='undefined')?entity:null;
-            const map={running:'Läuft',on:'An',off:'Aus',stopped:'Gestoppt',
-                       unavailable:'—',unknown:'—',idle:'Bereit',healthy:'OK'};
-            const s=e?String(e.state):'';
-            return map[s.toLowerCase()]||s||'—';
-          ]]]
-        custom_fields:
-          dot: &state_dot |
-            [[[
-              const e=(typeof entity!=='undefined')?entity:null;
-              const st=e?String(e.state).toLowerCase():'';
-              const bad=['off','unavailable','unknown','none','','error','problem',
-                         'critical','kritisch','offline','stopped','disconnected'].includes(st);
-              const c=bad?'#f0736a':'#a6d49e';
-              return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}28;"></span>`;
-            ]]]
-        styles: &state_styles
-          card:
-            - border-radius: 16px
-            - padding: 11px 13px
-            - box-shadow: none
-            - background: 'rgba(255,255,255,0.028)'
-            - border: 1px solid rgba(255,255,255,0.06)
-          grid:
-            - grid-template-columns: min-content 1fr min-content
-            - grid-template-areas: '"i l dot" "i n dot"'
-            - grid-template-rows: min-content min-content
-          img_cell:
-            - width: 42px
-            - height: 42px
-            - border-radius: 12px
-            - margin-right: 13px
-            - align-self: center
-            - background: &state_bg |
-                [[[
-                  const e=(typeof entity!=='undefined')?entity:null;
-                  const st=e?String(e.state).toLowerCase():'';
-                  const bad=['off','unavailable','unknown','none','','error','problem',
-                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
-                  return (bad?'#f0736a':'#a6d49e')+'22';
-                ]]]
-            - border: &state_border |
-                [[[
-                  const e=(typeof entity!=='undefined')?entity:null;
-                  const st=e?String(e.state).toLowerCase():'';
-                  const bad=['off','unavailable','unknown','none','','error','problem',
-                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
-                  return '1px solid '+(bad?'#f0736a':'#a6d49e')+'3a';
-                ]]]
-          icon:
-            - width: 22px
-            - height: 22px
-            - color: &state_col |
-                [[[
-                  const e=(typeof entity!=='undefined')?entity:null;
-                  const st=e?String(e.state).toLowerCase():'';
-                  const bad=['off','unavailable','unknown','none','','error','problem',
-                             'critical','kritisch','offline','stopped','disconnected'].includes(st);
-                  return bad?'#f0736a':'#a6d49e';
-                ]]]
-          label:
-            - justify-self: start
-            - align-self: end
-            - font-size: 17px
-            - font-weight: 750
-            - letter-spacing: -0.02em
-            - color: '#f2f5f8'
-          name:
-            - justify-self: start
-            - align-self: start
-            - font-size: 11.5px
-            - color: '#6e7988'
-            - margin-top: 2px
-          custom_fields:
-            dot:
-              - justify-self: end
-              - align-self: center
-      # Gesundheit
-      - type: custom:button-card
-        entity: binary_sensor.qemu_homeassistant_102_gesundheit
-        icon: mdi:heart-pulse
-        name: Gesundheit
-        show_icon: true
-        show_name: true
-        show_label: true
-        show_state: false
-        triggers_update: all
-        tap_action:
-          action: more-info
-        label: *state_val
-        custom_fields: { dot: *state_dot }
-        styles: *state_styles
-      # Knoten (Zahl)
-      - type: custom:button-card
-        entity: sensor.qemu_homeassistant_102_knoten
-        icon: mdi:file-tree
-        name: Knoten
-        show_icon: true
-        show_name: true
-        show_label: true
-        show_state: false
-        variables: { unit: '', decimals: 0 }
-        tap_action:
-          action: more-info
-        label: &tile_val |
-          [[[
-            const e=(typeof entity!=='undefined')?entity:null;
-            let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
-            const d=(variables.decimals===undefined?0:variables.decimals);
-            let n=isNaN(v)?((e&&e.state)?e.state:'–'):v.toFixed(d);
-            const u=variables.unit?`<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit}</span>`:'';
-            return `${n}${u}`;
-          ]]]
-        styles: &tile_styles
-          card:
-            - border-radius: 16px
-            - padding: 11px 13px
-            - box-shadow: none
-            - background: 'rgba(255,255,255,0.028)'
-            - border: 1px solid rgba(255,255,255,0.06)
-          grid:
-            - grid-template-columns: min-content 1fr
-            - grid-template-areas: '"i l" "i n"'
-            - grid-template-rows: min-content min-content
-          img_cell:
-            - width: 42px
-            - height: 42px
-            - border-radius: 12px
-            - margin-right: 13px
-            - align-self: center
-            - background: 'rgba(127,179,213,0.16)'
-            - border: 1px solid rgba(127,179,213,0.3)
-          icon:
-            - width: 22px
-            - height: 22px
-            - color: '#7fb3d5'
-          label:
-            - justify-self: start
-            - align-self: end
-            - font-size: 19px
-            - font-weight: 750
-            - letter-spacing: -0.02em
-            - color: '#f2f5f8'
-          name:
-            - justify-self: start
-            - align-self: start
-            - font-size: 11.5px
-            - color: '#6e7988'
-            - margin-top: 2px
-      # IPv4-Adresse (Text, kleiner)
-      - type: custom:button-card
-        entity: sensor.system_monitor_ipv4_adresse_enp0s18
-        icon: mdi:ip-network
-        name: IPv4-Adresse
-        show_icon: true
-        show_name: true
-        show_label: true
-        show_state: false
-        tap_action:
-          action: more-info
-        label: |
-          [[[
-            const e=(typeof entity!=='undefined')?entity:null;
-            return (e&&e.state&&e.state!=='unavailable')?e.state:'–';
-          ]]]
-        styles:
-          card:
-            - border-radius: 16px
-            - padding: 11px 13px
-            - box-shadow: none
-            - background: 'rgba(255,255,255,0.028)'
-            - border: 1px solid rgba(255,255,255,0.06)
-          grid:
-            - grid-template-columns: min-content 1fr
-            - grid-template-areas: '"i l" "i n"'
-            - grid-template-rows: min-content min-content
-          img_cell:
-            - width: 42px
-            - height: 42px
-            - border-radius: 12px
-            - margin-right: 13px
-            - align-self: center
-            - background: 'rgba(127,179,213,0.16)'
-            - border: 1px solid rgba(127,179,213,0.3)
-          icon:
-            - width: 22px
-            - height: 22px
-            - color: '#7fb3d5'
-          label:
-            - justify-self: start
-            - align-self: end
-            - font-size: 14px
-            - font-weight: 700
-            - letter-spacing: -0.01em
-            - color: '#f2f5f8'
-            - font-variant-numeric: tabular-nums
-          name:
-            - justify-self: start
-            - align-self: start
-            - font-size: 11.5px
-            - color: '#6e7988'
-            - margin-top: 2px
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        header: &kpi_header
+          show: true
+          show_states: true
+          colorize_states: true
+        show:
+          loading: false
+        all_series_config:
+          type: area
+          stroke_width: 2
+          show:
+            legend_value: false
+        apex_config: &kpi_apex
+          chart:
+            height: 95
+            sparkline:
+              enabled: true
+          fill:
+            type: gradient
+            gradient:
+              opacityFrom: 0.4
+              opacityTo: 0.0
+          tooltip:
+            enabled: false
+        series:
+          - entity: sensor.qemu_homeassistant_102_cpu_auslastung
+            name: CPU
+            color: '#a6d49e'
+        card_mod: &kpi_frame
+          style: |
+            ha-card {
+              background: rgba(255,255,255,0.028) !important;
+              border: 1px solid rgba(255,255,255,0.06) !important;
+              border-radius: 14px !important;
+              box-shadow: none !important;
+              padding: 4px 6px !important;
+            }
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        header: *kpi_header
+        show:
+          loading: false
+        all_series_config:
+          type: area
+          stroke_width: 2
+          show:
+            legend_value: false
+        apex_config: *kpi_apex
+        series:
+          - entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
+            name: RAM
+            color: '#e6b566'
+        card_mod: *kpi_frame
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        header: *kpi_header
+        show:
+          loading: false
+        all_series_config:
+          type: area
+          stroke_width: 2
+          show:
+            legend_value: false
+        apex_config: *kpi_apex
+        series:
+          - entity: sensor.system_monitor_swap_verwendung
+            name: Swap
+            color: '#a6d49e'
+        card_mod: *kpi_frame
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        header: *kpi_header
+        show:
+          loading: false
+        all_series_config:
+          type: area
+          stroke_width: 2
+          show:
+            legend_value: false
+        apex_config: *kpi_apex
+        series:
+          - entity: sensor.system_monitor_ausgehender_netzwerkdurchsatz_enp0s18
+            name: Netz ↑
+            color: '#7fb3d5'
+        card_mod: *kpi_frame
 
-  # ---- CPU-Auslastung (Owlet-gerahmter Verlauf) ----
-  - type: custom:mini-graph-card
-    name: CPU-Auslastung
-    icon: mdi:cpu-64-bit
-    line_width: 3
-    animate: true
-    hours_to_show: 48
-    points_per_hour: 1
-    font_size: 75
-    line_color: '#7fb3d5'
-    color_thresholds:
-      - value: 0
-        color: '#a6d49e'
-      - value: 60
-        color: '#e6b566'
-      - value: 85
-        color: '#f0736a'
-    entities:
-      - entity: sensor.qemu_homeassistant_102_cpu_auslastung
-        name: CPU-Auslastung
+  # ---- Hero-Kurve: CPU + RAM ueber die Zeit (Owlet-gerahmt) ----
+  - type: custom:apexcharts-card
+    graph_span: 48h
+    header:
+      show: true
+      title: Auslastung · 48 h
+      show_states: false
     show:
-      state: true
-      legend: false
-      average: true
-      extrema: true
-      labels: true
+      loading: false
+    all_series_config:
+      type: area
+      stroke_width: 2
+      curve: smooth
+    yaxis:
+      - id: pct
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+      - id: mem
+        opposite: true
+        min: 0
+        decimals: 1
+        apex_config:
+          tickAmount: 4
+    series:
+      - entity: sensor.qemu_homeassistant_102_cpu_auslastung
+        name: CPU
+        color: '#a6d49e'
+        yaxis_id: pct
+      - entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
+        name: RAM
+        color: '#e6b566'
+        yaxis_id: mem
+    apex_config:
+      chart:
+        height: 190
+      fill:
+        type: gradient
+        gradient:
+          shadeIntensity: 0.3
+          opacityFrom: 0.45
+          opacityTo: 0.05
+          stops: [0, 95]
+      grid:
+        borderColor: 'rgba(255,255,255,0.06)'
+        strokeDashArray: 4
+      legend:
+        show: true
+        position: top
+        horizontalAlign: right
+        labels:
+          colors: '#8794a5'
+      stroke:
+        curve: smooth
+      xaxis:
+        labels:
+          style:
+            colors: '#6e7988'
+      tooltip:
+        theme: dark
     card_mod: &frame
       style: |
         ha-card {
@@ -332,82 +284,8 @@ cards:
           border: 1px solid rgba(255,255,255,0.06) !important;
           border-radius: 16px !important;
           box-shadow: none !important;
-          padding: 6px 10px !important;
+          padding: 8px 10px !important;
         }
-
-  # ---- Arbeitsspeicher (genutzt / frei) ----
-  - type: custom:mini-graph-card
-    name: Arbeitsspeicher in Nutzung
-    icon: mdi:memory
-    line_width: 3
-    animate: true
-    hours_to_show: 48
-    update_interval: 60
-    hour24: true
-    font_size: 75
-    line_color:
-      - '#a6d49e'
-      - '#6e7988'
-    entities:
-      - entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
-        name: Genutzt
-      - entity: sensor.qemu_homeassistant_102_freier_arbeitsspeicher
-        name: Frei
-    show:
-      state: true
-      legend: false
-      average: false
-      extrema: true
-      labels: true
-    card_mod: *frame
-
-  # ---- Swap (belegt / frei) ----
-  - type: custom:mini-graph-card
-    name: Swap
-    icon: mdi:harddisk
-    line_width: 3
-    animate: true
-    hours_to_show: 48
-    font_size: 75
-    line_color:
-      - '#e6b566'
-      - '#6e7988'
-    entities:
-      - entity: sensor.system_monitor_swap_verwendung
-        name: Belegt
-      - entity: sensor.system_monitor_swap_frei
-        name: Frei
-    show:
-      state: false
-      legend: false
-      average: true
-      extrema: true
-      labels: true
-    card_mod: *frame
-
-  # ---- Traffic (ausgehend / eingehend) ----
-  - type: custom:mini-graph-card
-    name: Traffic
-    icon: mdi:swap-vertical
-    line_width: 3
-    animate: true
-    hours_to_show: 48
-    font_size: 75
-    line_color:
-      - '#7fb3d5'
-      - '#a6d49e'
-    entities:
-      - entity: sensor.system_monitor_ausgehender_netzwerkdurchsatz_enp0s18
-        name: Ausgehend
-      - entity: sensor.system_monitor_eingehender_netzwerkdurchsatz_enp0s18
-        name: Eingehend
-    show:
-      state: false
-      legend: false
-      average: true
-      extrema: true
-      labels: true
-    card_mod: *frame
 
   # ---- Verfuegbarkeit (Owlet-gerahmte uptime-card) ----
   - type: custom:uptime-card
