@@ -1,0 +1,330 @@
+# Fenster & Tueren (Status) im Design der ueberarbeiteten Owlet-Smart-Sock-
+# Karte. Eigenstaendige Karte (aus der grossen Uebersicht isoliert).
+#
+# Ausklappbare Sektion (input_boolean.fenster_turen_expanded bleibt erhalten):
+# Kopfzeile mit Status-Badge ("Alles zu" / "N offen") + Ausklapp-Pfeil; Tap
+# auf den Kopf klappt auf/zu. Darunter 2-spaltiges Status-Raster:
+# offen = rot, zu = gruen; Fenster-/Tuer-Icon je nach kind + Zustand.
+# Tap auf eine Kachel -> more-info.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &head_styles, &win_* .
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 12px !important;
+    }
+cards:
+  - type: custom:button-card
+    entity: input_boolean.fenster_turen_expanded
+    icon: mdi:door-open
+    name: Fenster & Türen
+    show_icon: true
+    show_name: true
+    show_state: false
+    triggers_update: all
+    tap_action:
+      action: toggle
+    custom_fields:
+      badge: |
+        [[[
+          const s=states['sensor.summe_offene_fenster_turen'];
+          const n= s?parseInt(parseFloat(s.state))||0:0;
+          const open=n>0;
+          const c=open?'#f0736a':'#a6d49e';
+          const bg=open?'rgba(240,115,106,0.13)':'rgba(166,212,158,0.13)';
+          const bd=open?'rgba(240,115,106,0.26)':'rgba(166,212,158,0.24)';
+          const txt=open?(n===1?'1 offen':n+' offen'):'Alles zu';
+          const ico = open
+            ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="'+c+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16v.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="'+c+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${bg};border:1px solid ${bd};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${ico}${txt}</span>`;
+        ]]]
+      chev: |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const up = e && e.state==='on';
+          return `<span style="display:inline-flex;transform:rotate(${up?180:0}deg);transition:transform .2s;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8794a5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>`;
+        ]]]
+    styles: &head_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 4px
+      grid:
+        - grid-template-areas: '"i n badge chev"'
+        - grid-template-columns: min-content 1fr min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+        chev:
+          - justify-self: end
+          - align-self: center
+          - margin-left: 10px
+  - type: conditional
+    conditions:
+      - entity: input_boolean.fenster_turen_expanded
+        state: "on"
+    card:
+      type: grid
+      columns: 2
+      square: false
+      cards:
+        - type: custom:button-card
+          entity: binary_sensor.tur_windfang
+          name: Tür Windfang
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: door }
+          icon: &win_icon |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const open = e && e.state==='on';
+              const kind = variables.kind||'window';
+              if(kind==='door') return open?'mdi:door-open':'mdi:door-closed';
+              return open?'mdi:window-open':'mdi:window-closed';
+            ]]]
+          custom_fields:
+            st: &win_dot |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                const open=e&&e.state==='on';
+                const c=open?'#f0736a':'#a6d49e';
+                return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}28;"></span>`;
+              ]]]
+          styles: &win_styles
+            card:
+              - border-radius: 14px
+              - padding: 10px 12px
+              - box-shadow: none
+              - background: 'rgba(255,255,255,0.028)'
+              - border: 1px solid rgba(255,255,255,0.06)
+            grid:
+              - grid-template-columns: min-content 1fr min-content
+              - grid-template-areas: '"i n st"'
+            img_cell:
+              - width: 34px
+              - height: 34px
+              - border-radius: 10px
+              - margin-right: 11px
+              - align-self: center
+              - background: &win_bg |
+                  [[[
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    return (e&&e.state==='on')?'rgba(240,115,106,0.15)':'rgba(166,212,158,0.13)';
+                  ]]]
+              - border: &win_border |
+                  [[[
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    return (e&&e.state==='on')?'1px solid rgba(240,115,106,0.28)':'1px solid rgba(166,212,158,0.24)';
+                  ]]]
+            icon:
+              - width: 19px
+              - height: 19px
+              - color: &win_color |
+                  [[[
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    return (e&&e.state==='on')?'#f0736a':'#a6d49e';
+                  ]]]
+            name:
+              - justify-self: start
+              - align-self: center
+              - font-size: 13.5px
+              - font-weight: 600
+              - color: '#f2f5f8'
+              - white-space: nowrap
+              - overflow: hidden
+              - text-overflow: ellipsis
+            custom_fields:
+              st:
+                - justify-self: end
+                - align-self: center
+        - type: custom:button-card
+          entity: binary_sensor.fenster_windfang
+          name: Windfang
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.haustur
+          name: Haustür
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: door }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.tur_keller
+          name: Keller
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: door }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_wohnzimmer_links
+          name: Wohnzimmer links
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_wohnzimmer_rechts
+          name: Wohnzimmer rechts
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_wohnzimmer_hof
+          name: Wohnzimmer Hof
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_kuche
+          name: Küche
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_garderobe
+          name: Garderobe
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_bad_unten_links
+          name: Bad unten links
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_bad_unten_rechts
+          name: Bad unten rechts
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_schlafzimmer_links
+          name: Schlafzimmer links
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_schlafzimmer_rechts
+          name: Schlafzimmer rechts
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_schlafzimmer_hof
+          name: Schlafzimmer Hof
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_buro
+          name: Büro
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.balkontur
+          name: Balkontür
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: door }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
+        - type: custom:button-card
+          entity: binary_sensor.fenster_kinderzimmer
+          name: Pauline
+          show_icon: true
+          show_name: true
+          show_state: false
+          variables: { kind: window }
+          icon: *win_icon
+          custom_fields: { st: *win_dot }
+          styles: *win_styles
