@@ -1,0 +1,332 @@
+# Temperaturen v2 - Raumliste mit 24h-Sparkline im Owlet-Look
+# ============================================================================
+# Unterschied zur v1 (temperaturen-button-card.yaml, bleibt unveraendert):
+#   v1 = Zeile mit Temp-Pille + Luftfeuchte-Pille.
+#   v2 = Zeile mit 24h-Verlauf (Sparkline, Amber) + Temp-Pille.
+#        (Luftfeuchte hier weggelassen; laesst sich als 2. Pille wieder
+#         ergaenzen - siehe Hinweis unten.)
+#
+# WARUM EIN ZUSAETZLICHER SENSOR?
+#   button-card kann KEINE Historie abfragen; states liefert nur den aktuellen
+#   Wert. Ein trigger-basierter Template-Sensor schreibt daher alle 10 Minuten
+#   den Ist-Wert JEDES Raums in einen Ringpuffer (Attribut "rooms"). Die Karte
+#   zeichnet daraus die Sparkline. Der Puffer ueberlebt Neustarts (restore).
+#
+#   HINWEIS: Kein Backfill - der Verlauf baut sich ab Aktivierung auf und ist
+#   nach ~24 h voll (144 Punkte bei 10-Min-Takt). Wer sofort echte Historie
+#   inkl. Rueckblick will, nutzt alternativ custom:mini-graph-card pro Raum.
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICHER SENSOR  (configuration.yaml bzw. packages/) - EINMALIG:
+# ---------------------------------------------------------------------------
+# template:
+#   - trigger:
+#       - platform: homeassistant
+#         event: start
+#       - platform: time_pattern
+#         minutes: "/10"            # Aufloesung des Verlaufs
+#     sensor:
+#       - name: "Temperatur Verlauf"
+#         unique_id: temperatur_verlauf
+#         icon: mdi:chart-line
+#         state: "{{ now().timestamp() | int }}"
+#         attributes:
+#           rooms: >
+#             {% set cap = 144 %}     # 24h * 6/h -> Punkte pro Raum
+#             {% set sources = {
+#               'wohnzimmer':  'sensor.temperatur_wohnzimmer_temperatur',
+#               'schlafzimmer':'sensor.temperatur_schlafzimmer_temperatur',
+#               'pauline':     'sensor.temperatur_pauline_temperatur',
+#               'buro':        'sensor.temperatur_buro_temperatur',
+#               'kuche':       'sensor.temperatur_kuche_temperatur',
+#               'bad_unten':   'sensor.temperatur_bad_unten_temperatur',
+#               'bad_oben':    'sensor.hmip_sthd_000ea0c9a9ac57_temperatur',
+#               'windfang':    'sensor.temperatur_windfang_temperatur',
+#               'keller':      'sensor.temperatur_keller_temperatur',
+#               'garage':      'sensor.hmip_sth_000e62699c1078_temperatur'
+#             } %}
+#             {% set prev = this.attributes.rooms | default({}, true) %}
+#             {% set ns = namespace(out={}) %}
+#             {% for key, ent in sources.items() %}
+#               {% set v = states(ent) | float(none) %}
+#               {% set hist = prev[key] | default([], true) %}
+#               {% if v is not none %}
+#                 {% set hist = (hist + [ v | round(1) ])[-cap:] %}
+#               {% endif %}
+#               {% set ns.out = ns.out | combine({key: hist}) %}
+#             {% endfor %}
+#             {{ ns.out }}
+#
+#   -> sensor.temperatur_verlauf.attributes.rooms =
+#      { 'wohnzimmer':[20.1,20.3,...], 'schlafzimmer':[...], ... }
+#      Die "room_key" jeder Zeile unten muss zu diesen Schluesseln passen.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS) + obiger Template-Sensor.
+# ============================================================================
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 8px !important;
+    }
+cards:
+  # ---- Kopfzeile mit Durchschnitts-Badge (wie v1) ----
+  - type: custom:button-card
+    icon: mdi:home-thermometer
+    name: Temperaturen
+    show_icon: true
+    show_name: true
+    show_label: false
+    tap_action:
+      action: none
+    custom_fields:
+      avg: |
+        [[[
+          const e=states['sensor.temperatur_durchschnitt'];
+          const v=e?parseFloat(e.state):NaN;
+          const t=isNaN(v)?'–':`${v.toFixed(1).replace('.',',')} °C`;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(230,181,102,0.15);border:1px solid rgba(230,181,102,0.28);color:#e6b566;padding:6px 12px;border-radius:12px;font-weight:700;font-size:14px;white-space:nowrap;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#e6b566" stroke-width="2" stroke-linecap="round"><path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0Z"/></svg>Ø ${t}</span>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n avg"'
+        - grid-template-columns: min-content 1fr min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        avg:
+          - justify-self: end
+          - align-self: center
+
+  # ---- Raumzeilen: Icon · Name · Sparkline (24h) · Temp-Pille ----
+  - type: custom:button-card
+    entity: sensor.temperatur_wohnzimmer_temperatur
+    icon: mdi:sofa
+    name: Wohnzimmer
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: wohnzimmer }
+    triggers_update:
+      - sensor.temperatur_wohnzimmer_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields:
+      spark: &spark_line |
+        [[[
+          const S=states['sensor.temperatur_verlauf'];
+          const rooms=(S&&S.attributes&&S.attributes.rooms)?S.attributes.rooms:{};
+          let data=(rooms[variables.room_key]||[])
+            .map(Number).filter(v=>v!==null&&!isNaN(v));
+          const c='#e6b566', muted='#6e7988';
+          if(data.length<2){
+            return `<span style="font-size:11px;color:${muted};white-space:nowrap;">wird aufgezeichnet…</span>`;
+          }
+          const w=92, h=28, pad=3;
+          const min=Math.min.apply(null,data), max=Math.max.apply(null,data), rng=(max-min)||1;
+          const pts=data.map((v,i)=>{
+            const x=pad+i*(w-2*pad)/(data.length-1);
+            const y=h-pad-((v-min)/rng)*(h-2*pad);
+            return [x,y];
+          });
+          const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+          const area=line+` L${(w-pad).toFixed(1)} ${(h-pad)} L${pad} ${(h-pad)} Z`;
+          const last=pts[pts.length-1];
+          const id='sg'+Math.random().toString(36).slice(2,8);
+          return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;">
+            <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="0.28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
+            <path d="${area}" fill="url(#${id})"/>
+            <path d="${line}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.3" fill="${c}"/></svg>`;
+        ]]]
+      temp: &temp_pill |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+          const t=isNaN(v)?'–':`${v.toFixed(1).replace('.',',')} °C`;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(230,181,102,0.15);border:1px solid rgba(230,181,102,0.28);color:#e6b566;padding:5px 10px;border-radius:11px;font-weight:700;font-size:13.5px;white-space:nowrap;">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#e6b566" stroke-width="2" stroke-linecap="round"><path d="M10 13.5V5a2 2 0 0 1 4 0v8.5a4 4 0 1 1-4 0Z"/></svg>${t}</span>`;
+        ]]]
+    styles: &row_styles
+      card:
+        - border-radius: 14px
+        - padding: 9px 12px
+        - box-shadow: none
+        - background: 'rgba(255,255,255,0.028)'
+        - border: 1px solid rgba(255,255,255,0.06)
+      grid:
+        - grid-template-columns: min-content 1fr min-content min-content
+        - grid-template-areas: '"i n spark temp"'
+        - grid-column-gap: 10px
+      img_cell:
+        - width: 38px
+        - height: 38px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'rgba(255,255,255,0.05)'
+      icon:
+        - width: 20px
+        - height: 20px
+        - color: '#b4c0cf'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 14.5px
+        - font-weight: 600
+        - color: '#e7ecf3'
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+      custom_fields:
+        spark:
+          - justify-self: end
+          - align-self: center
+        temp:
+          - justify-self: end
+          - align-self: center
+          - margin-left: 4px
+  - type: custom:button-card
+    entity: sensor.temperatur_schlafzimmer_temperatur
+    icon: mdi:bed-king
+    name: Schlafzimmer
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: schlafzimmer }
+    triggers_update:
+      - sensor.temperatur_schlafzimmer_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_pauline_temperatur
+    icon: mdi:teddy-bear
+    name: Pauline
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: pauline }
+    triggers_update:
+      - sensor.temperatur_pauline_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_buro_temperatur
+    icon: mdi:chair-rolling
+    name: Büro
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: buro }
+    triggers_update:
+      - sensor.temperatur_buro_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_kuche_temperatur
+    icon: fas:kitchen-set
+    name: Küche
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: kuche }
+    triggers_update:
+      - sensor.temperatur_kuche_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_bad_unten_temperatur
+    icon: mdi:shower
+    name: Bad unten
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: bad_unten }
+    triggers_update:
+      - sensor.temperatur_bad_unten_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.hmip_sthd_000ea0c9a9ac57_temperatur
+    icon: mdi:shower-head
+    name: Bad oben
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: bad_oben }
+    triggers_update:
+      - sensor.hmip_sthd_000ea0c9a9ac57_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_windfang_temperatur
+    icon: mdi:greenhouse
+    name: Windfang
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: windfang }
+    triggers_update:
+      - sensor.temperatur_windfang_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.temperatur_keller_temperatur
+    icon: hue:room-stairs
+    name: Keller
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: keller }
+    triggers_update:
+      - sensor.temperatur_keller_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
+  - type: custom:button-card
+    entity: sensor.hmip_sth_000e62699c1078_temperatur
+    icon: mdi:garage
+    name: Garage
+    show_icon: true
+    show_name: true
+    show_state: false
+    variables: { room_key: garage }
+    triggers_update:
+      - sensor.hmip_sth_000e62699c1078_temperatur
+      - sensor.temperatur_verlauf
+    custom_fields: { spark: *spark_line, temp: *temp_pill }
+    styles: *row_styles
