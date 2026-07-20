@@ -164,9 +164,19 @@ cards:
             {re:/problem/i,            label:'Problemabfall',color:'#b399d4', icon:'hazard'},
             {re:/sperr/i,              label:'Sperrmüll',    color:'#b399d4', icon:'hazard'}
           ];
+          // Zusatz-Hinweise (z.B. "Restmüll blau") aus dem Summary behalten:
+          // Basis-Label/Farbe/Icon kommt aus den RULES, ein erkanntes Farbwort
+          // wird wieder angehaengt -> "Restmüll" bleibt "Restmüll blau".
+          const QUALIFIERS=/\b(blau|gelb|grün|gruen|braun|schwarz|rot|weiß|weiss)\b/i;
           const classify=(sum)=>{
-            for(const r of RULES){ if(r.re.test(sum||'')) return r; }
-            return {label:(sum||'Termin'), color:'#8794a5', icon:'waste'};
+            let base=null;
+            for(const r of RULES){ if(r.re.test(sum||'')){ base={label:r.label, color:r.color, icon:r.icon}; break; } }
+            if(!base) base={label:(sum||'Termin'), color:'#8794a5', icon:'waste'};
+            const q=(sum||'').match(QUALIFIERS);
+            if(q && base.label.toLowerCase().indexOf(q[0].toLowerCase())===-1){
+              base.label = base.label + ' ' + q[0];   // Original-Schreibweise behalten
+            }
+            return base;
           };
           const WD=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
           const MO=['Jan.','Feb.','März','Apr.','Mai','Juni','Juli','Aug.','Sep.','Okt.','Nov.','Dez.'];
