@@ -85,28 +85,36 @@ cards:
           const batCol  = (!isNaN(soc)&&soc<=10)?RED:GRN;
           const pvCol   = pvOn?YEL:MUT;
 
-          // ---------- Partikel-Helfer ----------
-          const parts=(path,color,dur,n)=>{
+          // ---------- Partikel-Helfer (Tempo ~ Leistung) ----------
+          // dur: viel Leistung -> schneller (1,2s), wenig -> gemaechlich (2,8s)
+          const dur=(w)=>{
+            const a=Math.abs(w)||0;
+            const t=Math.max(0,Math.min(1,(a-50)/(2500-50)));   // 50W..2500W
+            return (2.8 - t*(2.8-1.2)).toFixed(2);
+          };
+          const parts=(path,color,d,n)=>{
             let o='';
             for(let i=0;i<n;i++){
-              const b=(dur*i/n).toFixed(2);
-              o+=`<circle r="3" fill="${color}"><animateMotion dur="${dur}s" begin="${b}s" repeatCount="indefinite" path="${path}"/></circle>`;
+              const b=(d*i/n).toFixed(2);
+              o+=`<circle r="3" fill="${color}"><animateMotion dur="${d}s" begin="${b}s" repeatCount="indefinite" path="${path}"/></circle>`;
             }
             return o;
           };
 
           // ---------- Kanten (Basis) ----------
           const P_PV='M200 68 L200 102', P_GH='M86 140 L162 140', P_HB='M238 140 L314 140';
-          const base=`<g stroke-width="2.5" fill="none" stroke-linecap="round">
+          const base=`<g stroke-width="2.5" fill="none" stroke-linecap="round" pointer-events="none">
             <path d="${P_PV}" stroke="${TRK}"/><path d="${P_GH}" stroke="${TRK}"/><path d="${P_HB}" stroke="${TRK}"/></g>`;
 
-          // ---------- Partikel (nur aktive Kanten) ----------
+          // ---------- Partikel (nur aktive Kanten; Farbe zeigt Richtung) ----------
+          //   PV->Haus gelb · Netz->Haus (Bezug) rot · Haus->Netz (Einspeisung) gruen
+          //   Haus->Akku (laden) gruen · Akku->Haus (entladen) blau
           let flow='';
-          if(pvOn) flow+=parts(P_PV, YEL, 1.5, 3);
-          if(gridImp) flow+=parts('M86 140 L162 140', RED, 1.6, 3);
-          else if(gridExp) flow+=parts('M162 140 L86 140', GRN, 1.6, 3);
-          if(batChg) flow+=parts('M238 140 L314 140', GRN, 1.4, 3);
-          else if(batDis) flow+=parts('M314 140 L238 140', GRN, 1.4, 3);
+          if(pvOn) flow+=parts(P_PV, YEL, dur(solar), 3);
+          if(gridImp) flow+=parts('M86 140 L162 140', RED, dur(netz), 3);
+          else if(gridExp) flow+=parts('M162 140 L86 140', GRN, dur(netz), 3);
+          if(batChg) flow+=parts('M238 140 L314 140', GRN, dur(akku), 3);
+          else if(batDis) flow+=parts('M314 140 L238 140', BLU, dur(akku), 3);
 
           // ---------- Knoten-Helfer ----------
           const ring=(cx,cy,r,col)=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}1f" stroke="${col}5c" stroke-width="1.5"/>`;
@@ -129,9 +137,19 @@ cards:
                       + cap(342,181, batWord, batCol);
           const nHome = ring(200,140,38,BLU)   + icHome(BLU)   + val(200,157, fmt(haus),13);
 
+          // ---------- Klickbare Flaechen -> more-info je Knoten ----------
+          // Eine transparente Trefferflaeche pro Knoten oeffnet gezielt den
+          // more-info-Dialog der jeweiligen Entity (Diagramm selbst nicht klickbar).
+          const hit=(cx,cy,r,ent)=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="transparent" style="cursor:pointer;pointer-events:all;" onclick="this.dispatchEvent(new CustomEvent('hass-more-info',{bubbles:true,composed:true,detail:{entityId:'${ent}'}}))"></circle>`;
+          const hits =
+              hit(200, 40, 30, 'sensor.solarbank_3_e2700_pro_solarleistung')
+            + hit(58, 140, 30, 'sensor.smart_meter_netzbezug')
+            + hit(342,140, 30, 'sensor.solarbank_3_e2700_pro_ladestand')
+            + hit(200,140, 40, 'sensor.solarbank_3_e2700_pro_ac_hausabgabe');
+
           return `<div style="width:100%;">
             <svg viewBox="0 0 400 200" style="width:100%;height:auto;display:block;">
-              ${base}${flow}${nPV}${nGrid}${nBat}${nHome}
+              <g pointer-events="none">${base}${flow}${nPV}${nGrid}${nBat}${nHome}</g>${hits}
             </svg></div>`;
         ]]]
     styles:
