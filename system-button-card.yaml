@@ -2,15 +2,14 @@
 # Owlet-Smart-Sock-Karte.
 #
 # Owlet-Sektion: Kopf mit Online-Badge, Uptime-Verlauf (custom:uptime-card),
-# kompakte Status-Kacheln (Knoten/IP/Status/Gesundheit) und die vertrauten
-# custom:mini-graph-card-Verlaeufe (CPU/Arbeitsspeicher/Swap/Traffic) -
-# Owlet-gerahmt und in der Owlet-Palette. CPU nutzt Schwellwert-Farben.
+# kompakte Status-Kacheln (Knoten/IP/Status/Gesundheit), CPU + Arbeitsspeicher
+# als Ringe (Schwellwert-Farben) und Swap + Traffic (ein/aus) als Balken-Zeilen.
 #
 # Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &head_styles, &info_styles,
-# &val_text, &val_status, &graph_frame.
+# &val_text, &val_status, &graph_frame, &ring_styles, &res_styles, &res_label,
+# &res_bar.
 #
-# Voraussetzung: custom:button-card + custom:uptime-card +
-# custom:mini-graph-card + card-mod (HACS).
+# Voraussetzung: custom:button-card + custom:uptime-card + card-mod (HACS).
 type: vertical-stack
 card_mod: &shell
   style: |
@@ -207,69 +206,186 @@ cards:
             return `<span style="color:${c};">${txt}</span>`;
           ]]]
         styles: *info_styles
-  # ---- CPU (mini-graph, Schwellwert-Farben) ----
-  - type: custom:mini-graph-card
-    name: CPU-Auslastung
-    icon: mdi:cpu-64-bit
-    entities:
-      - entity: sensor.qemu_homeassistant_102_cpu_auslastung
-        name: CPU
-    line_width: 3
-    smoothing: true
-    show: { extrema: true, average: true, state: true }
-    color_thresholds:
-      - { value: 0, color: '#a6d49e' }
-      - { value: 40, color: '#e6b566' }
-      - { value: 75, color: '#f0736a' }
-    card_mod: *graph_frame
-  # ---- Arbeitsspeicher (mini-graph) ----
-  - type: custom:mini-graph-card
-    name: Arbeitsspeicher
-    icon: mdi:memory
-    line_color:
-      - '#e6b566'
-      - '#7fb3d5'
-    line_width: 3
-    smoothing: true
-    hours_to_show: 48
-    hour24: true
-    update_interval: 60
-    show: { state: true, legend: false, average: false, extrema: true, labels: true }
-    entities:
-      - entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
-        name: Genutzt
-      - entity: sensor.qemu_homeassistant_102_freier_arbeitsspeicher
-        name: Frei
-    card_mod: *graph_frame
-  # ---- Swap (mini-graph) ----
-  - type: custom:mini-graph-card
-    name: Swap
+  # ---- CPU + Arbeitsspeicher als Ringe ----
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.qemu_homeassistant_102_cpu_auslastung
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        styles: &ring_styles
+          card:
+            - border-radius: 16px
+            - padding: 14px 8px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-areas: '"ring"'
+          custom_fields:
+            ring:
+              - width: 100%
+        custom_fields:
+          ring: |
+            [[[
+              const v=parseFloat(entity.state)||0;
+              const pct=Math.max(0,Math.min(100,v));
+              const c = pct>=75?'#f0736a':(pct>=40?'#e6b566':'#a6d49e');
+              const circ=314.16, off=Math.max(0,circ*(1-pct/100));
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="position:relative;width:110px;height:110px;">
+                    <svg viewBox="0 0 120 120" style="width:110px;height:110px;transform:rotate(-90deg);">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="11"/>
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="${c}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                      <div style="color:#f2f5f8;font-size:24px;font-weight:750;letter-spacing:-0.03em;line-height:1;">${v.toFixed(2).replace('.',',')}<span style="font-size:13px;">%</span></div>
+                      <div style="color:#6e7988;font-size:10.5px;margin-top:2px;">CPU</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12px;color:#6e7988;font-weight:600;">Auslastung</div>
+                </div>`;
+            ]]]
+      - type: custom:button-card
+        entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        triggers_update: all
+        variables:
+          used_entity: sensor.qemu_homeassistant_102_genutzter_arbeitsspeicher
+          free_entity: sensor.qemu_homeassistant_102_freier_arbeitsspeicher
+        styles: *ring_styles
+        custom_fields:
+          ring: |
+            [[[
+              const used=parseFloat(states[variables.used_entity]?.state)||0;
+              const free=parseFloat(states[variables.free_entity]?.state)||0;
+              const tot=used+free;
+              const pct= tot>0 ? Math.round(used/tot*100) : 0;
+              const c = pct>=90?'#f0736a':(pct>=75?'#e6b566':'#a6d49e');
+              const circ=314.16, off=Math.max(0,circ*(1-pct/100));
+              return `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="position:relative;width:110px;height:110px;">
+                    <svg viewBox="0 0 120 120" style="width:110px;height:110px;transform:rotate(-90deg);">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="11"/>
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="${c}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                      <div style="color:#f2f5f8;font-size:24px;font-weight:750;letter-spacing:-0.03em;line-height:1;">${pct}<span style="font-size:13px;">%</span></div>
+                      <div style="color:#6e7988;font-size:10.5px;margin-top:2px;">${used.toFixed(2).replace('.',',')} GB</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12px;color:#6e7988;font-weight:600;">Arbeitsspeicher</div>
+                </div>`;
+            ]]]
+  # ---- Swap + Traffic als Balken-Zeilen ----
+  - type: custom:button-card
+    entity: sensor.system_monitor_swap_verwendung
     icon: mdi:harddisk
-    line_color:
-      - '#b399d4'
-      - '#7fb3d5'
-    line_width: 3
-    smoothing: true
-    show: { state: false, legend: false, average: true, extrema: true, labels: true }
-    entities:
-      - entity: sensor.system_monitor_swap_frei
-        name: Swap frei
-      - entity: sensor.system_monitor_swap_verwendung
-        name: Swap belegt
-    card_mod: *graph_frame
-  # ---- Traffic (mini-graph) ----
-  - type: custom:mini-graph-card
-    name: Traffic
-    icon: mdi:swap-vertical-bold
-    line_color:
-      - '#e6b566'
-      - '#7fb3d5'
-    line_width: 3
-    smoothing: true
-    show: { state: false, legend: false, average: true, extrema: true, labels: true }
-    entities:
-      - entity: sensor.system_monitor_ausgehender_netzwerkdurchsatz_enp0s18
-        name: Ausgehend
-      - entity: sensor.system_monitor_eingehender_netzwerkdurchsatz_enp0s18
-        name: Eingehend
-    card_mod: *graph_frame
+    name: Swap belegt
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    variables:
+      accent: '#b399d4'
+      total_entity: sensor.system_monitor_swap_frei
+      decimals: 1
+    label: &res_label |
+      [[[
+        const e=(typeof entity!=='undefined')?entity:null;
+        let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+        const d=(variables.decimals===undefined?2:variables.decimals);
+        let n=isNaN(v)?((e&&e.state)?e.state:'–'):v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+        const u=variables.unit || ((e&&e.attributes)?e.attributes.unit_of_measurement:'') || '';
+        return `${n}<span style="font-size:0.7em;color:#6e7988;font-weight:600;margin-left:3px;">${u}</span>`;
+      ]]]
+    custom_fields:
+      bar: &res_bar |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):0; if(isNaN(v))v=0;
+          let pct;
+          if(variables.total_entity){ const o=parseFloat(states[variables.total_entity]?.state)||0; const tot=v+o; pct= tot>0? v/tot*100:0; }
+          else { const mx=variables.max||100; pct= mx>0? v/mx*100:0; }
+          pct=Math.max(0,Math.min(100,pct));
+          const a=variables.accent||'#7fb3d5';
+          return `<div style="height:8px;border-radius:6px;background:rgba(255,255,255,0.06);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:6px;background:${a};"></div></div>`;
+        ]]]
+    styles: &res_styles
+      card:
+        - border-radius: 16px
+        - padding: 12px 14px
+        - box-shadow: none
+        - background: 'rgba(255,255,255,0.028)'
+        - border: 1px solid rgba(255,255,255,0.06)
+      grid:
+        - grid-template-columns: min-content 1fr auto
+        - grid-template-areas: '"i n l" "i bar bar"'
+        - grid-template-rows: min-content min-content
+        - grid-row-gap: 8px
+      img_cell:
+        - width: 34px
+        - height: 34px
+        - border-radius: 10px
+        - margin-right: 12px
+        - align-self: center
+        - background: |
+            [[[ return (variables.accent||'#7fb3d5')+'26'; ]]]
+        - border: |
+            [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3a'; ]]]
+      icon:
+        - width: 18px
+        - height: 18px
+        - color: |
+            [[[ return variables.accent||'#7fb3d5'; ]]]
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 13px
+        - font-weight: 600
+        - color: '#e7ecf3'
+      label:
+        - justify-self: end
+        - align-self: center
+        - font-size: 13.5px
+        - font-weight: 700
+        - color: '#f2f5f8'
+      custom_fields:
+        bar:
+          - align-self: center
+  - type: custom:button-card
+    entity: sensor.system_monitor_eingehender_netzwerkdurchsatz_enp0s18
+    icon: mdi:download-network
+    name: Traffic eingehend
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    variables: { accent: '#7fb3d5', unit: MB/s, decimals: 2, max: 100 }
+    label: *res_label
+    custom_fields: { bar: *res_bar }
+    styles: *res_styles
+  - type: custom:button-card
+    entity: sensor.system_monitor_ausgehender_netzwerkdurchsatz_enp0s18
+    icon: mdi:upload-network
+    name: Traffic ausgehend
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    variables: { accent: '#e6b566', unit: MB/s, decimals: 2, max: 100 }
+    label: *res_label
+    custom_fields: { bar: *res_bar }
+    styles: *res_styles
