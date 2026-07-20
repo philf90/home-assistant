@@ -2,15 +2,16 @@
 # ============================================================================
 # Unterschied zur v1 (temperaturen-button-card.yaml, bleibt unveraendert):
 #   v1 = Zeile mit Temp-Pille + Luftfeuchte-Pille.
-#   v2 = Zeile mit 24h-Verlauf (Sparkline, Amber) + Temp-Pille.
-#        (Luftfeuchte hier weggelassen; laesst sich als 2. Pille wieder
-#         ergaenzen - siehe Hinweis unten.)
+#   v2 = Zeile mit 24h-Verlauf (Sparkline) + Temp-Pille. Die Sparkline zeigt
+#        zwei Linien: Temperatur (Amber, prominent) und Luftfeuchte (Blau,
+#        dezent/faible, eigene Skala) hinter der Temperaturlinie.
 #
 # WARUM EIN ZUSAETZLICHER SENSOR?
 #   button-card kann KEINE Historie abfragen; states liefert nur den aktuellen
 #   Wert. Ein trigger-basierter Template-Sensor schreibt daher alle 10 Minuten
-#   den Ist-Wert JEDES Raums in einen Ringpuffer (Attribut "rooms"). Die Karte
-#   zeichnet daraus die Sparkline. Der Puffer ueberlebt Neustarts (restore).
+#   Ist-Temperatur UND Ist-Feuchte JEDES Raums in einen Ringpuffer (Attribut
+#   "rooms"). Die Karte zeichnet daraus die zwei Linien. Der Puffer ueberlebt
+#   Neustarts (restore).
 #
 #   HINWEIS: Kein Backfill - der Verlauf baut sich ab Aktivierung auf und ist
 #   nach ~24 h voll (144 Punkte bei 10-Min-Takt). Wer sofort echte Historie
@@ -33,32 +34,35 @@
 #         attributes:
 #           rooms: >
 #             {% set cap = 144 %}     # 24h * 6/h -> Punkte pro Raum
+#             {# je Raum: [Temperatur-Entity, Luftfeuchte-Entity] #}
 #             {% set sources = {
-#               'wohnzimmer':  'sensor.temperatur_wohnzimmer_temperatur',
-#               'schlafzimmer':'sensor.temperatur_schlafzimmer_temperatur',
-#               'pauline':     'sensor.temperatur_pauline_temperatur',
-#               'buro':        'sensor.temperatur_buro_temperatur',
-#               'kuche':       'sensor.temperatur_kuche_temperatur',
-#               'bad_unten':   'sensor.temperatur_bad_unten_temperatur',
-#               'bad_oben':    'sensor.hmip_sthd_000ea0c9a9ac57_temperatur',
-#               'windfang':    'sensor.temperatur_windfang_temperatur',
-#               'keller':      'sensor.temperatur_keller_temperatur',
-#               'garage':      'sensor.hmip_sth_000e62699c1078_temperatur'
+#               'wohnzimmer':  ['sensor.temperatur_wohnzimmer_temperatur','sensor.temperatur_wohnzimmer_luftfeuchtigkeit'],
+#               'schlafzimmer':['sensor.temperatur_schlafzimmer_temperatur','sensor.temperatur_schlafzimmer_luftfeuchtigkeit'],
+#               'pauline':     ['sensor.temperatur_pauline_temperatur','sensor.temperatur_pauline_luftfeuchtigkeit'],
+#               'buro':        ['sensor.temperatur_buro_temperatur','sensor.temperatur_buro_luftfeuchtigkeit'],
+#               'kuche':       ['sensor.temperatur_kuche_temperatur','sensor.temperatur_kuche_luftfeuchtigkeit'],
+#               'bad_unten':   ['sensor.temperatur_bad_unten_temperatur','sensor.temperatur_bad_unten_luftfeuchtigkeit'],
+#               'bad_oben':    ['sensor.hmip_sthd_000ea0c9a9ac57_temperatur','sensor.hmip_sthd_000ea0c9a9ac57_luftfeuchtigkeit'],
+#               'windfang':    ['sensor.temperatur_windfang_temperatur','sensor.temperatur_windfang_luftfeuchtigkeit'],
+#               'keller':      ['sensor.temperatur_keller_temperatur','sensor.temperatur_keller_luftfeuchtigkeit'],
+#               'garage':      ['sensor.hmip_sth_000e62699c1078_temperatur','sensor.hmip_sth_000e62699c1078_luftfeuchtigkeit']
 #             } %}
 #             {% set prev = this.attributes.rooms | default({}, true) %}
 #             {% set ns = namespace(out={}) %}
 #             {% for key, ent in sources.items() %}
-#               {% set v = states(ent) | float(none) %}
-#               {% set hist = prev[key] | default([], true) %}
-#               {% if v is not none %}
-#                 {% set hist = (hist + [ v | round(1) ])[-cap:] %}
-#               {% endif %}
-#               {% set ns.out = ns.out | combine({key: hist}) %}
+#               {% set pr = prev[key] | default({}, true) %}
+#               {% set tv = states(ent[0]) | float(none) %}
+#               {% set hv = states(ent[1]) | float(none) %}
+#               {% set th = pr.t | default([], true) %}
+#               {% set hh = pr.h | default([], true) %}
+#               {% if tv is not none %}{% set th = (th + [ tv | round(1) ])[-cap:] %}{% endif %}
+#               {% if hv is not none %}{% set hh = (hh + [ hv | round(0) ])[-cap:] %}{% endif %}
+#               {% set ns.out = ns.out | combine({key: {'t': th, 'h': hh}}) %}
 #             {% endfor %}
 #             {{ ns.out }}
 #
 #   -> sensor.temperatur_verlauf.attributes.rooms =
-#      { 'wohnzimmer':[20.1,20.3,...], 'schlafzimmer':[...], ... }
+#      { 'wohnzimmer': {'t':[20.1,20.3,...], 'h':[48,49,...]}, ... }
 #      Die "room_key" jeder Zeile unten muss zu diesen Schluesseln passen.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS) + obiger Template-Sensor.
@@ -143,28 +147,40 @@ cards:
         [[[
           const S=states['sensor.temperatur_verlauf'];
           const rooms=(S&&S.attributes&&S.attributes.rooms)?S.attributes.rooms:{};
-          let data=(rooms[variables.room_key]||[])
-            .map(Number).filter(v=>v!==null&&!isNaN(v));
-          const c='#e6b566', muted='#6e7988';
-          if(data.length<2){
+          const rec=rooms[variables.room_key];
+          // Rueckwaerts-kompatibel: altes Format war ein reines Temp-Array.
+          let T=[], H=[];
+          if(Array.isArray(rec)) T=rec;
+          else if(rec&&typeof rec==='object'){ T=rec.t||[]; H=rec.h||[]; }
+          const clean=a=>a.map(Number).filter(v=>v!==null&&!isNaN(v));
+          T=clean(T); H=clean(H);
+          const amber='#e6b566', blue='#7fb3d5', muted='#6e7988';
+          if(T.length<2){
             return `<span style="font-size:11px;color:${muted};white-space:nowrap;">wird aufgezeichnet…</span>`;
           }
           const w=92, h=28, pad=3;
-          const min=Math.min.apply(null,data), max=Math.max.apply(null,data), rng=(max-min)||1;
-          const pts=data.map((v,i)=>{
-            const x=pad+i*(w-2*pad)/(data.length-1);
-            const y=h-pad-((v-min)/rng)*(h-2*pad);
-            return [x,y];
-          });
-          const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-          const area=line+` L${(w-pad).toFixed(1)} ${(h-pad)} L${pad} ${(h-pad)} Z`;
-          const last=pts[pts.length-1];
+          // Jede Linie auf ihrer EIGENEN Skala (Temp vs. Feuchte), volle Breite.
+          const path=(data)=>{
+            if(data.length<2) return null;
+            const min=Math.min.apply(null,data), max=Math.max.apply(null,data), rng=(max-min)||1;
+            const pts=data.map((v,i)=>{
+              const x=pad+i*(w-2*pad)/(data.length-1);
+              const y=h-pad-((v-min)/rng)*(h-2*pad);
+              return [x,y];
+            });
+            return { d:pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' '), last:pts[pts.length-1] };
+          };
+          const pt=path(T), ph=path(H);
           const id='sg'+Math.random().toString(36).slice(2,8);
+          const areaT=pt.d+` L${(w-pad).toFixed(1)} ${(h-pad)} L${pad} ${(h-pad)} Z`;
+          // Feuchte (blau, faible) HINTER der Temperaturlinie.
+          const humLine = ph ? `<path d="${ph.d}" fill="none" stroke="${blue}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>` : '';
           return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;">
-            <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="0.28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
-            <path d="${area}" fill="url(#${id})"/>
-            <path d="${line}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.3" fill="${c}"/></svg>`;
+            <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${amber}" stop-opacity="0.26"/><stop offset="1" stop-color="${amber}" stop-opacity="0"/></linearGradient></defs>
+            <path d="${areaT}" fill="url(#${id})"/>
+            ${humLine}
+            <path d="${pt.d}" fill="none" stroke="${amber}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="${pt.last[0].toFixed(1)}" cy="${pt.last[1].toFixed(1)}" r="2.3" fill="${amber}"/></svg>`;
         ]]]
       temp: &temp_pill |
         [[[
