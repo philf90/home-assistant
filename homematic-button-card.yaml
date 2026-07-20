@@ -1,0 +1,314 @@
+# Homematic IP / OpenCCU im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
+#
+# Owlet-Sektion: Kopf mit Online-Badge (Tap oeffnet die CCU-Weboberflaeche),
+# Duty-Cycle-Kacheln mit Mini-Balken (Farbe nach Auslastung), Anlernmodus +
+# Posteingang, optional "Anlernen aktiv" (Countdown) und die Owlet-gerahmte
+# homematicip-system-health-card.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &tile_styles, &lbl_pct, &dc_bar.
+#
+# Voraussetzung: custom:button-card + custom:homematicip-system-health-card +
+# card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---- Kopf mit Online-Badge (Tap -> CCU oeffnen) ----
+  - type: custom:button-card
+    entity: binary_sensor.uptimekuma_openccu
+    icon: mdi:z-wave
+    name: OpenCCU
+    show_icon: true
+    show_name: true
+    show_state: false
+    tap_action:
+      action: url
+      url_path: http://192.168.1.203
+    custom_fields:
+      badge: |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const on=e&&e.state==='on';
+          const c=on?'#a6d49e':'#f0736a';
+          const txt=on?'online':'offline';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}22;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>${txt}</span>`;
+        ]]]
+      link: >
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.06);"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#8794a5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n badge link"'
+        - grid-template-columns: min-content 1fr min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+        link:
+          - justify-self: end
+          - align-self: center
+          - margin-left: 8px
+  # ---- Duty-Cycle-Kacheln (mit Balken) ----
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.rpi_rf_mod_001f5f298d8eaf_duty_cycle_level
+        icon: mdi:radio-tower
+        name: Duty Cycle CCU3
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { unit: '%', decimals: 1 }
+        label: &lbl_pct |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const d=(variables.decimals===undefined?0:variables.decimals);
+            let n=isNaN(v)?'–':v.toFixed(d);
+            return `${n}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        custom_fields:
+          bar: &dc_bar |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):0;
+              if(isNaN(v)) v=0;
+              const c = v>=80 ? '#f0736a' : (v>=50 ? '#e6b566' : '#a6d49e');
+              const w = Math.max(0, Math.min(100, v));
+              return `<div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:9px;"><div style="height:100%;width:${w}%;border-radius:4px;background:${c};"></div></div>`;
+            ]]]
+        styles: &tile_styles
+          card:
+            - border-radius: 16px
+            - padding: 11px 13px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n" "bar bar"'
+            - grid-template-rows: min-content min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  let v=(e&&e.state!==undefined)?parseFloat(e.state):0; if(isNaN(v))v=0;
+                  const c = v>=80 ? '#f0736a' : (v>=50 ? '#e6b566' : '#a6d49e');
+                  return c+'26';
+                ]]]
+            - border: |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  let v=(e&&e.state!==undefined)?parseFloat(e.state):0; if(isNaN(v))v=0;
+                  const c = v>=80 ? '#f0736a' : (v>=50 ? '#e6b566' : '#a6d49e');
+                  return '1px solid '+c+'3d';
+                ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  let v=(e&&e.state!==undefined)?parseFloat(e.state):0; if(isNaN(v))v=0;
+                  return v>=80 ? '#f0736a' : (v>=50 ? '#e6b566' : '#a6d49e');
+                ]]]
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 20px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 2px
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+      - type: custom:button-card
+        entity: sensor.hmip_hap_js1_003b5f29afa9e2_duty_cycle_level
+        icon: mdi:radio-tower
+        name: Duty Cycle HAP
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { unit: '%', decimals: 1 }
+        label: *lbl_pct
+        custom_fields: { bar: *dc_bar }
+        styles: *tile_styles
+  # ---- Anlernmodus + Posteingang ----
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: button.homematic_anlernmodus_hmip_rf_aktivieren
+        icon: mdi:cellphone-link
+        name: Anlernmodus
+        label: Starten
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: toggle
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'rgba(179,153,212,0.15)'
+            - border: 1px solid rgba(179,153,212,0.32)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: 'rgba(179,153,212,0.2)'
+            - border: 1px solid rgba(179,153,212,0.4)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#b399d4'
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#e9def5'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#b399d4'
+            - margin-top: 2px
+      - type: custom:button-card
+        entity: sensor.homematic_posteingang
+        icon: mdi:tray-full
+        name: Posteingang
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { unit: Geräte, decimals: 0 }
+        label: &lbl_count |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            let n=isNaN(v)?'–':v.toFixed(0);
+            return `${n}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        styles: &tile_plain
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: 'rgba(255,255,255,0.05)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#8794a5'
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 2px
+  # ---- Anlernen aktiv (nur waehrend des Anlernens) ----
+  - type: conditional
+    conditions:
+      - condition: numeric_state
+        entity: sensor.homematic_anlernmodus_hmip_rf_dauer
+        above: 0
+    card:
+      type: custom:button-card
+      entity: sensor.homematic_anlernmodus_hmip_rf_dauer
+      icon: mdi:timer-sand
+      name: Anlernen aktiv
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      variables: { unit: Sekunden, decimals: 0 }
+      label: *lbl_count
+      styles: *tile_plain
+  # ---- System-Health-Karte (Owlet-gerahmt) ----
+  - type: custom:homematicip-system-health-card
+    entry_id: 01J4BSQESE4CTJK0P8BQ5VMN1G
+    card_mod:
+      style: |
+        ha-card {
+          background: rgba(255,255,255,0.02) !important;
+          border: 1px solid rgba(255,255,255,0.06) !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+        }
