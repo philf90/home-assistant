@@ -164,19 +164,9 @@ cards:
             {re:/problem/i,            label:'Problemabfall',color:'#b399d4', icon:'hazard'},
             {re:/sperr/i,              label:'Sperrmüll',    color:'#b399d4', icon:'hazard'}
           ];
-          // Zusatz-Hinweise (z.B. "Restmüll blau") aus dem Summary behalten:
-          // Basis-Label/Farbe/Icon kommt aus den RULES, ein erkanntes Farbwort
-          // wird wieder angehaengt -> "Restmüll" bleibt "Restmüll blau".
-          const QUALIFIERS=/\b(blau|gelb|grün|gruen|braun|schwarz|rot|weiß|weiss)\b/i;
           const classify=(sum)=>{
-            let base=null;
-            for(const r of RULES){ if(r.re.test(sum||'')){ base={label:r.label, color:r.color, icon:r.icon}; break; } }
-            if(!base) base={label:(sum||'Termin'), color:'#8794a5', icon:'waste'};
-            const q=(sum||'').match(QUALIFIERS);
-            if(q && base.label.toLowerCase().indexOf(q[0].toLowerCase())===-1){
-              base.label = base.label + ' ' + q[0];   // Original-Schreibweise behalten
-            }
-            return base;
+            for(const r of RULES){ if(r.re.test(sum||'')) return {label:r.label, color:r.color, icon:r.icon}; }
+            return {label:(sum||'Termin'), color:'#8794a5', icon:'waste'};
           };
           const WD=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
           const MO=['Jan.','Feb.','März','Apr.','Mai','Juni','Juli','Aug.','Sep.','Okt.','Nov.','Dez.'];
@@ -201,6 +191,12 @@ cards:
               <div><div style="font-weight:700;font-size:14px;color:${TEXT};">Sensor fehlt</div>
               <div style="font-size:12.5px;color:${MUTED};margin-top:2px;">Bitte <b>${variables.src_entity}</b> anlegen (siehe Kopf der YAML-Datei).</div></div></div>`);
           }
+
+          // Bestimmte Termine komplett ausblenden (Summary-Muster).
+          // "Restmüll blau" rausfiltern -> es bleibt nur der normale Restmüll.
+          // Weitere unerwuenschte Termine einfach als Regex ergaenzen.
+          const EXCLUDE=[/restm.*blau/i];
+          raw=raw.filter(e=>!EXCLUDE.some(re=>re.test(e.summary||'')));
 
           // Normalisieren + sortieren (Tage; Fallback aus date berechnen)
           const today=new Date(); today.setHours(0,0,0,0);
