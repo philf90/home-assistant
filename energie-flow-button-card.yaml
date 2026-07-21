@@ -17,6 +17,9 @@
 #   Akku    sensor.solarbank_3_e2700_pro_akkuleistung   (>0 laedt / <0 entlaedt)
 #   Haus    sensor.system_muhlweg_hausbedarf      (Verbrauch)
 #   SOC     sensor.solarbank_3_e2700_pro_ladestand          (Ladestand %)
+# Topverbraucher (Abzweige unter dem Haus):
+#   Geraete sensor.stromverbrauch_hausgerate_aktuell        (W)
+#   Server  sensor.stromverbrauch_server_aktuell            (W)
 #
 # KEIN zusaetzlicher Sensor noetig. picture-elements ist Core (kein HACS).
 # Voraussetzung: custom:button-card + card-mod (HACS).
@@ -92,7 +95,7 @@ cards:
   - type: picture-elements
     # Transparentes 2:1-Bild -> setzt das Seitenverhaeltnis, damit die
     # Prozent-Positionen der Klickflaechen exakt auf die SVG-Knoten passen.
-    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIj48L3N2Zz4="
+    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjkwIj48L3N2Zz4="
     card_mod:
       style: |
         ha-card {
@@ -112,6 +115,8 @@ cards:
           - sensor.solarbank_3_e2700_pro_akkuleistung
           - sensor.system_muhlweg_hausbedarf
           - sensor.solarbank_3_e2700_pro_ladestand
+          - sensor.stromverbrauch_hausgerate_aktuell
+          - sensor.stromverbrauch_server_aktuell
         card_mod:
           style: |
             ha-card {
@@ -130,10 +135,14 @@ cards:
               const akku =g('sensor.solarbank_3_e2700_pro_akkuleistung');
               const haus =g('sensor.system_muhlweg_hausbedarf');
               const soc  =g('sensor.solarbank_3_e2700_pro_ladestand');
+              // Topverbraucher (Abzweige unter dem Haus)
+              const hg   =g('sensor.stromverbrauch_hausgerate_aktuell');
+              const srv  =g('sensor.stromverbrauch_server_aktuell');
 
               // ---------- Palette ----------
               const YEL='#e6c15a', GRN='#a6d49e', RED='#f0736a', BLU='#7fb3d5',
-                    MUT='#6e7988', TXT='#f2f5f8', TRK='rgba(255,255,255,0.08)';
+                    MUT='#6e7988', TXT='#f2f5f8', TRK='rgba(255,255,255,0.08)',
+                    VIO='#b399d4', TEAL='#77d4d0';
 
               const fmt=(w)=>{ if(w===null||isNaN(w))return '–'; const a=Math.abs(w);
                 return a>=1000 ? (w/1000).toFixed(1).replace('.',',')+' kW' : Math.round(w)+' W'; };
@@ -151,6 +160,10 @@ cards:
               const gridCol = gridImp?RED:(gridExp?GRN:MUT);
               const batCol  = (!isNaN(soc)&&soc<=10)?RED:GRN;
               const pvCol   = pvOn?YEL:MUT;
+              const hgOn    = !isNaN(hg) &&hg > TH;
+              const srvOn   = !isNaN(srv)&&srv> TH;
+              const hgCol   = hgOn?VIO:MUT;
+              const srvCol  = srvOn?TEAL:MUT;
 
               // ---------- Partikel (Tempo ~ Leistung) ----------
               const dur=(w)=>{
@@ -169,17 +182,22 @@ cards:
 
               // ---------- Kanten ----------
               const P_PV='M200 68 L200 102', P_GH='M86 140 L162 140', P_HB='M238 140 L314 140';
+              // Abzweige Haus -> Verbraucher (immer aus dem Haus heraus)
+              const P_HHG='M186 176 L148 211', P_HSV='M214 176 L252 211';
               const base=`<g stroke-width="2.5" fill="none" stroke-linecap="round">
-                <path d="${P_PV}" stroke="${TRK}"/><path d="${P_GH}" stroke="${TRK}"/><path d="${P_HB}" stroke="${TRK}"/></g>`;
+                <path d="${P_PV}" stroke="${TRK}"/><path d="${P_GH}" stroke="${TRK}"/><path d="${P_HB}" stroke="${TRK}"/>
+                <path d="${P_HHG}" stroke="${TRK}" stroke-width="2"/><path d="${P_HSV}" stroke="${TRK}" stroke-width="2"/></g>`;
 
               // Farbe zeigt Richtung: Bezug rot / Einspeisung gruen,
-              // laden gruen / entladen blau, PV gelb.
+              // laden gruen / entladen blau, PV gelb, Verbraucher violett/tuerkis.
               let flow='';
               if(pvOn) flow+=parts(P_PV, YEL, dur(solar), 3);
               if(gridImp) flow+=parts('M86 140 L162 140', RED, dur(netz), 3);
               else if(gridExp) flow+=parts('M162 140 L86 140', GRN, dur(netz), 3);
               if(batChg) flow+=parts('M238 140 L314 140', GRN, dur(akku), 3);
               else if(batDis) flow+=parts('M314 140 L238 140', BLU, dur(akku), 3);
+              if(hgOn)  flow+=parts(P_HHG, VIO,  dur(hg),  2);
+              if(srvOn) flow+=parts(P_HSV, TEAL, dur(srv), 2);
 
               // ---------- Knoten ----------
               const ring=(cx,cy,r,col)=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}1f" stroke="${col}5c" stroke-width="1.5"/>`;
@@ -190,6 +208,8 @@ cards:
               const icGrid=(c)=>`<g transform="translate(58 132)" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-6-8 0-11 6-8M-4 11 0-11 4 11M-7 2H7M-5 6H5"/></g>`;
               const icBat=(c)=>`<g transform="translate(342 132)" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-9" y="-5" width="16" height="10" rx="2"/><path d="M7-2v4"/></g>`;
               const icHome=(c)=>`<g transform="translate(200 131)" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-11 1 0-9 11 1M-8-1V10H8V-1"/></g>`;
+              const icHG=(c)=>`<g transform="translate(140 227)" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-8" y="-9" width="16" height="18" rx="2.5"/><path d="M-8-3H8"/><circle cx="0" cy="3" r="4"/></g>`;
+              const icSRV=(c)=>`<g transform="translate(260 227)" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-9" y="-8" width="18" height="7" rx="1.5"/><rect x="-9" y="1" width="18" height="7" rx="1.5"/><path d="M4-4.5h.4M4 4.5h.4"/></g>`;
 
               const nPV   = ring(200,40,28,pvCol)  + icPV(pvCol)   + val(200,54, fmt(solar),11.5);
               const nGrid = ring(58,140,28,gridCol)+ icGrid(gridCol)+ val(58,154, fmtAbs(netz),11.5)
@@ -199,10 +219,14 @@ cards:
               const nBat  = ring(342,140,28,batCol)+ icBat(batCol) + val(342,153, socTxt,12)
                           + cap(342,181, batWord, batCol);
               const nHome = ring(200,140,38,BLU)   + icHome(BLU)   + val(200,157, fmt(haus),13);
+              const nHG   = ring(140,235,26,hgCol) + icHG(hgCol)   + val(140,249, fmt(hg),11)
+                          + cap(140,276,'Hausgeräte',hgCol);
+              const nSRV  = ring(260,235,26,srvCol)+ icSRV(srvCol) + val(260,249, fmt(srv),11)
+                          + cap(260,276,'Server',srvCol);
 
               return `<div style="width:100%;">
-                <svg viewBox="0 0 400 200" style="width:100%;height:auto;display:block;">
-                  ${base}${flow}${nPV}${nGrid}${nBat}${nHome}
+                <svg viewBox="0 0 400 290" style="width:100%;height:auto;display:block;">
+                  ${base}${flow}${nPV}${nGrid}${nBat}${nHome}${nHG}${nSRV}
                 </svg></div>`;
             ]]]
         styles:
@@ -231,10 +255,10 @@ cards:
         tap_action:
           action: more-info
         style:
-          top: 20%
+          top: 13.8%
           left: 50%
           width: 16%
-          height: 30%
+          height: 21%
           transform: translate(-50%, -50%)
           border-radius: 999px
           cursor: pointer
@@ -246,10 +270,10 @@ cards:
         tap_action:
           action: more-info
         style:
-          top: 74%
+          top: 51%
           left: 14.5%
           width: 18%
-          height: 40%
+          height: 28%
           transform: translate(-50%, -50%)
           border-radius: 16px
           cursor: pointer
@@ -261,10 +285,10 @@ cards:
         tap_action:
           action: more-info
         style:
-          top: 74%
+          top: 51%
           left: 85.5%
           width: 18%
-          height: 40%
+          height: 28%
           transform: translate(-50%, -50%)
           border-radius: 16px
           cursor: pointer
@@ -276,12 +300,44 @@ cards:
         tap_action:
           action: more-info
         style:
-          top: 70%
+          top: 48%
           left: 50%
           width: 20%
-          height: 38%
+          height: 26%
           transform: translate(-50%, -50%)
           border-radius: 999px
+          cursor: pointer
+          opacity: 0
+          z-index: 2
+      # ---- Klickflaeche Hausgeraete ----
+      - type: image
+        entity: sensor.stromverbrauch_hausgerate_aktuell
+        image: *pixel
+        tap_action:
+          action: more-info
+        style:
+          top: 82%
+          left: 35%
+          width: 22%
+          height: 30%
+          transform: translate(-50%, -50%)
+          border-radius: 16px
+          cursor: pointer
+          opacity: 0
+          z-index: 2
+      # ---- Klickflaeche Server ----
+      - type: image
+        entity: sensor.stromverbrauch_server_aktuell
+        image: *pixel
+        tap_action:
+          action: more-info
+        style:
+          top: 82%
+          left: 65%
+          width: 22%
+          height: 30%
+          transform: translate(-50%, -50%)
+          border-radius: 16px
           cursor: pointer
           opacity: 0
           z-index: 2
