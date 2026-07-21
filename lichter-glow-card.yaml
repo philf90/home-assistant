@@ -1,0 +1,441 @@
+# Lichter – Variante A: Glow-Kacheln im Owlet-Design.
+#
+# Einheitliche warme "Licht-an"-Sprache: an = weiches Amber-Leuchten (Icon glueht,
+# Kachel leicht getoent), aus = ruhig-flach. Gleiche Kachelhoehen (kein Inline-
+# Slider). Tap = an/aus, Halten = more-info (Dimmen/Farbe). Nach Raeumen
+# gruppiert; die Raum-Ueberschrift schaltet die Raum-Entitaet (Tap) und zeigt
+# einen AN-Status.
+#
+# Ausklappbar ueber input_boolean.lichter_expanded (bleibt erhalten).
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    entity: input_boolean.lichter_expanded
+    icon: mdi:home-lightbulb
+    name: Lichter
+    show_icon: true
+    show_name: true
+    show_state: false
+    triggers_update: all
+    tap_action: { action: toggle }
+    custom_fields:
+      badge: |
+        [[[
+          const s=states['sensor.lichter_an'];
+          const n= s?parseInt(parseFloat(s.state))||0:0;
+          const on=n>0;
+          const c=on?'#f0c274':'#6e7988';
+          const bg=on?'rgba(240,194,116,0.14)':'rgba(255,255,255,0.05)';
+          const bd=on?'rgba(240,194,116,0.28)':'rgba(255,255,255,0.08)';
+          const txt=on?(n===1?'1 an':n+' an'):'Alles aus';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${bg};border:1px solid ${bd};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 1 4 10.5c-.6.6-1 1.2-1 2H9c0-.8-.4-1.4-1-2A6 6 0 0 1 12 3ZM9 18h6"/></svg>${txt}</span>`;
+        ]]]
+      chev: |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const up = e && e.state==='on';
+          return `<span style="display:inline-flex;transform:rotate(${up?180:0}deg);transition:transform .2s;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#8794a5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>`;
+        ]]]
+    styles: &head_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 4px
+      grid:
+        - grid-template-areas: '"i n badge chev"'
+        - grid-template-columns: min-content 1fr min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        badge: { justify-self: end, align-self: center }
+        chev: { justify-self: end, align-self: center, margin-left: 10px }
+  - type: conditional
+    conditions:
+      - entity: input_boolean.lichter_expanded
+        state: "on"
+    card:
+      type: vertical-stack
+      cards:
+        # ---- Master ----
+        - type: custom:button-card
+          entity: light.alle_lichter
+          name: Alle Lichter
+          icon: mdi:lightbulb-group
+          show_icon: true
+          show_name: true
+          show_label: true
+          show_state: false
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          label: &glow_state |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              if(!e||e.state==='unavailable'||e.state==='unknown') return 'Nicht verfügbar';
+              if(e.state!=='on') return 'Aus';
+              const b=e.attributes?e.attributes.brightness:null;
+              if(b!=null) return Math.round(b/255*100)+' %';
+              return 'An';
+            ]]]
+          styles: &glow_styles
+            card:
+              - border-radius: 16px
+              - padding: 12px 13px
+              - box-shadow: none
+              - background: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'linear-gradient(180deg, rgba(240,194,116,0.11), rgba(240,194,116,0.04))':'rgba(255,255,255,0.02)'; ]]]
+              - border: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'1px solid rgba(240,194,116,0.28)':'1px solid rgba(255,255,255,0.06)'; ]]]
+              - opacity: |
+                  [[[ const e=entity; return (e&&(e.state==='unavailable'||e.state==='unknown'))?'0.55':'1'; ]]]
+            grid:
+              - grid-template-columns: min-content 1fr
+              - grid-template-areas: '"i n" "i s"'
+              - grid-template-rows: min-content min-content
+            img_cell:
+              - width: 44px
+              - height: 44px
+              - border-radius: 50%
+              - margin-right: 12px
+              - align-self: center
+              - background: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'radial-gradient(circle at 50% 45%, rgba(242,207,147,0.92), rgba(240,194,116,0.35) 70%)':'rgba(255,255,255,0.05)'; ]]]
+              - border: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'1px solid rgba(240,194,116,0.5)':'1px solid rgba(255,255,255,0.06)'; ]]]
+              - box-shadow: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'0 0 18px -2px rgba(240,194,116,0.55)':'none'; ]]]
+            icon:
+              - width: 22px
+              - height: 22px
+              - color: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'#3a2c12':'#8794a5'; ]]]
+            name:
+              - justify-self: start
+              - align-self: end
+              - font-size: 14px
+              - font-weight: 700
+              - color: '#f2f5f8'
+              - white-space: nowrap
+              - overflow: hidden
+              - text-overflow: ellipsis
+            label:
+              - justify-self: start
+              - align-self: start
+              - font-size: 11.5px
+              - margin-top: 2px
+              - color: |
+                  [[[ const e=entity; return (e&&e.state==='on')?'#f0c274':'#6e7988'; ]]]
+        # ============================ WOHNZIMMER ============================
+        - type: custom:button-card
+          entity: light.wohnzimmer
+          name: Wohnzimmer
+          show_icon: false
+          show_name: true
+          show_state: false
+          triggers_update: all
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          custom_fields:
+            dot: &room_dot |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                const on=e&&e.state==='on';
+                if(on) return `<span style="display:inline-flex;align-items:center;gap:6px;color:#f0c274;font-size:10.5px;font-weight:800;letter-spacing:0.08em;"><span style="width:8px;height:8px;border-radius:50%;background:#f0c274;box-shadow:0 0 8px 0 rgba(240,194,116,0.7);"></span>AN</span>`;
+                return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.12);"></span>`;
+              ]]]
+          styles: &room_head
+            card:
+              - background: none
+              - box-shadow: none
+              - border: none
+              - padding: 10px 2px 3px
+            grid:
+              - grid-template-areas: '"n dot"'
+              - grid-template-columns: 1fr min-content
+            name:
+              - justify-self: start
+              - font-size: 11.5px
+              - font-weight: 800
+              - letter-spacing: 0.11em
+              - text-transform: uppercase
+              - color: |
+                  [[[ const e=(typeof entity!=='undefined')?entity:null; return (e&&e.state==='on')?'#c9b78f':'#6e7988'; ]]]
+            custom_fields:
+              dot: { justify-self: end, align-self: center }
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.stehlampe_2
+              name: Couch
+              icon: hue:signe
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+            - type: custom:button-card
+              entity: light.lowboard
+              name: Lowboard
+              icon: hue:gradient-lightstrip
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+            - type: custom:button-card
+              entity: light.hue_smart_plug_1
+              name: Weihnachtsbaum
+              icon: phu:christmas-tree-v2
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ============================== BAD ==============================
+        - type: custom:button-card
+          entity: light.badezimmer
+          name: Bad
+          show_icon: false
+          show_name: true
+          show_state: false
+          triggers_update: all
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          custom_fields: { dot: *room_dot }
+          styles: *room_head
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.bad
+              name: Bad
+              icon: hue:iris
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+            - type: custom:button-card
+              entity: switch.heizlufter
+              name: Heizlüfter
+              icon: hue:plug-eu
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ========================== KINDERZIMMER ==========================
+        - type: custom:button-card
+          entity: light.kinderzimmer
+          name: Kinderzimmer
+          show_icon: false
+          show_name: true
+          show_state: false
+          triggers_update: all
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          custom_fields: { dot: *room_dot }
+          styles: *room_head
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.kinderbett
+              name: Bett
+              icon: hue:lightstrip
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+            - type: custom:button-card
+              entity: light.hue_smart_plug_1_3
+              name: Lichterkette
+              icon: mdi:string-lights
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ========================== SCHLAFZIMMER ==========================
+        - type: custom:button-card
+          entity: light.schlafzimmer
+          name: Schlafzimmer
+          show_icon: false
+          show_name: true
+          show_state: false
+          triggers_update: all
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          custom_fields: { dot: *room_dot }
+          styles: *room_head
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.hue_go_1
+              name: Hue Go
+              icon: hue:go
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+            - type: custom:button-card
+              entity: switch.schlafzimmer_shelly_plugin_g3_klimaanlage
+              name: Klimaanlage
+              icon: mdi:air-conditioner
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ============================== BÜRO ==============================
+        - type: custom:button-card
+          entity: light.buro
+          name: Büro
+          show_icon: false
+          show_name: true
+          show_state: false
+          triggers_update: all
+          tap_action: { action: toggle }
+          hold_action: { action: more-info }
+          custom_fields: { dot: *room_dot }
+          styles: *room_head
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.buro_lightstrip
+              name: Büro Lightstrip
+              icon: hue:lightstrip
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ============================= WINDFANG =============================
+        - type: custom:button-card
+          name: Windfang
+          show_icon: false
+          show_name: true
+          tap_action: { action: none }
+          styles: &room_label
+            card:
+              - background: none
+              - box-shadow: none
+              - border: none
+              - padding: 10px 2px 3px
+            grid:
+              - grid-template-areas: '"n"'
+            name:
+              - justify-self: start
+              - font-size: 11.5px
+              - font-weight: 800
+              - letter-spacing: 0.11em
+              - text-transform: uppercase
+              - color: '#6e7988'
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.hue_smart_plug_1_2
+              name: Windfang
+              icon: hue:plug-eu
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
+        # ============================= GARTEN =============================
+        - type: custom:button-card
+          name: Garten
+          show_icon: false
+          show_name: true
+          tap_action: { action: none }
+          styles: *room_label
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: light.shellyoutdoorsg3_e4b3232d6708_switch_0
+              name: Lichterkette
+              icon: mdi:string-lights
+              show_icon: true
+              show_name: true
+              show_label: true
+              show_state: false
+              tap_action: { action: toggle }
+              hold_action: { action: more-info }
+              label: *glow_state
+              styles: *glow_styles
