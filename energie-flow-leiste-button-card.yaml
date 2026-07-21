@@ -1,0 +1,289 @@
+# Energiefluss · Verbraucher-Leiste (Konzept B) im Owlet-Look
+# ============================================================================
+# Kopf mit Fluss-Zusammenfassung (Haus/PV/Netz) + Autark/Bezug-Badge, darunter
+# ALLE Top-Verbraucher als Live-Kacheln mit Richtungspfeil - Farben/Pfeil-Logik
+# wie in energie-verbrauch-uebersicht ("Verbraucher live").
+#
+# 6 Verbraucher mit Live-Leistung (W) voll eingefaerbt; 4 ohne Momentanwert
+# (Heizung, Schreibtisch, Klimaanlage, Heizluefter) gedaempft mit Tages-kWh.
+# Jede Kachel ist eine eigene button-card -> nativ klickbar (more-info).
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+# ============================================================================
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---- Kopfzeile: Fluss-Zusammenfassung + Badge ----
+  - type: custom:button-card
+    icon: mdi:transmission-tower
+    name: Energiefluss
+    show_icon: true
+    show_name: true
+    show_label: true
+    tap_action: { action: none }
+    triggers_update:
+      - sensor.system_muhlweg_hausbedarf
+      - sensor.solarbank_3_e2700_pro_solarleistung
+      - sensor.smart_meter_netzbezug
+    label: |
+      [[[
+        const g=(id)=>{const s=states[id];return s?parseFloat(s.state):NaN;};
+        const f=(w)=>isNaN(w)?'–':(Math.abs(w)>=1000?(w/1000).toFixed(1).replace('.',',')+' kW':Math.round(w)+' W');
+        return `Haus ${f(g('sensor.system_muhlweg_hausbedarf'))} · PV ${f(g('sensor.solarbank_3_e2700_pro_solarleistung'))} · Netz ${f(g('sensor.smart_meter_netzbezug'))}`;
+      ]]]
+    custom_fields:
+      badge: |
+        [[[
+          const netz=(()=>{const s=states['sensor.smart_meter_netzbezug'];return s?parseFloat(s.state):NaN;})();
+          const TH=15;
+          let txt='Autark', c='#a6d49e';
+          if(!isNaN(netz)&&netz>TH){ txt='Netzbezug'; c='#f0736a'; }
+          else if(!isNaN(netz)&&netz<-TH){ txt='Einspeisung'; c='#a6d49e'; }
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}22;border:1px solid ${c}47;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;">
+            <span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}33;"></span>${txt}</span>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+      custom_fields:
+        badge: [ justify-self: end, align-self: center ]
+
+  # ---- Verbraucher-Kacheln ----
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      # ===== Live-Verbraucher (Momentanleistung W) =====
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_server_aktuell
+        icon: mdi:server
+        name: Server
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fd0d5' }
+        label: &lbl_watt |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            if(isNaN(v)) return '–';
+            return `${Math.round(v)}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:2px;">W</span>`;
+          ]]]
+        custom_fields:
+          flow: &flow_watt |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+              const a=variables.accent||'#7fb3d5';
+              if(isNaN(v)||v<=1) return '<span style="color:#6e7988;">–</span>';
+              return `<span style="color:${a};">↓</span>`;
+            ]]]
+        styles: &live_styles
+          card:
+            - border-radius: 16px
+            - padding: 12px 12px 13px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i flow" "l l" "n n"'
+            - grid-template-rows: min-content min-content min-content
+            - grid-row-gap: 8px
+          img_cell:
+            - width: 34px
+            - height: 34px
+            - border-radius: 10px
+            - justify-self: start
+            - align-self: start
+            - background: |
+                [[[ return (variables.accent||'#7fb3d5')+'29'; ]]]
+          icon:
+            - width: 18px
+            - height: 18px
+            - color: |
+                [[[ return variables.accent||'#7fb3d5'; ]]]
+          custom_fields:
+            flow:
+              - justify-self: end
+              - align-self: start
+              - font-size: 16px
+              - font-weight: 700
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 19px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_hausgerate_aktuell
+        icon: mdi:dishwasher
+        name: Hausgeräte
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#e6b566' }
+        label: *lbl_watt
+        custom_fields: { flow: *flow_watt }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.poe_power_total
+        icon: mdi:ethernet
+        name: PoE
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#b399d4' }
+        label: *lbl_watt
+        custom_fields: { flow: *flow_watt }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.shelly_plugs_fernseher_switch_0_power
+        icon: mdi:television
+        name: TV
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fb3d5' }
+        label: *lbl_watt
+        custom_fields: { flow: *flow_watt }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.shelly_outdoor_plugs_pool_switch_0_power
+        icon: mdi:pool
+        name: Pool
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fd0d5' }
+        label: *lbl_watt
+        custom_fields: { flow: *flow_watt }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power
+        icon: mdi:water-pump
+        name: Gartenpumpe
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#a6d49e' }
+        label: *lbl_watt
+        custom_fields: { flow: *flow_watt }
+        styles: *live_styles
+      # ===== Nur Tages-kWh (kein Momentanwert) -> gedaempft =====
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_schreibtisch_daily
+        icon: mdi:desk
+        name: Schreibtisch
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#a6d49e' }
+        card_mod: &dim { style: 'ha-card { opacity: 0.55 !important; }' }
+        label: &lbl_kwh |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            if(isNaN(v)) return '–';
+            return `${v.toFixed(2).replace('.',',')}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:2px;">kWh</span>`;
+          ]]]
+        custom_fields:
+          flow: &flow_kwh |
+            [[[ return '<span style="color:#6e7988;font-size:0.7em;">heute</span>'; ]]]
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.heizlufter_stromverbrauch_heizlufter_daily
+        icon: mdi:heat-wave
+        name: Heizlüfter
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#e6b566' }
+        card_mod: *dim
+        label: *lbl_kwh
+        custom_fields: { flow: *flow_kwh }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_heizung_daily
+        icon: mdi:radiator
+        name: Heizung
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#f0736a' }
+        card_mod: *dim
+        label: *lbl_kwh
+        custom_fields: { flow: *flow_kwh }
+        styles: *live_styles
+      - type: custom:button-card
+        entity: sensor.schlafzimmer_shelly_plugin_g3_klimaanlage_stromverbrauch_klimaanlage_daily
+        icon: mdi:air-conditioner
+        name: Klimaanlage
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables: { accent: '#7fb3d5' }
+        card_mod: *dim
+        label: *lbl_kwh
+        custom_fields: { flow: *flow_kwh }
+        styles: *live_styles

@@ -1,30 +1,26 @@
-# Energiefluss-Diagramm im Owlet-Look
+# Energiefluss-Diagramm (Konzept A · dynamischer Faecher) im Owlet-Look
 # ============================================================================
-# Uebersicht "woher kommt / wohin geht der Strom": Erzeugung/Speicher oben
-# (Solar + Akku), Netz links, Haus in der Mitte, Topverbraucher unten
-# (Hausgeraete, Server, PoE). Animierte Partikel wandern in FLUSSRICHTUNG;
-# Richtung + Farbe + Tempo (viel W = schneller) reagieren live.
+# Quellen oben (Solar + Akku), Netz links, Haus mittig; die aktiven Live-
+# Verbraucher haengen als Faecher unten. 0-W-Geraete werden AUSGEBLENDET -> der
+# Faecher rueckt zusammen und zentriert sich (dynamisch in Groesse & Form).
+# Partikel wandern in Flussrichtung, Tempo ~ Leistung.
 #
-# FARBEN der Verbraucher sind identisch zur "Top-Verbraucher"-Karte
-# (energie-verbrauch-uebersicht): Hausgeraete #e6b566, Server #7fd0d5,
-# PoE #b399d4 -> durchgaengig einheitlich.
+# Verbraucherfarben = Top-Verbraucher-Karte: Hausgeraete #e6b566, Server
+# #7fd0d5, PoE #b399d4, TV #7fb3d5, Pool #7fd0d5, Gartenpumpe #a6d49e.
 #
-# KLICKBARKEIT: Diagramm als Hintergrund in picture-elements; darueber
-# transparente type:image-Flaechen (opacity:0) mit nativem more-info je Knoten.
+# KLICKBARKEIT: Quellen + Haus (feste Positionen) sind per transparenter
+# type:image-Flaeche klickbar (more-info). Die Verbraucher-Knoten reflowen
+# dynamisch und sind daher NICHT einzeln klickbar (Detail: "Verbraucher live"-
+# Karte). Diagramm-Hintergrund pointer-events:none.
 #
-# Ergaenzt energie-pv-button-card.yaml. Sensoren/Vorzeichen:
-#   Solar   sensor.solarbank_3_e2700_pro_solarleistung      (>=0)
-#   Netz    sensor.smart_meter_netzbezug     (>0 Bezug / <0 Einspeisung)
-#   Akku    sensor.solarbank_3_e2700_pro_akkuleistung   (>0 laedt / <0 entlaedt)
-#   Haus    sensor.system_muhlweg_hausbedarf      (Verbrauch)
-#   SOC     sensor.solarbank_3_e2700_pro_ladestand          (Ladestand %)
-# Topverbraucher (Abzweige unter dem Haus, W):
-#   Geraete sensor.stromverbrauch_hausgerate_aktuell
-#   Server  sensor.stromverbrauch_server_aktuell
-#   PoE     sensor.poe_power_total
+# Sensoren (W, ausser SOC): Solar solarleistung · Netz smart_meter_netzbezug
+# (>0 Bezug) · Akku akkuleistung (>0 laedt) · SOC ladestand · Haus
+# system_muhlweg_hausbedarf · Verbraucher: poe_power_total,
+# stromverbrauch_hausgerate_aktuell, stromverbrauch_server_aktuell,
+# shelly_plugs_fernseher_switch_0_power, shelly_outdoor_plugs_pool_switch_0_power,
+# shelly_outdoor_plug_s_gen3_brunnenpumpe_power.
 #
-# KEIN zusaetzlicher Sensor noetig. picture-elements ist Core (kein HACS).
-# Voraussetzung: custom:button-card + card-mod (HACS).
+# Voraussetzung: custom:button-card + card-mod (HACS). picture-elements = Core.
 # ============================================================================
 type: vertical-stack
 card_mod:
@@ -38,15 +34,13 @@ card_mod:
       gap: 8px !important;
     }
 cards:
-  # ---- Kopfzeile mit Autark/Bezug-Badge ----
   - type: custom:button-card
     icon: mdi:transmission-tower
     name: Energiefluss
     show_icon: true
     show_name: true
     show_state: false
-    tap_action:
-      action: none
+    tap_action: { action: none }
     triggers_update:
       - sensor.smart_meter_netzbezug
     custom_fields:
@@ -89,23 +83,14 @@ cards:
         - letter-spacing: -0.02em
         - color: '#f2f5f8'
       custom_fields:
-        badge:
-          - justify-self: end
-          - align-self: center
+        badge: [ justify-self: end, align-self: center ]
 
-  # ---- Diagramm (Hintergrund) + klickbare Knoten (Overlay) ----
   - type: picture-elements
-    # Transparentes 4:3-Bild -> Seitenverhaeltnis fuer exakte Klickpositionen.
-    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48L3N2Zz4="
+    image: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzIwIj48L3N2Zz4="
     card_mod:
       style: |
-        ha-card {
-          background: none !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
+        ha-card { background:none !important; border:none !important; box-shadow:none !important; }
     elements:
-      # ---- Fluss-Diagramm (nicht klickbar, fuellt die Flaeche) ----
       - type: custom:button-card
         show_icon: false
         show_name: false
@@ -114,149 +99,107 @@ cards:
           - sensor.solarbank_3_e2700_pro_solarleistung
           - sensor.smart_meter_netzbezug
           - sensor.solarbank_3_e2700_pro_akkuleistung
-          - sensor.system_muhlweg_hausbedarf
           - sensor.solarbank_3_e2700_pro_ladestand
+          - sensor.system_muhlweg_hausbedarf
+          - sensor.poe_power_total
           - sensor.stromverbrauch_hausgerate_aktuell
           - sensor.stromverbrauch_server_aktuell
-          - sensor.poe_power_total
+          - sensor.shelly_plugs_fernseher_switch_0_power
+          - sensor.shelly_outdoor_plugs_pool_switch_0_power
+          - sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power
         card_mod:
           style: |
-            ha-card {
-              background: none !important;
-              border: none !important;
-              box-shadow: none !important;
-              pointer-events: none !important;
-            }
+            ha-card { background:none !important; border:none !important; box-shadow:none !important; pointer-events:none !important; }
         custom_fields:
           flow: |
             [[[
-              // ---------- Werte ----------
               const g=(id)=>{ const s=states[id]; return s?parseFloat(s.state):NaN; };
               const solar=g('sensor.solarbank_3_e2700_pro_solarleistung');
               const netz =g('sensor.smart_meter_netzbezug');
               const akku =g('sensor.solarbank_3_e2700_pro_akkuleistung');
-              const haus =g('sensor.system_muhlweg_hausbedarf');
               const soc  =g('sensor.solarbank_3_e2700_pro_ladestand');
-              const hg   =g('sensor.stromverbrauch_hausgerate_aktuell');
-              const srv  =g('sensor.stromverbrauch_server_aktuell');
-              const poe  =g('sensor.poe_power_total');
 
-              // ---------- Palette (Verbraucher = Top-Verbraucher-Karte) ----------
-              const YEL='#e6c15a', GRN='#a6d49e', RED='#f0736a', BLU='#7fb3d5',
-                    MUT='#6e7988', TXT='#f2f5f8', TRK='rgba(255,255,255,0.08)',
-                    AMB='#e6b566', TEA='#7fd0d5', VIO='#b399d4';
-
+              const YEL='#e6c15a',GRN='#a6d49e',RED='#f0736a',BLU='#7fb3d5',MUT='#6e7988',TXT='#f2f5f8',TRK='rgba(255,255,255,0.08)';
+              const TH=15;
               const fmt=(w)=>{ if(w===null||isNaN(w))return '–'; const a=Math.abs(w);
                 return a>=1000 ? (w/1000).toFixed(1).replace('.',',')+' kW' : Math.round(w)+' W'; };
               const fmtAbs=(w)=>{ if(w===null||isNaN(w))return '–'; const a=Math.abs(w);
                 return a>=1000 ? (a/1000).toFixed(1).replace('.',',')+' kW' : Math.round(a)+' W'; };
-
-              // ---------- Fluss-Zustaende ----------
-              const TH=15;
-              const pvOn   = !isNaN(solar)&&solar> TH;
-              const gridImp= !isNaN(netz) &&netz > TH;   // Bezug  (Netz -> Haus)
-              const gridExp= !isNaN(netz) &&netz <-TH;   // Einspeisung (Haus -> Netz)
-              const batChg = !isNaN(akku) &&akku > TH;   // laedt  (Haus -> Akku)
-              const batDis = !isNaN(akku) &&akku <-TH;   // entlaedt (Akku -> Haus)
-              const hgOn   = !isNaN(hg) &&hg > TH;
-              const srvOn  = !isNaN(srv)&&srv> TH;
-              const poeOn  = !isNaN(poe)&&poe> TH;
-
-              const gridCol = gridImp?RED:(gridExp?GRN:MUT);
-              const batCol  = (!isNaN(soc)&&soc<=10)?RED:GRN;
-              const pvCol   = pvOn?YEL:MUT;
-              const hgCol   = hgOn?AMB:MUT;
-              const srvCol  = srvOn?TEA:MUT;
-              const poeCol  = poeOn?VIO:MUT;
-
-              // ---------- Partikel (Tempo ~ Leistung) ----------
-              const dur=(w)=>{
-                const a=Math.abs(w)||0;
-                const t=Math.max(0,Math.min(1,(a-50)/(2500-50)));
-                return (2.8 - t*(2.8-1.2)).toFixed(2);
-              };
-              const parts=(path,color,d,n)=>{
-                let o='';
-                for(let i=0;i<n;i++){
-                  const b=(d*i/n).toFixed(2);
-                  o+=`<circle r="3" fill="${color}"><animateMotion dur="${d}s" begin="${b}s" repeatCount="indefinite" path="${path}"/></circle>`;
-                }
-                return o;
+              const dur=(w)=>{ const a=Math.abs(w)||0; const t=Math.max(0,Math.min(1,(a-50)/(2500-50))); return (2.8 - t*(2.8-1.2)).toFixed(2); };
+              const parts=(path,color,d,n)=>{ let o=''; for(let i=0;i<n;i++){ o+=`<circle r="3" fill="${color}"><animateMotion dur="${d}s" begin="${(d*i/n).toFixed(2)}s" repeatCount="indefinite" path="${path}"/></circle>`; } return o; };
+              const ring=(cx,cy,r,c)=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${c}1f" stroke="${c}5c" stroke-width="1.5"/>`;
+              const txt=(x,y,t,s,c,w)=>`<text x="${x}" y="${y}" text-anchor="middle" fill="${c||TXT}" font-size="${s}" font-weight="${w||700}" font-family="-apple-system,system-ui,sans-serif" style="font-variant-numeric:tabular-nums">${t}</text>`;
+              const ico=(paths,x,y,c,sc)=>`<g transform="translate(${x} ${y}) scale(${sc||1})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`;
+              const I={
+                sun:'<circle cx="0" cy="0" r="4.2"/><path d="M0-8.5V-11M0 8.5V11M-8.5 0H-11M8.5 0H11M6 6 7.8 7.8M-6 6-7.8 7.8M6-6 7.8-7.8M-6-6-7.8-7.8"/>',
+                bat:'<rect x="-9" y="-5" width="16" height="10" rx="2"/><path d="M7-2v4"/>',
+                grid:'<path d="M-6-8 0-11 6-8M-4 11 0-11 4 11M-7 2H7M-5 6H5"/>',
+                home:'<path d="M-9 1 0-8 9 1M-6-1V9H6V-1"/>',
+                dishwasher:'<rect x="-7" y="-8" width="14" height="16" rx="2"/><path d="M-7-3H7"/><circle cx="0" cy="3" r="3.2"/>',
+                server:'<rect x="-8" y="-7" width="16" height="6" rx="1.4"/><rect x="-8" y="1" width="16" height="6" rx="1.4"/><path d="M4-4h.3M4 4h.3"/>',
+                ethernet:'<path d="M-6-2v-3h12v3M0-5v-3"/><rect x="-5" y="-2" width="10" height="8" rx="1.4"/><path d="M-3 6v1.4M0 6v1.4M3 6v1.4"/>',
+                tv:'<rect x="-9" y="-7" width="18" height="12" rx="1.6"/><path d="M-3 9h6"/>',
+                pool:'<path d="M-8 3c2-2 3 2 5 0s3-2 5 0 3 2 3 0M-8 8c2-2 3 2 5 0s3-2 5 0 3 2 3 0M-3-6a2 2 0 0 1 4 0v9"/>',
+                pump:'<path d="M-6 8V-2a4 4 0 0 1 8 0M-6 8h8M2-2h5M4-2v3"/><circle cx="-2" cy="-2" r="1"/>'
               };
 
-              // ---------- Kanten ----------
-              const P_SH ='M163 77 L183 120';   // Solar -> Haus
-              const P_AH ='M237 77 L217 120';   // Akku  <-> Haus (laden = umgekehrt)
-              const P_GH ='M79 156 L160 156';   // Netz  <-> Haus (Einspeisung = umgekehrt)
-              const P_HHG='M173 186 L128 234';  // Haus -> Hausgeraete
-              const P_HSV='M200 196 L200 228';  // Haus -> Server
-              const P_HPO='M227 186 L272 234';  // Haus -> PoE
-              const base=`<g fill="none" stroke-linecap="round">
-                <path d="${P_SH}"  stroke="${TRK}" stroke-width="2.5"/>
-                <path d="${P_AH}"  stroke="${TRK}" stroke-width="2.5"/>
-                <path d="${P_GH}"  stroke="${TRK}" stroke-width="2.5"/>
-                <path d="${P_HHG}" stroke="${TRK}" stroke-width="2"/>
-                <path d="${P_HSV}" stroke="${TRK}" stroke-width="2"/>
-                <path d="${P_HPO}" stroke="${TRK}" stroke-width="2"/></g>`;
+              // ---------- Quellen-Zustaende ----------
+              const pvOn=!isNaN(solar)&&solar>TH;
+              const gridImp=!isNaN(netz)&&netz>TH, gridExp=!isNaN(netz)&&netz<-TH;
+              const batChg=!isNaN(akku)&&akku>TH, batDis=!isNaN(akku)&&akku<-TH;
+              const pvCol=pvOn?YEL:MUT, gridCol=gridImp?RED:(gridExp?GRN:MUT), batCol=(!isNaN(soc)&&soc<=10)?RED:GRN;
 
-              // Farbe zeigt Richtung: PV gelb · Bezug rot/Einspeisung gruen ·
-              // laden gruen/entladen blau · Hausgeraete amber · Server teal · PoE violett
+              // ---------- Kanten Quellen ----------
+              const P_SH='M162 78 L182 114', P_AH='M238 78 L218 114', P_GH='M79 150 L160 150';
+              let base=`<g fill="none" stroke-linecap="round">
+                <path d="${P_SH}" stroke="${TRK}" stroke-width="2.5"/>
+                <path d="${P_AH}" stroke="${TRK}" stroke-width="2.5"/>
+                <path d="${P_GH}" stroke="${TRK}" stroke-width="2.5"/>`;
               let flow='';
               if(pvOn) flow+=parts(P_SH, YEL, dur(solar), 3);
-              if(gridImp) flow+=parts('M79 156 L160 156', RED, dur(netz), 3);
-              else if(gridExp) flow+=parts('M160 156 L79 156', GRN, dur(netz), 3);
-              if(batChg) flow+=parts('M217 120 L237 77', GRN, dur(akku), 3);
-              else if(batDis) flow+=parts('M237 77 L217 120', BLU, dur(akku), 3);
-              if(hgOn)  flow+=parts(P_HHG, AMB, dur(hg),  2);
-              if(srvOn) flow+=parts(P_HSV, TEA, dur(srv), 2);
-              if(poeOn) flow+=parts(P_HPO, VIO, dur(poe), 2);
+              if(gridImp) flow+=parts('M79 150 L160 150', RED, dur(netz), 3);
+              else if(gridExp) flow+=parts('M160 150 L79 150', GRN, dur(netz), 3);
+              if(batChg) flow+=parts('M218 114 L238 78', GRN, dur(akku), 3);
+              else if(batDis) flow+=parts('M238 78 L218 114', BLU, dur(akku), 3);
 
-              // ---------- Knoten-Helfer ----------
-              const ring=(cx,cy,r,col)=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}1f" stroke="${col}5c" stroke-width="1.5"/>`;
-              const val=(cx,y,t,size,col)=>`<text x="${cx}" y="${y}" text-anchor="middle" fill="${col||TXT}" font-size="${size}" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif" style="font-variant-numeric:tabular-nums;">${t}</text>`;
-              const cap=(cx,y,t,col)=>`<text x="${cx}" y="${y}" text-anchor="middle" fill="${col}" font-size="10.5" font-weight="600" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif">${t}</text>`;
+              // ---------- Verbraucher (nur aktive) ----------
+              const cons=[
+                {id:'sensor.stromverbrauch_hausgerate_aktuell', n:'Hausgeräte', ic:'dishwasher', c:'#e6b566'},
+                {id:'sensor.stromverbrauch_server_aktuell',     n:'Server',     ic:'server',     c:'#7fd0d5'},
+                {id:'sensor.poe_power_total',                   n:'PoE',        ic:'ethernet',   c:'#b399d4'},
+                {id:'sensor.shelly_plugs_fernseher_switch_0_power', n:'TV',      ic:'tv',         c:'#7fb3d5'},
+                {id:'sensor.shelly_outdoor_plugs_pool_switch_0_power', n:'Pool', ic:'pool',       c:'#7fd0d5'},
+                {id:'sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power', n:'Garten', ic:'pump', c:'#a6d49e'}
+              ].map(o=>Object.assign(o,{w:g(o.id)}))
+               .filter(o=>!isNaN(o.w)&&o.w>TH)
+               .sort((a,b)=>b.w-a.w);
 
-              // Icons (x,y = Mittelpunkt, c = Farbe)
-              const icPV=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"><circle cx="0" cy="0" r="4.5"/><path d="M0 -9V-12M0 9V12M-9 0H-12M9 0H12M6.4 6.4 8.5 8.5M-6.4 6.4-8.5 8.5M6.4-6.4 8.5-8.5M-6.4-6.4-8.5-8.5"/></g>`;
-              const icGrid=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-6-8 0-11 6-8M-4 11 0-11 4 11M-7 2H7M-5 6H5"/></g>`;
-              const icBat=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-9" y="-5" width="16" height="10" rx="2"/><path d="M7-2v4"/></g>`;
-              const icHome=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-11 1 0-9 11 1M-8-1V10H8V-1"/></g>`;
-              const icHG=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-8" y="-9" width="16" height="18" rx="2.5"/><path d="M-8-3H8"/><circle cx="0" cy="3" r="4"/></g>`;
-              const icSRV=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="-9" y="-8" width="18" height="7" rx="1.5"/><rect x="-9" y="1" width="18" height="7" rx="1.5"/><path d="M4-4.5h.4M4 4.5h.4"/></g>`;
-              const icPoE=(x,y,c)=>`<g transform="translate(${x} ${y})" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-7-2v-3h14v3M0-5v-4"/><rect x="-6" y="-2" width="12" height="9" rx="1.5"/><path d="M-3 7v1.5M0 7v1.5M3 7v1.5"/></g>`;
+              const N=cons.length, cy=270, cr=24, hy=190;
+              const sp = N>1 ? Math.min(64, 300/(N-1)) : 0;
+              const x0 = 200 - sp*(N-1)/2;
+              for(let i=0;i<N;i++){ base+=`<path d="M200 ${hy} L${(x0+i*sp).toFixed(1)} ${cy-cr}" stroke="${TRK}" stroke-width="1.8" fill="none"/>`; }
+              base+='</g>';
+              for(let i=0;i<N;i++){ flow+=parts(`M200 ${hy} L${(x0+i*sp).toFixed(1)} ${cy-cr}`, cons[i].c, dur(cons[i].w), 2); }
 
               // ---------- Knoten ----------
-              const nSolar= ring(152,52,27,pvCol)  + icPV(152,44,pvCol)   + val(152,65, fmt(solar),11.5);
-              const socTxt= (!isNaN(soc))?Math.round(soc)+' %':'–';
+              const socTxt=(!isNaN(soc))?Math.round(soc)+' %':'–';
               const batWord= batChg?('lädt '+fmtAbs(akku)):(batDis?('entlädt '+fmtAbs(akku)):'bereit');
-              const nAkku = ring(248,52,27,batCol) + icBat(248,44,batCol) + val(248,65, socTxt,12)
-                          + cap(248,92, batWord, batCol);
-              const nGrid = ring(52,156,27,gridCol)+ icGrid(52,148,gridCol)+ val(52,169, fmtAbs(netz),11.5)
-                          + cap(52,196, gridImp?'Bezug':(gridExp?'Einspeisung':'Netz'), gridCol);
-              const nHome = ring(200,156,40,BLU)   + icHome(200,147,BLU)  + val(200,173, fmt(haus),13);
-              const nHG   = ring(112,252,24,hgCol) + icHG(112,244,hgCol)  + val(112,257, fmt(hg),11)
-                          + cap(112,280,'Hausgeräte',hgCol);
-              const nSRV  = ring(200,252,24,srvCol)+ icSRV(200,244,srvCol)+ val(200,257, fmt(srv),11)
-                          + cap(200,280,'Server',srvCol);
-              const nPoE  = ring(288,252,24,poeCol)+ icPoE(288,244,poeCol)+ val(288,257, fmt(poe),11)
-                          + cap(288,280,'PoE',poeCol);
+              let nodes='';
+              nodes+=ring(150,54,27,pvCol)+ico(I.sun,150,47,pvCol)+txt(150,64,fmt(solar),11.5);
+              nodes+=ring(250,54,27,batCol)+ico(I.bat,250,47,batCol)+txt(250,64,socTxt,12)+txt(250,92,batWord,10.5,batCol,600);
+              nodes+=ring(52,150,27,gridCol)+ico(I.grid,52,143,gridCol)+txt(52,163,fmtAbs(netz),11.5)+txt(52,190,gridImp?'Bezug':(gridExp?'Einspeisung':'Netz'),10.5,gridCol,600);
+              nodes+=ring(200,150,40,BLU)+ico(I.home,200,142,BLU,1.15)+txt(200,167,fmt(g('sensor.system_muhlweg_hausbedarf')),13);
+              for(let i=0;i<N;i++){ const o=cons[i], x=x0+i*sp;
+                nodes+=ring(x,cy,cr,o.c)+ico(I[o.ic],x,cy-8,o.c,.82)+txt(x,cy+9,fmt(o.w),10.5,TXT)+txt(x,cy+cr+13,o.n,9.5,o.c,600);
+              }
 
-              return `<div style="width:100%;">
-                <svg viewBox="0 0 400 300" style="width:100%;height:auto;display:block;">
-                  ${base}${flow}${nSolar}${nAkku}${nGrid}${nHome}${nHG}${nSRV}${nPoE}
-                </svg></div>`;
+              return `<div style="width:100%;"><svg viewBox="0 0 400 320" style="width:100%;height:auto;display:block;">${base}${flow}${nodes}</svg></div>`;
             ]]]
         styles:
-          card:
-            - background: none
-            - box-shadow: none
-            - border: none
-            - padding: 0
-          grid:
-            - grid-template-areas: '"flow"'
+          card: [ background: none, box-shadow: none, border: none, padding: 0 ]
+          grid: [ grid-template-areas: '"flow"' ]
           custom_fields:
-            flow:
-              - width: 100%
+            flow: [ width: 100% ]
         style:
           top: 50%
           left: 50%
@@ -264,102 +207,24 @@ cards:
           transform: translate(-50%, -50%)
           pointer-events: none
 
-      # ---- Klickflaechen: transparente type:image-Elemente (opacity:0) ----
+      # ---- Klickflaechen: nur feste Knoten (Quellen + Haus) ----
       - type: image
         entity: sensor.solarbank_3_e2700_pro_solarleistung
         image: &pixel "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         tap_action: { action: more-info }
-        style:
-          top: 17%
-          left: 38%
-          width: 16%
-          height: 22%
-          transform: translate(-50%, -50%)
-          border-radius: 999px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
+        style: { top: 17%, left: 37.5%, width: 15%, height: 20%, transform: 'translate(-50%, -50%)', border-radius: 999px, cursor: pointer, opacity: 0, z-index: 2 }
       - type: image
         entity: sensor.solarbank_3_e2700_pro_ladestand
         image: *pixel
         tap_action: { action: more-info }
-        style:
-          top: 20%
-          left: 62%
-          width: 16%
-          height: 26%
-          transform: translate(-50%, -50%)
-          border-radius: 999px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
+        style: { top: 17%, left: 62.5%, width: 15%, height: 24%, transform: 'translate(-50%, -50%)', border-radius: 999px, cursor: pointer, opacity: 0, z-index: 2 }
       - type: image
         entity: sensor.smart_meter_netzbezug
         image: *pixel
         tap_action: { action: more-info }
-        style:
-          top: 55%
-          left: 13%
-          width: 16%
-          height: 26%
-          transform: translate(-50%, -50%)
-          border-radius: 16px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
+        style: { top: 47%, left: 13%, width: 15%, height: 24%, transform: 'translate(-50%, -50%)', border-radius: 16px, cursor: pointer, opacity: 0, z-index: 2 }
       - type: image
         entity: sensor.system_muhlweg_hausbedarf
         image: *pixel
         tap_action: { action: more-info }
-        style:
-          top: 52%
-          left: 50%
-          width: 20%
-          height: 28%
-          transform: translate(-50%, -50%)
-          border-radius: 999px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
-      - type: image
-        entity: sensor.stromverbrauch_hausgerate_aktuell
-        image: *pixel
-        tap_action: { action: more-info }
-        style:
-          top: 85%
-          left: 28%
-          width: 20%
-          height: 22%
-          transform: translate(-50%, -50%)
-          border-radius: 16px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
-      - type: image
-        entity: sensor.stromverbrauch_server_aktuell
-        image: *pixel
-        tap_action: { action: more-info }
-        style:
-          top: 85%
-          left: 50%
-          width: 20%
-          height: 22%
-          transform: translate(-50%, -50%)
-          border-radius: 16px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
-      - type: image
-        entity: sensor.poe_power_total
-        image: *pixel
-        tap_action: { action: more-info }
-        style:
-          top: 85%
-          left: 72%
-          width: 20%
-          height: 22%
-          transform: translate(-50%, -50%)
-          border-radius: 16px
-          cursor: pointer
-          opacity: 0
-          z-index: 2
+        style: { top: 47%, left: 50%, width: 20%, height: 26%, transform: 'translate(-50%, -50%)', border-radius: 999px, cursor: pointer, opacity: 0, z-index: 2 }
