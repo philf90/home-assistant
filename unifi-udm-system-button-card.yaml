@@ -1,0 +1,242 @@
+# UDM SE · Systemzustand – Owlet-Karte (CPU / RAM / Temperatur / Uptime)
+#
+# Kopfzeile (Icon + Titel + Online-Badge) über einem 2x2-Metrik-Raster im
+# gleichen Stil wie die Internet-/Infrastruktur-Karte (unifi-button-card.yaml).
+# Der Icon-Kachel-Ton färbt sich anhand Schwellwerten: grün = ok,
+# gelb = Warnung, rot = kritisch. Der Zahlenwert bleibt weiß (Dashboard-Stil).
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
+# │ Temperatur + Uptime sind bei dir bestätigt (in unifi-button-card genutzt).│
+# │ CPU-/RAM-Auslastung liefert die UniFi-Network-Integration ebenfalls,      │
+# │ ist aber je nach Version standardmäßig DEAKTIVIERT. Falls die Kacheln     │
+# │ "–" zeigen: Entität in HA aktivieren bzw. hier die ID anpassen.           │
+# │   CPU : sensor.dream_machine_special_edition_cpu_utilization              │
+# │   RAM : sensor.dream_machine_special_edition_memory_utilization           │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod: &shell
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------------------------- Kopfzeile ----------------------------
+  - type: custom:button-card
+    entity: sensor.dream_machine_special_edition_uptime
+    icon: mdi:server-network
+    name: UDM SE · System
+    show_icon: true
+    show_name: true
+    show_state: false
+    triggers_update: all
+    tap_action:
+      action: more-info
+    custom_fields:
+      badge: |
+        [[[
+          const s=states['sensor.dream_machine_special_edition_uptime'];
+          const st=s?String(s.state).toLowerCase():'';
+          const bad=['off','unavailable','disconnected','unknown','offline','none',''].includes(st);
+          const c=bad?'#f0736a':'#a6d49e';
+          const txt=bad?'offline':'online';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}22;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>${txt}</span>`;
+        ]]]
+    styles: &head_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n badge"'
+        - grid-template-columns: min-content 1fr min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+  # ------------------------- 2x2 Metrik-Raster -------------------------
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_cpu_utilization
+        icon: mdi:cpu-64-bit
+        name: CPU-Last
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          metric_entity: sensor.dream_machine_special_edition_cpu_utilization
+          unit: '%'
+          decimals: 0
+          warn: 70
+          bad: 90
+        label: &sys_val |
+          [[[
+            const muted='#6e7988', val='#f2f5f8';
+            const e=states[variables.metric_entity];
+            if(variables.kind==='uptime'){
+              let secs=NaN;
+              if(e && e.state){
+                const t=Date.parse(e.state);
+                if(!isNaN(t)) secs=(Date.now()-t)/1000;
+                else { const n=parseFloat(e.state); if(!isNaN(n)) secs=n; }
+              }
+              let txt='–';
+              if(!isNaN(secs) && secs>=0){
+                const d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600);
+                txt=d>0?`${d}d ${h}h`:`${h}h`;
+              }
+              return `<span style="color:${val};">${txt}</span>`;
+            }
+            let v=e?parseFloat(e.state):NaN;
+            const d=(variables.decimals===undefined?0:variables.decimals);
+            const n=isNaN(v)?'–':v.toFixed(d).replace('.',',');
+            return `${n}<span style="font-size:0.5em;color:${muted};font-weight:600;margin-left:2px;">${variables.unit||''}</span>`;
+          ]]]
+        styles: &sys_styles
+          card:
+            - border-radius: 16px
+            - padding: 11px 12px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"i l" "i n"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 40px
+            - height: 40px
+            - border-radius: 11px
+            - margin-right: 11px
+            - align-self: center
+            - background: &sys_bg |
+                [[[
+                  const g='#a6d49e', warn='#e6b566', bad='#f0736a', muted='#6e7988';
+                  if(variables.kind==='uptime') return g+'29';
+                  const e=states[variables.metric_entity];
+                  const v=e?parseFloat(e.state):NaN;
+                  let c=g;
+                  if(isNaN(v)) c=muted;
+                  else if(variables.bad!=null && v>=variables.bad) c=bad;
+                  else if(variables.warn!=null && v>=variables.warn) c=warn;
+                  return c+'29';
+                ]]]
+            - border: &sys_border |
+                [[[
+                  const g='#a6d49e', warn='#e6b566', bad='#f0736a', muted='#6e7988';
+                  let c=g;
+                  if(variables.kind!=='uptime'){
+                    const e=states[variables.metric_entity];
+                    const v=e?parseFloat(e.state):NaN;
+                    if(isNaN(v)) c=muted;
+                    else if(variables.bad!=null && v>=variables.bad) c=bad;
+                    else if(variables.warn!=null && v>=variables.warn) c=warn;
+                  }
+                  return '1px solid '+c+'3d';
+                ]]]
+          icon:
+            - width: 21px
+            - height: 21px
+            - color: &sys_col |
+                [[[
+                  const g='#a6d49e', warn='#e6b566', bad='#f0736a', muted='#6e7988';
+                  if(variables.kind==='uptime') return g;
+                  const e=states[variables.metric_entity];
+                  const v=e?parseFloat(e.state):NaN;
+                  if(isNaN(v)) return muted;
+                  if(variables.bad!=null && v>=variables.bad) return bad;
+                  if(variables.warn!=null && v>=variables.warn) return warn;
+                  return g;
+                ]]]
+          label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 18px
+            - font-weight: 750
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          name:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+            - margin-top: 2px
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_memory_utilization
+        icon: mdi:memory
+        name: RAM-Last
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          metric_entity: sensor.dream_machine_special_edition_memory_utilization
+          unit: '%'
+          decimals: 0
+          warn: 75
+          bad: 90
+        label: *sys_val
+        styles: *sys_styles
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_dream_machine_special_edition_local_temperature
+        icon: mdi:thermometer
+        name: Temperatur
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          metric_entity: sensor.dream_machine_special_edition_dream_machine_special_edition_local_temperature
+          unit: °C
+          decimals: 0
+          warn: 70
+          bad: 85
+        label: *sys_val
+        styles: *sys_styles
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_uptime
+        icon: mdi:timer-outline
+        name: Uptime
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          metric_entity: sensor.dream_machine_special_edition_uptime
+          kind: uptime
+        label: *sys_val
+        styles: *sys_styles

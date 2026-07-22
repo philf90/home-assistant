@@ -1,0 +1,182 @@
+# Steuerung – Owlet-Karte (Schnellaktionen für das UniFi-Netzwerk)
+#
+# Kachel-Raster wie im Navbar-"More"-Menü: Icon über Label. Schalter-Kacheln
+# färben sich grün wenn aktiv; die Neustart-Kachel ist rot getönt und fragt vor
+# der Ausführung nach.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN (alle instanzspezifisch!) ─────────────────┐
+# │ Schalter/Buttons hängen an DEINEN SSIDs, Ports und Geräten. Passe die IDs  │
+# │ unten an. Finde sie unter Entwicklerwerkzeuge -> Zustände (switch. / button.│
+# │   Gäste-WLAN  : switch.wlan_gaste            (SSID an/aus)                  │
+# │   Haupt-WLAN  : switch.wlan_home             (SSID an/aus)                  │
+# │   PoE-Port    : switch.usw_pro_max_24_poe_port_1  (Port-PoE an/aus)        │
+# │   UDM Neustart: button.dream_machine_special_edition_restart               │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod: &shell
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    icon: mdi:tune-vertical
+    name: Steuerung
+    show_icon: true
+    show_name: true
+    show_state: false
+    tap_action:
+      action: none
+    styles: &head_styles
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+      grid:
+        - grid-template-areas: '"i n"'
+        - grid-template-columns: min-content 1fr
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: center
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      # ---- Gäste-WLAN (Toggle) ----
+      - type: custom:button-card
+        entity: switch.wlan_gaste
+        icon: mdi:wifi-lock-open
+        name: Gäste-WLAN
+        show_icon: true
+        show_name: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: toggle
+        styles: &toggle_styles
+          card:
+            - padding: 14px 8px 12px
+            - border-radius: 16px
+            - box-shadow: none
+            - background: &tg_bg |
+                [[[
+                  const on=entity&&entity.state==='on';
+                  return on?'rgba(166, 212, 158, 0.10)':'rgba(255,255,255,0.028)';
+                ]]]
+            - border: &tg_border |
+                [[[
+                  const on=entity&&entity.state==='on';
+                  return '1px solid '+(on?'rgba(166, 212, 158, 0.24)':'rgba(255,255,255,0.06)');
+                ]]]
+          grid:
+            - grid-template-areas: '"i" "n"'
+            - grid-template-rows: min-content min-content
+            - justify-items: center
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 13px
+            - margin-bottom: 9px
+            - background: *tg_bg
+            - border: *tg_border
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: &tg_col |
+                [[[
+                  const on=entity&&entity.state==='on';
+                  return on?'#a6d49e':'#8794a5';
+                ]]]
+          name:
+            - font-size: 12.5px
+            - font-weight: 600
+            - color: '#f2f5f8'
+      # ---- Haupt-WLAN (Toggle) ----
+      - type: custom:button-card
+        entity: switch.wlan_home
+        icon: mdi:wifi
+        name: Haupt-WLAN
+        show_icon: true
+        show_name: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: toggle
+        styles: *toggle_styles
+      # ---- PoE-Port (Toggle) ----
+      - type: custom:button-card
+        entity: switch.usw_pro_max_24_poe_port_1
+        icon: mdi:ethernet
+        name: PoE-Port 1
+        show_icon: true
+        show_name: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: toggle
+        styles: *toggle_styles
+      # ---- UDM Neustart (Button, mit Rückfrage) ----
+      - type: custom:button-card
+        entity: button.dream_machine_special_edition_restart
+        icon: mdi:restart
+        name: UDM Neustart
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: call-service
+          service: button.press
+          service_data:
+            entity_id: button.dream_machine_special_edition_restart
+          confirmation:
+            text: Dream Machine SE wirklich neu starten?
+        styles:
+          card:
+            - padding: 14px 8px 12px
+            - border-radius: 16px
+            - box-shadow: none
+            - background: 'rgba(240, 115, 106, 0.10)'
+            - border: 1px solid rgba(240, 115, 106, 0.24)
+          grid:
+            - grid-template-areas: '"i" "n"'
+            - grid-template-rows: min-content min-content
+            - justify-items: center
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 13px
+            - margin-bottom: 9px
+            - background: 'rgba(240, 115, 106, 0.14)'
+            - border: 1px solid rgba(240, 115, 106, 0.24)
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: '#f0736a'
+          name:
+            - font-size: 12.5px
+            - font-weight: 600
+            - color: '#f2f5f8'
