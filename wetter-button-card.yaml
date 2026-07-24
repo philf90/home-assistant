@@ -92,6 +92,18 @@ cards:
           };
           const tColor=isNaN(t)?muted:pcHex(t);
 
+          // ---- Luftfeuchte-Farbe: Komfortskala (trocken=Amber -> ideal ~50%=Grün -> feucht=Blau) ----
+          const hE=S('sensor.wetterstation_pro_luftfeuchtigkeit');
+          const hum=hE?parseFloat(hE.state):NaN;
+          const hcHex=(h)=>{
+            const HS=[[0,230,181,102],[25,205,208,138],[40,166,212,158],[55,134,204,176],[68,127,208,213],[82,127,179,213],[100,95,136,196]];
+            let x=Math.max(HS[0][0],Math.min(HS[HS.length-1][0],h)),r,g,b;
+            for(let i=0;i<HS.length-1;i++){const a=HS[i],c=HS[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
+            const hx=n=>n.toString(16).padStart(2,'0');
+            return '#'+hx(r)+hx(g)+hx(b);
+          };
+          const hColor=isNaN(hum)?blue:hcHex(hum);
+
           // ---- Regen (Wetterstation) ----
           const rb=S('binary_sensor.wetterstation_pro_regen');
           const raining=rb&&rb.state==='on';
@@ -115,7 +127,7 @@ cards:
               ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2])}
               <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 ${cell(iThermo, numOf('sensor.wetterstation_pro_temperatur',1)+unit('°C'), 'Temperatur', tColor)}
-                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', blue)}
+                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', hColor)}
                 ${cell(rainIcon, rainLabel, 'Wetterstation', rainColor)}
                 ${cell(iRain, rmNum.toFixed(1)+unit('l/m²'), rmLabel, rmColor)}
               </div>
