@@ -78,10 +78,19 @@ cards:
           };
           const cInfo=condMap[cond]||[(cond||'–'),iCloud,muted];
 
-          // ---- Temperatur-Farbe ----
+          // ---- Temperatur-Farbe: gleiche Farbskala wie in der Heizung-View ----
+          // (weich interpolierte Skala kalt->warm; als 6-stelliges Hex, damit die
+          //  cell()-Logik ${accent}14/2b/22/3d wie gewohnt getoenten Hintergrund erzeugt)
           const tE=S('sensor.wetterstation_pro_temperatur');
           const t=tE?parseFloat(tE.state):NaN;
-          const tColor=isNaN(t)?muted:(t>30?red:(t>20?amber:(t>15?green:(t>10?green:(t>5?teal:blue)))));
+          const pcHex=(temp)=>{
+            const SC=[[-10,67,100,179],[0,79,143,208],[7,75,176,196],[14,92,191,154],[19,134,200,119],[22,184,207,106],[25,230,195,88],[28,231,159,73],[32,224,116,63],[36,214,79,74]];
+            let x=Math.max(SC[0][0],Math.min(SC[SC.length-1][0],temp)),r,g,b;
+            for(let i=0;i<SC.length-1;i++){const a=SC[i],c=SC[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
+            const h=n=>n.toString(16).padStart(2,'0');
+            return '#'+h(r)+h(g)+h(b);
+          };
+          const tColor=isNaN(t)?muted:pcHex(t);
 
           // ---- Regen (Wetterstation) ----
           const rb=S('binary_sensor.wetterstation_pro_regen');
