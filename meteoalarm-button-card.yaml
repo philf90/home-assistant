@@ -29,8 +29,10 @@ card:
     service: browser_mod.popup
     service_data:
       title: Wetterwarnungen
-      size: wide
-      # Dialog-Oberflaeche auf Owlet-Navy statt Schwarz (wie im Navbar-Menue)
+      # Dialog-Oberflaeche auf Owlet-Navy statt Schwarz (wie im Navbar-Menue).
+      # Breite: min() statt Media-Query, damit ohne Umweg beides passt -
+      # auf dem iPhone volle Viewport-Breite, auf dem Desktop bei 720px gedeckelt.
+      # Weniger Content-Padding holt auf dem Handy ~24px Textbreite zurueck.
       style: |
         --mdc-theme-surface: #1b2231;
         --ha-card-background: #1b2231;
@@ -40,6 +42,11 @@ card:
         --primary-text-color: #f2f5f8;
         --secondary-text-color: #8794a5;
         --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+        --mdc-dialog-min-width: min(100vw, 720px);
+        --mdc-dialog-max-width: min(100vw, 720px);
+        --popup-min-width: min(100vw, 720px);
+        --popup-max-width: min(100vw, 720px);
+        --dialog-content-padding: 12px;
       content:
         type: custom:button-card
         entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
@@ -54,17 +61,29 @@ card:
         show_icon: false
         show_label: false
         styles:
+          # Ohne diese Breiten-Fesseln sizet button-card sein Grid auf
+          # max-content: der Beschreibungssatz stuende dann auf einer Zeile
+          # und wuerde am rechten Dialogrand abgeschnitten statt umzubrechen.
           card:
             - padding: 0
             - border: none
             - box-shadow: none
             - background: none
+            - width: 100%
+            - max-width: 100%
+            - box-sizing: border-box
           grid:
             - grid-template-areas: '"body"'
+            - grid-template-columns: minmax(0, 1fr)
+            - width: 100%
+            - max-width: 100%
+            - min-width: 0
           custom_fields:
             body:
               - width: 100%
+              - max-width: 100%
               - min-width: 0
+              - overflow: hidden
         custom_fields:
           body: |
             [[[
@@ -170,14 +189,14 @@ card:
                   if (/^[·•\-\*]\s*/.test(l)) {
                     if (!open) { out += `<ul style="margin:2px 0 0;padding:0 0 0 16px;list-style:none;">`; open = true; }
                     const t = l.replace(/^[·•\-\*]\s*/, '');
-                    out += `<li style="position:relative;font-size:13.5px;line-height:1.5;color:${value};margin:3px 0;">`
+                    out += `<li style="position:relative;font-size:13.5px;line-height:1.5;color:${value};margin:3px 0;overflow-wrap:anywhere;">`
                         +  `<span style="position:absolute;left:-14px;top:0;color:${muted};">•</span>${esc(t)}</li>`;
                   } else if (/[:：]$/.test(l)) {
                     closeList();
-                    out += `<div style="font-size:11.5px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${soft};margin:10px 0 2px;">${esc(l.replace(/[:：]$/, ''))}</div>`;
+                    out += `<div style="font-size:11.5px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${soft};margin:10px 0 2px;overflow-wrap:anywhere;">${esc(l.replace(/[:：]$/, ''))}</div>`;
                   } else {
                     closeList();
-                    out += `<div style="font-size:13.5px;line-height:1.55;color:${value};margin:4px 0;">${esc(l)}</div>`;
+                    out += `<div style="font-size:13.5px;line-height:1.55;color:${value};margin:4px 0;overflow-wrap:anywhere;">${esc(l)}</div>`;
                   }
                 });
                 closeList();
@@ -243,7 +262,7 @@ card:
 
                 // Headline nur zeigen, wenn sie mehr aussagt als der Kurzname
                 const headlineExtra = (w.headline && w.headline.toUpperCase() !== w.name.toUpperCase())
-                  ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;">${esc(w.headline)}</div>` : '';
+                  ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;overflow-wrap:anywhere;">${esc(w.headline)}</div>` : '';
 
                 return `
                   <div style="background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;">
@@ -252,7 +271,7 @@ card:
                         ${iconFor(w.name, color, 22)}
                       </div>
                       <div style="min-width:0;flex:1 1 auto;">
-                        <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};">${esc(w.name)}</div>
+                        <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:anywhere;">${esc(w.name)}</div>
                         ${headlineExtra}
                         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${pills}</div>
                       </div>
