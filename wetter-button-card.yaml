@@ -60,7 +60,7 @@ cards:
             <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
               <div style="min-width:0;">
-                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${valueHtml}</div>
+                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
                 <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
               </div>
             </div>`;
@@ -78,10 +78,31 @@ cards:
           };
           const cInfo=condMap[cond]||[(cond||'–'),iCloud,muted];
 
-          // ---- Temperatur-Farbe ----
+          // ---- Temperatur-Farbe: gleiche Farbskala wie in der Heizung-View ----
+          // (weich interpolierte Skala kalt->warm; als 6-stelliges Hex, damit die
+          //  cell()-Logik ${accent}14/2b/22/3d wie gewohnt getoenten Hintergrund erzeugt)
           const tE=S('sensor.wetterstation_pro_temperatur');
           const t=tE?parseFloat(tE.state):NaN;
-          const tColor=isNaN(t)?muted:(t>30?red:(t>20?amber:(t>15?green:(t>10?green:(t>5?teal:blue)))));
+          const pcHex=(temp)=>{
+            const SC=[[-10,67,100,179],[0,79,143,208],[7,75,176,196],[14,92,191,154],[19,134,200,119],[22,184,207,106],[25,230,195,88],[28,231,159,73],[32,224,116,63],[36,214,79,74]];
+            let x=Math.max(SC[0][0],Math.min(SC[SC.length-1][0],temp)),r,g,b;
+            for(let i=0;i<SC.length-1;i++){const a=SC[i],c=SC[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
+            const h=n=>n.toString(16).padStart(2,'0');
+            return '#'+h(r)+h(g)+h(b);
+          };
+          const tColor=isNaN(t)?muted:pcHex(t);
+
+          // ---- Luftfeuchte-Farbe: Komfortskala (trocken=Amber -> ideal ~50%=Grün -> feucht=Blau) ----
+          const hE=S('sensor.wetterstation_pro_luftfeuchtigkeit');
+          const hum=hE?parseFloat(hE.state):NaN;
+          const hcHex=(h)=>{
+            const HS=[[0,230,181,102],[25,205,208,138],[40,166,212,158],[55,134,204,176],[68,127,208,213],[82,127,179,213],[100,95,136,196]];
+            let x=Math.max(HS[0][0],Math.min(HS[HS.length-1][0],h)),r,g,b;
+            for(let i=0;i<HS.length-1;i++){const a=HS[i],c=HS[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
+            const hx=n=>n.toString(16).padStart(2,'0');
+            return '#'+hx(r)+hx(g)+hx(b);
+          };
+          const hColor=isNaN(hum)?blue:hcHex(hum);
 
           // ---- Regen (Wetterstation) ----
           const rb=S('binary_sensor.wetterstation_pro_regen');
@@ -106,7 +127,7 @@ cards:
               ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2])}
               <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 ${cell(iThermo, numOf('sensor.wetterstation_pro_temperatur',1)+unit('°C'), 'Temperatur', tColor)}
-                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', blue)}
+                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', hColor)}
                 ${cell(rainIcon, rainLabel, 'Wetterstation', rainColor)}
                 ${cell(iRain, rmNum.toFixed(1)+unit('l/m²'), rmLabel, rmColor)}
               </div>
@@ -154,13 +175,17 @@ cards:
             <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
               <div style="min-width:0;">
-                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${valueHtml}</div>
+                <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
                 <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
               </div>
             </div>`;
 
+          // Windrichtung: Kuerzel (englische 16-Punkt-Windrose) -> volle deutsche Schreibweise
+          const dirMap={N:'Nord',NNE:'Nord-Nordost',NE:'Nordost',ENE:'Ost-Nordost',E:'Ost',ESE:'Ost-Südost',SE:'Südost',SSE:'Süd-Südost',S:'Süd',SSW:'Süd-Südwest',SW:'Südwest',WSW:'West-Südwest',W:'West',WNW:'West-Nordwest',NW:'Nordwest',NNW:'Nord-Nordwest'};
           const dirE=S('sensor.windrichtung');
-          const dir=dirE?dirE.state:'–';
+          const dirRaw=dirE?dirE.state:'';
+          const dirName=dirMap[(dirRaw||'').toUpperCase()]||(dirRaw&&dirRaw!=='unavailable'&&dirRaw!=='unknown'?dirRaw:'–');
+          const dir=`<span style="display:inline-block;white-space:normal;line-height:1.15;max-width:100%;font-size:17px;">${dirName}</span>`;
           const strName=S('sensor.windstarke_aktuell');
           const strLabel=strName?strName.state:'Windgeschwindigkeit';
 
