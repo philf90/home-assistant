@@ -103,6 +103,18 @@ card:
               const esc = (s) => String(s === null || s === undefined ? '' : s)
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+              // ---------- Breitenbegrenzung ----------
+              // Die Karte haengt im Dialog in einer shrink-to-fit-Kette: dort ist
+              // width/max-width 100% zirkulaer und setzt keine Grenze, der
+              // Fliesstext bliebe einzeilig und liefe aus dem Viewport. Deshalb
+              // eine *definite* Laenge - volle Viewport-Breite am Handy, 720px
+              // am Desktop.
+              // Zwei max-width-Deklarationen als Fallback-Kette: verschachteltes
+              // calc() in min() haben aeltere WebKit-Versionen nicht geparst,
+              // wodurch die ganze Deklaration weggefallen waere. Bleibt min()
+              // unverstanden, greift weiterhin die 94vw-Zeile davor.
+              const widthCap = 'width:100%;max-width:94vw;max-width:min(720px, 100vw - 28px);box-sizing:border-box;';
+
               // ---------- Stufen-Normalisierung ----------
               const lvlMeta = {
                 0: { label: 'Vorabinformation',  color: '#7c8ba1' },
@@ -265,7 +277,7 @@ card:
                   ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;overflow-wrap:anywhere;">${esc(w.headline)}</div>` : '';
 
                 return `
-                  <div style="background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;">
+                  <div style="background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;${widthCap}">
                     <div style="display:flex;align-items:flex-start;gap:12px;">
                       <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;background:${color}22;border:1px solid ${color}55;">
                         ${iconFor(w.name, color, 22)}
@@ -324,7 +336,7 @@ card:
               });
 
               if (!total) {
-                blocks = `<div style="background:${panel};border:1px solid ${line};border-radius:16px;padding:22px 16px;text-align:center;">
+                blocks = `<div style="background:${panel};border:1px solid ${line};border-radius:16px;padding:22px 16px;text-align:center;${widthCap}">
                     <div style="font-size:14px;font-weight:600;color:${value};">Aktuell keine Warnungen</div>
                     <div style="font-size:12.5px;color:${muted};margin-top:4px;">Für ${esc(region || 'die Region')} liegt keine Warnung vor.</div>
                   </div>`;
@@ -336,12 +348,8 @@ card:
               const footer = [esc(region), esc(standTxt), 'Quelle: ' + esc(attribution)]
                 .filter(Boolean).join(' · ');
 
-              // max-width als definite Laenge (nicht 100%): die Karte haengt im
-              // Dialog in einer shrink-to-fit-Kette - dort waere 100% zirkulaer
-              // und der Fliesstext bliebe einzeilig. Der Wert deckt sich mit der
-              // Dialogbreite: volle Viewport-Breite am Handy, 720px am Desktop.
               return `
-                <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:min(720px, calc(100vw - 28px));box-sizing:border-box;text-align:left;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                <div style="display:flex;flex-direction:column;gap:10px;${widthCap}text-align:left;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
                   ${blocks}
                   <div style="font-size:11.5px;color:${muted};line-height:1.45;padding:2px 2px 0;">${footer}</div>
                 </div>`;
