@@ -7,12 +7,32 @@
 # und darunter Wochentag/Datum.
 # Nutzer nicht zu Hause -> Foto in Graustufen, Untertitel wechselt.
 #
-# Anpassen: variables.weather_entity auf die eigene weather-Entitaet setzen.
+# Wetter-Quellen (hybrid): Das Zustand-Icon kommt aus der weather-Entitaet, die
+# angezeigte Temperatur ist der lokale Messwert der HomematicIP Wetterstation.
+# Die Station liefert keinen Wetterzustand, daher bleibt das Icon bei der
+# Vorhersage.
+#
+# Nacht-Korrektur: Die DWD-Entitaet unterscheidet nicht zwischen Tag und Nacht
+# und meldet auch nach Sonnenuntergang 'sunny'. Steht sun.sun auf below_horizon,
+# wird 'sunny' daher auf 'clear-night' gemappt, damit nachts der Mond statt der
+# Sonne erscheint.
+#
+# Anpassen: variables.weather_entity auf die eigene weather-Entitaet und
+# variables.temperature_entity auf den eigenen Aussentemperatur-Sensor setzen.
+# Beide zusaetzlich in triggers_update eintragen -- die Karte rendert sonst nur
+# bei einer Zustandsaenderung der eigenen entity (Person) neu, und die per
+# states[...] gelesenen Wetterwerte bleiben bis zum naechsten Reload stehen.
+# triggers_update wird nicht getemplatet, daher die IDs dort ausgeschrieben.
 # Voraussetzung: custom:button-card (HACS).
 type: custom:button-card
 entity: '[[[ return "person." + user.name.toLowerCase() ]]]'
 variables:
-  weather_entity: weather.forecast_home
+  weather_entity: weather.landau_pfalz
+  temperature_entity: sensor.wetterstation_pro_temperatur
+triggers_update:
+  - weather.landau_pfalz
+  - sensor.wetterstation_pro_temperatur
+  - sun.sun
 tap_action:
   action: more-info
 show_name: false
@@ -72,11 +92,25 @@ custom_fields:
       const dateStr = wd + ' · ' + dm;
 
       // ---------- Wetter ----------
+      // Zustand (fuer das Icon) aus der Vorhersage-Entitaet.
       const w = states[variables.weather_entity];
       const wBad = !w || w.state === 'unavailable' || w.state === 'unknown';
-      const cond = wBad ? '' : w.state;
+      const condRaw = wBad ? '' : w.state;
+
+      // Der DWD-Zustand kennt keine Nacht -- nach Sonnenuntergang auf das
+      // Nacht-Pendant mappen, sonst steht nachts die Sonne im Banner.
+      const sunE = states['sun.sun'];
+      const sunDown = !!sunE && sunE.state === 'below_horizon';
+      const cond = (sunDown && condRaw === 'sunny') ? 'clear-night' : condRaw;
+
+      // Temperatur bevorzugt als lokaler Messwert der Wetterstation; faellt auf
+      // die Vorhersage zurueck, wenn der Sensor keinen Wert liefert.
+      const ts = states[variables.temperature_entity];
+      const tsBad = !ts || ts.state === 'unavailable' || ts.state === 'unknown';
+      const tLocal = tsBad ? NaN : parseFloat(ts.state);
       const tAttr = (w && w.attributes && w.attributes.temperature !== undefined) ? w.attributes.temperature : null;
-      const tempTxt = (tAttr === null || tAttr === undefined || isNaN(tAttr)) ? '–' : Math.round(tAttr);
+      const tVal = !isNaN(tLocal) ? tLocal : tAttr;
+      const tempTxt = (tVal === null || tVal === undefined || isNaN(tVal)) ? '–' : Math.round(tVal);
 
       // Zustand -> Icon + Farbe (Owlet-Linienstil)
       const wxIcon = (c) => {
