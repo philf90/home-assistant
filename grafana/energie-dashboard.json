@@ -1,0 +1,2793 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Energie-Auswertung aus Home Assistant (InfluxDB 2): Strom, PV, Einzelverbraucher und Gas.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "Home Assistant – Energie",
+      "tooltip": "Energie-Dashboard in Home Assistant öffnen",
+      "type": "link",
+      "url": "http://homeassistant.local:8123/energy"
+    },
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "home-assistant"
+      ],
+      "targetBlank": false,
+      "title": "Weitere HA-Dashboards",
+      "tooltip": "",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "⚡ Live & Heute",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Aktuelle Netzleistung",
+      "description": "Momentanwert des Smart Meters (sensor.smart_meter_netzbezug). Sparkline: letzte 6 Stunden.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1500
+              },
+              {
+                "color": "orange",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          },
+          "unit": "watt",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_power}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"smart_meter_netzbezug\")\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now-6h"
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Netzbezug heute",
+      "description": "Zuwachs des Zählerstands seit 00:00 Uhr (lokale Zeit).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "PV-Ertrag heute",
+      "description": "Summe beider PV-Strings (Tageszähler, Maximalwert des Tages).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Hausverbrauch heute",
+      "description": "Netzbezug + PV-Erzeugung. Es ist keine Einspeisung konfiguriert, daher gilt die PV-Erzeugung vollständig als Eigenverbrauch.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> keep(columns: [\"_value\"])\n\npv = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n  |> keep(columns: [\"_value\"])\n\nunion(tables: [netz, pv])\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 14,
+      "type": "gauge",
+      "title": "Autarkiegrad heute",
+      "description": "PV-Erzeugung geteilt durch Gesamtverbrauch (PV + Netzbezug), seit 00:00 Uhr.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "timeFrom": "now/d",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "#EAB839",
+                "value": 40
+              },
+              {
+                "color": "green",
+                "value": 60
+              },
+              {
+                "color": "super-light-green",
+                "value": 85
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"array\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = (from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\npv = (from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\nn = if length(arr: netz) > 0 then netz[0] else 0.0\np = if length(arr: pv) > 0 then pv[0] else 0.0\n\narray.from(rows: [\n  {_time: now(), _value: if n + p > 0.0 then p / (n + p) * 100.0 else 0.0},\n])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Stromkosten heute",
+      "description": "Netzbezug heute × Arbeitspreis ($price_kwh €/kWh).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({_value: r._value * ${price_kwh}}))\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 2,
+      "type": "row",
+      "title": "📈 Verlauf & Lastprofil",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Netzbezugsleistung",
+      "description": "Mittelwert je Auflösungsfenster ($res). Schwellenlinien bei 3 kW und 5 kW.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "decimals": 0,
+          "displayName": "Netzbezug",
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_power}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"smart_meter_netzbezug\")\n  |> aggregateWindow(every: ${res}, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "histogram",
+      "title": "Verteilung der Netzleistung",
+      "description": "Wie häufig lag die Bezugsleistung in welchem Bereich? Zeigt Grundlast (linker Peak) und Lastspitzen (rechter Ausläufer).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "scheme",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "options": {
+        "bucketOffset": 0,
+        "combine": false,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_power}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"smart_meter_netzbezug\")\n  |> aggregateWindow(every: ${res}, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "barchart",
+      "title": "Energiebilanz je Tag",
+      "description": "Netzbezug und PV-Erzeugung pro Kalendertag (Europe/Berlin), gestapelt. Der Abfragezeitraum wird intern um 2 Tage erweitert, damit auch der erste Tag des Zeitraums einen Differenzwert bekommt.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "kWh",
+            "axisPlacement": "auto",
+            "fillOpacity": 85,
+            "gradientMode": "hue",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Netzbezug"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PV-Erzeugung"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.85,
+        "fullHighlight": false,
+        "groupWidth": 0.75,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xField": "_time",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"date\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = from(bucket: \"${bucket}\")\n  |> range(start: date.sub(d: 2d, from: v.timeRangeStart), stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> aggregateWindow(every: 1d, fn: last, timeSrc: \"_start\", createEmpty: false)\n  |> difference(nonNegative: true)\n  |> filter(fn: (r) => r._time >= v.timeRangeStart)\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> set(key: \"serie\", value: \"Netzbezug\")\n\npv = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> set(key: \"serie\", value: \"PV-Erzeugung\")\n\nunion(tables: [netz, pv])\n  |> group()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"serie\"], valueColumn: \"_value\")\n  |> sort(columns: [\"_time\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "piechart",
+      "title": "Energiemix im Zeitraum",
+      "description": "Anteil von Netzbezug und Eigenerzeugung am Gesamtverbrauch.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 1,
+          "mappings": [],
+          "unit": "kwatth"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Netzbezug"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PV-Erzeugung"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({quelle: \"Netzbezug\", _value: r._value}))\n\npv = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({quelle: \"PV-Erzeugung\", _value: r._value}))\n\nunion(tables: [netz, pv])\n  |> group()\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "quelle",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "_value",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "heatmap",
+      "title": "Lastprofil (Heatmap)",
+      "description": "Häufigkeitsverteilung der Bezugsleistung über die Zeit. Waagerechte Bänder = typische Lastniveaus, helle Flecken = Lastspitzen.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size",
+            "value": "1h"
+          },
+          "yBuckets": {
+            "mode": "count",
+            "value": "24"
+          }
+        },
+        "cellGap": 1,
+        "cellValues": {},
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Turbo",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-09
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single",
+          "show": true,
+          "yHistogram": true
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "decimals": 0,
+          "reverse": false,
+          "unit": "watt"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_power}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"smart_meter_netzbezug\")\n  |> aggregateWindow(every: ${res}, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "row",
+      "title": "🔌 Einzelverbraucher",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "panels": []
+    },
+    {
+      "id": 30,
+      "type": "bargauge",
+      "title": "Verbrauch je Gerät",
+      "description": "Zuwachs der Geräte-Energiezähler im gewählten Zeitraum, absteigend sortiert.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 9,
+        "x": 0,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "decimals": 2,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "lcd",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "left",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"dict\"\n\nnames = dict.fromList(pairs: [\n    {key: \"shelly_plugs_gen3_waschmaschine_switch_0_energy\", value: \"Waschmaschine\"},\n    {key: \"shelly_plugs_gen3_trockner_switch_0_energy\", value: \"Trockner\"},\n    {key: \"shelly_plugs_kuhlschrank_switch_0_energy\", value: \"Kühlschrank\"},\n    {key: \"shelly_plugs_spulmaschine_switch_0_energy\", value: \"Spülmaschine\"},\n    {key: \"stromverbrauch_poe_power_daily\", value: \"Netzwerk (PoE)\"},\n    {key: \"garten_energy\", value: \"Sonos Garten\"},\n    {key: \"pool_energy\", value: \"Sonos Pool\"},\n    {key: \"garage_energy\", value: \"Sonos Garage\"},\n    {key: \"shelly_plus_1pm_heizung_switch_0_energy\", value: \"Heizung\"},\n    {key: \"shelly_outdoor_plugs_pool_switch_0_energy\", value: \"Pumpe Pool\"},\n])\n\ndevices = [\n    \"shelly_plugs_gen3_waschmaschine_switch_0_energy\",\n    \"shelly_plugs_gen3_trockner_switch_0_energy\",\n    \"shelly_plugs_kuhlschrank_switch_0_energy\",\n    \"shelly_plugs_spulmaschine_switch_0_energy\",\n    \"stromverbrauch_poe_power_daily\",\n    \"garten_energy\",\n    \"pool_energy\",\n    \"garage_energy\",\n    \"shelly_plus_1pm_heizung_switch_0_energy\",\n    \"shelly_outdoor_plugs_pool_switch_0_energy\",\n]\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => contains(value: r.entity_id, set: devices))\n  |> increase()\n  |> last()\n  |> map(fn: (r) => ({\n      geraet: dict.get(dict: names, key: r.entity_id, default: r.entity_id),\n      _value: float(v: r._value),\n  }))\n  |> group(columns: [\"geraet\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "geraet",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "_value",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "piechart",
+      "title": "Anteil je Gerät",
+      "description": "Verteilung des gemessenen Geräteverbrauchs. Achtung: die Summe entspricht nicht dem Hausverbrauch – nicht gemessene Verbraucher fehlen.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 9,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"dict\"\n\nnames = dict.fromList(pairs: [\n    {key: \"shelly_plugs_gen3_waschmaschine_switch_0_energy\", value: \"Waschmaschine\"},\n    {key: \"shelly_plugs_gen3_trockner_switch_0_energy\", value: \"Trockner\"},\n    {key: \"shelly_plugs_kuhlschrank_switch_0_energy\", value: \"Kühlschrank\"},\n    {key: \"shelly_plugs_spulmaschine_switch_0_energy\", value: \"Spülmaschine\"},\n    {key: \"stromverbrauch_poe_power_daily\", value: \"Netzwerk (PoE)\"},\n    {key: \"garten_energy\", value: \"Sonos Garten\"},\n    {key: \"pool_energy\", value: \"Sonos Pool\"},\n    {key: \"garage_energy\", value: \"Sonos Garage\"},\n    {key: \"shelly_plus_1pm_heizung_switch_0_energy\", value: \"Heizung\"},\n    {key: \"shelly_outdoor_plugs_pool_switch_0_energy\", value: \"Pumpe Pool\"},\n])\n\ndevices = [\n    \"shelly_plugs_gen3_waschmaschine_switch_0_energy\",\n    \"shelly_plugs_gen3_trockner_switch_0_energy\",\n    \"shelly_plugs_kuhlschrank_switch_0_energy\",\n    \"shelly_plugs_spulmaschine_switch_0_energy\",\n    \"stromverbrauch_poe_power_daily\",\n    \"garten_energy\",\n    \"pool_energy\",\n    \"garage_energy\",\n    \"shelly_plus_1pm_heizung_switch_0_energy\",\n    \"shelly_outdoor_plugs_pool_switch_0_energy\",\n]\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => contains(value: r.entity_id, set: devices))\n  |> increase()\n  |> last()\n  |> map(fn: (r) => ({\n      geraet: dict.get(dict: names, key: r.entity_id, default: r.entity_id),\n      _value: float(v: r._value),\n  }))\n  |> group(columns: [\"geraet\"])\n  |> sum()\n  |> group()\n  |> sort(columns: [\"_value\"], desc: true)\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "geraet",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "_value",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "table",
+      "title": "Detailtabelle",
+      "description": "Verbrauch, Kosten und Anteil je Gerät im gewählten Zeitraum.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 7,
+        "x": 17,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Verbrauch"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kwatth"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kosten"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Anteil"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "enablePagination": false,
+          "fields": [
+            "Verbrauch",
+            "Kosten"
+          ],
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Verbrauch"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"dict\"\n\nnames = dict.fromList(pairs: [\n    {key: \"shelly_plugs_gen3_waschmaschine_switch_0_energy\", value: \"Waschmaschine\"},\n    {key: \"shelly_plugs_gen3_trockner_switch_0_energy\", value: \"Trockner\"},\n    {key: \"shelly_plugs_kuhlschrank_switch_0_energy\", value: \"Kühlschrank\"},\n    {key: \"shelly_plugs_spulmaschine_switch_0_energy\", value: \"Spülmaschine\"},\n    {key: \"stromverbrauch_poe_power_daily\", value: \"Netzwerk (PoE)\"},\n    {key: \"garten_energy\", value: \"Sonos Garten\"},\n    {key: \"pool_energy\", value: \"Sonos Pool\"},\n    {key: \"garage_energy\", value: \"Sonos Garage\"},\n    {key: \"shelly_plus_1pm_heizung_switch_0_energy\", value: \"Heizung\"},\n    {key: \"shelly_outdoor_plugs_pool_switch_0_energy\", value: \"Pumpe Pool\"},\n])\n\ndevices = [\n    \"shelly_plugs_gen3_waschmaschine_switch_0_energy\",\n    \"shelly_plugs_gen3_trockner_switch_0_energy\",\n    \"shelly_plugs_kuhlschrank_switch_0_energy\",\n    \"shelly_plugs_spulmaschine_switch_0_energy\",\n    \"stromverbrauch_poe_power_daily\",\n    \"garten_energy\",\n    \"pool_energy\",\n    \"garage_energy\",\n    \"shelly_plus_1pm_heizung_switch_0_energy\",\n    \"shelly_outdoor_plugs_pool_switch_0_energy\",\n]\n\nbasis = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => contains(value: r.entity_id, set: devices))\n  |> increase()\n  |> last()\n  |> map(fn: (r) => ({\n      geraet: dict.get(dict: names, key: r.entity_id, default: r.entity_id),\n      _value: float(v: r._value),\n  }))\n  |> group(columns: [\"geraet\"])\n  |> sum()\n  |> group()\n\nsumme = (basis\n  |> sum(column: \"_value\")\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\ngesamt = if length(arr: summe) > 0 and summe[0] > 0.0 then summe[0] else 1.0\n\nbasis\n  |> map(fn: (r) => ({\n      geraet: r.geraet,\n      kwh: r._value,\n      kosten: r._value * ${price_kwh},\n      anteil: r._value / gesamt * 100.0,\n  }))\n  |> sort(columns: [\"kwh\"], desc: true)\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "geraet": 0,
+              "kwh": 1,
+              "kosten": 2,
+              "anteil": 3
+            },
+            "renameByName": {
+              "geraet": "Gerät",
+              "kwh": "Verbrauch",
+              "kosten": "Kosten",
+              "anteil": "Anteil"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "barchart",
+      "title": "Geräteverbrauch je Tag",
+      "description": "Tagesverbrauch aller gemessenen Geräte, gestapelt.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "kWh",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.9,
+        "fullHighlight": false,
+        "groupWidth": 0.8,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "xField": "_time",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"dict\"\nimport \"date\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnames = dict.fromList(pairs: [\n    {key: \"shelly_plugs_gen3_waschmaschine_switch_0_energy\", value: \"Waschmaschine\"},\n    {key: \"shelly_plugs_gen3_trockner_switch_0_energy\", value: \"Trockner\"},\n    {key: \"shelly_plugs_kuhlschrank_switch_0_energy\", value: \"Kühlschrank\"},\n    {key: \"shelly_plugs_spulmaschine_switch_0_energy\", value: \"Spülmaschine\"},\n    {key: \"stromverbrauch_poe_power_daily\", value: \"Netzwerk (PoE)\"},\n    {key: \"garten_energy\", value: \"Sonos Garten\"},\n    {key: \"pool_energy\", value: \"Sonos Pool\"},\n    {key: \"garage_energy\", value: \"Sonos Garage\"},\n    {key: \"shelly_plus_1pm_heizung_switch_0_energy\", value: \"Heizung\"},\n    {key: \"shelly_outdoor_plugs_pool_switch_0_energy\", value: \"Pumpe Pool\"},\n])\n\ndevices = [\n    \"shelly_plugs_gen3_waschmaschine_switch_0_energy\",\n    \"shelly_plugs_gen3_trockner_switch_0_energy\",\n    \"shelly_plugs_kuhlschrank_switch_0_energy\",\n    \"shelly_plugs_spulmaschine_switch_0_energy\",\n    \"stromverbrauch_poe_power_daily\",\n    \"garten_energy\",\n    \"pool_energy\",\n    \"garage_energy\",\n    \"shelly_plus_1pm_heizung_switch_0_energy\",\n    \"shelly_outdoor_plugs_pool_switch_0_energy\",\n]\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: date.sub(d: 2d, from: v.timeRangeStart), stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => contains(value: r.entity_id, set: devices))\n  |> increase()\n  |> aggregateWindow(every: 1d, fn: last, timeSrc: \"_start\", createEmpty: false)\n  |> difference()\n  |> filter(fn: (r) => r._time >= v.timeRangeStart)\n  |> map(fn: (r) => ({\n      _time: r._time,\n      _value: float(v: r._value),\n      geraet: dict.get(dict: names, key: r.entity_id, default: r.entity_id),\n  }))\n  |> group()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"geraet\"], valueColumn: \"_value\")\n  |> sort(columns: [\"_time\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "🔥 Gas",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "panels": []
+    },
+    {
+      "id": 40,
+      "type": "stat",
+      "title": "Gas heute",
+      "description": "Zuwachs des Gaszählers seit 00:00 Uhr.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m3",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Gaskosten heute",
+      "description": "Gasverbrauch heute × $price_gas €/m³.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({_value: r._value * ${price_gas}}))\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now/d"
+    },
+    {
+      "id": 42,
+      "type": "stat",
+      "title": "Gas im Zeitraum",
+      "description": "Gasverbrauch über den gewählten Dashboard-Zeitraum.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m3",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "type": "stat",
+      "title": "Gaskosten im Zeitraum",
+      "description": "Gasverbrauch im Zeitraum × $price_gas €/m³.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({_value: r._value * ${price_gas}}))\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "type": "stat",
+      "title": "Zählerstand Gas",
+      "description": "Letzter übertragener Zählerstand des HmIP-ESI Gaszählers.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m3",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now-7d"
+    },
+    {
+      "id": 45,
+      "type": "stat",
+      "title": "Zählerstand Strom",
+      "description": "Letzter übertragener Zählerstand des HmIP-ESI Stromzählers.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "now-7d"
+    },
+    {
+      "id": 46,
+      "type": "barchart",
+      "title": "Gasverbrauch je Tag",
+      "description": "Tagesdifferenz des Gaszählers (Europe/Berlin).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 61
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-YlRd"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "m³",
+            "axisPlacement": "auto",
+            "fillOpacity": 85,
+            "gradientMode": "scheme",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m3"
+        },
+        "overrides": []
+      },
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.85,
+        "fullHighlight": false,
+        "groupWidth": 0.75,
+        "legend": {
+          "calcs": [
+            "sum",
+            "mean"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "_time",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"date\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: date.sub(d: 2d, from: v.timeRangeStart), stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> aggregateWindow(every: 1d, fn: last, timeSrc: \"_start\", createEmpty: false)\n  |> difference(nonNegative: true)\n  |> filter(fn: (r) => r._time >= v.timeRangeStart)\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> rename(columns: {_value: \"Gasverbrauch\"})\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "type": "timeseries",
+      "title": "Gaszählerstand",
+      "description": "Absoluter Zählerstand – die Steigung entspricht dem Verbrauch.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 61
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "displayName": "Zählerstand",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m3"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "first",
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_gas}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_gaszahler_gas_volumen\")\n  |> aggregateWindow(every: ${res}, fn: last, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\"])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "ℹ️ Kennzahlen, Daten & Hinweise",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
+      "panels": []
+    },
+    {
+      "id": 50,
+      "type": "stat",
+      "title": "Ø Netzbezug pro Tag",
+      "description": "Netzbezug im Zeitraum geteilt durch die Länge des Zeitraums in Tagen.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"array\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = (from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\ntage = float(v: int(v: v.timeRangeStop) - int(v: v.timeRangeStart)) / 86400000000000.0\nn = if length(arr: netz) > 0 then netz[0] else 0.0\n\narray.from(rows: [\n  {_time: now(), _value: if tage > 0.0 then n / tage else 0.0},\n])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "type": "stat",
+      "title": "Netzbezug im Zeitraum",
+      "description": "Zuwachs des Stromzählers über den gewählten Zeitraum.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "type": "stat",
+      "title": "PV-Ertrag im Zeitraum",
+      "description": "Summe der Tageserträge beider PV-Strings.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "kwatth",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "type": "stat",
+      "title": "Stromkosten im Zeitraum",
+      "description": "Netzbezug im Zeitraum × $price_kwh €/kWh.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyEUR",
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nfrom(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({_value: r._value * ${price_kwh}}))\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "type": "gauge",
+      "title": "Autarkiegrad im Zeitraum",
+      "description": "PV-Anteil am Gesamtverbrauch über den gewählten Dashboard-Zeitraum.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20
+              },
+              {
+                "color": "#EAB839",
+                "value": 40
+              },
+              {
+                "color": "green",
+                "value": 60
+              },
+              {
+                "color": "super-light-green",
+                "value": 85
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "sizing": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "import \"array\"\nimport \"timezone\"\noption location = timezone.location(name: \"Europe/Berlin\")\n\nnetz = (from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id == \"hmip_esi_stromzahler_energiezahler_ch2\")\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\npv = (from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"${m_energy}\" and r._field == \"value\")\n  |> filter(fn: (r) => r.entity_id =~ /^system_muhlweg_tagliche_pv_[12]$/)\n  |> aggregateWindow(every: 1d, fn: max, timeSrc: \"_start\", createEmpty: false)\n  |> group()\n  |> sum()\n  |> findColumn(fn: (key) => true, column: \"_value\"))\n\nn = if length(arr: netz) > 0 then netz[0] else 0.0\np = if length(arr: pv) > 0 then pv[0] else 0.0\n\narray.from(rows: [\n  {_time: now(), _value: if n + p > 0.0 then p / (n + p) * 100.0 else 0.0},\n])\n",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "type": "table",
+      "title": "Datenqualität – letzte Messwerte",
+      "description": "Alle Sensoren im Bucket mit letztem Wert und Alter in Minuten. Hohe Werte in der Spalte 'Alter' deuten auf einen ausgefallenen Sensor hin.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alter"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 60
+                    },
+                    {
+                      "color": "red",
+                      "value": 360
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Wert"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": true,
+          "fields": [],
+          "reducer": [
+            "count"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Alter"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._field == \"value\")\n  |> last()\n  |> map(fn: (r) => ({\n      entitaet: r.entity_id,\n      einheit: r._measurement,\n      wert: float(v: r._value),\n      alter: float(v: int(v: now()) - int(v: r._time)) / 60000000000.0,\n  }))\n  |> group()\n  |> sort(columns: [\"alter\"], desc: true)\n",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "entitaet": 0,
+              "einheit": 1,
+              "wert": 2,
+              "alter": 3
+            },
+            "renameByName": {
+              "entitaet": "Entität",
+              "einheit": "Einheit",
+              "wert": "Wert",
+              "alter": "Alter"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "type": "text",
+      "title": "Hinweise",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "## So funktioniert dieses Dashboard\n\n**Datenquelle:** Die Home-Assistant-`influxdb`-Integration schreibt die rohen Sensor-States\nnach InfluxDB 2. Das Measurement entspricht der Einheit (`kWh`, `W`, `m³`), das Feld heißt\n`value`, der Tag `entity_id` enthält die Entity **ohne** Domain-Präfix.\n\n**Rechenweg:** Alle Energiesensoren sind Zählerstände. Der Verbrauch wird über\n`increase()` bzw. `difference()` gebildet – genau wie es die Energie-View in Home Assistant\nmit den Langzeitstatistiken tut. Tagesgrenzen liegen dank\n`option location = timezone.location(name: \"Europe/Berlin\")` auf lokaler Mitternacht.\n\n**Variablen** (oben):\n\n| Variable | Bedeutung |\n|---|---|\n| `Datenquelle` | InfluxDB-Datasource, Standard `influxdb-homeassistant` |\n| `Bucket` | Influx-Bucket, Standard `homeassistant` |\n| `Strompreis` | €/kWh für alle Kostenpanels |\n| `Gaspreis` | €/m³ für alle Gaskostenpanels |\n| `Auflösung` | Aggregationsfenster der Verlaufsdiagramme |\n\nVersteckte Variablen `m_energy` / `m_power` / `m_gas` enthalten die Measurement-Namen.\nFalls du in der HA-Konfiguration `measurement_attr: entity_id` statt\n`unit_of_measurement` verwendest, musst du diese drei in den\nDashboard-Einstellungen anpassen.\n\n**Bekannte Einschränkungen**\n\n* Die PV-Sensoren sind Tageszähler und werden über das Tagesmaximum ausgewertet.\n* Es ist keine Einspeisung konfiguriert – der Autarkiegrad geht davon aus, dass die\n  gesamte PV-Erzeugung selbst verbraucht wird.\n* Die Summe der Einzelverbraucher ist kleiner als der Hausverbrauch, weil nicht alle\n  Verbraucher gemessen werden.\n* Die Daten beginnen mit der Aktivierung der `influxdb`-Integration – es gibt keine\n  rückwirkende Historie.",
+        "mode": "markdown"
+      },
+      "transparent": false
+    }
+  ],
+  "preload": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "home-assistant",
+    "energie",
+    "influxdb"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "influxdb-homeassistant",
+          "value": "influxdb-homeassistant"
+        },
+        "description": "InfluxDB-2-Datasource in Grafana",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datenquelle",
+        "multi": false,
+        "name": "DS",
+        "options": [],
+        "query": "influxdb",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "homeassistant",
+          "value": "homeassistant"
+        },
+        "description": "Influx-Bucket, in den Home Assistant schreibt",
+        "hide": 0,
+        "label": "Bucket",
+        "name": "bucket",
+        "options": [
+          {
+            "selected": true,
+            "text": "homeassistant",
+            "value": "homeassistant"
+          }
+        ],
+        "query": "homeassistant",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "0.3223",
+          "value": "0.3223"
+        },
+        "description": "",
+        "hide": 0,
+        "label": "Strompreis €/kWh",
+        "name": "price_kwh",
+        "options": [
+          {
+            "selected": true,
+            "text": "0.3223",
+            "value": "0.3223"
+          }
+        ],
+        "query": "0.3223",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "0.111",
+          "value": "0.111"
+        },
+        "description": "",
+        "hide": 0,
+        "label": "Gaspreis €/m³",
+        "name": "price_gas",
+        "options": [
+          {
+            "selected": true,
+            "text": "0.111",
+            "value": "0.111"
+          }
+        ],
+        "query": "0.111",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "auto": true,
+        "auto_count": 300,
+        "auto_min": "1m",
+        "current": {
+          "selected": true,
+          "text": "auto",
+          "value": "$__auto_interval_res"
+        },
+        "description": "Aggregationsfenster der Verlaufsdiagramme",
+        "hide": 0,
+        "label": "Auflösung",
+        "name": "res",
+        "options": [
+          {
+            "selected": true,
+            "text": "auto",
+            "value": "$__auto_interval_res"
+          },
+          {
+            "selected": false,
+            "text": "1m",
+            "value": "1m"
+          },
+          {
+            "selected": false,
+            "text": "5m",
+            "value": "5m"
+          },
+          {
+            "selected": false,
+            "text": "15m",
+            "value": "15m"
+          },
+          {
+            "selected": false,
+            "text": "30m",
+            "value": "30m"
+          },
+          {
+            "selected": false,
+            "text": "1h",
+            "value": "1h"
+          },
+          {
+            "selected": false,
+            "text": "3h",
+            "value": "3h"
+          },
+          {
+            "selected": false,
+            "text": "6h",
+            "value": "6h"
+          },
+          {
+            "selected": false,
+            "text": "12h",
+            "value": "12h"
+          },
+          {
+            "selected": false,
+            "text": "1d",
+            "value": "1d"
+          }
+        ],
+        "query": "1m,5m,15m,30m,1h,3h,6h,12h,1d",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "type": "interval"
+      },
+      {
+        "current": {
+          "text": "kWh",
+          "value": "kWh"
+        },
+        "description": "Measurement-Name für Energie (Standard: Einheit kWh)",
+        "hide": 2,
+        "label": "Measurement Energie",
+        "name": "m_energy",
+        "options": [
+          {
+            "selected": true,
+            "text": "kWh",
+            "value": "kWh"
+          }
+        ],
+        "query": "kWh",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "W",
+          "value": "W"
+        },
+        "description": "Measurement-Name für Leistung (Standard: Einheit W)",
+        "hide": 2,
+        "label": "Measurement Leistung",
+        "name": "m_power",
+        "options": [
+          {
+            "selected": true,
+            "text": "W",
+            "value": "W"
+          }
+        ],
+        "query": "W",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "m³",
+          "value": "m³"
+        },
+        "description": "Measurement-Name für Gas (Standard: Einheit m³)",
+        "hide": 2,
+        "label": "Measurement Gas",
+        "name": "m_gas",
+        "options": [
+          {
+            "selected": true,
+            "text": "m³",
+            "value": "m³"
+          }
+        ],
+        "query": "m³",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ],
+    "time_options": [
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d",
+      "6M",
+      "1y"
+    ]
+  },
+  "timezone": "browser",
+  "title": "Energie – Home Assistant",
+  "uid": "ha-energie",
+  "version": 1,
+  "weekStart": "monday"
+}
