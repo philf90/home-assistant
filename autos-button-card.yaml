@@ -1,8 +1,15 @@
 # Autos (Passat + Touran) im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
 #
 # Pro Fahrzeug eine Owlet-Sektion: Kopf mit Kennzeichen, Fahrzeugbild
-# (Owlet-gerahmt), Status-Chips (Bewegung, Standheizung, Tueren, Fenster) und
-# Owlet-Kennzahl-Kacheln. Am Ende eine gemeinsame Standort-Karte.
+# (Owlet-gerahmt), Schloss-Statusleiste, Status-Chips (Bewegung, Standheizung,
+# Tueren, Fenster) und Owlet-Kennzahl-Kacheln. Am Ende eine gemeinsame
+# Standort-Karte.
+#
+# Die Schloss-Statusleiste fasst die vier Tuerschloesser + Heckklappenschloss
+# zu einer Aussage zusammen. Achtung device_class: lock -> 'off' = verriegelt,
+# 'on' = entriegelt (umgekehrt zu den Tuer-Kontakten der Chips darunter). Das
+# Motorhaubenschloss bleibt bewusst aussen vor: es haengt am mechanischen
+# Fanghaken und meldet dauerhaft 'on'.
 #
 # HINWEIS: Alle Entitaeten sind 1:1 aus dem urspruenglichen Code uebernommen
 # und lassen sich nach dem Integrations-Wechsel einfach tauschen (jede Kachel
@@ -10,7 +17,8 @@
 # (variables.on_txt/off_txt/on_col/off_col) nach dem Wechsel pruefen.
 #
 # Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &frame,
-# &chip_styles, &chip_name, &chip_icon, &lbl_val, &tile_styles.
+# &bar_name, &bar_icon, &bar_label, &bar_styles, &chip_styles, &chip_name,
+# &chip_icon, &lbl_val, &tile_styles.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS).
 type: vertical-stack
@@ -75,6 +83,113 @@ cards:
               box-shadow: none !important;
               background: rgba(255,255,255,0.02) !important;
             }
+      # ---- Schloss-Statusleiste (lock_ids und lock_names in gleicher Reihenfolge) ----
+      - type: custom:button-card
+        entity: binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_vorne_links
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          lock_ids:
+            - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_vorne_links
+            - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_vorne_rechts
+            - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_hinten_links
+            - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_hinten_rechts
+            - binary_sensor.passat_variant_elegance_20_l_tdi_scr_heckklappenschloss
+          lock_names:
+            - Fahrertür
+            - Beifahrertür
+            - Tür hinten links
+            - Tür hinten rechts
+            - Heckklappe
+        name: &bar_name |
+          [[[
+            const ids=variables.lock_ids||[], nms=variables.lock_names||[];
+            let open=[], unknown=0;
+            ids.forEach((id,i)=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state==='on') open.push(nms[i]||id);
+            });
+            if(open.length===1) return open[0]+' nicht verriegelt';
+            if(open.length>1) return open.length+' Schlösser nicht verriegelt';
+            if(unknown>0) return 'Schlossstatus unbekannt';
+            return 'Fahrzeug abgeschlossen';
+          ]]]
+        icon: &bar_icon |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=0, unknown=0;
+            ids.forEach(id=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state==='on') open++;
+            });
+            if(open>0) return 'mdi:lock-open-variant';
+            if(unknown>0) return 'mdi:lock-question';
+            return 'mdi:lock';
+          ]]]
+        label: &bar_label |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=[], all=[];
+            ids.forEach(id=>{ const s=states[id]; if(!s) return;
+              const t=new Date(s.last_changed).getTime(); if(isNaN(t)) return;
+              all.push(t); if(s.state==='on') open.push(t);
+            });
+            const pool=open.length?open:all;
+            if(!pool.length) return '';
+            const d=new Date(Math.max(...pool)), n=new Date();
+            const p=v=>String(v).padStart(2,'0');
+            const hm=`${p(d.getHours())}:${p(d.getMinutes())}`;
+            return 'seit '+(d.toDateString()===n.toDateString()
+              ? hm : `${p(d.getDate())}.${p(d.getMonth()+1)}. ${hm}`);
+          ]]]
+        styles: &bar_styles
+          card:
+            - border-radius: 13px
+            - padding: 10px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 20px
+            - height: 20px
+            - margin: 0 11px 0 0
+            - align-self: center
+          icon:
+            - width: 20px
+            - height: 20px
+            - color: &bar_col |
+                [[[
+                  const ids=variables.lock_ids||[];
+                  let open=0, unknown=0;
+                  ids.forEach(id=>{ const s=states[id];
+                    if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+                    if(s.state==='on') open++;
+                  });
+                  if(open>0) return '#e6b566';
+                  if(unknown>0) return '#8794a5';
+                  return '#a6d49e';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 12.5px
+            - font-weight: 600
+            - letter-spacing: -0.01em
+            - color: *bar_col
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - margin-left: 10px
       # ---- Status-Chips (Fenster/Tueren aus je 4 Einzelsensoren kombiniert) ----
       - type: grid
         columns: 4
@@ -310,6 +425,31 @@ cards:
       - type: picture
         image: /local/auto/touran/touran.png
         card_mod: *frame
+      # ---- Schloss-Statusleiste (lock_ids und lock_names in gleicher Reihenfolge) ----
+      - type: custom:button-card
+        entity: binary_sensor.touran_highline_20_l_tdi_scr_turschloss_vorne_links
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        variables:
+          lock_ids:
+            - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_vorne_links
+            - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_vorne_rechts
+            - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_hinten_links
+            - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_hinten_rechts
+            - binary_sensor.touran_highline_20_l_tdi_scr_heckklappenschloss
+          lock_names:
+            - Fahrertür
+            - Beifahrertür
+            - Tür hinten links
+            - Tür hinten rechts
+            - Heckklappe
+        name: *bar_name
+        icon: *bar_icon
+        label: *bar_label
+        styles: *bar_styles
       - type: grid
         columns: 4
         square: false
