@@ -1,0 +1,2104 @@
+<title>Proxmox VE &amp; PBS – Grafana-Dashboard-Mockups</title>
+
+<style>
+/* ============================================================
+   Tokens – Grafana Dark (Standard) und Grafana Light
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  --canvas:      #0F1013;
+  --nav:         #111217;
+  --panel:       #181B1F;
+  --panel-2:     #1D2025;
+  --border:      #25272C;
+  --border-soft: #1F2126;
+  --grid:        #23252A;
+
+  --ink:         #DCDDDF;
+  --ink-2:       #9096A0;
+  --ink-3:       #6B7079;
+
+  --s1: #3274D9;   /* blau   */
+  --s2: #E0B400;   /* gelb   */
+  --s3: #56A64B;   /* grün   */
+  --s4: #A352CC;   /* violett*/
+  --s5: #E02F44;   /* rot    */
+
+  --ok:   #56A64B;
+  --warn: #E0B400;
+  --high: #FF780A;
+  --crit: #E02F44;
+
+  --brand: #E57000;          /* Proxmox-Orange */
+  --brand-soft: #E5700022;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+
+  --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Roboto Mono", "SF Mono", SFMono-Regular, Menlo,
+          Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) {
+    color-scheme: light;
+    --canvas:      #F4F5F5;
+    --nav:         #FFFFFF;
+    --panel:       #FFFFFF;
+    --panel-2:     #F7F8F9;
+    --border:      #DCDEE1;
+    --border-soft: #E7E9EC;
+    --grid:        #E9EBEE;
+
+    --ink:         #1B1F26;
+    --ink-2:       #5A616C;
+    --ink-3:       #838A94;
+
+    --s1: #3274D9;
+    --s2: #C99700;
+    --s3: #37872D;
+    --s4: #A352CC;
+    --s5: #C4162A;
+
+    --ok:   #37872D;
+    --warn: #C99700;
+    --high: #E36209;
+    --crit: #C4162A;
+
+    --brand: #C85F00;
+    --brand-soft: #C85F0018;
+    --shadow: 0 1px 2px rgba(24,26,30,.10);
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas:      #F4F5F5;
+  --nav:         #FFFFFF;
+  --panel:       #FFFFFF;
+  --panel-2:     #F7F8F9;
+  --border:      #DCDEE1;
+  --border-soft: #E7E9EC;
+  --grid:        #E9EBEE;
+  --ink:         #1B1F26;
+  --ink-2:       #5A616C;
+  --ink-3:       #838A94;
+  --s1: #3274D9; --s2: #C99700; --s3: #37872D; --s4: #A352CC; --s5: #C4162A;
+  --ok: #37872D; --warn: #C99700; --high: #E36209; --crit: #C4162A;
+  --brand: #C85F00; --brand-soft: #C85F0018;
+  --shadow: 0 1px 2px rgba(24,26,30,.10);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0F1013; --nav: #111217; --panel: #181B1F; --panel-2: #1D2025;
+  --border: #25272C; --border-soft: #1F2126; --grid: #23252A;
+  --ink: #DCDDDF; --ink-2: #9096A0; --ink-3: #6B7079;
+  --s1: #3274D9; --s2: #E0B400; --s3: #56A64B; --s4: #A352CC; --s5: #E02F44;
+  --ok: #56A64B; --warn: #E0B400; --high: #FF780A; --crit: #E02F44;
+  --brand: #E57000; --brand-soft: #E5700022;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+
+/* ============================================================
+   Grundgerüst
+   ============================================================ */
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 2px; }
+
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* --- Topnav ------------------------------------------------ */
+.topnav {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 16px; height: 48px;
+  background: var(--nav);
+  border-bottom: 1px solid var(--border);
+}
+.brandmark {
+  display: flex; align-items: center; gap: 9px;
+  padding-right: 14px; border-right: 1px solid var(--border);
+  height: 100%;
+}
+.brandmark .rail { width: 3px; height: 20px; background: var(--brand); border-radius: 2px; }
+.brandmark b { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+.brandmark span { color: var(--ink-3); font-size: 11px; }
+
+.tabs { display: flex; gap: 2px; }
+.tab {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font: inherit; color: var(--ink-2);
+  padding: 6px 12px; border-radius: 3px;
+  display: flex; align-items: center; gap: 7px;
+}
+.tab:hover { background: var(--panel-2); color: var(--ink); }
+.tab[aria-selected="true"] {
+  background: var(--brand-soft); color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--brand);
+}
+.tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+
+.navspacer { flex: 1; }
+
+.ctrl {
+  display: flex; align-items: center; gap: 7px;
+  height: 28px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 3px;
+  background: var(--panel); color: var(--ink-2);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.ctrl:hover { border-color: var(--ink-3); color: var(--ink); }
+.ctrl .ico { font-size: 11px; color: var(--ink-3); }
+
+/* --- Variablen-Leiste -------------------------------------- */
+.varbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: var(--nav);
+  border-bottom: 1px solid var(--border);
+}
+.var { display: flex; align-items: stretch; border-radius: 3px; overflow: hidden; border: 1px solid var(--border); }
+.var label {
+  display: flex; align-items: center; padding: 0 9px;
+  background: var(--panel-2); color: var(--ink-3);
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  border-right: 1px solid var(--border);
+}
+.var .val {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; background: var(--panel); color: var(--ink); font-size: 12px;
+}
+.var .val::after { content: "▾"; color: var(--ink-3); font-size: 9px; }
+
+/* --- Kontextstreifen --------------------------------------- */
+.context {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+  display: flex; flex-wrap: wrap; gap: 20px 36px; align-items: baseline;
+}
+.context p { margin: 0; max-width: 62ch; color: var(--ink-2); }
+.context strong { color: var(--ink); font-weight: 600; }
+.ctxnote {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--ink-3); font-size: 12px;
+}
+.ctxnote kbd {
+  font-family: var(--mono); font-size: 11px;
+  border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 3px; padding: 1px 5px; background: var(--panel);
+  color: var(--ink-2);
+}
+
+/* --- Board / Grid ------------------------------------------ */
+.board { padding: 8px; }
+.board[hidden] { display: none; }
+
+.rowhead {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 4px 8px;
+  cursor: pointer; user-select: none;
+}
+.rowhead:first-child { padding-top: 6px; }
+.rowhead .caret { color: var(--ink-3); font-size: 10px; transition: transform .15s ease; }
+.rowhead[aria-expanded="false"] .caret { transform: rotate(-90deg); }
+.rowhead h2 {
+  margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; color: var(--ink);
+}
+.rowhead .rowmeta { color: var(--ink-3); font-size: 11px; }
+.rowhead .rule { flex: 1; height: 1px; background: var(--border-soft); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 8px;
+}
+.grid[hidden] { display: none; }
+
+.w3{grid-column:span 3}   .w4{grid-column:span 4}   .w5{grid-column:span 5}
+.w6{grid-column:span 6}   .w7{grid-column:span 7}   .w8{grid-column:span 8}
+.w9{grid-column:span 9}   .w10{grid-column:span 10} .w12{grid-column:span 12}
+.w14{grid-column:span 14} .w15{grid-column:span 15} .w16{grid-column:span 16}
+.w18{grid-column:span 18} .w24{grid-column:span 24}
+
+@media (max-width: 1280px) {
+  .grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .w3,.w4,.w5,.w6 { grid-column: span 6; }
+  .w7,.w8,.w9,.w10,.w12,.w14,.w15,.w16,.w18,.w24 { grid-column: span 12; }
+}
+@media (max-width: 720px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .grid > * { grid-column: 1 / -1 !important; }
+}
+
+/* Topnav bricht auf schmalen Displays in zwei Zeilen um */
+@media (max-width: 880px) {
+  .topnav { height: auto; flex-wrap: wrap; padding: 8px 12px; row-gap: 8px; gap: 10px; }
+  .brandmark { border-right: 0; padding-right: 0; height: auto; }
+  .tabs { flex-wrap: wrap; }
+  .navspacer { flex-basis: 100%; height: 0; margin: 0; }
+  .board { padding: 6px; }
+  .context { gap: 12px; }
+}
+
+/* --- Panel ------------------------------------------------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column;
+  min-width: 0;
+  position: relative;
+}
+.phead {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px 4px;
+}
+.phead h3 {
+  margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.phead .src {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 2px;
+  border: 1px solid var(--border); color: var(--ink-3); flex: none;
+}
+.phead .src.api { border-color: color-mix(in srgb, var(--s4) 45%, transparent); color: var(--s4); }
+.phead .spacer { flex: 1; }
+.qbtn {
+  appearance: none; border: 1px solid transparent; background: transparent;
+  color: var(--ink-3); font: inherit; font-size: 10px;
+  letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 2px; cursor: pointer; flex: none;
+  opacity: 0; transition: opacity .12s ease;
+}
+.panel:hover .qbtn, .qbtn:focus-visible { opacity: 1; }
+.qbtn:hover { border-color: var(--border); color: var(--ink); background: var(--panel-2); }
+.pbody { padding: 4px 10px 10px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* --- Stat -------------------------------------------------- */
+.stat { display: flex; flex-direction: column; justify-content: center; gap: 2px; position: relative; min-height: 76px; }
+.stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 500; line-height: 1.05; letter-spacing: -.02em; }
+.stat .v .u { font-size: 15px; font-weight: 400; color: var(--ink-2); margin-left: 2px; }
+.stat .sub { font-size: 11px; color: var(--ink-3); }
+/* Sparkline bekommt ein eigenes Band unten, damit sie den Untertitel nicht überdeckt */
+.stat.hasspark { padding-bottom: 30px; }
+/* width/height explizit: bei absolut positionierten SVGs greift width:auto sonst
+   auf die Intrinsic-Größe zurück statt auf left/right */
+.stat .spark { position: absolute; inset: auto 0 0 0; width: 100%; height: 30px;
+  display: block; pointer-events: none; }
+.stat.compact .v { font-size: 22px; }
+
+/* --- Chart-Gerüst ------------------------------------------ */
+.chartwrap { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 6px; }
+.yaxis {
+  display: flex; flex-direction: column; justify-content: space-between;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--ink-3); text-align: right;
+  padding: 0; white-space: nowrap;
+}
+.yaxis span { transform: translateY(-50%); }
+.yaxis span:last-child { transform: translateY(50%); }
+.plot { position: relative; min-width: 0; cursor: crosshair; }
+.plot svg { display: block; width: 100%; height: 100%; }
+.xaxis {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--ink-3); padding-top: 4px;
+}
+.crosshair {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--ink-3); opacity: 0; pointer-events: none;
+}
+.hdot {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.plot.hot .crosshair, .plot.hot .hdot { opacity: 1; }
+
+.tooltip {
+  position: fixed; z-index: 60; pointer-events: none; opacity: 0;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 3px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  padding: 7px 9px; font-size: 11px; min-width: 150px;
+  transition: opacity .08s ease;
+}
+.tooltip.on { opacity: 1; }
+.tooltip .tt-time { color: var(--ink-3); font-family: var(--mono); font-size: 10px; margin-bottom: 5px; }
+.tooltip .tt-row { display: flex; align-items: center; gap: 7px; }
+.tooltip .tt-row .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.tooltip .tt-row .nm { color: var(--ink-2); flex: 1; white-space: nowrap; }
+.tooltip .tt-row .vl { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* --- Legende ----------------------------------------------- */
+.legend { margin-top: 8px; overflow-x: auto; }
+.legend table { border-collapse: collapse; width: 100%; font-size: 11px; }
+.legend th {
+  text-align: right; font-weight: 400; color: var(--ink-3);
+  font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 0 0 3px 12px; white-space: nowrap;
+}
+.legend th:first-child { text-align: left; padding-left: 0; }
+.legend td { padding: 2px 0 2px 12px; text-align: right; white-space: nowrap;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.legend td:first-child { text-align: left; padding-left: 0; font-family: var(--font); color: var(--ink-2); }
+.legend .lg { display: flex; align-items: center; gap: 7px; }
+.legend .sw { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+.legend tr td.hi { color: var(--ink); }
+
+/* --- Bar-Gauge (LCD) --------------------------------------- */
+.bg-list { display: flex; flex-direction: column; gap: 9px; }
+.bg-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+.bg-name { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bg-val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+.bg-track {
+  grid-column: 1 / -1; height: 12px; border-radius: 2px;
+  background: var(--panel-2); border: 1px solid var(--border-soft);
+  overflow: hidden; position: relative;
+}
+.bg-fill { height: 100%; }
+.bg-track::after {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg,
+    transparent 0 5px, var(--panel) 5px 7px);
+  opacity: .55;
+}
+.bg-sub { grid-column: 1 / -1; font-size: 10px; color: var(--ink-3);
+  font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* --- Gauge ------------------------------------------------- */
+.gauges { display: flex; gap: 6px; justify-content: space-around; flex-wrap: wrap; }
+.gauge { text-align: center; min-width: 84px; }
+.gauge .gv { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 17px; margin-top: -26px; }
+.gauge .gn { font-size: 11px; color: var(--ink-3); margin-top: 8px; }
+
+/* --- Tabelle ----------------------------------------------- */
+.tblwrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+table.data th {
+  position: sticky; top: 0;
+  text-align: left; font-weight: 500; color: var(--ink-2);
+  font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+  padding: 5px 8px; background: var(--panel-2);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+table.data th.r, table.data td.r { text-align: right; }
+table.data td {
+  padding: 4px 8px; border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap; color: var(--ink-2);
+}
+table.data td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+table.data tbody tr:hover td { background: var(--panel-2); }
+table.data td.name { color: var(--ink); }
+table.data tfoot td { border-top: 1px solid var(--border); border-bottom: 0; color: var(--ink-2); font-weight: 500; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1px 7px 1px 5px; border-radius: 9px; font-size: 10.5px;
+  border: 1px solid; white-space: nowrap;
+}
+.pill .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.pill.ok   { color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.pill.crit { color: var(--crit); border-color: color-mix(in srgb, var(--crit) 40%, transparent); }
+.pill.off  { color: var(--ink-3); border-color: var(--border); }
+
+/* Mikro-Balken in Tabellenzellen */
+.cellbar { position: relative; min-width: 62px; }
+.cellbar i {
+  position: absolute; left: 8px; right: 8px; bottom: 1px; height: 2px;
+  background: var(--border); border-radius: 1px; display: block;
+}
+.cellbar i::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  background: currentColor; border-radius: 1px; width: var(--p, 0%); }
+
+/* --- Status-Matrix ----------------------------------------- */
+.matrix { display: grid; gap: 2px; font-size: 11px; overflow-x: auto; }
+.mx-label { color: var(--ink-2); white-space: nowrap; padding-right: 8px;
+  display: flex; align-items: center; font-size: 11px; }
+.mx-cell { height: 18px; border-radius: 2px; position: relative; min-width: 12px; }
+.mx-head { color: var(--ink-3); font-size: 9.5px; font-family: var(--mono);
+  text-align: center; padding-bottom: 3px; }
+.mx-legend { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+.mx-legend span { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
+.mx-legend i { width: 10px; height: 10px; border-radius: 2px; display: block; }
+
+/* --- Textpanel --------------------------------------------- */
+.textpanel { font-size: 12px; color: var(--ink-2); }
+.textpanel h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.textpanel ul { margin: 0 0 12px; padding-left: 16px; }
+.textpanel li { margin-bottom: 4px; }
+.textpanel li:last-child { margin-bottom: 0; }
+.textpanel code { font-family: var(--mono); font-size: 11px;
+  background: var(--panel-2); border: 1px solid var(--border-soft);
+  border-radius: 2px; padding: 0 4px; color: var(--ink); }
+
+/* --- Query-Drawer ------------------------------------------ */
+.drawer {
+  position: fixed; inset: 0 0 0 auto; width: min(640px, 100%);
+  background: var(--nav); border-left: 1px solid var(--border);
+  z-index: 80; transform: translateX(100%); transition: transform .2s ease;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 30px rgba(0,0,0,.35);
+}
+.drawer.open { transform: none; }
+.drawer-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.drawer-head h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+.drawer-head p { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+.drawer-close {
+  appearance: none; border: 1px solid var(--border); background: var(--panel);
+  color: var(--ink-2); border-radius: 3px; width: 26px; height: 26px;
+  cursor: pointer; font: inherit; line-height: 1; flex: none;
+}
+.drawer-close:hover { color: var(--ink); border-color: var(--ink-3); }
+.drawer-body { overflow-y: auto; padding: 14px 16px 40px; }
+.drawer-body h4 { margin: 16px 0 6px; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+.drawer-body h4:first-child { margin-top: 0; }
+.drawer-body pre {
+  margin: 0; padding: 11px 12px; overflow-x: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: var(--ink);
+  white-space: pre;
+}
+.drawer-body p { margin: 0; font-size: 12px; color: var(--ink-2); }
+.scrim {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 70;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.scrim.on { opacity: 1; pointer-events: auto; }
+
+/* --- Doku-Sektion ------------------------------------------ */
+.docs { padding: 40px 16px 80px; border-top: 1px solid var(--border);
+  background: var(--nav); margin-top: 24px; }
+.docs-inner { max-width: 1180px; margin: 0 auto; }
+.docs h2 {
+  margin: 0 0 4px; font-size: 20px; font-weight: 600; letter-spacing: -.015em;
+  text-wrap: balance;
+}
+.docs .lede { margin: 0 0 28px; color: var(--ink-2); max-width: 66ch; }
+.docs h3 {
+  margin: 30px 0 10px; font-size: 12px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--brand); font-weight: 600;
+  display: flex; align-items: center; gap: 10px;
+}
+.docs h3::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.docs p { max-width: 66ch; color: var(--ink-2); }
+.docs pre {
+  margin: 10px 0; padding: 12px 14px; overflow-x: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--ink);
+}
+.docs table { border-collapse: collapse; width: 100%; font-size: 12px; margin: 10px 0; }
+.docs th { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border);
+  color: var(--ink-3); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 500; }
+.docs td { padding: 6px 10px; border-bottom: 1px solid var(--border-soft); color: var(--ink-2); vertical-align: top; }
+.docs td code, .docs p code, .docs li code {
+  font-family: var(--mono); font-size: 11px; background: var(--panel);
+  border: 1px solid var(--border-soft); border-radius: 2px; padding: 0 4px; color: var(--ink); }
+.docs ul { max-width: 66ch; color: var(--ink-2); padding-left: 18px; }
+.docs li { margin-bottom: 6px; }
+.docs .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.docs .tblscroll { overflow-x: auto; }
+
+.callout {
+  border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  background: var(--panel); border-radius: 3px; padding: 12px 14px; margin: 14px 0;
+  max-width: 66ch;
+}
+.callout p { margin: 0; }
+.callout strong { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<header class="topnav">
+  <div class="brandmark">
+    <div class="rail"></div>
+    <div>
+      <b>Proxmox</b> <span>Monitoring</span>
+    </div>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Dashboard wählen">
+    <button class="tab" role="tab" id="tab-ve" aria-controls="board-ve" aria-selected="true">
+      <i class="dot"></i> Virtual Environment
+    </button>
+    <button class="tab" role="tab" id="tab-pbs" aria-controls="board-pbs" aria-selected="false">
+      <i class="dot"></i> Backup Server
+    </button>
+  </div>
+  <div class="navspacer"></div>
+  <button class="ctrl" type="button"><span class="ico">🕑</span> Letzte 24 Stunden</button>
+  <button class="ctrl" type="button"><span class="ico">↻</span> 30s</button>
+  <button class="ctrl" type="button" id="themebtn"><span class="ico">◐</span> <span id="themelabel">Dark</span></button>
+</header>
+
+<div class="varbar" id="varbar"></div>
+
+<div class="context">
+  <p><strong>Mockup, keine Live-Daten.</strong> Die Werte sind plausibel erfunden, Aufbau,
+     Panel-Typen und Queries entsprechen dem, was mit Grafana OSS und einer
+     InfluxDB-2-Datenquelle tatsächlich baubar ist.</p>
+  <div class="ctxnote">Auf ein Panel zeigen und <kbd>Query</kbd> klicken zeigt die zugehörige Flux-Abfrage.</div>
+</div>
+
+<main>
+  <section class="board" id="board-ve" role="tabpanel" aria-labelledby="tab-ve"></section>
+  <section class="board" id="board-pbs" role="tabpanel" aria-labelledby="tab-pbs" hidden></section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Panel-Query">
+  <div class="drawer-head">
+    <div style="flex:1;min-width:0">
+      <h3 id="drawer-title">Panel</h3>
+      <p id="drawer-sub">InfluxDB 2 · Flux</p>
+    </div>
+    <button class="drawer-close" id="drawer-close" type="button" aria-label="Schließen">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<div class="tooltip" id="tooltip" role="status" aria-live="off"></div>
+
+<section class="docs">
+  <div class="docs-inner">
+    <h2>Was zum Nachbauen nötig ist</h2>
+    <p class="lede">Beide Proxmox-Produkte schreiben von sich aus nach InfluxDB 2 – aber sie
+       schreiben nicht dasselbe, und der Proxmox Backup Server schreibt deutlich weniger,
+       als ein Backup-Dashboard braucht. Das ist der wichtigste Punkt auf dieser Seite.</p>
+
+    <h3>1 · Metrik-Server einrichten</h3>
+    <p>In beiden Oberflächen unter <code>Datacenter → Metric Server</code> bzw.
+       <code>Configuration → Metric Server</code> einen Server vom Typ <b>InfluxDB</b> anlegen:</p>
+    <div class="tblscroll">
+    <table>
+      <thead><tr><th>Feld</th><th>Wert</th><th>Anmerkung</th></tr></thead>
+      <tbody>
+        <tr><td>Protocol</td><td><code>HTTP</code></td><td>nicht UDP – UDP kann kein Influx&nbsp;2</td></tr>
+        <tr><td>Server / Port</td><td><code>192.168.x.x</code> / <code>8086</code></td><td>dieselbe Influx wie beim HA-Dashboard</td></tr>
+        <tr><td>Organization</td><td><code>meine-org</code></td><td></td></tr>
+        <tr><td>Bucket</td><td><code>proxmox</code></td><td>eigener Bucket, nicht der HA-Bucket</td></tr>
+        <tr><td>Token</td><td>API-Token mit <b>Schreibrecht</b></td><td>Grafana braucht separat ein Leserecht</td></tr>
+        <tr><td>Interval</td><td><code>10</code> s</td><td>Standard, reicht völlig</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>Ein eigener Bucket ist die bessere Wahl: Proxmox schreibt mit anderen Tag-Sätzen als
+       die Home-Assistant-Integration, und eine getrennte Retention (z.&nbsp;B. 90 Tage
+       statt unbegrenzt) hält die Datenbank klein.</p>
+
+    <h3>2 · Datenmodell prüfen, bevor du Panels baust</h3>
+    <p>Die Feldnamen unterscheiden sich zwischen PVE-Versionen. Führe diese Query einmal im
+       Influx-Data-Explorer oder in einem Grafana-Panel aus und richte die Dashboards nach
+       dem aus, was tatsächlich ankommt:</p>
+<pre>import "influxdata/influxdb/schema"
+
+schema.measurements(bucket: "proxmox")
+
+// und je Measurement:
+schema.fieldKeys(bucket: "proxmox", predicate: (r) =&gt; r._measurement == "cpustat")
+schema.tagKeys(bucket: "proxmox",   predicate: (r) =&gt; r._measurement == "system")</pre>
+
+    <div class="cols">
+      <div>
+        <h3>Proxmox VE – erwartetes Modell</h3>
+        <div class="tblscroll">
+        <table>
+          <thead><tr><th>Measurement</th><th>Tags</th><th>Felder (Auswahl)</th></tr></thead>
+          <tbody>
+            <tr><td><code>system</code></td><td><code>object=nodes</code>, <code>host</code>, <code>nodename</code></td><td><code>uptime</code>, <code>cpu</code>, <code>maxcpu</code>, <code>wait</code></td></tr>
+            <tr><td><code>cpustat</code></td><td><code>object=nodes</code></td><td><code>user</code>, <code>system</code>, <code>iowait</code>, <code>idle</code>, <code>avg1</code>, <code>avg5</code>, <code>avg15</code></td></tr>
+            <tr><td><code>memory</code></td><td><code>object=nodes</code></td><td><code>memtotal</code>, <code>memused</code>, <code>memfree</code>, <code>arcsize</code>, <code>swaptotal</code>, <code>swapused</code></td></tr>
+            <tr><td><code>nics</code></td><td><code>object=nodes</code>, <code>instance</code></td><td><code>receive</code>, <code>transmit</code></td></tr>
+            <tr><td><code>blockstat</code></td><td><code>object=nodes|qemu</code></td><td><code>read_bytes</code>, <code>write_bytes</code>, <code>read_ios</code>, <code>write_ios</code></td></tr>
+            <tr><td><code>pressure</code></td><td><code>object=nodes</code>, <code>resource</code></td><td><code>some_avg10</code>, <code>full_avg10</code> <span style="color:var(--ink-3)">(ab PVE 8)</span></td></tr>
+            <tr><td><code>system</code></td><td><code>object=storages</code>, <code>host</code>=Storage-ID</td><td><code>total</code>, <code>used</code>, <code>avail</code></td></tr>
+            <tr><td><code>system</code></td><td><code>object=qemu|lxc</code>, <code>vmid</code>, <code>host</code>=Gastname</td><td><code>cpu</code>, <code>maxcpu</code>, <code>mem</code>, <code>maxmem</code>, <code>netin</code>, <code>netout</code>, <code>diskread</code>, <code>diskwrite</code>, <code>uptime</code></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div>
+        <h3>Proxmox Backup Server – erwartetes Modell</h3>
+        <div class="tblscroll">
+        <table>
+          <thead><tr><th>Measurement</th><th>Tags</th><th>Felder (Auswahl)</th></tr></thead>
+          <tbody>
+            <tr><td><code>cpustat</code></td><td><code>object=host</code></td><td><code>cpu</code>, <code>iowait</code>, <code>avg1</code>, <code>avg5</code>, <code>avg15</code></td></tr>
+            <tr><td><code>memory</code></td><td><code>object=host</code></td><td><code>total</code>, <code>used</code>, <code>available</code></td></tr>
+            <tr><td><code>swap</code></td><td><code>object=host</code></td><td><code>total</code>, <code>used</code>, <code>free</code></td></tr>
+            <tr><td><code>nics</code></td><td><code>object=host</code>, <code>instance</code></td><td><code>receive</code>, <code>transmit</code></td></tr>
+            <tr><td><code>blockstat</code></td><td><code>object=host</code></td><td><code>read_bytes</code>, <code>write_bytes</code>, <code>io_ticks</code></td></tr>
+            <tr><td><code>disk</code></td><td><code>object=host</code></td><td><code>total</code>, <code>used</code>, <code>available</code></td></tr>
+            <tr><td><code>disk</code></td><td><code>object=datastore</code>, <code>datastore</code></td><td><code>total</code>, <code>used</code>, <code>available</code></td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="callout">
+          <p><strong>Die entscheidende Lücke:</strong> PBS schickt über den Metric Server nur
+             Host- und Datastore-Metriken. <b>Kein</b> Task-Ergebnis, keine Snapshot-Zahlen,
+             keine Backup-Dauer, kein Dedup-Faktor, kein Verify- oder GC-Status. Alle Panels
+             im Mockup, die mit <b>PBS-API</b> gekennzeichnet sind, brauchen eine zweite
+             Datenquelle.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>3 · PBS-API als zweite Datenquelle</h3>
+    <p>Für die Backup-Panels das Plugin <b>Infinity</b> (kostenlos, in Grafana OSS
+       installierbar) als JSON-Datenquelle einrichten. In PBS unter
+       <code>Access Control → API Token</code> ein Token für einen Benutzer mit der Rolle
+       <code>Audit</code> anlegen – lesend genügt.</p>
+<pre>URL     https://pbs.fritz.box:8007
+Header  Authorization: PBSAPIToken=grafana@pbs!readonly:&lt;secret&gt;
+
+# Endpunkte, die die Panels im Mockup füllen:
+GET /api2/json/admin/datastore/{store}/status      → Belegung, Dedup, Zähler
+GET /api2/json/admin/datastore/{store}/snapshots   → Snapshot-Liste je Gast
+GET /api2/json/admin/datastore/{store}/gc          → letzter Garbage-Collect
+GET /api2/json/nodes/localhost/tasks?limit=200     → Task-Historie (Status, Dauer)</pre>
+    <p>Läuft PBS mit selbstsigniertem Zertifikat, in der Infinity-Datenquelle
+       <i>Skip TLS Verify</i> setzen – oder besser das PBS-Zertifikat in den
+       Grafana-Container mounten.</p>
+
+    <h3>4 · Bewusst getroffene Entscheidungen</h3>
+    <ul>
+      <li><b>Reichweiten-Panels statt reiner Belegungsanzeigen.</b> „Storage zu 78&nbsp;%
+          voll" ist erst dann eine Information, wenn danebensteht, dass das in 40 Tagen
+          100&nbsp;% sind. Die Prognose ist eine simple lineare Fortschreibung über 14 Tage –
+          das genügt für Homelab-Wachstum und braucht kein ML-Plugin.</li>
+      <li><b>Schwellenfarben nur mit Zahl.</b> Grün/Gelb/Rot steht nie allein, überall
+          daneben der Wert oder ein Statuswort – sonst ist das Dashboard für rot-grün-blinde
+          Betrachter unlesbar.</li>
+      <li><b>Serienfarben ≠ Statusfarben.</b> Blau/Gelb/Grün/Violett sind für Zeitreihen mit
+          mehreren Serien reserviert, die Schwellenrampe für Zustände. Sonst heißt Rot mal
+          „kritisch" und mal „Serie 5".</li>
+      <li><b>Ein Panel „Datenaktualität" pro Dashboard.</b> Der häufigste Fehlerfall ist
+          nicht die kaputte VM, sondern der Metric Server, der seit drei Tagen nichts mehr
+          schreibt – und ein Dashboard, das dabei fröhlich den letzten Wert weiterzeigt.</li>
+      <li><b>Keine Dual-Axis-Panels.</b> Zwei Y-Achsen in einem Diagramm erzeugen beliebige
+          Scheinkorrelationen. Wo zwei Größen zusammengehören, aber unterschiedlich
+          skalieren, stehen zwei Panels nebeneinander.</li>
+    </ul>
+
+    <h3>5 · Sinnvolle Alarme</h3>
+    <div class="tblscroll">
+    <table>
+      <thead><tr><th>Regel</th><th>Bedingung</th><th>Warum</th></tr></thead>
+      <tbody>
+        <tr><td>Kein Backup</td><td>letzter erfolgreicher Backup-Task älter als 36&nbsp;h</td><td>fängt auch den Fall „Job läuft, schlägt aber still fehl"</td></tr>
+        <tr><td>Datastore-Reichweite</td><td>prognostizierte Restlaufzeit &lt; 21&nbsp;Tage</td><td>Vorwarnzeit, um Platten zu bestellen</td></tr>
+        <tr><td>Verifikation</td><td>Snapshot ohne <code>verify: ok</code> älter als 14&nbsp;Tage</td><td>ein unverifiziertes Backup ist kein Backup</td></tr>
+        <tr><td>Metrik-Stille</td><td>letzter Datenpunkt <code>object=nodes</code> älter als 5&nbsp;min</td><td>erkennt Node-Ausfall <i>und</i> kaputte Metrik-Kette</td></tr>
+        <tr><td>Storage-Füllstand</td><td>belegt &gt; 90&nbsp;% für 15&nbsp;min</td><td>bei ZFS wird es ab 90&nbsp;% messbar langsam</td></tr>
+        <tr><td>IO-Wait</td><td>Node-<code>iowait</code> &gt; 15&nbsp;% für 10&nbsp;min</td><td>zeigt sterbende Platten oft vor SMART</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ============================================================
+   Deterministische Pseudo-Zufallsdaten
+   ============================================================ */
+function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a += 0x6D2B79F5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Zeitreihe mit Tagesgang, Rauschen und optionalen Spitzen */
+function gen(seed, n, o) {
+  o = o || {};
+  const r = rng(seed);
+  const base = o.base ?? 30, amp = o.amp ?? 10, noise = o.noise ?? 3;
+  const trend = o.trend ?? 0, phase = o.phase ?? 0;
+  const lo = o.min ?? 0, hi = o.max ?? Infinity;
+  const spike = o.spike ?? 0, spikeAmp = o.spikeAmp ?? amp * 3;
+  const out = [];
+  let drift = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    drift = drift * 0.86 + (r() - 0.5) * noise;
+    let v = base
+      + amp * Math.sin((t * Math.PI * 2 * (o.cycles ?? 1)) + phase)
+      + trend * t
+      + drift;
+    if (spike && r() < spike) v += spikeAmp * (0.5 + r());
+    out.push(Math.min(hi, Math.max(lo, v)));
+  }
+  return out;
+}
+
+/* ============================================================
+   Formatierung
+   ============================================================ */
+const nf = (v, d) => Number(v).toLocaleString('de-DE',
+  { minimumFractionDigits: d ?? 0, maximumFractionDigits: d ?? 0 });
+
+function fmtUnit(v, unit, dec) {
+  switch (unit) {
+    case '%':      return nf(v, dec ?? 1) + ' %';
+    case 'bytes':  return humanBytes(v);
+    case 'Bps':    return humanBytes(v) + '/s';
+    case 'bps':    return humanBits(v);
+    case 'iops':   return nf(v, 0) + ' IO/s';
+    case 'ms':     return nf(v, 0) + ' ms';
+    case 'load':   return nf(v, 2);
+    case 'none':   return nf(v, dec ?? 0);
+    default:       return nf(v, dec ?? 1) + (unit ? ' ' + unit : '');
+  }
+}
+function humanBytes(v) {
+  const u = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return nf(v, v < 10 && i > 0 ? 1 : 0) + ' ' + u[i];
+}
+function humanBits(v) {
+  const u = ['bit/s', 'kbit/s', 'Mbit/s', 'Gbit/s'];
+  let i = 0;
+  while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+  return nf(v, v < 10 && i > 0 ? 1 : 0) + ' ' + u[i];
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* Zeitachse: 24 h zurück, 10-Minuten-Schritte */
+const N = 145;
+const T_END = new Date('2026-08-02T14:20:00');
+const times = Array.from({ length: N }, (_, i) =>
+  new Date(T_END.getTime() - (N - 1 - i) * 10 * 60 * 1000));
+const hhmm = d => String(d.getHours()).padStart(2, '0') + ':' +
+                  String(d.getMinutes()).padStart(2, '0');
+const xLabels = [0, 24, 48, 72, 96, 120, 144].map(i => hhmm(times[i]));
+
+/* ============================================================
+   Panel-Bausteine
+   ============================================================ */
+let qid = 0;
+const QUERIES = {};
+
+function head(title, opts) {
+  opts = opts || {};
+  const id = 'q' + (++qid);
+  if (opts.q) QUERIES[id] = { title, sub: opts.src === 'api' ? 'PBS-API · Infinity' : 'InfluxDB 2 · Flux', blocks: opts.q };
+  const badge = opts.src === 'api'
+    ? '<span class="src api" title="Braucht die PBS-API über das Infinity-Plugin">PBS-API</span>'
+    : (opts.src === 'influx' ? '<span class="src">Influx</span>' : '');
+  return `<div class="phead"><h3 title="${esc(opts.tip || title)}">${esc(title)}</h3>${badge}
+    <span class="spacer"></span>
+    ${opts.q ? `<button class="qbtn" type="button" data-q="${id}">Query</button>` : ''}
+  </div>`;
+}
+
+function panel(w, inner, cls) {
+  return `<div class="panel ${cls || ''} w${w}">${inner}</div>`;
+}
+
+/* ---------- Stat ---------- */
+function stat(o) {
+  const color = o.color || 'var(--ink)';
+  let spark = '';
+  if (o.spark) {
+    const d = o.spark, mn = Math.min(...d), mx = Math.max(...d), sp = (mx - mn) || 1;
+    const pts = d.map((v, i) =>
+      `${(i / (d.length - 1) * 100).toFixed(2)},${(100 - (v - mn) / sp * 100).toFixed(2)}`);
+    spark = `<svg class="spark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,100 L${pts.join(' L')} L100,100 Z" fill="${color}" opacity=".16"/>
+      <path d="M${pts.join(' L')}" fill="none" stroke="${color}" stroke-width="1.6"
+        vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  return panel(o.w || 3,
+    head(o.title, o) +
+    `<div class="pbody"><div class="stat ${o.compact ? 'compact' : ''} ${o.spark ? 'hasspark' : ''}">
+      ${spark}
+      <div class="v" style="color:${color}">${o.value}${o.unit ? `<span class="u">${esc(o.unit)}</span>` : ''}</div>
+      <div class="sub">${o.sub || ''}</div>
+    </div></div>`);
+}
+
+/* ---------- Timeseries ---------- */
+function ts(o) {
+  const h = o.h || 150;
+  const series = o.series;
+  const n = series[0].data.length;
+
+  // Y-Bereich
+  let mx = o.yMax, mn = o.yMin ?? 0;
+  if (mx == null) {
+    if (o.stack) {
+      let peak = 0;
+      for (let i = 0; i < n; i++) peak = Math.max(peak, series.reduce((s, x) => s + x.data[i], 0));
+      mx = peak;
+    } else {
+      mx = Math.max(...series.flatMap(s => s.data));
+    }
+    mx = mx * 1.12;
+  }
+  const span = (mx - mn) || 1;
+  const Y = v => (1 - (v - mn) / span) * 100;
+
+  // Gitter
+  const ticks = 4;
+  let gridSvg = '';
+  const yl = [];
+  for (let i = 0; i <= ticks; i++) {
+    const frac = i / ticks;
+    const val = mx - frac * span;
+    gridSvg += `<line x1="0" y1="${(frac * 100).toFixed(2)}" x2="100" y2="${(frac * 100).toFixed(2)}"
+      stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+    yl.push(`<span>${esc(o.axisFmt ? o.axisFmt(val) : fmtUnit(val, o.unit, o.dec))}</span>`);
+  }
+
+  // Pfade
+  let paths = '', dots = '';
+  const drawn = o.stack ? [...series].reverse() : series;
+  const stackTop = {};
+  if (o.stack) {
+    // kumulative Oberkanten von unten nach oben
+    const cum = new Array(n).fill(0);
+    series.forEach(s => {
+      const top = s.data.map((v, i) => (cum[i] += v));
+      stackTop[s.name] = top.slice();
+    });
+  }
+  const P = (v, i) => `${(i / (n - 1) * 100).toFixed(3)},${Y(v).toFixed(3)}`;
+  drawn.forEach(s => {
+    const vals = o.stack ? stackTop[s.name] : s.data;
+    // Ab dashFrom ist die Serie eine Fortschreibung – gestrichelt, ohne Fläche
+    const cut = s.dashFrom != null ? s.dashFrom : n - 1;
+    const solid = 'M' + vals.slice(0, cut + 1).map((v, i) => P(v, i)).join(' L');
+    if (o.stack || o.fill) {
+      paths += `<path d="${solid} L${(cut / (n - 1) * 100).toFixed(3)},100 L0,100 Z"
+        fill="${s.color}" opacity="${o.stack ? .5 : .16}"/>`;
+    }
+    paths += `<path d="${solid}" fill="none" stroke="${s.color}" stroke-width="2"
+      vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (s.dashFrom != null && cut < n - 1) {
+      const dash = 'M' + vals.slice(cut).map((v, i) => P(v, cut + i)).join(' L');
+      paths += `<path d="${dash}" fill="none" stroke="${s.color}" stroke-width="2"
+        stroke-dasharray="5 4" opacity=".75"
+        vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+  });
+
+  // Senkrechte Markierung, z. B. „heute" zwischen Messung und Prognose
+  if (o.markerAt != null) {
+    const mx2 = (o.markerAt / (n - 1) * 100).toFixed(2);
+    paths += `<line x1="${mx2}" y1="0" x2="${mx2}" y2="100" stroke="var(--ink-3)"
+      stroke-width="1" stroke-dasharray="3 3" opacity=".7" vector-effect="non-scaling-stroke"/>`;
+  }
+  series.forEach(s => {
+    dots += `<i class="hdot" data-s="${esc(s.name)}" style="background:${s.color}"></i>`;
+  });
+
+  // Schwellenlinie
+  if (o.threshold != null && o.threshold <= mx) {
+    paths += `<line x1="0" y1="${Y(o.threshold).toFixed(2)}" x2="100" y2="${Y(o.threshold).toFixed(2)}"
+      stroke="var(--crit)" stroke-width="1.5" stroke-dasharray="6 4"
+      vector-effect="non-scaling-stroke" opacity=".8"/>`;
+  }
+
+  // Legende mit Kennzahlen
+  const calcs = o.calcs !== false;
+  let legend = '';
+  if (series.length > 1 || calcs) {
+    const rows = series.map(s => {
+      // Kennzahlen nur über die gemessenen Punkte – nie über die Fortschreibung
+      const d = o.calcTo != null ? s.data.slice(0, o.calcTo + 1) : s.data;
+      const last = d[d.length - 1];
+      const max = Math.max(...d);
+      const avg = d.reduce((a, b) => a + b, 0) / d.length;
+      return `<tr>
+        <td><span class="lg"><i class="sw" style="background:${s.color}"></i>${esc(s.name)}</span></td>
+        <td>${esc(fmtUnit(avg, o.unit, o.dec))}</td>
+        <td>${esc(fmtUnit(max, o.unit, o.dec))}</td>
+        <td class="hi">${esc(fmtUnit(last, o.unit, o.dec))}</td>
+      </tr>`;
+    }).join('');
+    legend = `<div class="legend"><table>
+      <thead><tr><th>${esc(o.legendTitle || 'Serie')}</th><th>Ø</th><th>Max</th>
+        <th>${o.legendNote ? 'Zuletzt ' + esc(o.legendNote) : 'Zuletzt'}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  const payload = {
+    unit: o.unit, dec: o.dec, stack: !!o.stack, min: mn, max: mx,
+    labels: o.pointLabels || null,
+    series: series.map(s => ({ name: s.name, color: s.color, data: s.data })),
+    top: o.stack ? series.map(s => stackTop[s.name]) : null
+  };
+  const xax = o.xLabels || xLabels;
+
+  return panel(o.w || 8,
+    head(o.title, o) +
+    `<div class="pbody">
+      <div class="chartwrap">
+        <div class="yaxis" style="height:${h}px">${yl.join('')}</div>
+        <div class="plot" style="height:${h}px" data-ts='${esc(JSON.stringify(payload))}'>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            ${gridSvg}${paths}
+          </svg>
+          <div class="crosshair"></div>${dots}
+        </div>
+        <div></div>
+        <div class="xaxis">${xax.map(l => `<span>${esc(l)}</span>`).join('')}</div>
+      </div>
+      ${legend}
+    </div>`);
+}
+
+/* ---------- Bar-Gauge (LCD-Stil) ---------- */
+function thColor(p, inv) {
+  const v = inv ? 100 - p : p;
+  if (v >= 90) return 'var(--crit)';
+  if (v >= 78) return 'var(--high)';
+  if (v >= 60) return 'var(--warn)';
+  return 'var(--ok)';
+}
+function bargauge(o) {
+  const items = o.items.map(it => {
+    const pct = it.pct;
+    const c = it.color || thColor(pct);
+    return `<div class="bg-item">
+      <div class="bg-name" title="${esc(it.name)}">${esc(it.name)}</div>
+      <div class="bg-val" style="color:${c}">${esc(it.value)}</div>
+      <div class="bg-track"><div class="bg-fill" style="width:${Math.min(100, pct).toFixed(1)}%;background:${c}"></div></div>
+      ${it.sub ? `<div class="bg-sub">${esc(it.sub)}</div>` : ''}
+    </div>`;
+  }).join('');
+  return panel(o.w || 8, head(o.title, o) + `<div class="pbody"><div class="bg-list">${items}</div></div>`);
+}
+
+/* ---------- Gauge (Bogen) ---------- */
+function gaugeArc(pct, color) {
+  const R = 34, C = 40;
+  const start = -220, end = 40, sweep = end - start;
+  const rad = a => (a * Math.PI) / 180;
+  const pt = a => [C + R * Math.cos(rad(a)), C + R * Math.sin(rad(a))];
+  const arc = (a0, a1, col, w, op) => {
+    const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+    return `<path d="M${x0.toFixed(2)},${y0.toFixed(2)} A${R},${R} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)}"
+      fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" opacity="${op || 1}"/>`;
+  };
+  const cur = start + sweep * Math.min(1, pct / 100);
+  return `<svg viewBox="0 0 80 56" style="width:100%;max-width:104px;height:auto" aria-hidden="true">
+    ${arc(start, end, 'var(--grid)', 7)}
+    ${pct > 0.5 ? arc(start, cur, color, 7) : ''}
+  </svg>`;
+}
+function gauges(o) {
+  const g = o.items.map(it => {
+    const c = it.color || thColor(it.pct);
+    return `<div class="gauge">${gaugeArc(it.pct, c)}
+      <div class="gv" style="color:${c}">${esc(it.value)}</div>
+      <div class="gn">${esc(it.name)}</div></div>`;
+  }).join('');
+  return panel(o.w || 8, head(o.title, o) + `<div class="pbody"><div class="gauges">${g}</div></div>`);
+}
+
+/* ---------- Tabelle ---------- */
+function table(o) {
+  const th = o.cols.map(c =>
+    `<th class="${c.align === 'r' ? 'r' : ''}">${esc(c.label)}</th>`).join('');
+  const tb = o.rows.map(r =>
+    `<tr>${r.map((cell, i) => {
+      const c = o.cols[i];
+      const cls = [c.align === 'r' ? 'r' : '', c.num ? 'n' : '', c.name ? 'name' : ''].join(' ');
+      return `<td class="${cls}">${cell}</td>`;
+    }).join('')}</tr>`).join('');
+  const tf = o.foot ? `<tfoot><tr>${o.foot.map((cell, i) =>
+    `<td class="${o.cols[i].align === 'r' ? 'r' : ''} ${o.cols[i].num ? 'n' : ''}">${cell}</td>`).join('')}</tr></tfoot>` : '';
+  return panel(o.w || 24, head(o.title, o) +
+    `<div class="pbody"><div class="tblwrap"><table class="data">
+      <thead><tr>${th}</tr></thead><tbody>${tb}</tbody>${tf}</table></div></div>`);
+}
+
+function pill(kind, text) {
+  return `<span class="pill ${kind}"><i class="d"></i>${esc(text)}</span>`;
+}
+function cellbar(text, pct, color) {
+  return `<span class="cellbar" style="display:inline-block;color:${color || thColor(pct)}">
+    ${esc(text)}<i style="--p:${Math.min(100, pct).toFixed(1)}%"></i></span>`;
+}
+
+/* ---------- Balkendiagramm (vertikal) ---------- */
+function barchart(o) {
+  const h = o.h || 130;
+  const vals = o.data.map(d => d.v);
+  // Nulllinie einbeziehen, damit negative Werte (GC/Prune) nach unten zeigen
+  let mx = Math.max(...vals, 0), mn = Math.min(...vals, 0);
+  const pad = ((mx - mn) * 0.12) || 1;
+  mx += pad;
+  if (mn < 0) mn -= pad;
+  const span = (mx - mn) || 1;
+  const Y = v => (1 - (v - mn) / span) * 100;
+  const zero = Y(0);
+
+  const bw = 100 / o.data.length;
+  const bars = o.data.map((d, i) => {
+    const y = Y(d.v);
+    const c = d.color || o.color || 'var(--s1)';
+    return `<rect x="${(i * bw + bw * 0.18).toFixed(2)}" y="${Math.min(y, zero).toFixed(2)}"
+      width="${(bw * 0.64).toFixed(2)}" height="${Math.max(0.4, Math.abs(y - zero)).toFixed(2)}"
+      fill="${c}" rx="0.6">
+      <title>${esc(d.label)}: ${esc(d.text || fmtUnit(d.v, o.unit, o.dec))}</title></rect>`;
+  }).join('');
+
+  const yl = [];
+  for (let i = 0; i <= 3; i++) {
+    yl.push(`<span>${esc(fmtUnit(mx - (i / 3) * span, o.unit, o.dec))}</span>`);
+  }
+  return panel(o.w || 8, head(o.title, o) +
+    `<div class="pbody"><div class="chartwrap">
+      <div class="yaxis" style="height:${h}px">${yl.join('')}</div>
+      <div style="height:${h}px;min-width:0">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%">
+          <line x1="0" y1="${zero.toFixed(2)}" x2="100" y2="${zero.toFixed(2)}"
+            stroke="var(--ink-3)" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".7"/>
+          ${bars}
+        </svg>
+      </div>
+      <div></div>
+      <div class="xaxis">${o.data.map(d => `<span style="flex:1;text-align:center">${esc(d.short ?? d.label)}</span>`).join('')}</div>
+    </div></div>`);
+}
+
+/* ---------- Horizontale Balken ---------- */
+function hbars(o) {
+  const mx = Math.max(...o.items.map(i => i.v)) || 1;
+  const rows = o.items.map(it => `
+    <div class="bg-item">
+      <div class="bg-name">${esc(it.name)}</div>
+      <div class="bg-val">${esc(it.text)}</div>
+      <div class="bg-track"><div class="bg-fill" style="width:${(it.v / mx * 100).toFixed(1)}%;background:${it.color || o.color || 'var(--s1)'}"></div></div>
+    </div>`).join('');
+  return panel(o.w || 8, head(o.title, o) + `<div class="pbody"><div class="bg-list">${rows}</div></div>`);
+}
+
+/* ---------- Status-Matrix ---------- */
+function matrix(o) {
+  const days = o.days;
+  const rows = o.rows.map(r => {
+    const cells = r.states.map((s, i) => {
+      const map = {
+        ok:   ['var(--ok)', 'erfolgreich'],
+        warn: ['var(--warn)', 'mit Warnung'],
+        err:  ['var(--crit)', 'fehlgeschlagen'],
+        none: ['var(--border)', 'kein Lauf']
+      };
+      const [c, lbl] = map[s] || map.none;
+      return `<div class="mx-cell" style="background:${c}"
+        title="${esc(r.name)} · ${esc(days[i])} · ${lbl}"></div>`;
+    }).join('');
+    return `<div class="mx-label">${esc(r.name)}</div>${cells}`;
+  }).join('');
+  const heads = days.map(d => `<div class="mx-head">${esc(d)}</div>`).join('');
+  return panel(o.w || 16, head(o.title, o) +
+    `<div class="pbody">
+      <div class="matrix" style="grid-template-columns:auto repeat(${days.length},minmax(10px,1fr))">
+        <div></div>${heads}${rows}
+      </div>
+      <div class="mx-legend">
+        <span><i style="background:var(--ok)"></i>erfolgreich</span>
+        <span><i style="background:var(--warn)"></i>mit Warnung</span>
+        <span><i style="background:var(--crit)"></i>fehlgeschlagen</span>
+        <span><i style="background:var(--border)"></i>kein Lauf</span>
+      </div>
+    </div>`);
+}
+
+/* ---------- Textpanel ---------- */
+function textpanel(o) {
+  return panel(o.w || 8, head(o.title, o) + `<div class="pbody"><div class="textpanel">${o.html}</div></div>`);
+}
+
+/* ---------- Row ---------- */
+function row(title, meta, panels) {
+  return { title, meta, html: `<div class="grid">${panels.join('')}</div>` };
+}
+
+/* ============================================================
+   Daten – Proxmox VE
+   ============================================================ */
+const CPU_USER   = gen(11, N, { base: 12, amp: 5, cycles: 1.4, noise: 2.4, min: 2, phase: 1.1, spike: .03, spikeAmp: 14 });
+const CPU_SYS    = gen(12, N, { base: 4.4, amp: 1.6, cycles: 1.2, noise: 1.1, min: .8 });
+const CPU_IOWAIT = gen(13, N, { base: 1.2, amp: .7, cycles: 2.1, noise: .6, min: .05, spike: .04, spikeAmp: 5 });
+
+const MEM_USED  = gen(21, N, { base: 38.4, amp: 1.9, cycles: 1.1, noise: .5, min: 30 });
+const MEM_ARC   = gen(22, N, { base: 14.6, amp: 1.2, cycles: .8, noise: .35, min: 8 });
+const MEM_CACHE = gen(23, N, { base: 5.1, amp: 1.1, cycles: 1.7, noise: .4, min: 1 });
+
+const LOAD1  = gen(31, N, { base: 1.5, amp: .75, cycles: 1.5, noise: .35, min: .1, spike: .03, spikeAmp: 2.6 });
+const LOAD5  = gen(32, N, { base: 1.42, amp: .55, cycles: 1.4, noise: .18, min: .15 });
+const LOAD15 = gen(33, N, { base: 1.36, amp: .38, cycles: 1.3, noise: .09, min: .2 });
+
+const PSI_CPU = gen(41, N, { base: 3.1, amp: 1.8, cycles: 1.6, noise: 1, min: 0, spike: .04, spikeAmp: 9 });
+const PSI_IO  = gen(42, N, { base: 2.2, amp: 1.6, cycles: 2.2, noise: .9, min: 0, spike: .05, spikeAmp: 14 });
+const PSI_MEM = gen(43, N, { base: .25, amp: .2, cycles: 1.1, noise: .12, min: 0 });
+
+const NET_IN  = gen(51, N, { base: 9.4e6, amp: 5.2e6, cycles: 1.5, noise: 2.4e6, min: 4e5, spike: .05, spikeAmp: 5.4e7 });
+const NET_OUT = gen(52, N, { base: 6.1e6, amp: 3.6e6, cycles: 1.3, noise: 1.8e6, min: 3e5, spike: .04, spikeAmp: 3.8e7 });
+
+const IO_READ  = gen(61, N, { base: 3.4e6, amp: 2.2e6, cycles: 1.7, noise: 1.4e6, min: 5e4, spike: .05, spikeAmp: 4.6e7 });
+const IO_WRITE = gen(62, N, { base: 7.8e6, amp: 3.8e6, cycles: 1.2, noise: 2.6e6, min: 2e5, spike: .06, spikeAmp: 7.2e7 });
+
+const ARC_HIT = gen(71, N, { base: 97.4, amp: 1.1, cycles: 1.9, noise: .5, min: 88, max: 99.9 });
+const ARC_SZ  = gen(72, N, { base: 14.6, amp: 1.2, cycles: .8, noise: .3, min: 8 });
+
+const G_HA    = gen(81, N, { base: 22, amp: 7, cycles: 1.6, noise: 3, min: 3, spike: .04, spikeAmp: 26 });
+const G_FRIG  = gen(82, N, { base: 46, amp: 13, cycles: 1.1, noise: 5, min: 12, spike: .05, spikeAmp: 30 });
+const G_DOCK  = gen(83, N, { base: 17, amp: 6, cycles: 1.9, noise: 3.4, min: 2 });
+const G_INFL  = gen(84, N, { base: 11, amp: 5, cycles: 2.4, noise: 2.6, min: 1, spike: .05, spikeAmp: 22 });
+
+const GM_HA   = gen(91, N, { base: 63, amp: 3, cycles: 1.1, noise: 1.2, min: 40 });
+const GM_FRIG = gen(92, N, { base: 74, amp: 4, cycles: .9, noise: 1.4, min: 40 });
+const GM_DOCK = gen(93, N, { base: 58, amp: 5, cycles: 1.4, noise: 1.8, min: 30 });
+const GM_INFL = gen(94, N, { base: 81, amp: 3.5, cycles: 1.2, noise: 1.1, min: 40 });
+
+/* ============================================================
+   Queries – Proxmox VE
+   ============================================================ */
+const Q_CPU = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "cpustat")
+  |> filter(fn: (r) => r.object == "nodes" and r.host == "\${node}")
+  |> filter(fn: (r) => r._field == "user" or r._field == "system"
+                    or r._field == "iowait")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))
+  |> keep(columns: ["_time", "_value", "_field"])`],
+  ['Hinweis', 'Proxmox liefert die CPU-Anteile als Bruch (0–1), deshalb die Multiplikation mit 100. Gestapelt ergeben user + system + iowait die Gesamtauslastung – deshalb hier ein Stack und keine drei freien Linien.']
+];
+
+const Q_MEM = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "memory" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}")
+  |> filter(fn: (r) => r._field == "memused" or r._field == "arcsize")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+  ['Hinweis', 'Bei ZFS ist arcsize in memused enthalten. Wer die tatsächlich von Gästen belegte RAM-Menge sehen will, muss memused - arcsize rechnen – sonst wirkt der Host dauerhaft am Anschlag, obwohl der ARC bei Bedarf sofort schrumpft.']
+];
+
+const Q_LOAD = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "cpustat" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}")
+  |> filter(fn: (r) => r._field =~ /^avg(1|5|15)$/)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+  ['Schwellenlinie', 'Die rote gestrichelte Linie liegt auf der Anzahl der CPU-Threads (hier 12). Darüber warten Prozesse tatsächlich auf CPU-Zeit – ein Load von 6 auf einem 12-Thread-Host ist dagegen unauffällig.']
+];
+
+const Q_PSI = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "pressure" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}" and r._field == "some_avg10")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> keep(columns: ["_time", "_value", "resource"])`],
+  ['Hinweis', 'Pressure Stall Information gibt es ab PVE 8. Sie beantwortet die Frage, die Load nicht beantwortet: Wie viel Prozent der Zeit hat mindestens ein Task auf diese Ressource gewartet? Ein io-Wert über 10 % zeigt einen Storage-Engpass zuverlässiger als jede Auslastungskurve.']
+];
+
+const Q_NET = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "nics" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}" and r.instance == "vmbr0")
+  |> filter(fn: (r) => r._field == "receive" or r._field == "transmit")
+  |> derivative(unit: 1s, nonNegative: true)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+  ['Hinweis', 'receive und transmit sind kumulative Zähler. Ohne derivative() zeigt das Panel eine monoton steigende Gerade. nonNegative: true fängt den Zählerüberlauf beim Reboot ab.']
+];
+
+const Q_IO = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "blockstat" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}")
+  |> filter(fn: (r) => r._field == "read_bytes" or r._field == "write_bytes")
+  |> derivative(unit: 1s, nonNegative: true)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`]
+];
+
+const Q_STORAGE = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "system" and r.object == "storages")
+  |> filter(fn: (r) => r._field == "used" or r._field == "total")
+  |> last()
+  |> pivot(rowKey: ["host"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({
+       Storage: r.host,
+       Belegt:  r.used,
+       Gesamt:  r.total,
+       Prozent: float(v: r.used) / float(v: r.total) * 100.0
+     }))
+  |> sort(columns: ["Prozent"], desc: true)`],
+  ['Hinweis', 'Der Tag host trägt bei object = "storages" die Storage-ID, nicht den Hostnamen. Vor dem Nachbau mit schema.tagValues() gegenprüfen.']
+];
+
+const Q_FORECAST = [
+  ['Flux', `import "experimental"
+
+tage = 14
+
+verlauf = from(bucket: "\${bucket}")
+  |> range(start: -duration(v: string(v: tage) + "d"))
+  |> filter(fn: (r) => r._measurement == "system" and r.object == "storages")
+  |> filter(fn: (r) => r._field == "used")
+  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
+
+wachstum = verlauf
+  |> difference(nonNegative: false)
+  |> mean()                       // Ø Zuwachs pro Tag in Byte
+
+frei = from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "system" and r.object == "storages")
+  |> filter(fn: (r) => r._field == "avail")
+  |> last()
+
+join(tables: {w: wachstum, f: frei}, on: ["host"])
+  |> map(fn: (r) => ({
+       Storage:    r.host,
+       ProTag:     r._value_w,
+       Reichweite: if r._value_w <= 0.0 then 9999.0
+                   else r._value_f / r._value_w
+     }))`],
+  ['Warum so', 'Lineare Fortschreibung über 14 Tage. Bewusst simpel: Homelab-Wachstum ist annähernd linear, und eine Prognose, deren Rechenweg man in zwei Zeilen erklären kann, glaubt man auch. Negative Steigung (Storage wird leerer) wird auf „unbegrenzt" gesetzt statt auf eine sinnlose Zahl in der Vergangenheit.']
+];
+
+const Q_GUESTS = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "system")
+  |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
+  |> filter(fn: (r) => contains(value: r._field, set: [
+       "cpu", "maxcpu", "mem", "maxmem", "netin", "netout",
+       "diskread", "diskwrite", "uptime", "status"]))
+  |> last()
+  |> pivot(rowKey: ["vmid"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({ r with
+       CPU:  r.cpu * 100.0,
+       RAM:  float(v: r.mem) / float(v: r.maxmem) * 100.0
+     }))
+  |> sort(columns: ["CPU"], desc: true)`],
+  ['Aufbereitung', 'In Grafana danach über Field-Overrides: CPU und RAM als Prozent mit Gauge-Cell-Display, Status über Value-Mappings (1 → running, 0 → stopped) auf farbige Textzellen. Die Sortierung nach CPU macht die Tabelle zur Top-Liste – der Verursacher steht immer oben.']
+];
+
+const Q_GUESTCPU = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "system")
+  |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
+  |> filter(fn: (r) => r._field == "cpu")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))
+  |> top(n: 5, columns: ["_value"])          // optional: nur Top 5
+  |> keep(columns: ["_time", "_value", "host", "vmid"])`],
+  ['Hinweis', 'cpu ist bei Gästen relativ zu den zugewiesenen vCPUs (0–1), nicht zum Host. 100 % bedeutet also „der Gast lastet seine eigenen Kerne voll aus", nicht „der Node steht still".']
+];
+
+const Q_FRESH = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._field == "uptime" or r._field == "used")
+  |> group(columns: ["object", "host"])
+  |> last()
+  |> map(fn: (r) => ({
+       Quelle: r.object + " / " + r.host,
+       Alter:  int(v: now()) - int(v: r._time)
+     }))
+  |> sort(columns: ["Alter"], desc: true)`],
+  ['Warum dieses Panel', 'Grafana zeigt ohne Weiteres den letzten bekannten Wert – auch wenn er drei Tage alt ist. Dieses Panel ist die Gegenprobe und gehört auf jedes Dashboard, das aus einem Push-Datenstrom gespeist wird.']
+];
+
+const Q_ARC = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "memory" and r.object == "nodes")
+  |> filter(fn: (r) => r._field == "arcsize")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+  ['Hinweis', 'Die ARC-Trefferquote liefert der Metric Server nicht mit. Sie kommt aus /proc/spl/kstat/zfs/arcstats und braucht einen Telegraf-Agenten auf dem Node – oder man lässt das Panel weg. Im Mockup ist es enthalten, weil es bei ZFS die aussagekräftigste einzelne Zahl zur Storage-Performance ist.']
+];
+
+/* ============================================================
+   Board: Proxmox VE
+   ============================================================ */
+const veRows = [
+  row('Node-Status', 'pve · 12 Threads · 64 GiB · ZFS RAID-Z1', [
+    stat({ w: 3, title: 'Node', value: 'Online', color: 'var(--ok)', compact: true,
+      sub: 'PVE 8.4.1 · Quorum ok', q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -5m)
+  |> filter(fn: (r) => r._measurement == "system" and r.object == "nodes")
+  |> filter(fn: (r) => r._field == "uptime")
+  |> last()
+  |> map(fn: (r) => ({ r with _value: 1.0 }))`],
+      ['Hinweis', 'Es gibt kein „Status"-Feld für den Node. Online heißt hier: In den letzten 5 Minuten kam ein Datenpunkt. Im Stat-Panel über „No value" → Text „Offline", Farbe rot abbilden.']] }),
+    stat({ w: 3, title: 'Uptime', value: '47', unit: 'd 06 h', compact: true,
+      sub: 'letzter Reboot 16.06. 03:12', q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "system" and r.object == "nodes")
+  |> filter(fn: (r) => r._field == "uptime" and r.host == "\${node}")
+  |> last()`], ['Einheit', 'Field-Unit auf „seconds (s)" stellen, Grafana formatiert dann selbst zu 47d 6h.']] }),
+    stat({ w: 3, title: 'CPU', value: '17,8', unit: '%', color: 'var(--ok)',
+      spark: CPU_USER.map((v, i) => v + CPU_SYS[i] + CPU_IOWAIT[i]),
+      sub: 'Ø 24 h: 19,4 % · Max 62,1 %', q: Q_CPU }),
+    stat({ w: 3, title: 'RAM', value: '61,1', unit: '%', color: 'var(--warn)',
+      spark: MEM_USED, sub: '39,1 / 64,0 GiB · davon 14,6 ARC', q: Q_MEM }),
+    stat({ w: 3, title: 'Load 1 min', value: '1,42', color: 'var(--ok)',
+      spark: LOAD1, sub: '5 min 1,38 · 15 min 1,31 · 12 Threads', q: Q_LOAD }),
+    stat({ w: 3, title: 'IO-Wait', value: '1,1', unit: '%', color: 'var(--ok)',
+      spark: CPU_IOWAIT, sub: 'Ø 24 h: 1,3 % · Max 6,8 %', q: Q_CPU }),
+    stat({ w: 3, title: 'Laufende Gäste', value: '11', unit: '/ 12', compact: true,
+      sub: '5 VM · 7 LXC · 1 gestoppt', q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "system")
+  |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
+  |> filter(fn: (r) => r._field == "status")
+  |> last()
+  |> filter(fn: (r) => r._value == 1)
+  |> count()`]] }),
+    stat({ w: 3, title: 'Root-Dateisystem', value: '34,2', unit: '%', color: 'var(--ok)',
+      compact: true, sub: '32,1 / 93,9 GiB frei: 61,8 GiB', q: Q_STORAGE })
+  ]),
+
+  row('Auslastung des Nodes', 'aggregiert über v.windowPeriod', [
+    ts({ w: 12, title: 'CPU-Auslastung nach Typ', unit: '%', dec: 1, stack: true, h: 165,
+      legendTitle: 'Typ', q: Q_CPU,
+      tip: 'user + system + iowait, gestapelt = Gesamtauslastung',
+      series: [
+        { name: 'user', color: 'var(--s1)', data: CPU_USER },
+        { name: 'system', color: 'var(--s4)', data: CPU_SYS },
+        { name: 'iowait', color: 'var(--s2)', data: CPU_IOWAIT }
+      ] }),
+    ts({ w: 12, title: 'Arbeitsspeicher', unit: 'GiB', dec: 1, stack: true, h: 165,
+      yMax: 64, legendTitle: 'Bereich', q: Q_MEM, threshold: 57.6,
+      tip: 'Schwellenlinie bei 90 % von 64 GiB',
+      series: [
+        { name: 'Gäste + Dienste', color: 'var(--s1)', data: MEM_USED.map((v, i) => v - MEM_ARC[i]) },
+        { name: 'ZFS ARC', color: 'var(--s4)', data: MEM_ARC },
+        { name: 'Page-Cache', color: 'var(--s3)', data: MEM_CACHE }
+      ] }),
+
+    ts({ w: 8, title: 'Load Average', unit: 'load', h: 140, threshold: 12,
+      legendTitle: 'Fenster', q: Q_LOAD,
+      tip: 'Schwellenlinie = Anzahl CPU-Threads',
+      series: [
+        { name: '1 min', color: 'var(--s1)', data: LOAD1 },
+        { name: '5 min', color: 'var(--s4)', data: LOAD5 },
+        { name: '15 min', color: 'var(--s3)', data: LOAD15 }
+      ] }),
+    ts({ w: 8, title: 'Pressure Stall (some, 10 s)', unit: '%', dec: 1, h: 140,
+      legendTitle: 'Ressource', q: Q_PSI, threshold: 10,
+      tip: 'Anteil der Zeit, in der mindestens ein Task wartete',
+      series: [
+        { name: 'cpu', color: 'var(--s1)', data: PSI_CPU },
+        { name: 'io', color: 'var(--s2)', data: PSI_IO },
+        { name: 'memory', color: 'var(--s4)', data: PSI_MEM }
+      ] }),
+    ts({ w: 8, title: 'Netzwerk vmbr0', unit: 'Bps', h: 140, fill: true,
+      legendTitle: 'Richtung', q: Q_NET,
+      series: [
+        { name: 'eingehend', color: 'var(--s1)', data: NET_IN },
+        { name: 'ausgehend', color: 'var(--s3)', data: NET_OUT }
+      ] })
+  ]),
+
+  row('Storage', 'ZFS-Pool rpool, NVMe-Pool, NFS auf der Synology', [
+    bargauge({ w: 8, title: 'Belegung je Storage', q: Q_STORAGE,
+      items: [
+        { name: 'local-zfs (rpool)', pct: 71.4, value: '71,4 %', sub: '1,14 TiB von 1,60 TiB · frei 468 GiB' },
+        { name: 'nvme-vm', pct: 48.2, value: '48,2 %', sub: '916 GiB von 1,86 TiB · frei 986 GiB' },
+        { name: 'pbs-store', pct: 83.6, value: '83,6 %', sub: '6,10 TiB von 7,29 TiB · frei 1,19 TiB' },
+        { name: 'nas-iso (NFS)', pct: 22.9, value: '22,9 %', sub: '916 GiB von 3,90 TiB · frei 3,00 TiB' },
+        { name: 'local (ext4)', pct: 34.2, value: '34,2 %', sub: '32,1 GiB von 93,9 GiB · frei 61,8 GiB' }
+      ] }),
+    ts({ w: 8, title: 'Disk-Durchsatz Node', unit: 'Bps', h: 176, fill: true,
+      legendTitle: 'Richtung', q: Q_IO,
+      series: [
+        { name: 'gelesen', color: 'var(--s1)', data: IO_READ },
+        { name: 'geschrieben', color: 'var(--s4)', data: IO_WRITE }
+      ] }),
+    ts({ w: 8, title: 'ZFS ARC – Größe', unit: 'GiB', dec: 1, h: 176, fill: true,
+      calcs: true, legendTitle: 'Metrik', q: Q_ARC,
+      series: [{ name: 'arcsize', color: 'var(--s3)', data: ARC_SZ }] }),
+
+    table({ w: 24, title: 'Storage-Reichweite – wann ist Schluss?', q: Q_FORECAST,
+      tip: 'Lineare Fortschreibung des Zuwachses der letzten 14 Tage',
+      cols: [
+        { label: 'Storage', name: true },
+        { label: 'Typ' },
+        { label: 'Belegt', align: 'r', num: true },
+        { label: 'Gesamt', align: 'r', num: true },
+        { label: 'Frei', align: 'r', num: true },
+        { label: 'Auslastung', align: 'r' },
+        { label: 'Ø Zuwachs / Tag', align: 'r', num: true },
+        { label: 'Voll in', align: 'r', num: true },
+        { label: 'Bewertung', align: 'r' }
+      ],
+      rows: [
+        ['pbs-store', 'PBS', '6,10 TiB', '7,29 TiB', '1,19 TiB',
+          cellbar('83,6 %', 83.6), '18,4 GiB', '66 Tagen', pill('warn', 'beobachten')],
+        ['local-zfs (rpool)', 'ZFS', '1,14 TiB', '1,60 TiB', '468 GiB',
+          cellbar('71,4 %', 71.4), '2,1 GiB', '223 Tagen', pill('ok', 'unkritisch')],
+        ['nvme-vm', 'ZFS', '916 GiB', '1,86 TiB', '986 GiB',
+          cellbar('48,2 %', 48.2), '4,7 GiB', '210 Tagen', pill('ok', 'unkritisch')],
+        ['nas-iso (NFS)', 'NFS', '916 GiB', '3,90 TiB', '3,00 TiB',
+          cellbar('22,9 %', 22.9), '0,3 GiB', '> 5 Jahren', pill('ok', 'unkritisch')],
+        ['local (ext4)', 'Dir', '32,1 GiB', '93,9 GiB', '61,8 GiB',
+          cellbar('34,2 %', 34.2), '−0,1 GiB', 'unbegrenzt', pill('ok', 'schrumpft')]
+      ],
+      foot: ['Summe', '', '8,17 TiB', '14,6 TiB', '6,46 TiB', '', '25,4 GiB', '', ''] })
+  ]),
+
+  row('Gäste', '5 virtuelle Maschinen, 7 Container', [
+    table({ w: 24, title: 'Alle Gäste', q: Q_GUESTS,
+      cols: [
+        { label: 'VMID', num: true },
+        { label: 'Name', name: true },
+        { label: 'Typ' },
+        { label: 'Status' },
+        { label: 'CPU', align: 'r' },
+        { label: 'vCPU', align: 'r', num: true },
+        { label: 'RAM', align: 'r' },
+        { label: 'RAM zug.', align: 'r', num: true },
+        { label: 'Disk R/W', align: 'r', num: true },
+        { label: 'Netz ein/aus', align: 'r', num: true },
+        { label: 'Uptime', align: 'r', num: true }
+      ],
+      rows: [
+        ['104', 'frigate', 'LXC', pill('ok', 'running'), cellbar('47,2 %', 47.2), '4', cellbar('74,1 %', 74.1), '8,0 GiB', '1,2 / 18,4 MiB/s', '24,1 / 3,2 MiB/s', '47 d'],
+        ['100', 'homeassistant', 'VM', pill('ok', 'running'), cellbar('23,4 %', 23.4), '4', cellbar('63,2 %', 63.2), '8,0 GiB', '0,4 / 2,1 MiB/s', '1,8 / 2,4 MiB/s', '12 d'],
+        ['200', 'influxdb', 'LXC', pill('ok', 'running'), cellbar('12,8 %', 12.8), '4', cellbar('81,4 %', 81.4), '8,0 GiB', '2,8 / 6,4 MiB/s', '0,9 / 1,1 MiB/s', '47 d'],
+        ['102', 'docker-01', 'VM', pill('ok', 'running'), cellbar('18,1 %', 18.1), '4', cellbar('58,6 %', 58.6), '12,0 GiB', '0,9 / 3,8 MiB/s', '3,4 / 5,8 MiB/s', '23 d'],
+        ['101', 'pbs', 'VM', pill('ok', 'running'), cellbar('8,6 %', 8.6), '2', cellbar('44,2 %', 44.2), '4,0 GiB', '14,2 / 9,1 MiB/s', '11,4 / 1,2 MiB/s', '47 d'],
+        ['203', 'unifi', 'LXC', pill('ok', 'running'), cellbar('9,4 %', 9.4), '2', cellbar('68,8 %', 68.8), '4,0 GiB', '0,2 / 0,8 MiB/s', '0,6 / 0,4 MiB/s', '47 d'],
+        ['201', 'grafana', 'LXC', pill('ok', 'running'), cellbar('6,2 %', 6.2), '2', cellbar('41,6 %', 41.6), '2,0 GiB', '0,1 / 0,3 MiB/s', '0,8 / 2,1 MiB/s', '47 d'],
+        ['105', 'opnsense', 'VM', pill('ok', 'running'), cellbar('11,2 %', 11.2), '2', cellbar('31,4 %', 31.4), '4,0 GiB', '0,1 / 0,4 MiB/s', '38,2 / 41,6 MiB/s', '47 d'],
+        ['205', 'zigbee2mqtt', 'LXC', pill('ok', 'running'), cellbar('3,1 %', 3.1), '1', cellbar('52,8 %', 52.8), '1,0 GiB', '0,0 / 0,1 MiB/s', '0,1 / 0,1 MiB/s', '47 d'],
+        ['202', 'adguard', 'LXC', pill('ok', 'running'), cellbar('2,4 %', 2.4), '1', cellbar('38,2 %', 38.2), '1,0 GiB', '0,0 / 0,1 MiB/s', '0,4 / 0,3 MiB/s', '47 d'],
+        ['206', 'nginx-proxy', 'LXC', pill('ok', 'running'), cellbar('1,8 %', 1.8), '1', cellbar('29,4 %', 29.4), '1,0 GiB', '0,0 / 0,1 MiB/s', '2,2 / 2,4 MiB/s', '47 d'],
+        ['103', 'win11-vdi', 'VM', pill('off', 'stopped'), '—', '4', '—', '16,0 GiB', '—', '—', '—']
+      ] }),
+
+    ts({ w: 12, title: 'CPU je Gast – Top 4', unit: '%', dec: 1, h: 150,
+      legendTitle: 'Gast', q: Q_GUESTCPU,
+      tip: 'Prozent der dem Gast zugewiesenen vCPUs',
+      series: [
+        { name: 'frigate (104)', color: 'var(--s1)', data: G_FRIG },
+        { name: 'homeassistant (100)', color: 'var(--s2)', data: G_HA },
+        { name: 'docker-01 (102)', color: 'var(--s3)', data: G_DOCK },
+        { name: 'influxdb (200)', color: 'var(--s4)', data: G_INFL }
+      ] }),
+    ts({ w: 12, title: 'RAM-Belegung je Gast – Top 4', unit: '%', dec: 1, h: 150,
+      yMax: 100, threshold: 90, legendTitle: 'Gast',
+      q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "system")
+  |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
+  |> filter(fn: (r) => r._field == "mem" or r._field == "maxmem")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> pivot(rowKey: ["_time", "vmid"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({ r with
+       _value: float(v: r.mem) / float(v: r.maxmem) * 100.0 }))`],
+        ['Hinweis', 'Bei Containern ist mem der tatsächliche Verbrauch. Bei VMs mit Ballooning meldet der Gast über den Balloon-Treiber – ohne qemu-guest-agent sieht man nur die vom Host zugeteilte Menge, was fast immer nach 100 % aussieht.']],
+      series: [
+        { name: 'influxdb (200)', color: 'var(--s4)', data: GM_INFL },
+        { name: 'frigate (104)', color: 'var(--s1)', data: GM_FRIG },
+        { name: 'homeassistant (100)', color: 'var(--s2)', data: GM_HA },
+        { name: 'docker-01 (102)', color: 'var(--s3)', data: GM_DOCK }
+      ] })
+  ]),
+
+  row('Diagnose', 'zuerst hier nachsehen, wenn Zahlen komisch aussehen', [
+    table({ w: 12, title: 'Datenaktualität je Quelle', q: Q_FRESH,
+      cols: [
+        { label: 'Quelle', name: true },
+        { label: 'Letzter Datenpunkt', align: 'r', num: true },
+        { label: 'Alter', align: 'r', num: true },
+        { label: 'Status', align: 'r' }
+      ],
+      rows: [
+        ['nodes / pve', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['qemu / 100–105', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['lxc / 200–206', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['storages / local-zfs', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['storages / nas-iso', '14:18:12', '1 min 48 s', pill('warn', 'NFS träge')],
+        ['nodes / pressure', '14:19:58', '2 s', pill('ok', 'aktuell')]
+      ] }),
+    textpanel({ w: 12, title: 'Lesehilfe', html: `
+      <h4>Was welche Zahl bedeutet</h4>
+      <ul>
+        <li><b>CPU des Gastes</b> ist relativ zu seinen eigenen vCPUs. <code>100 %</code> bei
+            <code>frigate</code> heißt: 4 von 4 zugewiesenen Kernen ausgelastet, also ein Drittel des Nodes.</li>
+        <li><b>RAM des Nodes</b> enthält den <code>ZFS ARC</code>. Der ist kein Verbrauch,
+            sondern Cache und wird bei Bedarf sofort freigegeben. Deshalb ist er hier eine
+            eigene Stapelfläche.</li>
+        <li><b>Load</b> ohne Bezug zur Thread-Zahl ist wertlos. Die rote Linie liegt auf 12.</li>
+        <li><b>Pressure io</b> über <code>10 %</code> ist der verlässlichste Frühindikator für
+            eine Platte, die stirbt – deutlich früher als SMART.</li>
+      </ul>
+      <h4>Wenn ein Panel leer bleibt</h4>
+      <ul>
+        <li><code>pressure</code> gibt es erst ab PVE 8.</li>
+        <li><code>arcsize</code> nur bei ZFS als Root-Dateisystem.</li>
+        <li>Gastnamen fehlen in älteren PVE-Versionen – dann steht in der Tabelle nur die
+            <code>vmid</code>. Abhilfe: eine <code>Value mapping</code>-Tabelle im Panel pflegen.</li>
+      </ul>` })
+  ])
+];
+
+/* ============================================================
+   Daten – Proxmox Backup Server
+   ============================================================ */
+const P_CPU  = gen(211, N, { base: 6, amp: 3, cycles: 1.1, noise: 1.6, min: .5, spike: .05, spikeAmp: 62 });
+const P_WAIT = gen(212, N, { base: 2.1, amp: 1.4, cycles: 1.3, noise: 1, min: .1, spike: .05, spikeAmp: 24 });
+const P_MEM  = gen(213, N, { base: 5.4, amp: .7, cycles: 1.1, noise: .25, min: 2 });
+const P_LOAD = gen(214, N, { base: .6, amp: .45, cycles: 1.2, noise: .25, min: .02, spike: .05, spikeAmp: 4.2 });
+const P_RD   = gen(215, N, { base: 2.1e6, amp: 1.4e6, cycles: 1.4, noise: 1e6, min: 1e4, spike: .06, spikeAmp: 1.9e8 });
+const P_WR   = gen(216, N, { base: 1.4e6, amp: 1.1e6, cycles: 1.2, noise: .8e6, min: 1e4, spike: .06, spikeAmp: 2.4e8 });
+const P_NIN  = gen(217, N, { base: 2.4e6, amp: 1.8e6, cycles: 1.3, noise: 1.2e6, min: 2e4, spike: .06, spikeAmp: 2.8e8 });
+const P_NOUT = gen(218, N, { base: .9e6, amp: .6e6, cycles: 1.5, noise: .4e6, min: 1e4, spike: .04, spikeAmp: 4.2e7 });
+
+/* Datastore-Belegung: 30 Tage gemessen + 30 Tage lineare Fortschreibung.
+   Steigung passend zu den Tabellenwerten: main 18,4 GiB/Tag, offsite 7,1 GiB/Tag
+   (30 · 18,4 GiB = 0,54 TiB bzw. 30 · 7,1 GiB = 0,21 TiB). */
+const D_HIST = 30, D_FC = 30, D_DAYS = D_HIST + D_FC;
+
+function withForecast(hist, perDay) {
+  const out = hist.slice();
+  const last = hist[hist.length - 1];
+  for (let i = 1; i <= D_FC; i++) out.push(last + perDay * i);
+  return out;
+}
+const D_MAIN = withForecast(
+  gen(221, D_HIST, { base: 5.56, amp: .035, cycles: .6, noise: .018, trend: .54, min: 5 }), 0.018);
+const D_OFF = withForecast(
+  gen(222, D_HIST, { base: 2.10, amp: .02, cycles: .5, noise: .01, trend: .21, min: 1.8 }), 0.007);
+
+/* Achsen- und Tooltip-Beschriftung: 04.07. bis 01.09. */
+const dsStart = new Date('2026-07-04T00:00:00');
+const dsDate = i => new Date(dsStart.getTime() + i * 86400000);
+const ddmm = d => String(d.getDate()).padStart(2, '0') + '.' +
+                  String(d.getMonth() + 1).padStart(2, '0') + '.';
+const DS_POINTS = Array.from({ length: D_DAYS }, (_, i) =>
+  ddmm(dsDate(i)) + (i > D_HIST - 1 ? ' · Prognose' : ''));
+const DS_XAXIS = [0, 10, 20, 29, 39, 49, 59].map(i => ddmm(dsDate(i)));
+
+/* ============================================================
+   Queries – PBS
+   ============================================================ */
+const Q_PBS_DS = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -10m)
+  |> filter(fn: (r) => r._measurement == "disk" and r.object == "datastore")
+  |> filter(fn: (r) => r._field == "used" or r._field == "total")
+  |> last()
+  |> pivot(rowKey: ["datastore"], columnKey: ["_field"], valueColumn: "_value")
+  |> map(fn: (r) => ({
+       Datastore: r.datastore,
+       Belegt:    r.used,
+       Gesamt:    r.total,
+       Prozent:   float(v: r.used) / float(v: r.total) * 100.0
+     }))`],
+  ['Hinweis', 'Das ist der Rohplatzbedarf auf der Platte – also nach Deduplizierung und Kompression. Die logische Größe aller Snapshots ist ein Vielfaches davon und kommt nur aus der API.']
+];
+
+const Q_PBS_TREND = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r._measurement == "disk" and r.object == "datastore")
+  |> filter(fn: (r) => r._field == "used")
+  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
+  |> keep(columns: ["_time", "_value", "datastore"])`],
+  ['Prognose-Linie', 'Grafana kann die Trendlinie selbst zeichnen: im Panel unter Transformations → „Regression analysis" (Grafana 10+) eine lineare Regression über dieselbe Serie legen und als gestrichelte Overlay-Serie darstellen. Kein Plugin nötig.']
+];
+
+const Q_PBS_GROWTH = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: -14d)
+  |> filter(fn: (r) => r._measurement == "disk" and r.object == "datastore")
+  |> filter(fn: (r) => r._field == "used" and r.datastore == "backup-main")
+  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
+  |> difference(nonNegative: false)`],
+  ['Warum negative Balken wichtig sind', 'Ein Tag mit deutlich negativem Zuwachs ist fast immer ein Garbage-Collect oder ein Prune-Lauf. Verschwinden diese Ausschläge, läuft die Aufräumkette nicht mehr – und der Datastore wächst still bis zum Anschlag. Deshalb nonNegative: false.']
+];
+
+const Q_PBS_HOST = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "cpustat" and r.object == "host")
+  |> filter(fn: (r) => r._field == "cpu" or r._field == "iowait")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))`],
+  ['Lesart', 'Die Spitzen fallen mit den Backup-Fenstern zusammen. Interessant ist nicht die Höhe, sondern das Verhältnis: Steigt iowait stärker als cpu, limitiert die Platte – dann bringt eine schnellere CPU im PBS nichts.']
+];
+
+const Q_PBS_TASKS = [
+  ['HTTP', `GET /api2/json/nodes/localhost/tasks
+    ?limit=200
+    &errors=0
+    &since={{ __from / 1000 }}
+
+Header: Authorization: PBSAPIToken=grafana@pbs!readonly:&lt;secret&gt;`],
+  ['Infinity-Konfiguration', `Type    : JSON
+Parser  : Backend
+Root    : data
+Columns :
+  starttime  → Zeit    (UNIX ms/s)
+  worker_type→ Typ     (string)
+  worker_id  → Ziel    (string)
+  status     → Status  (string)
+  endtime    → Ende    (UNIX ms/s)`],
+  ['Dauer berechnen', 'Die API liefert keine Dauer. In Grafana über Transformations → „Add field from calculation" → Binary operation: endtime − starttime, danach Field-Unit auf „seconds".']
+];
+
+const Q_PBS_STATUS = [
+  ['HTTP', `GET /api2/json/admin/datastore/backup-main/status
+
+# liefert u.a.:
+#   total, used, avail
+#   counts.vm / counts.ct / counts.host   → Snapshot-Zahlen
+#   gc-status.upid, gc-status.endtime`],
+  ['Dedup-Faktor', 'Der Faktor steht nicht direkt in der Antwort. PBS berechnet ihn als Summe der logischen Snapshot-Größen geteilt durch den belegten Speicher. Die logischen Größen kommen aus /snapshots (Feld size je Snapshot), die Division macht in Grafana eine „Reduce"-Transformation.']
+];
+
+const Q_PBS_VERIFY = [
+  ['HTTP', `GET /api2/json/admin/datastore/backup-main/snapshots
+
+# je Snapshot:
+#   backup-type (vm|ct|host), backup-id, backup-time
+#   verification.state  → "ok" | "failed" | fehlt = nie geprüft
+#   size, protected`],
+  ['Warum das eigene Panel bekommt', 'Ein Backup, das nie verifiziert wurde, ist eine Vermutung. Die Matrix zeigt genau das: nicht ob ein Backup lief, sondern ob es geprüft wurde. Ein Feld ohne Verifikationseintrag wird grau, nicht grün.']
+];
+
+/* ============================================================
+   Board: PBS
+   ============================================================ */
+const dayLabels = ['04.07', '', '06.07', '', '08.07', '', '10.07', '', '12.07', '',
+  '14.07', '', '16.07', '', '18.07', '', '20.07', '', '22.07', '', '24.07', '',
+  '26.07', '', '28.07', '', '30.07', '', '01.08', ''];
+
+const growth = [
+  4.2, 3.8, 5.1, 4.4, 3.9, -38.2, 4.6, 5.2, 4.1, 3.7,
+  4.8, 5.4, -12.6, 4.2, 4.9, 3.6, 5.8, 4.3, -41.7, 4.1,
+  4.7, 5.2, 3.9, 4.4, 5.6, -14.2, 4.8, 5.1, 4.2, 18.4
+].map((v, i) => ({
+  label: ['05.07','06.07','07.07','08.07','09.07','10.07','11.07','12.07','13.07','14.07',
+          '15.07','16.07','17.07','18.07','19.07','20.07','21.07','22.07','23.07','24.07',
+          '25.07','26.07','27.07','28.07','29.07','30.07','31.07','01.08','02.08','03.08'][i],
+  short: i % 6 === 0 ? ['05.07','11.07','17.07','23.07','29.07'][i / 6] || '' : '',
+  v: v,
+  text: (v > 0 ? '+' : '') + nf(v, 1) + ' GiB',
+  color: v < 0 ? 'var(--s3)' : (v > 10 ? 'var(--s2)' : 'var(--s1)')
+}));
+
+const mxDays = ['20.','21.','22.','23.','24.','25.','26.','27.','28.','29.','30.','31.','01.','02.'];
+const mxRows = [
+  { name: 'vm/100 homeassistant', states: ['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'vm/101 pbs',           states: ['none','none','ok','none','none','none','ok','none','none','none','ok','none','none','none'] },
+  { name: 'vm/102 docker-01',     states: ['ok','ok','ok','ok','ok','warn','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'vm/105 opnsense',      states: ['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'ct/200 influxdb',      states: ['ok','ok','ok','err','err','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'ct/201 grafana',       states: ['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'ct/203 unifi',         states: ['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'ct/204 frigate',       states: ['ok','ok','warn','ok','ok','ok','ok','warn','ok','ok','ok','ok','ok','warn'] },
+  { name: 'ct/205 zigbee2mqtt',   states: ['ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok','ok'] },
+  { name: 'host/nas-config',      states: ['none','ok','none','none','none','none','ok','none','none','none','none','ok','none','none'] }
+];
+
+const pbsRows = [
+  row('Backup-Lage', 'die sechs Zahlen, die vor dem Frühstück reichen müssen', [
+    stat({ w: 4, title: 'Letztes Backup', tip: 'Letzter erfolgreich beendeter Backup-Task',
+      value: 'vor 3', unit: 'h 12 min', color: 'var(--ok)', compact: true, src: 'api',
+      sub: '02.08. 11:08 · ct/205 zigbee2mqtt', q: Q_PBS_TASKS }),
+    stat({ w: 4, title: 'Fehler (24 h)', tip: 'Fehlgeschlagene Tasks jeder Art',
+      value: '0', compact: true,
+      color: 'var(--ok)', src: 'api', sub: '7 Tage: 2 · beide ct/200 am 23.07.', q: Q_PBS_TASKS }),
+    stat({ w: 4, title: 'Snapshots', value: '1.284', compact: true, src: 'api',
+      sub: '412 vm · 806 ct · 66 host', q: Q_PBS_STATUS }),
+    stat({ w: 4, title: 'Dedup-Faktor', tip: 'Logische Snapshot-Größe geteilt durch belegten Speicher',
+      value: '24,7', unit: '×', compact: true,
+      color: 'var(--s1)', src: 'api', sub: '151 TiB logisch → 6,10 TiB real', q: Q_PBS_STATUS }),
+    stat({ w: 4, title: 'Verifikation', value: 'OK', compact: true, color: 'var(--ok)',
+      src: 'api', sub: 'vor 11 h · 1.284 von 1.284 geprüft', q: Q_PBS_VERIFY }),
+    stat({ w: 4, title: 'Garbage-Collect', value: 'vor 2', unit: 'Tagen',
+      compact: true, color: 'var(--warn)', src: 'api',
+      sub: '31.07. 02:00 · 412 GiB frei', q: Q_PBS_STATUS })
+  ]),
+
+  row('Datastores', 'zwei Ziele: lokal auf dem NVMe-Pool und offsite per Sync-Job', [
+    bargauge({ w: 8, title: 'Belegung je Datastore', q: Q_PBS_DS,
+      items: [
+        { name: 'backup-main', pct: 83.6, value: '83,6 %', sub: '6,10 TiB von 7,29 TiB · frei 1,19 TiB' },
+        { name: 'backup-offsite', pct: 64.2, value: '64,2 %', sub: '2,31 TiB von 3,60 TiB · frei 1,29 TiB' },
+        { name: 'Root-Dateisystem', pct: 21.4, value: '21,4 %', sub: '6,7 GiB von 31,4 GiB · frei 24,7 GiB' }
+      ] }),
+    ts({ w: 16, title: 'Belegung – 30 Tage gemessen, 30 Tage fortgeschrieben',
+      unit: 'TiB', dec: 2, h: 176, q: Q_PBS_TREND, legendTitle: 'Datastore',
+      yMax: 7.6, threshold: 7.29, calcTo: D_HIST - 1, legendNote: 'gemessen',
+      xLabels: DS_XAXIS, pointLabels: DS_POINTS, markerAt: D_HIST - 1,
+      tip: 'Rote Linie = Kapazität backup-main · gestrichelt ab heute = Fortschreibung',
+      series: [
+        { name: 'backup-main', color: 'var(--s1)', data: D_MAIN, dashFrom: D_HIST - 1 },
+        { name: 'backup-offsite', color: 'var(--s4)', data: D_OFF, dashFrom: D_HIST - 1 }
+      ] }),
+
+    barchart({ w: 12, title: 'Täglicher Zuwachs backup-main', unit: 'GiB', dec: 1,
+      h: 140, q: Q_PBS_GROWTH, data: growth,
+      tip: 'Negative Balken = Garbage-Collect oder Prune' }),
+    table({ w: 12, title: 'Reichweite je Datastore', q: Q_PBS_TREND,
+      cols: [
+        { label: 'Datastore', name: true },
+        { label: 'Belegt', align: 'r', num: true },
+        { label: 'Frei', align: 'r', num: true },
+        { label: 'Auslastung', align: 'r' },
+        { label: 'Ø / Tag', align: 'r', num: true },
+        { label: 'Voll in', align: 'r', num: true },
+        { label: 'Bewertung', align: 'r' }
+      ],
+      rows: [
+        ['backup-main', '6,10 TiB', '1,19 TiB', cellbar('83,6 %', 83.6), '18,4 GiB', '66 Tagen', pill('warn', 'beobachten')],
+        ['backup-offsite', '2,31 TiB', '1,29 TiB', cellbar('64,2 %', 64.2), '7,1 GiB', '186 Tagen', pill('ok', 'unkritisch')],
+        ['Root-Dateisystem', '6,7 GiB', '24,7 GiB', cellbar('21,4 %', 21.4), '0,02 GiB', '> 3 Jahren', pill('ok', 'unkritisch')]
+      ] })
+  ]),
+
+  row('Backup-Jobs', 'aus der PBS-API – der Metric Server liefert davon nichts', [
+    matrix({ w: 14, title: 'Backup-Kalender – 14 Tage', days: mxDays, rows: mxRows,
+      src: 'api', q: Q_PBS_VERIFY,
+      tip: 'Eine Zeile je Backup-Ziel, eine Spalte je Tag' }),
+    hbars({ w: 10, title: 'Backup-Dauer je Ziel – letzter Lauf', src: 'api', q: Q_PBS_TASKS,
+      items: [
+        { name: 'ct/204 frigate', v: 1284, text: '21 min 24 s', color: 'var(--s2)' },
+        { name: 'vm/102 docker-01', v: 742, text: '12 min 22 s' },
+        { name: 'vm/100 homeassistant', v: 418, text: '6 min 58 s' },
+        { name: 'ct/200 influxdb', v: 386, text: '6 min 26 s' },
+        { name: 'vm/105 opnsense', v: 164, text: '2 min 44 s' },
+        { name: 'ct/203 unifi', v: 98, text: '1 min 38 s' },
+        { name: 'ct/201 grafana', v: 42, text: '42 s' },
+        { name: 'ct/205 zigbee2mqtt', v: 18, text: '18 s' }
+      ] }),
+
+    table({ w: 14, title: 'Task-Historie', src: 'api', q: Q_PBS_TASKS,
+      cols: [
+        { label: 'Beginn', num: true },
+        { label: 'Typ' },
+        { label: 'Ziel', name: true },
+        { label: 'Dauer', align: 'r', num: true },
+        { label: 'Übertragen', align: 'r', num: true },
+        { label: 'Status', align: 'r' }
+      ],
+      rows: [
+        ['02.08. 11:08:02', 'backup', 'ct/205 zigbee2mqtt', '18 s', '124 MiB', pill('ok', 'OK')],
+        ['02.08. 11:06:14', 'backup', 'ct/203 unifi', '1 min 38 s', '892 MiB', pill('ok', 'OK')],
+        ['02.08. 11:02:41', 'backup', 'ct/204 frigate', '21 min 24 s', '14,2 GiB', pill('warn', 'OK, 2 Warnungen')],
+        ['02.08. 10:48:19', 'backup', 'vm/102 docker-01', '12 min 22 s', '6,4 GiB', pill('ok', 'OK')],
+        ['02.08. 10:40:02', 'backup', 'vm/100 homeassistant', '6 min 58 s', '2,1 GiB', pill('ok', 'OK')],
+        ['02.08. 03:14:00', 'verify', 'backup-main (alle)', '2 h 41 min', '—', pill('ok', 'OK')],
+        ['02.08. 02:00:00', 'sync', 'backup-main → offsite', '1 h 08 min', '38,4 GiB', pill('ok', 'OK')],
+        ['01.08. 23:30:00', 'prune', 'backup-main', '12 s', '—', pill('ok', '46 entfernt')],
+        ['31.07. 02:00:00', 'garbage_collection', 'backup-main', '48 min 12 s', '412 GiB frei', pill('ok', 'OK')],
+        ['23.07. 10:41:08', 'backup', 'ct/200 influxdb', '2 min 04 s', '—', pill('crit', 'Fehler: Sperre belegt')]
+      ] }),
+    textpanel({ w: 10, title: 'Aufbewahrung & Prüfkette', html: `
+      <h4>Prune-Regel backup-main</h4>
+      <ul>
+        <li><code>keep-last 3</code> · <code>keep-daily 14</code> · <code>keep-weekly 8</code> ·
+            <code>keep-monthly 12</code> · <code>keep-yearly 3</code></li>
+        <li>Prune markiert nur. Erst der <b>Garbage-Collect</b> gibt Platz frei –
+            deshalb steht er als eigene Kachel oben. Läuft er nicht, wirkt Prune folgenlos.</li>
+      </ul>
+      <h4>Was die Kacheln oben zusammen prüfen</h4>
+      <ul>
+        <li><b>Backup lief</b> – letzter erfolgreicher Task</li>
+        <li><b>Backup ist lesbar</b> – letzte Verifikation</li>
+        <li><b>Backup bleibt bezahlbar</b> – Reichweite des Datastores</li>
+        <li><b>Backup liegt woanders</b> – Sync-Job in der Task-Historie</li>
+      </ul>
+      <p style="margin:0;color:var(--ink-3)">Fällt eine dieser vier Zeilen aus, ist die
+         Sicherung unvollständig – auch wenn die anderen drei grün sind.</p>` })
+  ]),
+
+  row('PBS-Host', 'die Maschine selbst – aus dem Metric Server', [
+    ts({ w: 8, title: 'CPU-Auslastung', unit: '%', dec: 1, h: 140, fill: true,
+      legendTitle: 'Metrik', q: Q_PBS_HOST,
+      series: [
+        { name: 'cpu', color: 'var(--s1)', data: P_CPU },
+        { name: 'iowait', color: 'var(--s2)', data: P_WAIT }
+      ] }),
+    ts({ w: 8, title: 'Arbeitsspeicher', unit: 'GiB', dec: 1, h: 140, fill: true,
+      yMax: 8, legendTitle: 'Bereich',
+      q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "memory" and r.object == "host")
+  |> filter(fn: (r) => r._field == "used")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+        ['Hinweis', 'PBS nutzt für Verifikation und GC viel Page-Cache. Ein hoher Wert im Verify-Fenster ist normal und kein Grund, der VM mehr RAM zu geben.']],
+      series: [{ name: 'belegt', color: 'var(--s4)', data: P_MEM }] }),
+    ts({ w: 8, title: 'Load Average 1 min', unit: 'load', h: 140, fill: true,
+      legendTitle: 'Fenster', threshold: 2,
+      q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "cpustat" and r.object == "host")
+  |> filter(fn: (r) => r._field == "avg1")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+        ['Schwellenlinie', 'Liegt auf 2 – der Anzahl vCPUs dieser VM.']],
+      series: [{ name: 'avg1', color: 'var(--s3)', data: P_LOAD }] }),
+
+    ts({ w: 12, title: 'Disk-Durchsatz', unit: 'Bps', h: 140, fill: true,
+      legendTitle: 'Richtung',
+      q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "blockstat" and r.object == "host")
+  |> filter(fn: (r) => r._field == "read_bytes" or r._field == "write_bytes")
+  |> derivative(unit: 1s, nonNegative: true)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`]],
+      series: [
+        { name: 'gelesen', color: 'var(--s1)', data: P_RD },
+        { name: 'geschrieben', color: 'var(--s4)', data: P_WR }
+      ] }),
+    ts({ w: 12, title: 'Netzwerk', unit: 'Bps', h: 140, fill: true,
+      legendTitle: 'Richtung',
+      q: [['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "nics" and r.object == "host")
+  |> filter(fn: (r) => r._field == "receive" or r._field == "transmit")
+  |> derivative(unit: 1s, nonNegative: true)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+        ['Lesart', 'Die eingehenden Spitzen sind die Backup-Fenster, die kleinere ausgehende Welle um 02:00 ist der Sync-Job zum Offsite-Ziel. Bleibt eine der beiden aus, fehlt ein Glied in der Kette.']],
+      series: [
+        { name: 'eingehend', color: 'var(--s1)', data: P_NIN },
+        { name: 'ausgehend', color: 'var(--s3)', data: P_NOUT }
+      ] })
+  ]),
+
+  row('Diagnose', '', [
+    table({ w: 12, title: 'Datenaktualität je Quelle', q: Q_FRESH,
+      cols: [
+        { label: 'Quelle', name: true },
+        { label: 'Letzter Datenpunkt', align: 'r', num: true },
+        { label: 'Alter', align: 'r', num: true },
+        { label: 'Status', align: 'r' }
+      ],
+      rows: [
+        ['host / cpustat', '14:19:56', '4 s', pill('ok', 'aktuell')],
+        ['host / memory', '14:19:56', '4 s', pill('ok', 'aktuell')],
+        ['datastore / backup-main', '14:19:56', '4 s', pill('ok', 'aktuell')],
+        ['datastore / backup-offsite', '14:19:56', '4 s', pill('ok', 'aktuell')],
+        ['PBS-API / tasks', '14:18:30', '1 min 30 s', pill('ok', 'Abfrage alle 5 min')],
+        ['PBS-API / snapshots', '14:15:12', '4 min 48 s', pill('ok', 'Abfrage alle 5 min')]
+      ] }),
+    textpanel({ w: 12, title: 'Grenzen dieses Dashboards', html: `
+      <h4>Kommt nicht aus InfluxDB</h4>
+      <ul>
+        <li>Task-Ergebnisse, Backup-Dauer, übertragene Datenmenge</li>
+        <li>Snapshot-Zahlen, Dedup-Faktor, Verifikationsstatus</li>
+        <li>Prune- und GC-Zeitpunkte</li>
+      </ul>
+      <p style="margin:0 0 12px">Alle mit <b>PBS-API</b> markierten Panels brauchen das
+         Infinity-Plugin und ein API-Token mit der Rolle <code>Audit</code>.</p>
+      <h4>Kommt aus keiner der beiden Quellen</h4>
+      <ul>
+        <li><b>SMART-Werte der Platten.</b> PBS zeigt sie in der Oberfläche, gibt sie aber
+            weder über den Metric Server noch bequem über die API heraus. Wer sie im
+            Dashboard will, braucht <code>smartctl</code> plus Telegraf auf dem PBS-Host.</li>
+        <li><b>Restore-Tests.</b> Kein Monitoring der Welt beantwortet die Frage, ob sich das
+            Backup wirklich zurückspielen lässt. Ein vierteljährlicher Restore-Test in eine
+            Wegwerf-VM bleibt Handarbeit.</li>
+      </ul>` })
+  ])
+];
+
+/* ============================================================
+   Rendern
+   ============================================================ */
+function renderBoard(el, rows) {
+  el.innerHTML = rows.map((r, i) => `
+    <div class="rowhead" role="button" tabindex="0" aria-expanded="true" data-row="${i}">
+      <span class="caret">▼</span>
+      <h2>${esc(r.title)}</h2>
+      ${r.meta ? `<span class="rowmeta">${esc(r.meta)}</span>` : ''}
+      <span class="rule"></span>
+    </div>
+    ${r.html}`).join('');
+}
+renderBoard(document.getElementById('board-ve'), veRows);
+renderBoard(document.getElementById('board-pbs'), pbsRows);
+
+/* Variablenleiste je Board */
+const VARS = {
+  ve: [['Datenquelle', 'influxdb-proxmox'], ['Bucket', 'proxmox'], ['Node', 'pve'],
+       ['Gast', 'Alle'], ['Auflösung', 'auto']],
+  pbs: [['Datenquelle', 'influxdb-proxmox'], ['PBS-API', 'infinity-pbs'],
+        ['Bucket', 'proxmox'], ['Datastore', 'Alle'], ['Auflösung', 'auto']]
+};
+function renderVars(which) {
+  document.getElementById('varbar').innerHTML = VARS[which].map(([k, v]) =>
+    `<div class="var"><label>${esc(k)}</label><div class="val">${esc(v)}</div></div>`).join('');
+}
+renderVars('ve');
+
+/* Row auf-/zuklappen */
+document.addEventListener('click', e => {
+  const rh = e.target.closest('.rowhead');
+  if (!rh) return;
+  const open = rh.getAttribute('aria-expanded') === 'true';
+  rh.setAttribute('aria-expanded', String(!open));
+  const grid = rh.nextElementSibling;
+  if (grid && grid.classList.contains('grid')) grid.hidden = open;
+});
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('rowhead')) {
+    e.preventDefault(); e.target.click();
+  }
+});
+
+/* Tabs */
+const tabVe = document.getElementById('tab-ve');
+const tabPbs = document.getElementById('tab-pbs');
+function selectTab(which) {
+  const isVe = which === 've';
+  tabVe.setAttribute('aria-selected', String(isVe));
+  tabPbs.setAttribute('aria-selected', String(!isVe));
+  document.getElementById('board-ve').hidden = !isVe;
+  document.getElementById('board-pbs').hidden = isVe;
+  renderVars(which);
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+tabVe.addEventListener('click', () => selectTab('ve'));
+tabPbs.addEventListener('click', () => selectTab('pbs'));
+
+/* Theme-Umschalter */
+const themebtn = document.getElementById('themebtn');
+const themelabel = document.getElementById('themelabel');
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme')
+    || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+}
+function syncThemeLabel() { themelabel.textContent = currentTheme() === 'dark' ? 'Dark' : 'Light'; }
+themebtn.addEventListener('click', () => {
+  document.documentElement.setAttribute('data-theme', currentTheme() === 'dark' ? 'light' : 'dark');
+  syncThemeLabel();
+});
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', syncThemeLabel);
+syncThemeLabel();
+
+/* ---------- Query-Drawer ---------- */
+const drawer = document.getElementById('drawer');
+const scrim = document.getElementById('scrim');
+function openDrawer(id) {
+  const q = QUERIES[id];
+  if (!q) return;
+  document.getElementById('drawer-title').textContent = q.title;
+  document.getElementById('drawer-sub').textContent = q.sub;
+  document.getElementById('drawer-body').innerHTML = q.blocks.map(([h, body]) =>
+    `<h4>${esc(h)}</h4>${/^(Flux|HTTP|Infinity-Konfiguration)/.test(h)
+      ? `<pre>${body}</pre>` : `<p>${body}</p>`}`).join('');
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  scrim.classList.add('on');
+}
+function closeDrawer() {
+  drawer.classList.remove('open');
+  drawer.setAttribute('aria-hidden', 'true');
+  scrim.classList.remove('on');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.qbtn');
+  if (b) { openDrawer(b.dataset.q); return; }
+});
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+scrim.addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+/* ---------- Hover-Layer für Zeitreihen ---------- */
+const tip = document.getElementById('tooltip');
+document.querySelectorAll('.plot[data-ts]').forEach(plot => {
+  const cfg = JSON.parse(plot.dataset.ts);
+  const cross = plot.querySelector('.crosshair');
+  const dots = [...plot.querySelectorAll('.hdot')];
+  const n = cfg.series[0].data.length;
+
+  function move(ev) {
+    const r = plot.getBoundingClientRect();
+    const rel = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    const i = Math.round(rel * (n - 1));
+    const xp = (i / (n - 1)) * 100;
+    plot.classList.add('hot');
+    cross.style.left = xp + '%';
+
+    const span = (cfg.max - cfg.min) || 1;
+    let rows = '';
+    cfg.series.forEach((s, si) => {
+      const shown = cfg.stack ? cfg.top[si][i] : s.data[i];
+      const y = (1 - (shown - cfg.min) / span) * 100;
+      const d = dots[si];
+      d.style.left = xp + '%';
+      d.style.top = y + '%';
+      rows += `<div class="tt-row"><i class="sw" style="background:${s.color}"></i>
+        <span class="nm">${esc(s.name)}</span>
+        <span class="vl">${esc(fmtUnit(s.data[i], cfg.unit, cfg.dec))}</span></div>`;
+    });
+    if (cfg.stack) {
+      const sum = cfg.series.reduce((a, s) => a + s.data[i], 0);
+      rows += `<div class="tt-row" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--border)">
+        <i class="sw" style="background:transparent"></i>
+        <span class="nm">Summe</span>
+        <span class="vl">${esc(fmtUnit(sum, cfg.unit, cfg.dec))}</span></div>`;
+    }
+    const stamp = cfg.labels ? cfg.labels[i]
+      : times[i].toLocaleString('de-DE',
+          { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    tip.innerHTML = `<div class="tt-time">${esc(stamp)}</div>${rows}`;
+    tip.classList.add('on');
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = ev.clientX + 14, y2 = ev.clientY + 14;
+    if (x + tw > innerWidth - 8) x = ev.clientX - tw - 14;
+    if (y2 + th > innerHeight - 8) y2 = ev.clientY - th - 14;
+    tip.style.left = x + 'px';
+    tip.style.top = y2 + 'px';
+  }
+  plot.addEventListener('pointermove', move);
+  plot.addEventListener('pointerleave', () => {
+    plot.classList.remove('hot');
+    tip.classList.remove('on');
+  });
+});
+</script>
