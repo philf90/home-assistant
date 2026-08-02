@@ -1,0 +1,2591 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Backup-Lage, Datastore und Host des PBS aus InfluxDB 2 und der PBS-API.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "proxmox"
+      ],
+      "targetBlank": false,
+      "title": "Proxmox-Dashboards",
+      "tooltip": "",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Backup-Lage",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Letztes Backup",
+      "description": "Jüngster erfolgreich beendeter Backup-Task. Die beiden Filter sind wichtig: Ohne sie zeigt die Kachel den letzten beliebigen Task – auch einen logrotate – und behauptet damit ein Backup, das es nicht gab.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/nodes/localhost/tasks",
+          "url_options": {
+            "method": "GET",
+            "data": "",
+            "params": [
+              {
+                "key": "limit",
+                "value": "500"
+              },
+              {
+                "key": "since",
+                "value": "${__from:date:seconds}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "starttime",
+              "text": "Beginn",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "starttime",
+              "text": "_start",
+              "type": "number"
+            },
+            {
+              "selector": "endtime",
+              "text": "_end",
+              "type": "number"
+            },
+            {
+              "selector": "worker_type",
+              "text": "Typ",
+              "type": "string"
+            },
+            {
+              "selector": "worker_id",
+              "text": "Ziel",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "Status",
+              "type": "string"
+            },
+            {
+              "selector": "user",
+              "text": "Benutzer",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "include",
+            "match": "all",
+            "filters": [
+              {
+                "fieldName": "Typ",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "backup"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "include",
+            "match": "all",
+            "filters": [
+              {
+                "fieldName": "Status",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "OK"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "dateTimeFromNow",
+          "decimals": null,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "max"
+          ],
+          "fields": "/^Beginn$/",
+          "values": false
+        },
+        "textMode": "value",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Fehlgeschlagene Tasks",
+      "description": "Alle Tasks im gewählten Zeitraum, deren Status nicht OK ist – Backups ebenso wie Verifikation, Prune und Garbage-Collect.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/nodes/localhost/tasks",
+          "url_options": {
+            "method": "GET",
+            "data": "",
+            "params": [
+              {
+                "key": "limit",
+                "value": "500"
+              },
+              {
+                "key": "since",
+                "value": "${__from:date:seconds}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "starttime",
+              "text": "Beginn",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "starttime",
+              "text": "_start",
+              "type": "number"
+            },
+            {
+              "selector": "endtime",
+              "text": "_end",
+              "type": "number"
+            },
+            {
+              "selector": "worker_type",
+              "text": "Typ",
+              "type": "string"
+            },
+            {
+              "selector": "worker_id",
+              "text": "Ziel",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "Status",
+              "type": "string"
+            },
+            {
+              "selector": "user",
+              "text": "Benutzer",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "exclude",
+            "match": "all",
+            "filters": [
+              {
+                "fieldName": "Status",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "OK"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "count"
+          ],
+          "fields": "/^Status$/",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Dedup-Faktor",
+      "description": "Logische Größe aller Indizes geteilt durch den belegten Chunk-Store – beide Werte stehen fertig in gc-status. Ein Rechenweg über die Snapshot-Liste ist nicht nötig.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/status/datastore-usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "gc-status.index-data-bytes",
+              "text": "Logisch",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.disk-bytes",
+              "text": "Auf Platte",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.pending-bytes",
+              "text": "Wartet auf GC",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.removed-bytes",
+              "text": "Letzter GC frei",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.still-bad",
+              "text": "Defekte Chunks",
+              "type": "number"
+            },
+            {
+              "selector": "estimated-full-date",
+              "text": "Voll am",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "avail",
+              "text": "Frei",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "Gesamt",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "Belegt",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Dedup",
+            "mode": "binary",
+            "binary": {
+              "left": "Logisch",
+              "operator": "/",
+              "right": "Auf Platte"
+            },
+            "replaceFields": false
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Dedup$/",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Voll am",
+      "description": "PBS rechnet die Prognose selbst und liefert sie als estimated-full-date. Das ist belastbarer als eine lineare Fortschreibung über die letzten 14 Tage, weil PBS die eigene Verlaufskurve kennt.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/status/datastore-usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "gc-status.index-data-bytes",
+              "text": "Logisch",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.disk-bytes",
+              "text": "Auf Platte",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.pending-bytes",
+              "text": "Wartet auf GC",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.removed-bytes",
+              "text": "Letzter GC frei",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.still-bad",
+              "text": "Defekte Chunks",
+              "type": "number"
+            },
+            {
+              "selector": "estimated-full-date",
+              "text": "Voll am",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "avail",
+              "text": "Frei",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "Gesamt",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "Belegt",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "dateTimeFromNow",
+          "decimals": null,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Voll am$/",
+          "values": false
+        },
+        "textMode": "value",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Defekte Chunks",
+      "description": "gc-status.still-bad: Chunks, die der letzte Garbage-Collect als beschädigt erkannt und NICHT reparieren konnte. Alles über 0 bedeutet beschädigte Backups.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/status/datastore-usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "gc-status.index-data-bytes",
+              "text": "Logisch",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.disk-bytes",
+              "text": "Auf Platte",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.pending-bytes",
+              "text": "Wartet auf GC",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.removed-bytes",
+              "text": "Letzter GC frei",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.still-bad",
+              "text": "Defekte Chunks",
+              "type": "number"
+            },
+            {
+              "selector": "estimated-full-date",
+              "text": "Voll am",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "avail",
+              "text": "Frei",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "Gesamt",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "Belegt",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Defekte Chunks$/",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Wartet auf Garbage-Collect",
+      "description": "gc-status.pending-bytes: So viel Platz gibt der nächste GC-Lauf frei. Wächst der Wert dauerhaft, läuft die Aufräumkette nicht.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/status/datastore-usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "gc-status.index-data-bytes",
+              "text": "Logisch",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.disk-bytes",
+              "text": "Auf Platte",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.pending-bytes",
+              "text": "Wartet auf GC",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.removed-bytes",
+              "text": "Letzter GC frei",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.still-bad",
+              "text": "Defekte Chunks",
+              "type": "number"
+            },
+            {
+              "selector": "estimated-full-date",
+              "text": "Voll am",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "avail",
+              "text": "Frei",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "Gesamt",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "Belegt",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "bytes",
+          "decimals": null,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Wartet auf GC$/",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Datastore",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "bargauge",
+      "title": "Belegung je Datastore",
+      "description": "Die Belegung liegt in blockstat, nicht in einem Measurement disk. Unterschieden wird über die Existenz des Tags datastore – object steht bei allen Serien auf \"host\".",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"blockstat\")\n  |> filter(fn: (r) => exists r.datastore)\n  |> filter(fn: (r) => r._field == \"used\" or r._field == \"total\")\n  |> last()\n  |> keep(columns: [\"_field\", \"_value\", \"datastore\"])\n  |> group()\n  |> pivot(rowKey: [\"datastore\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({ _time: now(), _field: r.datastore,\n       _value: float(v: r.used) / float(v: r.total) * 100.0 }))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 78
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "lcd",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "valueMode": "color"
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Belegungsverlauf",
+      "description": "Für die Prognose nicht nötig, die liefert PBS als estimated-full-date in der Kachel oben. Dieses Panel zeigt den tatsächlichen Verlauf inkl. der Sprünge nach jedem Garbage-Collect.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 8,
+        "y": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"blockstat\")\n  |> filter(fn: (r) => exists r.datastore)\n  |> filter(fn: (r) => r._field == \"used\" or r._field == \"total\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\", \"datastore\"], columnKey: [\"_field\"],\n           valueColumn: \"_value\")\n  |> map(fn: (r) => ({ _time: r._time, _field: r.datastore, _value: r.used }))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": null,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Täglicher Zuwachs",
+      "description": "nonNegative bewusst auf false: Ein Tag mit deutlich negativem Zuwachs ist ein Garbage-Collect. Verschwinden diese Ausschläge, läuft die Aufräumkette nicht mehr und der Datastore wächst still bis zum Anschlag.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"blockstat\")\n  |> filter(fn: (r) => exists r.datastore and r._field == \"used\")\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\n  |> difference(nonNegative: false)\n  |> map(fn: (r) => ({ _time: r._time, _field: r.datastore, _value: r._value }))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": null,
+          "min": null,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Datastore-Status",
+      "description": "Kommt vollständig aus /api2/json/status/datastore-usage.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/status/datastore-usage",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "gc-status.index-data-bytes",
+              "text": "Logisch",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.disk-bytes",
+              "text": "Auf Platte",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.pending-bytes",
+              "text": "Wartet auf GC",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.removed-bytes",
+              "text": "Letzter GC frei",
+              "type": "number"
+            },
+            {
+              "selector": "gc-status.still-bad",
+              "text": "Defekte Chunks",
+              "type": "number"
+            },
+            {
+              "selector": "estimated-full-date",
+              "text": "Voll am",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "avail",
+              "text": "Frei",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "Gesamt",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "Belegt",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Logisch"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Auf Platte"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Wartet auf GC"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Letzter GC frei"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Frei"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Belegt"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Defekte Chunks"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Backup-Jobs",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Task-Historie",
+      "description": "worker_type kennt bei PBS die Werte backup, verificationjob, garbage_collection, prunejob, logrotate und aptupdate. Ein sync-Task erscheint nur, wenn ein Sync-Job auf ein zweites Ziel eingerichtet ist.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 14,
+        "x": 0,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/nodes/localhost/tasks",
+          "url_options": {
+            "method": "GET",
+            "data": "",
+            "params": [
+              {
+                "key": "limit",
+                "value": "500"
+              },
+              {
+                "key": "since",
+                "value": "${__from:date:seconds}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "starttime",
+              "text": "Beginn",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "starttime",
+              "text": "_start",
+              "type": "number"
+            },
+            {
+              "selector": "endtime",
+              "text": "_end",
+              "type": "number"
+            },
+            {
+              "selector": "worker_type",
+              "text": "Typ",
+              "type": "string"
+            },
+            {
+              "selector": "worker_id",
+              "text": "Ziel",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "Status",
+              "type": "string"
+            },
+            {
+              "selector": "user",
+              "text": "Benutzer",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Dauer",
+            "mode": "binary",
+            "binary": {
+              "left": "_end",
+              "operator": "-",
+              "right": "_start"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_start": true,
+              "_end": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Beginn",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "OK": {
+                        "color": "green",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "empty",
+                      "result": {
+                        "color": "text",
+                        "index": 1,
+                        "text": "läuft"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Snapshots",
+      "description": "verification.state ist \"ok\", \"failed\" – oder fehlt, wenn der Snapshot nie geprüft wurde. Ein unverifiziertes Backup ist eine Vermutung, kein Backup.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 10,
+        "x": 14,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/admin/datastore/${datastore}/snapshots",
+          "url_options": {
+            "method": "GET",
+            "data": ""
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "backup-type",
+              "text": "Typ",
+              "type": "string"
+            },
+            {
+              "selector": "backup-id",
+              "text": "ID",
+              "type": "string"
+            },
+            {
+              "selector": "backup-time",
+              "text": "Zeitpunkt",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "comment",
+              "text": "Bezeichnung",
+              "type": "string"
+            },
+            {
+              "selector": "size",
+              "text": "Größe logisch",
+              "type": "number"
+            },
+            {
+              "selector": "verification.state",
+              "text": "Verifikation",
+              "type": "string"
+            },
+            {
+              "selector": "owner",
+              "text": "Besitzer",
+              "type": "string"
+            },
+            {
+              "selector": "protected",
+              "text": "Geschützt",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "Zeitpunkt",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Größe logisch"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Verifikation"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ok": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "failed": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "empty",
+                      "result": {
+                        "color": "orange",
+                        "index": 2,
+                        "text": "nie geprüft"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Backup-Dauer je Ziel",
+      "description": "Dauer = endtime − starttime. Die API liefert keine fertige Dauer.",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_API}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_API}"
+          },
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/api2/json/nodes/localhost/tasks",
+          "url_options": {
+            "method": "GET",
+            "data": "",
+            "params": [
+              {
+                "key": "limit",
+                "value": "500"
+              },
+              {
+                "key": "since",
+                "value": "${__from:date:seconds}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "starttime",
+              "text": "Beginn",
+              "type": "timestamp_epoch_s"
+            },
+            {
+              "selector": "starttime",
+              "text": "_start",
+              "type": "number"
+            },
+            {
+              "selector": "endtime",
+              "text": "_end",
+              "type": "number"
+            },
+            {
+              "selector": "worker_type",
+              "text": "Typ",
+              "type": "string"
+            },
+            {
+              "selector": "worker_id",
+              "text": "Ziel",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "Status",
+              "type": "string"
+            },
+            {
+              "selector": "user",
+              "text": "Benutzer",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Dauer",
+            "mode": "binary",
+            "binary": {
+              "left": "_end",
+              "operator": "-",
+              "right": "_start"
+            },
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_start": true,
+              "_end": true
+            }
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "include",
+            "match": "all",
+            "filters": [
+              {
+                "fieldName": "Typ",
+                "config": {
+                  "id": "equal",
+                  "options": {
+                    "value": "backup"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Ziel": {
+                "aggregations": [],
+                "operation": "groupby"
+              },
+              "Dauer": {
+                "aggregations": [
+                  "lastNotNull",
+                  "max",
+                  "mean"
+                ],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer (lastNotNull)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer (max)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer (mean)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "PBS-Host",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "CPU-Auslastung",
+      "description": "Nicht iowait nehmen – das ist ein kumulativer Zähler. Die auswertbare Prozentzahl heißt iowait_percent. Steigt sie stärker als cpu, limitiert die Platte und eine schnellere CPU bringt nichts.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 45
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpustat\")\n  |> filter(fn: (r) => r._field == \"cpu\" or r._field == \"iowait_percent\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Arbeitsspeicher",
+      "description": "PBS nutzt für Verifikation und GC viel Page-Cache. memused sieht dann hoch aus, obwohl der Speicher jederzeit freigegeben werden kann – memavailable ist die ehrlichere Zahl.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 45
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"memory\")\n  |> filter(fn: (r) => r._field == \"memused\" or r._field == \"memavailable\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": null,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Load Average",
+      "description": "Die Thread-Zahl heißt bei PBS cpu_count, bei PVE cpus. Wer Panels zwischen den Dashboards kopiert, läuft genau hier auf.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 45
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpustat\")\n  |> filter(fn: (r) => r._field =~ /^avg(1|5|15)$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "B",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpustat\" and r._field == \"cpu_count\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> map(fn: (r) => ({ _time: r._time, \"CPU-Threads\": r._value }))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU-Threads"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Disk-Durchsatz",
+      "description": "Der datastore-Filter ist Pflicht: blockstat liegt zweimal vor, mit und ohne datastore-Tag. Liegen Datastore und Wurzeldateisystem auf demselben Gerät, sind beide Serien identisch und würden doppelt gezeichnet.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"blockstat\")\n  |> filter(fn: (r) => not exists r.datastore)\n  |> filter(fn: (r) => r._field == \"read_bytes\" or r._field == \"write_bytes\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "decimals": null,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Netzwerk ${nic_pbs}",
+      "description": "Das Feld heißt bei PBS send, nicht transmit. Ein Backup-Ziel empfängt viel und sendet wenig – kippt das Verhältnis, läuft vermutlich ein Restore oder ein Sync-Job.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"nics\" and r.instance == \"${nic_pbs}\")\n  |> filter(fn: (r) => r._field == \"receive\" or r._field == \"send\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "decimals": null,
+          "min": 0,
+          "max": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "none"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Diagnose",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "panels": []
+    },
+    {
+      "id": 24,
+      "type": "table",
+      "title": "Datenaktualität je Quelle",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "${DS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "${DS}"
+          },
+          "refId": "A",
+          "query": "from(bucket: \"${bucket_pbs}\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._field == \"total\" or r._field == \"memtotal\")\n  |> group(columns: [\"_measurement\", \"datastore\"])\n  |> last()\n  |> map(fn: (r) => ({\n       Quelle: r._measurement + (if exists r.datastore then \" / \" + r.datastore else \"\"),\n       \"Letzter Datenpunkt\": r._time,\n       \"Alter\": float(v: int(v: now()) - int(v: r._time)) / 1000000000.0 }))\n  |> group()\n  |> sort(columns: [\"Alter\"], desc: true)"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "_start": true,
+              "_stop": true,
+              "result": true,
+              "table": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alter"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 60
+                    },
+                    {
+                      "color": "red",
+                      "value": 300
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "text",
+      "title": "Grenzen dieses Dashboards",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Kommt nicht aus InfluxDB\n\nDer Metric Server des PBS liefert **nur Host- und Datastore-Metriken**. Alle Panels mit\nTask-, Snapshot- oder GC-Bezug hängen an der PBS-API über das **Infinity**-Plugin:\n\n* Task-Ergebnisse, Backup-Dauer, übertragene Datenmenge\n* Snapshot-Zahlen, Dedup-Faktor, Verifikationsstatus\n* Prune- und GC-Zeitpunkte\n* **Uptime** – anders als PVE schreibt PBS kein `uptime`-Feld\n\nDer API-Token braucht die Rolle `Audit` auf dem Pfad `/`. Mit aktiver\n*Privilege Separation* hat ein frisch angelegter Token **keinerlei** Rechte, bis diese\nZuweisung existiert – das ist die häufigste Ursache für 403.\n\n### Fallen im Influx-Datenmodell\n\n* **Kein Measurement `disk`.** Die Datastore-Belegung liegt in `blockstat`.\n* **`object` steht bei allen Serien auf `host`** und taugt nicht zur Unterscheidung.\n  Der Datastore hängt an der Existenz des Tags `datastore`.\n* **`iowait` ist ein Zähler**, auswertbar ist `iowait_percent`.\n* **Das Netzfeld heißt `send`**, nicht `transmit`. Die Thread-Zahl heißt `cpu_count`,\n  bei PVE dagegen `cpus`.\n* `nics` führt die String-Felder `device` und `ty`, die bei Sammelabfragen über den\n  ganzen Bucket eine Schema-Kollision auslösen.\n\n### Was auch die API nicht liefert\n\n* **SMART-Werte der Platten.** Dafür braucht es `smartctl` plus Telegraf auf dem Host.\n* **Restore-Tests.** Kein Monitoring beantwortet, ob sich ein Backup wirklich\n  zurückspielen lässt. Ein regelmäßiger Restore in eine Wegwerf-VM bleibt Handarbeit.\n\n### Die vier Zeilen, die zusammen eine Sicherung ergeben\n\n1. **Backup lief** – Kachel *Letztes Backup*\n2. **Backup ist lesbar** – Spalte *Verifikation* in der Snapshot-Tabelle\n3. **Backup bleibt bezahlbar** – Kachel *Voll am*\n4. **Backup liegt woanders** – ein `sync`-Task in der Task-Historie\n\nFällt eine dieser Zeilen aus, ist die Sicherung unvollständig – auch wenn die anderen\ndrei grün sind. Erscheint in der Task-Historie nie ein `sync`, existiert kein zweites\nZiel: Alle Backups liegen dann auf genau einer Maschine.\n"
+      }
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "proxmox"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS",
+        "label": "InfluxDB (Proxmox)",
+        "type": "datasource",
+        "query": "influxdb",
+        "current": {},
+        "hide": 0,
+        "refresh": 1,
+        "regex": "",
+        "options": []
+      },
+      {
+        "name": "DS_API",
+        "label": "PBS-API (Infinity)",
+        "type": "datasource",
+        "query": "yesoreyeram-infinity-datasource",
+        "current": {},
+        "hide": 0,
+        "refresh": 1,
+        "regex": "",
+        "options": []
+      },
+      {
+        "name": "bucket_pbs",
+        "label": "Bucket",
+        "type": "textbox",
+        "query": "proxmox-backup",
+        "current": {
+          "text": "proxmox-backup",
+          "value": "proxmox-backup"
+        },
+        "hide": 0,
+        "options": []
+      },
+      {
+        "name": "datastore",
+        "label": "Datastore",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS}"
+        },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket_pbs}\", tag: \"datastore\")",
+        "definition": "schema.tagValues(bucket: \"${bucket_pbs}\", tag: \"datastore\")",
+        "refresh": 1,
+        "sort": 1,
+        "regex": "",
+        "multi": false,
+        "includeAll": false,
+        "allValue": null,
+        "current": {},
+        "options": [],
+        "hide": 0
+      },
+      {
+        "name": "nic_pbs",
+        "label": "Interface",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "${DS}"
+        },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket_pbs}\", tag: \"instance\",\n  predicate: (r) => r._measurement == \"nics\")",
+        "definition": "  predicate: (r) => r._measurement == \"nics\")",
+        "refresh": 1,
+        "sort": 1,
+        "regex": "/^(en|eth|bond)/",
+        "multi": false,
+        "includeAll": false,
+        "allValue": null,
+        "current": {},
+        "options": [],
+        "hide": 0
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Proxmox Backup Server",
+  "uid": "proxmox-pbs",
+  "version": 1,
+  "weekStart": "monday"
+}
