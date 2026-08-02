@@ -47,20 +47,19 @@ Typ **InfluxDB**:
 Ein **eigener Bucket** ist sinnvoll: Proxmox schreibt mit anderen Tag-Sätzen als die
 Home-Assistant-Integration, und eine getrennte Retention hält die Datenbank klein.
 
-### Datenmodell (PVE 9, gegen den Quellcode geprüft)
+### Datenmodell PVE 9 (an einem echten Bucket gemessen)
 
-Tag-Sätze aus `PVE/Status/InfluxDB.pm`, Feldgruppen aus `PVE/Service/pvestatd.pm`.
 Der Measurement-Name ist der Name des verschachtelten Schlüssels; flache Schlüssel
 landen in `system`.
 
-| Measurement | Tags | Felder (Auswahl) |
+| Measurement | Tags | Felder |
 |---|---|---|
-| `system` | `object=nodes`, `host`=Node | `uptime` |
-| `cpustat` | `object=nodes` | `user`, `system`, `iowait`, `idle`, `nice`, `sum`, `wait`, `avg1`, `avg5`, `avg15`, `cpus`, **plus die PSI-Werte** |
-| `memory` | `object=nodes` | `memtotal`, `memused`, `memfree`, `memshared`, `memavailable`, `arcsize`, `swap*` |
-| `nics` | `object=nodes`, `instance` | `receive`, `transmit` |
-| `blockstat` | `object=nodes` | `read_bytes`, `write_bytes`, `read_ios`, `write_ios` |
-| `system` | `object=storages`, `nodename`, `host`=Storage-ID, `type` | `total`, `used` |
+| `system` | `object=nodes`, `host`=Node | `uptime` – mehr nicht |
+| `cpustat` | `object=nodes` | **Verhältnisse (0–1):** `cpu`, `wait` · **Zähler:** `user`, `system`, `idle`, `iowait`, `nice`, `irq`, `softirq`, `steal`, `guest`, `guest_nice`, `total`, `used`, `sum` · `avg1`, `avg5`, `avg15`, `cpus`, `ctime` |
+| `memory` | `object=nodes` | `memtotal`, `memused`, `memfree`, `memavailable`, `memshared`, `swaptotal`, `swapused`, `swapfree`, `arcsize`, `arcmin`, `arcmax` |
+| `nics` | `object=nodes`, `instance`=Interface | `receive`, `transmit` · **String-Feld:** `type` (`physical`/`virtual`) |
+| `blockstat` | `object=nodes` | **statfs, keine IO-Zähler:** `blocks`, `bavail`, `bfree`, `used`, `per`, `files`, `ffree`, `favail`, `fused`, `fper` plus `su_*`- und `user_*`-Varianten |
+| `system` | `object=storages`, `nodename`, `host`=Storage-ID, `type` | `total`, `used`, `avail`, `active`, `enabled`, `shared` · **Strings:** `content`, `type` |
 | `system` | `object=qemu`, `vmid`, `nodename`, `host`=Gastname | `cpu` (0–1), `cpus`, `mem`, `maxmem`, `memhost`, `freemem`, `balloon`, `netin`, `netout`, `diskread`, `diskwrite`, `uptime`, `pid`, `disk`+`maxdisk` (bei VMs stets 0), alle sechs `pressure*` · **Strings:** `name`, `status`, `qmpstatus`, `tags`, `running-qemu`, `running-machine` |
 | `ballooninfo` | `object=qemu`, `vmid` | `actual`, `total_mem`, `free_mem`, `max_mem`, `major_page_faults`, `minor_page_faults`, `mem_swapped_in`, `mem_swapped_out` |
 | `blockstat` | `object=qemu`, `vmid`, + Gerätetag | QEMU-Blockstatistik je virtuellem Laufwerk: `rd_bytes`, `wr_bytes`, `rd_operations`, `wr_operations`, `*_total_time_ns`, `flush_*`, `unmap_*`, `failed_*` |
