@@ -79,6 +79,31 @@ schema.fieldKeys(bucket: "proxmox", predicate: (r) => r._measurement == "cpustat
 schema.tagKeys(bucket: "proxmox",   predicate: (r) => r._measurement == "system")
 ```
 
+### Datenmodell PBS (an einem echten Bucket gemessen)
+
+Es gibt genau **vier** Measurements – kein `disk`, kein `swap`, kein `uptime`.
+
+| Measurement | Tags | Felder |
+|---|---|---|
+| `cpustat` | `object=host`, `host` | **Verhältnisse (0–1):** `cpu`, `iowait_percent` · **Zähler:** `user`, `system`, `idle`, `iowait`, `nice`, `irq`, `softirq`, `steal`, `guest`, `guest_nice`, `total` · `avg1`, `avg5`, `avg15`, `cpu_count` |
+| `memory` | `object=host` | `memtotal`, `memused`, `memfree`, `memavailable`, `memshared`, `swaptotal`, `swapused`, `swapfree` |
+| `nics` | `object=host`, `instance`=Interface | `receive`, `send` · **String-Felder:** `device`, `ty` (`Physical`/`Virtual`) |
+| `blockstat` | `object=host`, **optional** `datastore` | **Belegung:** `total`, `used`, `avail` · **IO-Zähler:** `read_bytes`, `write_bytes`, `read_ios`, `write_ios`, `io_ticks` |
+
+Vier Fallen, die reihenweise Panels leer lassen oder falsch füllen:
+
+1. **Die Datastore-Belegung liegt in `blockstat`**, nicht in einem Measurement `disk`.
+2. **`object` steht bei *allen* Serien auf `host`** und taugt nicht zur Unterscheidung.
+   Der Datastore hängt an der Existenz des Tags `datastore` – also `exists r.datastore`.
+3. **`iowait` ist ein kumulativer Zähler.** Die auswertbare Prozentzahl heißt
+   `iowait_percent`. Wer `iowait` nimmt, bekommt eine Gerade in Millionenhöhe.
+4. **Das Netzwerkfeld heißt `send`, nicht `transmit`** – hier weicht PBS von PVE ab.
+   Ebenso: PVE nennt die Thread-Zahl `cpus`, PBS nennt sie `cpu_count`.
+
+Die String-Felder `device` und `ty` in `nics` lösen bei einer Sammelabfrage über den
+ganzen Bucket eine Schema-Kollision aus (`_value` ist sowohl `string` als auch `float`).
+Vor dem `group()` mit `map(fn: (r) => ({ r with _value: string(v: r._value) }))` casten.
+
 ### PBS: die entscheidende Lücke
 
 Der PBS-Metric-Server liefert **nur Host- und Datastore-Metriken**. Nicht enthalten sind:
@@ -86,6 +111,7 @@ Der PBS-Metric-Server liefert **nur Host- und Datastore-Metriken**. Nicht enthal
 * Task-Ergebnisse, Backup-Dauer, übertragene Datenmenge
 * Snapshot-Zahlen, Dedup-Faktor
 * Verifikations- und Garbage-Collect-Status
+* **Uptime** – anders als PVE schreibt PBS kein `uptime`-Feld
 
 Alle Panels, die im Mockup mit **PBS-API** gekennzeichnet sind, brauchen deshalb eine
 zweite Datenquelle: das kostenlose **Infinity**-Plugin gegen die PBS-API, mit einem
@@ -171,7 +197,8 @@ Drei häufig nachinstallierte Plugins sind überflüssig geworden:
 * *Backup-Lage* – letztes Backup, Fehler in 24 h, Snapshots, Dedup-Faktor,
   Verifikation, Garbage-Collect
 * *Datastores* – Belegung, Verlauf über 30 Tage mit gestrichelter 30-Tage-Fortschreibung,
-  täglicher Zuwachs, Reichweiten-Tabelle
+  täglicher Zuwachs, Reichweiten-Tabelle. Die Zahlen entsprechen dem realen Bucket:
+  ein Datastore `data01`, 449,55 GiB gesamt, 307,40 GiB belegt
 * *Backup-Jobs* – Backup-Kalender als Statusmatrix (Ziel × Tag), Backup-Dauer je Ziel,
   Task-Historie, Aufbewahrungsregeln
 * *PBS-Host* – CPU, RAM, Load, Disk- und Netzdurchsatz der Maschine selbst
