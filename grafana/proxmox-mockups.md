@@ -47,9 +47,29 @@ Typ **InfluxDB**:
 Ein **eigener Bucket** ist sinnvoll: Proxmox schreibt mit anderen Tag-Sätzen als die
 Home-Assistant-Integration, und eine getrennte Retention hält die Datenbank klein.
 
-### Datenmodell vor dem Bau prüfen
+### Datenmodell (PVE 9, gegen den Quellcode geprüft)
 
-Die Feldnamen unterscheiden sich zwischen PVE-Versionen. Einmal im Influx-Data-Explorer:
+Tag-Sätze aus `PVE/Status/InfluxDB.pm`, Feldgruppen aus `PVE/Service/pvestatd.pm`.
+Der Measurement-Name ist der Name des verschachtelten Schlüssels; flache Schlüssel
+landen in `system`.
+
+| Measurement | Tags | Felder (Auswahl) |
+|---|---|---|
+| `system` | `object=nodes`, `host`=Node | `uptime` |
+| `cpustat` | `object=nodes` | `user`, `system`, `iowait`, `idle`, `nice`, `sum`, `wait`, `avg1`, `avg5`, `avg15`, `cpus`, **plus die PSI-Werte** |
+| `memory` | `object=nodes` | `memtotal`, `memused`, `memfree`, `memshared`, `memavailable`, `arcsize`, `swap*` |
+| `nics` | `object=nodes`, `instance` | `receive`, `transmit` |
+| `blockstat` | `object=nodes` | `read_bytes`, `write_bytes`, `read_ios`, `write_ios` |
+| `system` | `object=storages`, `nodename`, `host`=Storage-ID, `type` | `total`, `used` |
+| `system` | `object=qemu\|lxc`, `vmid`, `nodename`, `host`=Gastname | `cpu`, `maxcpu`, `mem`, `maxmem`, `disk`, `maxdisk`, `netin`, `netout`, `diskread`, `diskwrite`, `uptime`, `status`, `template`, `name` |
+| `system` | `object=qemu\|lxc` | `pressurecpusome`, `pressurecpufull`, `pressureiosome`, `pressureiofull`, `pressurememorysome`, `pressurememoryfull` *(ab PVE 9)* |
+
+**Die häufigste Fehlannahme:** Es gibt **kein** Measurement `pressure`. Die PSI-Werte des
+Nodes schreibt `pvestatd` direkt in den `cpustat`-Hash, die der Gäste als flache
+`pressure*`-Felder nach `system`. Viele fertige Community-Dashboards filtern auf
+`_measurement == "pressure"` und zeigen deshalb dauerhaft ein leeres Panel.
+
+Die exakten Feldnamen trotzdem einmal gegenprüfen:
 
 ```flux
 import "influxdata/influxdb/schema"
@@ -58,9 +78,6 @@ schema.measurements(bucket: "proxmox")
 schema.fieldKeys(bucket: "proxmox", predicate: (r) => r._measurement == "cpustat")
 schema.tagKeys(bucket: "proxmox",   predicate: (r) => r._measurement == "system")
 ```
-
-Die im Mockup angenommenen Measurements, Tags und Felder stehen vollständig in der
-HTML-Datei im Abschnitt *Datenmodell*.
 
 ### PBS: die entscheidende Lücke
 
@@ -86,6 +103,53 @@ GET /api2/json/nodes/localhost/tasks?limit=200     → Task-Historie
 SMART-Werte der Platten liefert keine der beiden Quellen. Wer sie im Dashboard will,
 braucht `smartctl` plus Telegraf auf dem jeweiligen Host.
 
+## Grafana-Plugins
+
+**Genau ein Plugin ist wirklich nötig.** Alles andere im Mockup läuft mit Bordmitteln
+von Grafana OSS.
+
+| Plugin | ID | Wofür hier | Urteil |
+|---|---|---|---|
+| Infinity | `yesoreyeram-infinity-datasource` | PBS-API: Tasks, Snapshots, Verifikation, Dedup, GC | **Pflicht** – ohne bleibt die halbe PBS-Seite leer. Wird von Grafana Labs selbst gepflegt. |
+| Business Text | `marcusolsson-dynamictext-panel` | Task-Historie als HTML/Handlebars statt starrer Tabelle | Nice to have, sobald du JSON aus der PBS-API frei formatieren willst |
+| Image Renderer | `grafana-image-renderer` | Graph-Bilder in Alarm-Benachrichtigungen | Sinnvoll bei Alarmen – als **eigener Container**, nicht im Grafana-Image |
+| Business Calendar | `marcusolsson-calendar-panel` | Backup-Kalender als Monatsansicht | Optional – *Status history* ist Bordmittel und dichter |
+| Business Charts | `volkovlabs-echarts-panel` | Sankey und exotische Formen | Hier kein Anlass – du schreibst ECharts-JSON von Hand |
+
+`GF_INSTALL_PLUGINS` ist seit Grafana 12 abgekündigt, die aktuelle Variable heißt
+`GF_PLUGINS_PREINSTALL`:
+
+```yaml
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource,marcusolsson-dynamictext-panel
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  renderer:                       # nur nötig, wenn Alarme Bilder mitschicken sollen
+    image: grafana/grafana-image-renderer:latest
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
+```
+
+Version pinnen geht mit `plugin-id@1.2.3`. Das Altverhalten erzwingt man mit
+`GF_INSTALL_PLUGINS_FORCE=true` – besser ist die Migration.
+
+Drei häufig nachinstallierte Plugins sind überflüssig geworden:
+
+| Statt Plugin | nimm Bordmittel | im Mockup |
+|---|---|---|
+| `natel-discrete-panel`, `flant-statusmap-panel` | **State timeline** / **Status history** | Backup-Kalender, Gast-Status über Zeit |
+| Trendline- und Forecast-Plugins | Transformation **Trendline** (seit Grafana 12.1 regulär in OSS) | Fortschreibung der Datastore-Belegung |
+| `grafana-polystat-panel` | **Canvas** oder **Bar gauge** mit Schwellen | Belegung je Storage, Top-Listen |
+
 ## Inhalt der Dashboards
 
 **Proxmox VE**
@@ -97,8 +161,9 @@ braucht `smartctl` plus Telegraf auf dem jeweiligen Host.
   Netzwerkdurchsatz
 * *Storage* – Belegung je Storage als Bar Gauge, Disk-Durchsatz, ARC-Größe und eine
   Tabelle **Storage-Reichweite** mit Ø Zuwachs pro Tag und Restlaufzeit
-* *Gäste* – Tabelle aller VMs und Container mit CPU, RAM, Disk- und Netz-IO, dazu CPU-
-  und RAM-Verlauf der Top 4
+* *Gäste* – Tabelle aller VMs und Container mit CPU, RAM, Disk- und Netz-IO, dazu
+  CPU-, RAM- und **IO-Pressure**-Verlauf der Top 4. Der PSI je Gast ist neu ab PVE 9
+  und beantwortet als einziges Panel die Frage, *welcher* Gast auf IO wartet.
 * *Diagnose* – Datenaktualität je Quelle und ein Textpanel mit Lesehilfe
 
 **Proxmox Backup Server**

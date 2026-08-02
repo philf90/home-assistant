@@ -621,21 +621,32 @@ schema.tagKeys(bucket: "proxmox",   predicate: (r) =&gt; r._measurement == "syst
 
     <div class="cols">
       <div>
-        <h3>Proxmox VE – erwartetes Modell</h3>
+        <h3>Proxmox VE 9 – gegen den Quellcode geprüft</h3>
+        <p style="font-size:12px">Tag-Sätze aus <code>PVE/Status/InfluxDB.pm</code>, Feldgruppen aus
+           <code>PVE/Service/pvestatd.pm</code>. Der Measurement-Name ist der Name des
+           verschachtelten Schlüssels; flache Schlüssel landen in <code>system</code>.</p>
         <div class="tblscroll">
         <table>
           <thead><tr><th>Measurement</th><th>Tags</th><th>Felder (Auswahl)</th></tr></thead>
           <tbody>
-            <tr><td><code>system</code></td><td><code>object=nodes</code>, <code>host</code>, <code>nodename</code></td><td><code>uptime</code>, <code>cpu</code>, <code>maxcpu</code>, <code>wait</code></td></tr>
-            <tr><td><code>cpustat</code></td><td><code>object=nodes</code></td><td><code>user</code>, <code>system</code>, <code>iowait</code>, <code>idle</code>, <code>avg1</code>, <code>avg5</code>, <code>avg15</code></td></tr>
-            <tr><td><code>memory</code></td><td><code>object=nodes</code></td><td><code>memtotal</code>, <code>memused</code>, <code>memfree</code>, <code>arcsize</code>, <code>swaptotal</code>, <code>swapused</code></td></tr>
+            <tr><td><code>system</code></td><td><code>object=nodes</code>, <code>host</code>=Node</td><td><code>uptime</code></td></tr>
+            <tr><td><code>cpustat</code></td><td><code>object=nodes</code></td><td><code>user</code>, <code>system</code>, <code>iowait</code>, <code>idle</code>, <code>nice</code>, <code>sum</code>, <code>wait</code>, <code>ctime</code>, <code>avg1</code>, <code>avg5</code>, <code>avg15</code>, <code>cpus</code>, <b>plus die PSI-Werte</b></td></tr>
+            <tr><td><code>memory</code></td><td><code>object=nodes</code></td><td><code>memtotal</code>, <code>memused</code>, <code>memfree</code>, <code>memshared</code>, <code>memavailable</code>, <code>arcsize</code>, <code>swaptotal</code>, <code>swapused</code>, <code>swapfree</code></td></tr>
             <tr><td><code>nics</code></td><td><code>object=nodes</code>, <code>instance</code></td><td><code>receive</code>, <code>transmit</code></td></tr>
-            <tr><td><code>blockstat</code></td><td><code>object=nodes|qemu</code></td><td><code>read_bytes</code>, <code>write_bytes</code>, <code>read_ios</code>, <code>write_ios</code></td></tr>
-            <tr><td><code>pressure</code></td><td><code>object=nodes</code>, <code>resource</code></td><td><code>some_avg10</code>, <code>full_avg10</code> <span style="color:var(--ink-3)">(ab PVE 8)</span></td></tr>
-            <tr><td><code>system</code></td><td><code>object=storages</code>, <code>host</code>=Storage-ID</td><td><code>total</code>, <code>used</code>, <code>avail</code></td></tr>
-            <tr><td><code>system</code></td><td><code>object=qemu|lxc</code>, <code>vmid</code>, <code>host</code>=Gastname</td><td><code>cpu</code>, <code>maxcpu</code>, <code>mem</code>, <code>maxmem</code>, <code>netin</code>, <code>netout</code>, <code>diskread</code>, <code>diskwrite</code>, <code>uptime</code></td></tr>
+            <tr><td><code>blockstat</code></td><td><code>object=nodes</code></td><td><code>read_bytes</code>, <code>write_bytes</code>, <code>read_ios</code>, <code>write_ios</code></td></tr>
+            <tr><td><code>system</code></td><td><code>object=storages</code>, <code>nodename</code>, <code>host</code>=Storage-ID, <code>type</code></td><td><code>total</code>, <code>used</code></td></tr>
+            <tr><td><code>system</code></td><td><code>object=qemu</code>|<code>lxc</code>, <code>vmid</code>, <code>nodename</code>, <code>host</code>=Gastname</td><td><code>cpu</code>, <code>maxcpu</code>, <code>mem</code>, <code>maxmem</code>, <code>disk</code>, <code>maxdisk</code>, <code>netin</code>, <code>netout</code>, <code>diskread</code>, <code>diskwrite</code>, <code>uptime</code>, <code>status</code>, <code>template</code>, <code>name</code></td></tr>
+            <tr><td><code>system</code></td><td><code>object=qemu</code>|<code>lxc</code></td><td><code>pressurecpusome</code>, <code>pressurecpufull</code>, <code>pressureiosome</code>, <code>pressureiofull</code>, <code>pressurememorysome</code>, <code>pressurememoryfull</code> <span style="color:var(--ink-3)">(ab PVE 9)</span></td></tr>
           </tbody>
         </table>
+        </div>
+        <div class="callout">
+          <p><strong>Die häufigste Fehlannahme:</strong> Es gibt <b>kein</b> Measurement
+             <code>pressure</code>. Die PSI-Werte des Nodes schreibt <code>pvestatd</code>
+             direkt in den <code>cpustat</code>-Hash, die der Gäste als flache
+             <code>pressure*</code>-Felder nach <code>system</code>. Viele fertige
+             Community-Dashboards filtern auf <code>_measurement == "pressure"</code> und
+             zeigen deshalb dauerhaft ein leeres Panel.</p>
         </div>
       </div>
       <div>
@@ -681,7 +692,86 @@ GET /api2/json/nodes/localhost/tasks?limit=200     → Task-Historie (Status, Da
        <i>Skip TLS Verify</i> setzen – oder besser das PBS-Zertifikat in den
        Grafana-Container mounten.</p>
 
-    <h3>4 · Bewusst getroffene Entscheidungen</h3>
+    <h3>4 · Grafana-Plugins für die Docker-Installation</h3>
+    <p>Kurz vorweg: <b>Genau ein Plugin ist wirklich nötig.</b> Alles andere im Mockup
+       läuft mit Bordmitteln von Grafana OSS.</p>
+    <div class="tblscroll">
+    <table>
+      <thead><tr><th>Plugin</th><th>ID</th><th>Wofür hier</th><th>Urteil</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Infinity</b></td>
+          <td><code>yesoreyeram-infinity-datasource</code></td>
+          <td>PBS-API: Tasks, Snapshots, Verifikation, Dedup-Faktor, GC-Status</td>
+          <td><b style="color:var(--ok)">Pflicht.</b> Ohne das bleibt die halbe PBS-Seite leer. Wird inzwischen von Grafana Labs selbst gepflegt.</td>
+        </tr>
+        <tr>
+          <td><b>Business Text</b></td>
+          <td><code>marcusolsson-dynamictext-panel</code></td>
+          <td>Task-Historie und Statusblöcke als HTML/Handlebars statt als starre Tabelle</td>
+          <td><span style="color:var(--warn)">Nice to have.</span> Lohnt, sobald du JSON aus der PBS-API frei formatieren willst – etwa Fehlertext plus Link zum Task-Log in einer Zeile.</td>
+        </tr>
+        <tr>
+          <td><b>Image Renderer</b></td>
+          <td><code>grafana-image-renderer</code></td>
+          <td>Graph-Bilder in Alarm-Benachrichtigungen (Telegram, E-Mail, Matrix)</td>
+          <td><span style="color:var(--warn)">Sinnvoll bei Alarmen.</span> Als <b>eigener Container</b> betreiben, nicht im Grafana-Image – er zieht Chromium mit rein.</td>
+        </tr>
+        <tr>
+          <td><b>Business Calendar</b></td>
+          <td><code>marcusolsson-calendar-panel</code></td>
+          <td>Backup-Kalender als echte Monatsansicht mit klickbaren Einträgen</td>
+          <td><span style="color:var(--ink-3)">Optional.</span> Der Backup-Kalender im Mockup ist eine <i>Status history</i> – die ist Bordmittel und für „lief das Backup?" die dichtere Darstellung.</td>
+        </tr>
+        <tr>
+          <td><b>Business Charts</b> (ECharts)</td>
+          <td><code>volkovlabs-echarts-panel</code></td>
+          <td>Sankey, Gauge-Varianten, exotische Diagrammformen</td>
+          <td><span style="color:var(--crit)">Hier nicht.</span> Sehr mächtig, aber du schreibst ECharts-JSON von Hand. Für Proxmox-Monitoring gibt es dafür keinen Anlass.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4 style="margin:22px 0 6px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:500">Installation im Container</h4>
+    <p><code>GF_INSTALL_PLUGINS</code> ist seit Grafana 12 abgekündigt. Die aktuelle
+       Variable heißt <code>GF_PLUGINS_PREINSTALL</code>:</p>
+<pre>services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_PLUGINS_PREINSTALL: yesoreyeram-infinity-datasource,marcusolsson-dynamictext-panel
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  renderer:                       # nur nötig, wenn Alarme Bilder mitschicken sollen
+    image: grafana/grafana-image-renderer:latest
+    restart: unless-stopped
+
+volumes:
+  grafana-data:</pre>
+    <p>Version pinnen geht mit <code>plugin-id@1.2.3</code>. Wer noch auf der alten
+       Variable sitzt und sie behalten muss, erzwingt das Altverhalten mit
+       <code>GF_INSTALL_PLUGINS_FORCE=true</code> – besser ist die Migration.</p>
+
+    <h4 style="margin:22px 0 6px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:500">Was Grafana OSS schon mitbringt</h4>
+    <p>Für diese drei häufig nachinstallierten Plugins gibt es inzwischen Bordmittel –
+       spar sie dir:</p>
+    <div class="tblscroll">
+    <table>
+      <thead><tr><th>Statt Plugin</th><th>nimm Bordmittel</th><th>im Mockup</th></tr></thead>
+      <tbody>
+        <tr><td><code>natel-discrete-panel</code>, <code>flant-statusmap-panel</code></td><td><b>State timeline</b> / <b>Status history</b></td><td>Backup-Kalender, Gast-Status über Zeit</td></tr>
+        <tr><td>Trendline- und Forecast-Plugins</td><td>Transformation <b>Trendline</b> (seit 12.1 regulär in OSS)</td><td>Fortschreibung der Datastore-Belegung</td></tr>
+        <tr><td><code>grafana-polystat-panel</code></td><td><b>Canvas</b> oder <b>Bar gauge</b> mit Schwellen</td><td>Belegung je Storage, Top-Listen</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>5 · Bewusst getroffene Entscheidungen</h3>
     <ul>
       <li><b>Reichweiten-Panels statt reiner Belegungsanzeigen.</b> „Storage zu 78&nbsp;%
           voll" ist erst dann eine Information, wenn danebensteht, dass das in 40 Tagen
@@ -701,7 +791,7 @@ GET /api2/json/nodes/localhost/tasks?limit=200     → Task-Historie (Status, Da
           skalieren, stehen zwei Panels nebeneinander.</li>
     </ul>
 
-    <h3>5 · Sinnvolle Alarme</h3>
+    <h3>6 · Sinnvolle Alarme</h3>
     <div class="tblscroll">
     <table>
       <thead><tr><th>Regel</th><th>Bedingung</th><th>Warum</th></tr></thead>
@@ -1182,6 +1272,12 @@ const G_FRIG  = gen(82, N, { base: 46, amp: 13, cycles: 1.1, noise: 5, min: 12, 
 const G_DOCK  = gen(83, N, { base: 17, amp: 6, cycles: 1.9, noise: 3.4, min: 2 });
 const G_INFL  = gen(84, N, { base: 11, amp: 5, cycles: 2.4, noise: 2.6, min: 1, spike: .05, spikeAmp: 22 });
 
+/* PSI je Gast – ab PVE 9 im Measurement system als pressure*-Felder */
+const GP_FRIG = gen(101, N, { base: 8.4, amp: 4.2, cycles: 1.2, noise: 2.4, min: .2, spike: .06, spikeAmp: 22 });
+const GP_INFL = gen(102, N, { base: 3.1, amp: 1.8, cycles: 1.8, noise: 1.2, min: .1, spike: .05, spikeAmp: 14 });
+const GP_HA   = gen(103, N, { base: 1.2, amp: .8, cycles: 1.4, noise: .5, min: .05 });
+const GP_DOCK = gen(104, N, { base: .9, amp: .6, cycles: 2.1, noise: .4, min: .02 });
+
 const GM_HA   = gen(91, N, { base: 63, amp: 3, cycles: 1.1, noise: 1.2, min: 40 });
 const GM_FRIG = gen(92, N, { base: 74, amp: 4, cycles: .9, noise: 1.4, min: 40 });
 const GM_DOCK = gen(93, N, { base: 58, amp: 5, cycles: 1.4, noise: 1.8, min: 30 });
@@ -1220,17 +1316,39 @@ const Q_LOAD = [
   |> filter(fn: (r) => r.host == "\${node}")
   |> filter(fn: (r) => r._field =~ /^avg(1|5|15)$/)
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
-  ['Schwellenlinie', 'Die rote gestrichelte Linie liegt auf der Anzahl der CPU-Threads (hier 12). Darüber warten Prozesse tatsächlich auf CPU-Zeit – ein Load von 6 auf einem 12-Thread-Host ist dagegen unauffällig.']
+  ['Schwellenlinie aus den Daten statt hart verdrahtet', `<code>cpustat</code> enthält das Feld <code>cpus</code> mit der Thread-Zahl. Damit muss die Schwelle nicht fest eingetragen werden:
+
+<code>threads = from(bucket: "\${bucket}")<br>
+&nbsp; |> range(start: -10m)<br>
+&nbsp; |> filter(fn: (r) =&gt; r._measurement == "cpustat" and r._field == "cpus")<br>
+&nbsp; |> last()</code>
+
+Als zweite Query ins selbe Panel legen und über eine Field-Override als gestrichelte Linie darstellen. Der Vorteil: Baust du CPUs um oder kommt ein zweiter Node dazu, wandert die Linie mit.`],
+  ['Warum die Linie überhaupt', 'Load ohne Bezug zur Thread-Zahl ist wertlos. Erst oberhalb der Thread-Zahl warten Prozesse tatsächlich auf CPU-Zeit – ein Load von 6 auf einem 12-Thread-Host ist unauffällig.']
 ];
 
 const Q_PSI = [
   ['Flux', `from(bucket: "\${bucket}")
   |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
-  |> filter(fn: (r) => r._measurement == "pressure" and r.object == "nodes")
-  |> filter(fn: (r) => r.host == "\${node}" and r._field == "some_avg10")
+  |> filter(fn: (r) => r._measurement == "cpustat" and r.object == "nodes")
+  |> filter(fn: (r) => r.host == "\${node}")
+  |> filter(fn: (r) => r._field =~ /^pressure/)
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)`],
+  ['Achtung: kein eigenes Measurement', 'Die PSI-Werte des Nodes landen <b>innerhalb von <code>cpustat</code></b>, nicht in einem Measurement <code>pressure</code>. <code>pvestatd</code> schreibt sie direkt in den <code>cpustat</code>-Hash. Der Regex-Filter <code>/^pressure/</code> ist bewusst gewählt: Er greift unabhängig davon, ob die Felder <code>pressurecpusome</code> oder anders heißen – die exakten Namen einmal mit <code>schema.fieldKeys()</code> gegenprüfen.'],
+  ['Was PSI beantwortet', 'Wie viel Prozent der Zeit hat mindestens ein Task auf diese Ressource gewartet? Das beantwortet Load nicht. Ein io-Wert über 10 % zeigt einen Storage-Engpass zuverlässiger als jede Auslastungskurve. <code>some</code> = mindestens ein Task wartet, <code>full</code> = alle Tasks warten, also echter Stillstand.']
+];
+
+const Q_PSI_GUEST = [
+  ['Flux', `from(bucket: "\${bucket}")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r._measurement == "system")
+  |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
+  |> filter(fn: (r) => r._field == "pressureiosome"
+                    or r._field == "pressurecpusome")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
-  |> keep(columns: ["_time", "_value", "resource"])`],
-  ['Hinweis', 'Pressure Stall Information gibt es ab PVE 8. Sie beantwortet die Frage, die Load nicht beantwortet: Wie viel Prozent der Zeit hat mindestens ein Task auf diese Ressource gewartet? Ein io-Wert über 10 % zeigt einen Storage-Engpass zuverlässiger als jede Auslastungskurve.']
+  |> keep(columns: ["_time", "_value", "host", "vmid", "_field"])`],
+  ['Neu ab PVE 9', 'Seit dem Schema <code>pve-vm-9.0</code> liefert <code>pvestatd</code> PSI <b>je Gast</b>: <code>pressurecpusome</code>, <code>pressurecpufull</code>, <code>pressureiosome</code>, <code>pressureiofull</code>, <code>pressurememorysome</code>, <code>pressurememoryfull</code>. Bei gestoppten Gästen sind die Felder leer.'],
+  ['Warum das das nützlichste neue Panel ist', 'Der Node-PSI sagt „irgendwas wartet auf IO". Der Gast-PSI sagt <i>welcher</i> Gast wartet. Das ist der Unterschied zwischen „der Storage ist langsam" und „frigate schreibt die Platte voll und homeassistant wartet darauf".']
 ];
 
 const Q_NET = [
@@ -1260,15 +1378,16 @@ const Q_STORAGE = [
   |> filter(fn: (r) => r._measurement == "system" and r.object == "storages")
   |> filter(fn: (r) => r._field == "used" or r._field == "total")
   |> last()
-  |> pivot(rowKey: ["host"], columnKey: ["_field"], valueColumn: "_value")
+  |> pivot(rowKey: ["host", "type"], columnKey: ["_field"], valueColumn: "_value")
   |> map(fn: (r) => ({
        Storage: r.host,
+       Typ:     r.type,
        Belegt:  r.used,
        Gesamt:  r.total,
        Prozent: float(v: r.used) / float(v: r.total) * 100.0
      }))
   |> sort(columns: ["Prozent"], desc: true)`],
-  ['Hinweis', 'Der Tag host trägt bei object = "storages" die Storage-ID, nicht den Hostnamen. Vor dem Nachbau mit schema.tagValues() gegenprüfen.']
+  ['Tags bei object = "storages"', 'Bestätigt gegen den Quellcode von <code>PVE/Status/InfluxDB.pm</code>: Der Tag-Satz ist <code>object=storages, nodename=&lt;Node&gt;, host=&lt;Storage-ID&gt;</code> – <code>host</code> trägt hier also die Storage-ID, nicht den Hostnamen. Dazu kommt optional <code>type</code> mit dem Storage-Typ (<code>zfspool</code>, <code>dir</code>, <code>nfs</code>, <code>pbs</code> …). Die Typ-Spalte in der Tabelle kommt von dort und muss nicht gepflegt werden.']
 ];
 
 const Q_FORECAST = [
@@ -1311,12 +1430,14 @@ const Q_GUESTS = [
        "cpu", "maxcpu", "mem", "maxmem", "netin", "netout",
        "diskread", "diskwrite", "uptime", "status"]))
   |> last()
-  |> pivot(rowKey: ["vmid"], columnKey: ["_field"], valueColumn: "_value")
+  |> pivot(rowKey: ["vmid", "host"], columnKey: ["_field"], valueColumn: "_value")
   |> map(fn: (r) => ({ r with
+       Name: r.host,
        CPU:  r.cpu * 100.0,
        RAM:  float(v: r.mem) / float(v: r.maxmem) * 100.0
      }))
   |> sort(columns: ["CPU"], desc: true)`],
+  ['Der Gastname steht im Tag host', 'Bestätigt gegen <code>PVE/Status/InfluxDB.pm</code>: Der Tag-Satz je Gast ist <code>object=qemu|lxc, vmid=&lt;VMID&gt;, nodename=&lt;Node&gt;</code> und zusätzlich <code>host=&lt;Gastname&gt;</code>, sofern der Name gesetzt ist. Auf PVE 9 braucht es dafür also <b>keine</b> gepflegte Value-Mapping-Tabelle im Panel.'],
   ['Aufbereitung', 'In Grafana danach über Field-Overrides: CPU und RAM als Prozent mit Gauge-Cell-Display, Status über Value-Mappings (1 → running, 0 → stopped) auf farbige Textzellen. Die Sortierung nach CPU macht die Tabelle zur Top-Liste – der Verursacher steht immer oben.']
 ];
 
@@ -1362,7 +1483,7 @@ const Q_ARC = [
 const veRows = [
   row('Node-Status', 'pve · 12 Threads · 64 GiB · ZFS RAID-Z1', [
     stat({ w: 3, title: 'Node', value: 'Online', color: 'var(--ok)', compact: true,
-      sub: 'PVE 8.4.1 · Quorum ok', q: [['Flux', `from(bucket: "\${bucket}")
+      sub: 'PVE 9.2.1 · Quorum ok', q: [['Flux', `from(bucket: "\${bucket}")
   |> range(start: -5m)
   |> filter(fn: (r) => r._measurement == "system" and r.object == "nodes")
   |> filter(fn: (r) => r._field == "uptime")
@@ -1516,7 +1637,7 @@ const veRows = [
         ['103', 'win11-vdi', 'VM', pill('off', 'stopped'), '—', '4', '—', '16,0 GiB', '—', '—', '—']
       ] }),
 
-    ts({ w: 12, title: 'CPU je Gast – Top 4', unit: '%', dec: 1, h: 150,
+    ts({ w: 8, title: 'CPU je Gast – Top 4', unit: '%', dec: 1, h: 150,
       legendTitle: 'Gast', q: Q_GUESTCPU,
       tip: 'Prozent der dem Gast zugewiesenen vCPUs',
       series: [
@@ -1525,7 +1646,7 @@ const veRows = [
         { name: 'docker-01 (102)', color: 'var(--s3)', data: G_DOCK },
         { name: 'influxdb (200)', color: 'var(--s4)', data: G_INFL }
       ] }),
-    ts({ w: 12, title: 'RAM-Belegung je Gast – Top 4', unit: '%', dec: 1, h: 150,
+    ts({ w: 8, title: 'RAM-Belegung je Gast – Top 4', unit: '%', dec: 1, h: 150,
       yMax: 100, threshold: 90, legendTitle: 'Gast',
       q: [['Flux', `from(bucket: "\${bucket}")
   |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
@@ -1542,6 +1663,15 @@ const veRows = [
         { name: 'frigate (104)', color: 'var(--s1)', data: GM_FRIG },
         { name: 'homeassistant (100)', color: 'var(--s2)', data: GM_HA },
         { name: 'docker-01 (102)', color: 'var(--s3)', data: GM_DOCK }
+      ] }),
+    ts({ w: 8, title: 'IO-Pressure je Gast – neu ab PVE 9', unit: '%', dec: 1, h: 150,
+      legendTitle: 'Gast', q: Q_PSI_GUEST, threshold: 15,
+      tip: 'pressureiosome: Anteil der Zeit, in der dieser Gast auf IO wartete',
+      series: [
+        { name: 'frigate (104)', color: 'var(--s1)', data: GP_FRIG },
+        { name: 'influxdb (200)', color: 'var(--s4)', data: GP_INFL },
+        { name: 'homeassistant (100)', color: 'var(--s2)', data: GP_HA },
+        { name: 'docker-01 (102)', color: 'var(--s3)', data: GP_DOCK }
       ] })
   ]),
 
@@ -1559,7 +1689,7 @@ const veRows = [
         ['lxc / 200–206', '14:19:58', '2 s', pill('ok', 'aktuell')],
         ['storages / local-zfs', '14:19:58', '2 s', pill('ok', 'aktuell')],
         ['storages / nas-iso', '14:18:12', '1 min 48 s', pill('warn', 'NFS träge')],
-        ['nodes / pressure', '14:19:58', '2 s', pill('ok', 'aktuell')]
+        ['cpustat / PSI-Felder', '14:19:58', '2 s', pill('ok', 'aktuell')]
       ] }),
     textpanel({ w: 12, title: 'Lesehilfe', html: `
       <h4>Was welche Zahl bedeutet</h4>
@@ -1575,10 +1705,15 @@ const veRows = [
       </ul>
       <h4>Wenn ein Panel leer bleibt</h4>
       <ul>
-        <li><code>pressure</code> gibt es erst ab PVE 8.</li>
+        <li><b>PSI liegt nicht in einem Measurement <code>pressure</code>.</b> Die Node-Werte
+            stehen <i>innerhalb</i> von <code>cpustat</code>, die Gast-Werte als
+            <code>pressure*</code>-Felder in <code>system</code>. Wer auf
+            <code>_measurement == "pressure"</code> filtert, bekommt nie Daten.</li>
+        <li>PSI je Gast gibt es erst ab PVE 9 (Schema <code>pve-vm-9.0</code>), bei
+            gestoppten Gästen bleiben die Felder leer.</li>
         <li><code>arcsize</code> nur bei ZFS als Root-Dateisystem.</li>
-        <li>Gastnamen fehlen in älteren PVE-Versionen – dann steht in der Tabelle nur die
-            <code>vmid</code>. Abhilfe: eine <code>Value mapping</code>-Tabelle im Panel pflegen.</li>
+        <li>Der Gastname steht im Tag <code>host</code> – falls die Tabelle nur
+            <code>vmid</code> zeigt, hat der Gast keinen Namen gesetzt.</li>
       </ul>` })
   ])
 ];
@@ -1646,7 +1781,7 @@ const Q_PBS_TREND = [
   |> filter(fn: (r) => r._field == "used")
   |> aggregateWindow(every: 1d, fn: last, createEmpty: false)
   |> keep(columns: ["_time", "_value", "datastore"])`],
-  ['Prognose-Linie', 'Grafana kann die Trendlinie selbst zeichnen: im Panel unter Transformations → „Regression analysis" (Grafana 10+) eine lineare Regression über dieselbe Serie legen und als gestrichelte Overlay-Serie darstellen. Kein Plugin nötig.']
+  ['Prognose-Linie ohne Plugin', 'Grafana zeichnet die Trendlinie selbst: im Panel unter <b>Transformations → Trendline</b> eine lineare Regression über dieselbe Serie legen und als gestrichelte Overlay-Serie darstellen. Die Transformation hieß früher „Regression analysis" und lag hinter einem Feature-Toggle; seit Grafana 12.1 ist sie unter dem Namen <b>Trendline</b> auch in OSS regulär verfügbar. Kein Plugin nötig.']
 ];
 
 const Q_PBS_GROWTH = [
