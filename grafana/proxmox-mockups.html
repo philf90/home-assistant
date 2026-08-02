@@ -622,8 +622,9 @@ schema.tagKeys(bucket: "proxmox",   predicate: (r) =&gt; r._measurement == "syst
     <div class="cols">
       <div>
         <h3>Proxmox VE 9 – am Bucket gemessen</h3>
-        <p style="font-size:12px">Node und Storages sind nachgemessen. Die Gast-Zeile stammt
-           aus dem Quellcode und ist <b>noch nicht verifiziert</b>.</p>
+        <p style="font-size:12px">Vollständig am Bucket nachgemessen – Node, Storages und
+           Gäste (Stichprobe VMID 102, eine QEMU-VM). Für <code>object=lxc</code> liegt keine
+           Messung vor.</p>
         <div class="tblscroll">
         <table>
           <thead><tr><th>Measurement</th><th>Tags</th><th>Felder</th></tr></thead>
@@ -634,9 +635,20 @@ schema.tagKeys(bucket: "proxmox",   predicate: (r) =&gt; r._measurement == "syst
             <tr><td><code>nics</code></td><td><code>object=nodes</code>, <code>instance</code>=Interface</td><td><code>receive</code>, <code>transmit</code> · <b>String-Feld:</b> <code>type</code> (<code>physical</code>/<code>virtual</code>)</td></tr>
             <tr><td><code>blockstat</code></td><td><code>object=nodes</code></td><td><b>statfs, keine IO-Zähler:</b> <code>blocks</code>, <code>bavail</code>, <code>bfree</code>, <code>used</code>, <code>per</code>, <code>files</code>, <code>ffree</code>, <code>favail</code>, <code>fused</code>, <code>fper</code> plus die <code>su_*</code>- und <code>user_*</code>-Varianten</td></tr>
             <tr><td><code>system</code></td><td><code>object=storages</code>, <code>nodename</code>, <code>host</code>=Storage-ID, <code>type</code></td><td><code>total</code>, <code>used</code>, <code>avail</code>, <code>active</code>, <code>enabled</code>, <code>shared</code> · <b>String-Felder:</b> <code>content</code>, <code>type</code></td></tr>
-            <tr style="opacity:.65"><td><code>system</code></td><td><code>object=qemu</code>|<code>lxc</code>, <code>vmid</code>, <code>nodename</code>, <code>host</code>=Gastname</td><td><i>laut Quellcode</i> <code>cpu</code>, <code>maxcpu</code>, <code>mem</code>, <code>maxmem</code>, <code>disk</code>, <code>maxdisk</code>, <code>netin</code>, <code>netout</code>, <code>diskread</code>, <code>diskwrite</code>, <code>uptime</code>, <code>status</code>, <code>template</code>, <code>name</code>, <code>pressure*</code> – <b>ungeprüft</b></td></tr>
+            <tr><td><code>system</code></td><td><code>object=qemu</code>, <code>vmid</code>, <code>nodename</code>, <code>host</code>=Gastname</td><td><code>cpu</code> (0–1), <code>cpus</code>, <code>mem</code>, <code>maxmem</code>, <code>memhost</code>, <code>freemem</code>, <code>balloon</code>, <code>netin</code>, <code>netout</code>, <code>diskread</code>, <code>diskwrite</code>, <code>uptime</code>, <code>pid</code>, <code>disk</code>+<code>maxdisk</code> (bei VMs stets 0) · <b>alle sechs</b> <code>pressure*</code> · <b>String-Felder:</b> <code>name</code>, <code>status</code>, <code>qmpstatus</code>, <code>tags</code>, <code>running-qemu</code>, <code>running-machine</code></td></tr>
+            <tr><td><code>ballooninfo</code></td><td><code>object=qemu</code>, <code>vmid</code></td><td><code>actual</code>, <code>total_mem</code>, <code>free_mem</code>, <code>max_mem</code>, <code>major_page_faults</code>, <code>minor_page_faults</code>, <code>mem_swapped_in</code>, <code>mem_swapped_out</code>, <code>last_update</code></td></tr>
+            <tr><td><code>blockstat</code></td><td><code>object=qemu</code>, <code>vmid</code>, <b>+ ein Gerätetag</b></td><td>QEMU-Blockstatistik je virtuellem Laufwerk: <code>rd_bytes</code>, <code>wr_bytes</code>, <code>rd_operations</code>, <code>wr_operations</code>, <code>rd_total_time_ns</code>, <code>wr_total_time_ns</code>, <code>flush_*</code>, <code>unmap_*</code>, <code>zone_append_*</code>, <code>failed_*</code>, <code>invalid_*</code>, <code>wr_highest_offset</code>, <code>idle_time_ns</code></td></tr>
+            <tr><td><code>nics</code></td><td><code>object=qemu</code>, <code>vmid</code></td><td><code>netin</code>, <code>netout</code> – identisch mit den gleichnamigen Feldern in <code>system</code></td></tr>
+            <tr><td><code>proxmox-support</code></td><td><code>object=qemu</code>, <code>vmid</code></td><td><code>pbs-library-version</code> – String, für Diagramme unbrauchbar</td></tr>
           </tbody>
         </table>
+        </div>
+        <div class="callout" style="border-left-color:var(--ok)">
+          <p><strong>PSI gibt es je Gast, aber nicht für den Node.</strong> Alle sechs
+             <code>pressure*</code>-Felder liegen im Measurement <code>system</code> bei
+             <code>object=qemu</code> – dieselbe Auswertung für <code>object=nodes</code>
+             gibt es nicht. Vom einen aufs andere zu schließen, führt in beide Richtungen
+             in die Irre.</p>
         </div>
         <div class="callout">
           <p><strong>Drei Annahmen, die sich am Bucket nicht bestätigt haben:</strong>
@@ -1376,8 +1388,9 @@ const Q_PSI_GUEST = [
                     or r._field == "pressurecpusome")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "host", "vmid", "_field"])`],
-  ['Neu ab PVE 9', 'Seit dem Schema <code>pve-vm-9.0</code> liefert <code>pvestatd</code> PSI <b>je Gast</b>: <code>pressurecpusome</code>, <code>pressurecpufull</code>, <code>pressureiosome</code>, <code>pressureiofull</code>, <code>pressurememorysome</code>, <code>pressurememoryfull</code>. Bei gestoppten Gästen sind die Felder leer.'],
-  ['Warum das das nützlichste neue Panel ist', 'Der Node-PSI sagt „irgendwas wartet auf IO". Der Gast-PSI sagt <i>welcher</i> Gast wartet. Das ist der Unterschied zwischen „der Storage ist langsam" und „frigate schreibt die Platte voll und homeassistant wartet darauf".']
+  ['Am Bucket bestätigt', 'Alle sechs Felder sind vorhanden: <code>pressurecpusome</code>, <code>pressurecpufull</code>, <code>pressureiosome</code>, <code>pressureiofull</code>, <code>pressurememorysome</code>, <code>pressurememoryfull</code> – im Measurement <code>system</code> bei <code>object=qemu</code>. Zum Zeitpunkt der Messung standen sie alle auf 0, die Maschine lief also ohne jeden Engpass.'],
+  ['Das ist die Ausnahme, nicht die Regel', 'Der <b>Node</b> liefert kein PSI, die <b>Gäste</b> schon. Beim Nachbauen also nicht vom einen aufs andere schließen.'],
+  ['Warum das Panel trotzdem drin bleibt', 'Es beantwortet als einziges die Frage, <i>welcher</i> Gast wartet – der Unterschied zwischen „der Storage ist langsam" und „ein bestimmter Gast blockiert die Platte". Dass die Werte gerade 0 sind, ist die gute Nachricht; interessant wird das Panel erst, wenn sie es nicht mehr sind. Als Alarm mit Schwelle bei 15 % über 10 Minuten ist es aussagekräftiger als jede CPU-Kurve.']
 ];
 
 const Q_NET = [
@@ -1475,7 +1488,7 @@ const Q_GUESTS = [
   |> filter(fn: (r) => r._measurement == "system")
   |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
   |> filter(fn: (r) => contains(value: r._field, set: [
-       "cpu", "maxcpu", "mem", "maxmem", "netin", "netout",
+       "cpu", "cpus", "mem", "maxmem", "memhost", "netin", "netout",
        "diskread", "diskwrite", "uptime", "status"]))
   |> last()
   |> pivot(rowKey: ["vmid", "host"], columnKey: ["_field"], valueColumn: "_value")
@@ -1485,8 +1498,10 @@ const Q_GUESTS = [
        RAM:  float(v: r.mem) / float(v: r.maxmem) * 100.0
      }))
   |> sort(columns: ["CPU"], desc: true)`],
-  ['Der Gastname steht im Tag host', 'Bestätigt gegen <code>PVE/Status/InfluxDB.pm</code>: Der Tag-Satz je Gast ist <code>object=qemu|lxc, vmid=&lt;VMID&gt;, nodename=&lt;Node&gt;</code> und zusätzlich <code>host=&lt;Gastname&gt;</code>, sofern der Name gesetzt ist. Auf PVE 9 braucht es dafür also <b>keine</b> gepflegte Value-Mapping-Tabelle im Panel.'],
-  ['Aufbereitung', 'In Grafana danach über Field-Overrides: CPU und RAM als Prozent mit Gauge-Cell-Display, Status über Value-Mappings (1 → running, 0 → stopped) auf farbige Textzellen. Die Sortierung nach CPU macht die Tabelle zur Top-Liste – der Verursacher steht immer oben.']
+  ['Es heißt cpus, nicht maxcpu', 'Am Bucket gemessen: Das Feld mit der vCPU-Zahl heißt bei Gästen <code>cpus</code> – genau wie beim Node, aber anders als der oft zitierte Name <code>maxcpu</code>. Bei VMID 102 steht dort 4.'],
+  ['status ist ein String, keine 1/0', 'Ebenfalls gemessen: <code>status</code> und <code>qmpstatus</code> enthalten den Text <code>"running"</code>, nicht den Zahlenwert 1. Value-Mappings von 1 → running laufen ins Leere; ein <code>count()</code> laufender Gäste braucht <code>filter(fn: (r) =&gt; r._value == "running")</code>.'],
+  ['disk und maxdisk sind bei VMs 0', 'Bei <code>object=qemu</code> stehen beide Felder auf 0 – der Host sieht nicht in das Gastdateisystem hinein. Eine Spalte „Disk-Belegung" ist für VMs also nicht befüllbar. Für den tatsächlichen Plattenverbrauch bleibt nur die Storage-Sicht über <code>object=storages</code>.'],
+  ['Gastname im Tag host – bestätigt', 'Der Tag-Satz ist <code>object=qemu, vmid=102, nodename=pve, host=homeassistant</code>. Der Name ist da, es braucht keine gepflegte Value-Mapping-Tabelle.']
 ];
 
 const Q_GUESTCPU = [
@@ -1554,14 +1569,15 @@ const veRows = [
     stat({ w: 3, title: 'IO-Wait', value: '0,23', unit: '%', color: 'var(--ok)',
       spark: CPU_IOWAIT, sub: 'Feld cpustat.wait · kein PSI verfügbar', q: Q_PSI }),
     stat({ w: 3, title: 'Laufende Gäste', value: '8', unit: 'VM', compact: true,
-      sub: 'aus tap*-Interfaces · LXC nicht sichtbar', q: [['Flux', `from(bucket: "\${bucket}")
+      sub: '102–107, 110, 118 · Feld status = running', q: [['Flux', `from(bucket: "\${bucket}")
   |> range(start: -10m)
   |> filter(fn: (r) => r._measurement == "system")
   |> filter(fn: (r) => r.object == "qemu" or r.object == "lxc")
   |> filter(fn: (r) => r._field == "status")
   |> last()
-  |> filter(fn: (r) => r._value == 1)
-  |> count()`]] }),
+  |> filter(fn: (r) => r._value == "running")
+  |> count()`],
+      ['status ist ein String', 'Am Bucket gemessen: <code>status</code> enthält <code>"running"</code>, nicht 1. Ein Vergleich gegen die Zahl 1 liefert dauerhaft 0 – und ein Stat-Panel, das fälschlich „keine Gäste laufen" behauptet.']] }),
     stat({ w: 3, title: 'Wurzeldateisystem', value: '1', unit: '%', color: 'var(--ok)',
       compact: true, sub: '4,54 / 722,6 GiB · Inodes 0,007 %', q: Q_BLOCKSTAT })
   ]),
@@ -1651,7 +1667,7 @@ const veRows = [
       foot: ['Summe', '', '12,10 TiB', '28,53 TiB', '16,43 TiB', '', '16,4 GiB', '', ''] })
   ]),
 
-  row('Gäste', 'noch nicht gegen den Bucket geprüft – Werte illustrativ', [
+  row('Gäste', 'Schema geprüft an VMID 102 · übrige Zeilen illustrativ', [
     table({ w: 24, title: 'Alle Gäste', q: Q_GUESTS,
       cols: [
         { label: 'VMID', num: true },
@@ -1661,14 +1677,14 @@ const veRows = [
         { label: 'CPU', align: 'r' },
         { label: 'vCPU', align: 'r', num: true },
         { label: 'RAM', align: 'r' },
-        { label: 'RAM zug.', align: 'r', num: true },
-        { label: 'Disk R/W', align: 'r', num: true },
-        { label: 'Netz ein/aus', align: 'r', num: true },
+        { label: 'RAM Host', align: 'r', num: true },
+        { label: 'Disk R/W kum.', align: 'r', num: true },
+        { label: 'Netz ein/aus kum.', align: 'r', num: true },
         { label: 'Uptime', align: 'r', num: true }
       ],
       rows: [
         ['104', 'frigate', 'LXC', pill('ok', 'running'), cellbar('47,2 %', 47.2), '4', cellbar('74,1 %', 74.1), '8,0 GiB', '1,2 / 18,4 MiB/s', '24,1 / 3,2 MiB/s', '47 d'],
-        ['100', 'homeassistant', 'VM', pill('ok', 'running'), cellbar('23,4 %', 23.4), '4', cellbar('63,2 %', 63.2), '8,0 GiB', '0,4 / 2,1 MiB/s', '1,8 / 2,4 MiB/s', '12 d'],
+        ['102', 'homeassistant', 'VM', pill('ok', 'running'), cellbar('2,03 %', 2.03), '4', cellbar('88,8 %', 88.8), '7,76 GiB', '9,80 / 53,81 GiB', '50,68 / 4,44 GiB', '2,14 d'],
         ['200', 'influxdb', 'LXC', pill('ok', 'running'), cellbar('12,8 %', 12.8), '4', cellbar('81,4 %', 81.4), '8,0 GiB', '2,8 / 6,4 MiB/s', '0,9 / 1,1 MiB/s', '47 d'],
         ['102', 'docker-01', 'VM', pill('ok', 'running'), cellbar('18,1 %', 18.1), '4', cellbar('58,6 %', 58.6), '12,0 GiB', '0,9 / 3,8 MiB/s', '3,4 / 5,8 MiB/s', '23 d'],
         ['101', 'pbs', 'VM', pill('ok', 'running'), cellbar('8,6 %', 8.6), '2', cellbar('44,2 %', 44.2), '4,0 GiB', '14,2 / 9,1 MiB/s', '11,4 / 1,2 MiB/s', '47 d'],
@@ -1701,14 +1717,15 @@ const veRows = [
   |> pivot(rowKey: ["_time", "vmid"], columnKey: ["_field"], valueColumn: "_value")
   |> map(fn: (r) => ({ r with
        _value: float(v: r.mem) / float(v: r.maxmem) * 100.0 }))`],
-        ['Hinweis', 'Bei Containern ist mem der tatsächliche Verbrauch. Bei VMs mit Ballooning meldet der Gast über den Balloon-Treiber – ohne qemu-guest-agent sieht man nur die vom Host zugeteilte Menge, was fast immer nach 100 % aussieht.']],
+        ['mem ist der echte Verbrauch im Gast', 'Am Bucket nachgerechnet: <code>mem</code> = <code>ballooninfo.total_mem − ballooninfo.free_mem</code>, bei VMID 102 exakt 8.326.647.808 − 700.444.672 = 7.626.203.136. Der Balloon-Treiber liefert also die Sicht <i>aus</i> dem Gast, nicht die vom Host zugeteilte Menge. Meine frühere Warnung, das sähe ohne Guest-Agent immer nach 100 % aus, trifft hier nicht zu.'],
+        ['memhost ist eine andere Zahl', 'Daneben gibt es <code>memhost</code> – was der QEMU-Prozess auf dem Host tatsächlich belegt (7,76 GiB gegenüber 7,10 GiB im Gast). Für „passt der Gast noch in den Node" ist <code>memhost</code> die richtige Größe, für „hat der Gast genug RAM" ist es <code>mem</code>.']],
       series: [
         { name: 'influxdb (200)', color: 'var(--s4)', data: GM_INFL },
         { name: 'frigate (104)', color: 'var(--s1)', data: GM_FRIG },
         { name: 'homeassistant (100)', color: 'var(--s2)', data: GM_HA },
         { name: 'docker-01 (102)', color: 'var(--s3)', data: GM_DOCK }
       ] }),
-    ts({ w: 8, title: 'IO-Pressure je Gast – neu ab PVE 9', unit: '%', dec: 1, h: 150,
+    ts({ w: 8, title: 'IO-Pressure je Gast', unit: '%', dec: 1, h: 150,
       legendTitle: 'Gast', q: Q_PSI_GUEST, threshold: 15,
       tip: 'pressureiosome: Anteil der Zeit, in der dieser Gast auf IO wartete',
       series: [
@@ -1729,23 +1746,29 @@ const veRows = [
       ],
       rows: [
         ['nodes / pve', '14:19:58', '2 s', pill('ok', 'aktuell')],
-        ['qemu / 100–105', '14:19:58', '2 s', pill('ok', 'aktuell')],
-        ['lxc / 200–206', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['qemu / 102–118', '14:19:58', '2 s', pill('ok', 'aktuell')],
         ['storages / local-zfs', '14:19:58', '2 s', pill('ok', 'aktuell')],
-        ['storages / nas-iso', '14:18:12', '1 min 48 s', pill('warn', 'NFS träge')],
+        ['storages / PBS', '14:19:58', '2 s', pill('ok', 'aktuell')],
+        ['storages / UNAS-Pro', '14:18:12', '1 min 48 s', pill('warn', 'NFS träge')],
         ['cpustat / PSI-Felder', '14:19:58', '2 s', pill('ok', 'aktuell')]
       ] }),
     textpanel({ w: 12, title: 'Lesehilfe', html: `
       <h4>Was welche Zahl bedeutet</h4>
       <ul>
         <li><b>CPU des Gastes</b> ist relativ zu seinen eigenen vCPUs. <code>100 %</code> bei
-            <code>frigate</code> heißt: 4 von 4 zugewiesenen Kernen ausgelastet, also ein Drittel des Nodes.</li>
+            <code>homeassistant</code> (4 vCPU) hieße: 4 von 16 Threads des Nodes, also ein
+            Viertel. Aktuell stehen dort 2,03 %.</li>
         <li><b>RAM des Nodes</b> enthält den <code>ZFS ARC</code>. Der ist kein Verbrauch,
             sondern Cache und wird bei Bedarf sofort freigegeben. Deshalb ist er hier eine
             eigene Stapelfläche.</li>
-        <li><b>Load</b> ohne Bezug zur Thread-Zahl ist wertlos. Die rote Linie liegt auf 12.</li>
-        <li><b>Pressure io</b> über <code>10 %</code> ist der verlässlichste Frühindikator für
-            eine Platte, die stirbt – deutlich früher als SMART.</li>
+        <li><b>Load</b> ohne Bezug zur Thread-Zahl ist wertlos. Die rote Linie liegt auf 16
+            – dem Wert aus <code>cpustat.cpus</code>.</li>
+        <li><b>Pressure io je Gast</b> über <code>15 %</code> ist der verlässlichste
+            Frühindikator für eine überlastete oder sterbende Platte. Für den Node gibt es
+            diesen Wert nicht, dort bleibt nur <code>wait</code>.</li>
+        <li><b>mem gegen memhost.</b> <code>mem</code> ist die Sicht im Gast (7,10 GiB bei
+            102), <code>memhost</code> der Verbrauch des QEMU-Prozesses auf dem Node
+            (7,76 GiB). Für „passt der Gast noch in den Node" zählt <code>memhost</code>.</li>
       </ul>
       <h4>Was am Bucket nachgemessen ist</h4>
       <ul>
@@ -1764,8 +1787,14 @@ const veRows = [
             (6,01 von 6,06 GiB) – der ARC ist gedeckelt und kann nicht wachsen.</li>
         <li>Der Gastname steht im Tag <code>host</code>, die Storage-ID ebenfalls in
             <code>host</code>, dazu <code>type</code> als Tag. Beides bestätigt.</li>
-        <li><b>Offen:</b> die Gast-Felder inklusive PSI je Gast. Dafür fehlt noch ein Dump
-            gefiltert auf eine einzelne <code>vmid</code>.</li>
+        <li><b>PSI gibt es je Gast, aber nicht für den Node.</b> Alle sechs
+            <code>pressure*</code>-Felder liegen in <code>system</code> bei
+            <code>object=qemu</code>. Vom Node aufs Gast zu schließen führt in die Irre.</li>
+        <li><b><code>status</code> ist ein String</b> (<code>"running"</code>), keine 1.
+            <code>cpus</code> statt <code>maxcpu</code>. <code>disk</code> und
+            <code>maxdisk</code> sind bei VMs stets 0.</li>
+        <li><b>Ungeprüft bleibt <code>object=lxc</code></b> – auf diesem Node laufen
+            offenbar nur QEMU-VMs.</li>
       </ul>` })
   ])
 ];

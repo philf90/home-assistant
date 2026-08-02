@@ -61,13 +61,23 @@ landen in `system`.
 | `nics` | `object=nodes`, `instance` | `receive`, `transmit` |
 | `blockstat` | `object=nodes` | `read_bytes`, `write_bytes`, `read_ios`, `write_ios` |
 | `system` | `object=storages`, `nodename`, `host`=Storage-ID, `type` | `total`, `used` |
-| `system` | `object=qemu\|lxc`, `vmid`, `nodename`, `host`=Gastname | `cpu`, `maxcpu`, `mem`, `maxmem`, `disk`, `maxdisk`, `netin`, `netout`, `diskread`, `diskwrite`, `uptime`, `status`, `template`, `name` |
-| `system` | `object=qemu\|lxc` | `pressurecpusome`, `pressurecpufull`, `pressureiosome`, `pressureiofull`, `pressurememorysome`, `pressurememoryfull` *(ab PVE 9)* |
+| `system` | `object=qemu`, `vmid`, `nodename`, `host`=Gastname | `cpu` (0–1), `cpus`, `mem`, `maxmem`, `memhost`, `freemem`, `balloon`, `netin`, `netout`, `diskread`, `diskwrite`, `uptime`, `pid`, `disk`+`maxdisk` (bei VMs stets 0), alle sechs `pressure*` · **Strings:** `name`, `status`, `qmpstatus`, `tags`, `running-qemu`, `running-machine` |
+| `ballooninfo` | `object=qemu`, `vmid` | `actual`, `total_mem`, `free_mem`, `max_mem`, `major_page_faults`, `minor_page_faults`, `mem_swapped_in`, `mem_swapped_out` |
+| `blockstat` | `object=qemu`, `vmid`, + Gerätetag | QEMU-Blockstatistik je virtuellem Laufwerk: `rd_bytes`, `wr_bytes`, `rd_operations`, `wr_operations`, `*_total_time_ns`, `flush_*`, `unmap_*`, `failed_*` |
 
-**Die häufigste Fehlannahme:** Es gibt **kein** Measurement `pressure`. Die PSI-Werte des
-Nodes schreibt `pvestatd` direkt in den `cpustat`-Hash, die der Gäste als flache
-`pressure*`-Felder nach `system`. Viele fertige Community-Dashboards filtern auf
-`_measurement == "pressure"` und zeigen deshalb dauerhaft ein leeres Panel.
+Vier Befunde, die am Bucket anders aussehen als erwartet:
+
+1. **PSI gibt es je Gast, aber nicht für den Node.** Alle sechs `pressure*`-Felder liegen
+   in `system` bei `object=qemu`. Für `object=nodes` existiert nichts dergleichen –
+   weder ein Measurement `pressure` noch eingebettete Felder. Dort bleibt nur `wait`.
+2. **`blockstat` ist auf Node-Ebene ein `statfs`**, kein IO-Zähler: `blocks`, `bavail`,
+   `used`, `per`, Inode-Zähler und `su_*`/`user_*`-Varianten. Disk-Durchsatz des Nodes
+   ist damit nicht darstellbar. Auf **Gast**-Ebene ist dasselbe Measurement dagegen die
+   volle QEMU-Blockstatistik je virtuellem Laufwerk.
+3. **Nur `cpu` und `wait` sind Verhältnisse** (0–1). `user`, `system`, `iowait`, `idle`,
+   `total` und der Rest sind kumulative Jiffie-Zähler.
+4. **`status` ist ein String** (`"running"`), keine 1. Die vCPU-Zahl heißt `cpus`, nicht
+   `maxcpu`. `disk` und `maxdisk` sind bei QEMU-VMs stets 0.
 
 Die exakten Feldnamen trotzdem einmal gegenprüfen:
 
