@@ -63,13 +63,36 @@ In Grafana die Infinity-Datenquelle so konfigurieren:
 | Security | Allowed hosts | `https://<pbs>:8007` |
 | Network | Skip TLS Verify | an (selbstsigniertes Zertifikat) |
 
-Zwei Stolpersteine:
+Drei Stolpersteine:
 
 * Zwischen Token-ID und Secret steht ein **Doppelpunkt**. Bei Proxmox VE ist an
   derselben Stelle ein Gleichheitszeichen – wer von einem PVE-Beispiel abschreibt,
   landet bei „no authentication credentials provided".
 * **Allowed hosts ist Pflicht**, sobald eine Authentifizierung konfiguriert ist.
-  Fehlt der Eintrag, verweigert Infinity jede Anfrage.
+* Als Auth type **`API Key`** wählen, nicht `Bearer Token`. Bei Bearer sendet Infinity
+  `Authorization: Bearer PBSAPIToken=…`, damit kann PBS nichts anfangen.
+
+### Wenn die API-Panels leer bleiben
+
+**Zuerst den Custom Health Check aktivieren.** Ohne ihn prüft Infinity beim
+*Save & test* die Zugangsdaten überhaupt nicht – ein grünes „Data source is working"
+bedeutet dann nur, dass das Plugin geladen ist. Unter **Health check** →
+*Enable custom health check*, URL `https://<pbs>:8007/api2/json/version`. Ab da ist
+grün eine echte Aussage, und man kann Änderungen einzeln durchprobieren, ohne ins
+Dashboard zu wechseln.
+
+Der Statuscode sagt, wo der Fehler sitzt:
+
+| Code | Bedeutung |
+|---|---|
+| **401** | PBS konnte nicht authentifizieren. Der Header fehlt, ist unvollständig oder das Secret ist veraltet. Die Verbindung selbst steht – URL, TLS und Allowed hosts sind in Ordnung, sonst käme kein HTTP-Status zurück. |
+| **403** | Authentifiziert, aber ohne Rechte. Das ist die fehlende ACL-Zuweisung bei aktiver Privilege Separation. |
+| kein Statuscode | Die Anfrage kommt gar nicht an: falscher Host, TLS-Fehler oder fehlender Allowed-hosts-Eintrag. |
+
+Den Token an der Authentication-Sektion vorbei testen: Unter **Health check** →
+*Add header* einen Header `Authorization` mit dem vollständigen `PBSAPIToken=…`-Wert
+eintragen. Wird der Check damit grün, stimmt der Token und der Fehler liegt in der
+Authentication-Sektion. Bleibt er rot, ist der Token selbst das Problem.
 
 ## Import
 
