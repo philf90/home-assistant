@@ -1,0 +1,91 @@
+name: Validate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# Bei schneller Folge von Pushes nur den letzten Lauf behalten.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  js-templates:
+    name: button-card JS-Templates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JS-Templates auf Syntaxfehler pruefen
+        run: node ci/check-js-templates.js
+
+  yaml:
+    name: Lovelace-YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Werkzeuge installieren
+        run: pip install --quiet pyyaml yamllint
+      - name: Struktur pruefen (Parsing, doppelte Schluessel, Kartentypen)
+        run: python ci/check_yaml.py
+      - name: Stil pruefen
+        run: yamllint --strict -c .yamllint.yml .
+
+  grafana:
+    name: Grafana-Dashboards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dashboards pruefen
+        run: python ci/check_grafana.py
+      # Die Proxmox-Dashboards werden aus proxmox_dashboards.py erzeugt.
+      # Wer das JSON von Hand aendert, verliert die Aenderung beim naechsten
+      # Generatorlauf -- deshalb hier den Abgleich erzwingen.
+      - name: Generator und committete Dashboards abgleichen
+        run: |
+          cd grafana && python proxmox_dashboards.py && cd ..
+          git diff --exit-code -- 'grafana/*.json' \
+            || { echo "::error::grafana/*.json weicht von proxmox_dashboards.py ab -- Generator laufen lassen und Ergebnis committen"; exit 1; }
+
+  python:
+    name: Python-Skripte
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ruff installieren
+        run: pip install --quiet ruff
+      - name: Linten
+        run: ruff check grafana/
+      - name: Uebersetzen
+        run: python -m compileall -q grafana/
+
+  secrets:
+    name: Secret-Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" -w /repo \
+            zricethezav/gitleaks:latest \
+            detect --source . --config .gitleaks.toml \
+            --redact --verbose --no-banner

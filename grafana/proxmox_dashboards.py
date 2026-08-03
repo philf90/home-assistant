@@ -311,7 +311,8 @@ from(bucket: "${bucket}")
              "5 Minuten kam ein Datenpunkt. Kein Wert = Metrikkette unterbrochen.",
         mappings=[
             {"type": "value", "options": {"1": {"text": "Online", "color": "green", "index": 0}}},
-            {"type": "special", "options": {"match": "null", "result": {"text": "Offline", "color": "red", "index": 1}}},
+            {"type": "special", "options": {"match": "null", "result": {
+                "text": "Offline", "color": "red", "index": 1}}},
         ]))
 
     panels.append(stat(
