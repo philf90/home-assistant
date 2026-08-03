@@ -4,6 +4,12 @@
 # + Wert: Temperatur nach Schwelle, Feuchte blau, Trocken gruen / Regen blau,
 # Wind teal. Werte/Einheiten/Labels wie im Original.
 #
+# Tap-Verhalten der Wetter-Karte: Jede Metrik-Kachel oeffnet die more-info
+# ihrer eigenen Entitaet (Bedingung -> weather.landau_pfalz, Temperatur,
+# Luftfeuchtigkeit, Wetterstation-Regen, Regenmenge). Klicks auf Kopfzeile
+# oder Kartenhintergrund fallen weiterhin auf das tap_action der Karte
+# (Wetter-Entitaet) zurueck.
+#
 # Voraussetzung: custom:button-card (HACS).
 type: vertical-stack
 cards:
@@ -56,8 +62,16 @@ cards:
           const iBolt=(c)=>svg('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>',c);
           const iFog=(c)=>svg('<path d="M5 9h14M4 13h16M6 17h12"/>',c);
 
-          const cell=(iconFn, valueHtml, label, accent)=>`
-            <div style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;">
+          // Jede Kachel oeffnet die more-info ihrer eigenen Entitaet: Der
+          // Klick feuert das Frontend-Event "hass-more-info" (bubbles +
+          // composed, damit es aus dem Shadow-DOM der Karte herauskommt).
+          // stopPropagation verhindert, dass zusaetzlich das tap_action der
+          // Gesamtkarte (Wetter-Entitaet) ausgeloest wird; mousedown/touchstart
+          // ebenfalls, damit die Karte keine Hold-Erkennung startet.
+          const tap=(id)=>id?` onclick="event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"`:'';
+
+          const cell=(iconFn, valueHtml, label, accent, entityId)=>`
+            <div${tap(entityId)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}14;border:1px solid ${accent}2b;min-width:0;${entityId?'cursor:pointer;':''}">
               <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}22;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
@@ -124,12 +138,12 @@ cards:
                 <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}20;border:1px solid ${green}33;">${iThermo(green)}</div>
                 <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wetter</div>
               </div>
-              ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2])}
+              ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2], 'weather.landau_pfalz')}
               <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${cell(iThermo, numOf('sensor.wetterstation_pro_temperatur',1)+unit('°C'), 'Temperatur', tColor)}
-                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', hColor)}
-                ${cell(rainIcon, rainLabel, 'Wetterstation', rainColor)}
-                ${cell(iRain, rmNum.toFixed(1)+unit('l/m²'), rmLabel, rmColor)}
+                ${cell(iThermo, numOf('sensor.wetterstation_pro_temperatur',1)+unit('°C'), 'Temperatur', tColor, 'sensor.wetterstation_pro_temperatur')}
+                ${cell(iDrop, numOf('sensor.wetterstation_pro_luftfeuchtigkeit',1)+unit('%'), 'Luftfeuchtigkeit', hColor, 'sensor.wetterstation_pro_luftfeuchtigkeit')}
+                ${cell(rainIcon, rainLabel, 'Wetterstation', rainColor, 'binary_sensor.wetterstation_pro_regen')}
+                ${cell(iRain, rmNum.toFixed(1)+unit('l/m²'), rmLabel, rmColor, 'sensor.regenmenge')}
               </div>
             </div>`;
         ]]]
