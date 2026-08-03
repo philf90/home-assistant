@@ -63,13 +63,52 @@ In Grafana die Infinity-Datenquelle so konfigurieren:
 | Security | Allowed hosts | `https://<pbs>:8007` |
 | Network | Skip TLS Verify | an (selbstsigniertes Zertifikat) |
 
-Zwei Stolpersteine:
+### Der Wert im Feld *Value* – häufigste Fehlerquelle
 
-* Zwischen Token-ID und Secret steht ein **Doppelpunkt**. Bei Proxmox VE ist an
-  derselben Stelle ein Gleichheitszeichen – wer von einem PVE-Beispiel abschreibt,
-  landet bei „no authentication credentials provided".
+Er muss vollständig sein und exakt diese Form haben:
+
+```
+PBSAPIToken=grafana@pbs!readonly:1a2b3c4d-5e6f-7890-abcd-ef1234567890
+            └──── Token-ID ────┘ └───────── Secret ─────────┘
+```
+
+Drei Details, an denen es reihenweise scheitert:
+
+* **Genau ein Ausrufezeichen.** Es trennt Benutzer von Tokennamen und darf im Namen
+  selbst nicht vorkommen. Wer Benutzer- und Tokenfeld aus der Oberfläche
+  zusammenkopiert, landet leicht bei `user@pam!name!name` – das ist ungültig.
+* **Doppelpunkt vor dem Secret.** Bei Proxmox VE steht an derselben Stelle ein
+  Gleichheitszeichen. Wer von einem PVE-Beispiel abschreibt, bekommt 401.
+* **Das Präfix `PBSAPIToken=` gehört mit in den Wert.** Nur das Secret allein reicht
+  nicht. Ebenso auf ein angehängtes Leerzeichen achten.
+
+Weitere Stolpersteine:
+
 * **Allowed hosts ist Pflicht**, sobald eine Authentifizierung konfiguriert ist.
-  Fehlt der Eintrag, verweigert Infinity jede Anfrage.
+* Als Auth type **`API Key`** wählen, nicht `Bearer Token`. Bei Bearer sendet Infinity
+  `Authorization: Bearer PBSAPIToken=…`, damit kann PBS nichts anfangen.
+
+### Wenn die API-Panels leer bleiben
+
+**Zuerst den Custom Health Check aktivieren.** Ohne ihn prüft Infinity beim
+*Save & test* die Zugangsdaten überhaupt nicht – ein grünes „Data source is working"
+bedeutet dann nur, dass das Plugin geladen ist. Unter **Health check** →
+*Enable custom health check*, URL `https://<pbs>:8007/api2/json/version`. Ab da ist
+grün eine echte Aussage, und man kann Änderungen einzeln durchprobieren, ohne ins
+Dashboard zu wechseln.
+
+Der Statuscode sagt, wo der Fehler sitzt:
+
+| Code | Bedeutung |
+|---|---|
+| **401** | PBS konnte nicht authentifizieren. Der Header fehlt, ist unvollständig oder das Secret ist veraltet. Die Verbindung selbst steht – URL, TLS und Allowed hosts sind in Ordnung, sonst käme kein HTTP-Status zurück. |
+| **403** | Authentifiziert, aber ohne Rechte. Das ist die fehlende ACL-Zuweisung bei aktiver Privilege Separation. |
+| kein Statuscode | Die Anfrage kommt gar nicht an: falscher Host, TLS-Fehler oder fehlender Allowed-hosts-Eintrag. |
+
+Den Token an der Authentication-Sektion vorbei testen: Unter **Health check** →
+*Add header* einen Header `Authorization` mit dem vollständigen `PBSAPIToken=…`-Wert
+eintragen. Wird der Check damit grün, stimmt der Token und der Fehler liegt in der
+Authentication-Sektion. Bleibt er rot, ist der Token selbst das Problem.
 
 ## Import
 
