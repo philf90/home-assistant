@@ -3,7 +3,7 @@
 # Unterschied zur v1 (muellabfuhr-trash-card.yaml, bleibt unveraendert):
 #   v1 = custom:trash-card, gleichrangige Zeilen je Termin.
 #   v2 = custom:button-card, EIN grosser Hero fuer die naechste(n) Abholung(en)
-#        + kompakte "+N Tage"-Chips fuer die Folgetermine.
+#        + eine "Danach"-Liste (eine Zeile je Abholtag) fuer die Folgetermine.
 #
 # WARUM EIN ZUSAETZLICHER SENSOR?
 #   button-card kann NICHT asynchron den Kalender abfragen. Eine calendar-Entity
@@ -176,7 +176,18 @@ cards:
             const dt=new Date(p[0],p[1]-1,p[2]);
             return { wd:WD[dt.getDay()], txt:`${p[2]}. ${MO[p[1]-1]}` };
           };
-          const ico=(name,color,px)=>`<ha-icon icon="${ICONS[name]||ICONS.waste}" style="color:${color};--mdc-icon-size:${px}px;width:${px}px;height:${px}px;"></ha-icon>`;
+          // WICHTIG - Ursache des "verschobenen" Icons:
+          // ha-icon rendert intern ein ha-svg-icon, das per Default
+          // "display:inline-flex; vertical-align:middle" ist. Damit haengt das
+          // Symbol an der Textbasislinie der umgebenden Zeile und sitzt
+          // messbar 2,5px zu tief (deshalb stand im Hero frueher ein
+          // translateY(-2px) als Pflaster).
+          // Fix an der Wurzel: --ha-icon-display:block nimmt dem inneren
+          // ha-svg-icon den Inline-Fluss, display:block gilt fuer die Huelle,
+          // line-height:0 am Container laesst gar keine Textzeile entstehen.
+          const ico=(name,color,px)=>`<ha-icon icon="${ICONS[name]||ICONS.waste}" style="display:block;--ha-icon-display:block;flex:0 0 auto;color:${color};--mdc-icon-size:${px}px;width:${px}px;height:${px}px;"></ha-icon>`;
+          // Icon-Kachel (getoentes Quadrat) - zentriert das Icon zuverlaessig.
+          const tile=(name,color,box,px,radius)=>`<div style="width:${box}px;height:${box}px;border-radius:${radius}px;display:flex;align-items:center;justify-content:center;line-height:0;flex:0 0 auto;background:${color}22;border:1px solid ${color}3d;">${ico(name,color,px)}</div>`;
 
           // ---------- Daten einlesen ----------
           const S=states[variables.src_entity];
@@ -248,9 +259,7 @@ cards:
                   <div style="font-size:18px;font-weight:750;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i0.label}</div>
                   <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
                 </div>
-                <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:0 0 auto;background:${i0.color}22;border:1px solid ${i0.color}3d;margin-left:auto;">
-                  ${ico(i0.icon,i0.color,24)}
-                </div>
+                <div style="margin-left:auto;">${tile(i0.icon,i0.color,46,24,14)}</div>
               </div>`;
           } else {
             // MEHRERE Abholungen am selben Tag: Datum oben, darunter je Tonne
@@ -258,7 +267,7 @@ cards:
             // abgeschnitten, alle Namen bleiben vollstaendig lesbar.
             const pills=heroItems.map(i=>`
               <span style="display:inline-flex;align-items:center;gap:6px;background:${i.color}1e;border:1px solid ${i.color}3d;color:${TEXT};font-size:13px;font-weight:700;padding:5px 10px;border-radius:11px;white-space:nowrap;">
-                <span style="display:inline-flex;align-items:center;transform:translateY(-2px);">${ico(i.icon,i.color,15)}</span>${i.label}
+                ${ico(i.icon,i.color,15)}${i.label}
               </span>`).join('');
             hero=`
               <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
@@ -270,19 +279,42 @@ cards:
               </div>`;
           }
 
-          // ---------- Folgetermin-Chips (dynamisch; leer => nichts) ----------
-          let chips='';
+          // ---------- Folgetermine (dynamisch; leer => nichts) ----------
+          // Frueher: zentrierte "+N Tg"-Kacheln nebeneinander. Bei nur EINEM
+          // Folgetermin wirkte die einzelne, breit gezogene Kachel verloren.
+          // Jetzt: volle Zeilen unter einer "Danach"-Ueberschrift, je Abholtag
+          // eine Zeile (Datum + ausgeschriebener Countdown oben, Tonnen-Pillen
+          // darunter). Eine Zeile sieht damit genauso gewollt aus wie fuenf und
+          // benutzt dieselbe Pillen-Sprache wie der Hero.
+          let follow='';
           if(rest.length>0){
-            const chip=(i)=>{
-              const when = i.days===1 ? 'morgen' : `+${i.days} Tg`;
-              return `<div style="flex:1 1 92px;min-width:92px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:13px;padding:11px 10px;text-align:center;">
-                <div style="width:28px;height:28px;border-radius:9px;display:inline-grid;place-items:center;background:${i.color}22;margin-bottom:6px;">${ico(i.icon,i.color,16)}</div>
-                <div style="font-size:14px;font-weight:700;color:${TEXT};font-variant-numeric:tabular-nums;">${when}</div>
-                <div style="font-size:11px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.label}</div>
+            // Folgetermine nach Tag gruppieren -> mehrere Tonnen am selben Tag
+            // landen in EINER Zeile statt in mehreren fast identischen Kacheln.
+            const groups=[];
+            rest.forEach(i=>{
+              const g=groups.find(x=>x.days===i.days);
+              if(g) g.items.push(i);
+              else groups.push({days:i.days, wd:i.wd, dtxt:i.dtxt, items:[i]});
+            });
+            const row=(g)=>{
+              const when = g.days===1 ? 'morgen' : `in ${g.days} Tagen`;
+              const pills=g.items.map(i=>`
+                <span style="display:inline-flex;align-items:center;gap:6px;background:${i.color}1e;border:1px solid ${i.color}3d;color:${TEXT};font-size:12.5px;font-weight:700;padding:4px 9px;border-radius:10px;white-space:nowrap;">
+                  ${ico(i.icon,i.color,15)}${i.label}
+                </span>`).join('');
+              return `<div style="background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:11px 13px;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <span style="font-size:12.5px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${g.wd}, ${g.dtxt}</span>
+                  <span style="font-size:12px;font-weight:700;color:${SUB};background:rgba(255,255,255,0.05);border-radius:8px;padding:3px 8px;white-space:nowrap;font-variant-numeric:tabular-nums;flex:0 0 auto;">${when}</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">${pills}</div>
               </div>`;
             };
-            chips=`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">${rest.map(chip).join('')}</div>`;
+            follow=`<div style="margin-top:12px;">
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MUTED};margin:0 2px 7px;">Danach</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">${groups.map(row).join('')}</div>
+            </div>`;
           }
 
-          return shell(hero+chips);
+          return shell(hero+follow);
         ]]]
