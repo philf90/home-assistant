@@ -138,8 +138,16 @@ cards:
       grid:
         - grid-template-areas: '"body"'
       custom_fields:
+        # WICHTIG: button-card rendert jedes custom_field als
+        # <div id="body" class="ellipsis"> und .ellipsis setzt
+        # "white-space:nowrap; overflow:hidden". Ohne das Zuruecksetzen erbt
+        # JEDER Text im Karteninhalt nowrap - lange Zeilen (z. B.
+        # "Freitag, 7. Aug. · abends rausstellen") laufen dann ueber den
+        # Kartenrand und werden hart abgeschnitten statt umzubrechen.
         body:
           - width: 100%
+          - white-space: normal
+          - overflow-wrap: break-word
     custom_fields:
       body: |
         [[[
@@ -193,7 +201,10 @@ cards:
           const S=states[variables.src_entity];
           let raw=(S && S.attributes && Array.isArray(S.attributes.events)) ? S.attributes.events.slice() : null;
 
-          const shell=(inner)=>`<div style="width:100%;font-family:${font};text-align:left;color:${TEXT};">${inner}</div>`;
+          // white-space:normal hebt das von .ellipsis geerbte nowrap auch dann
+          // auf, wenn die Karte ohne die styles.custom_fields.body oben
+          // kopiert wird. Doppelt gemoppelt, aber billig.
+          const shell=(inner)=>`<div style="width:100%;font-family:${font};text-align:left;color:${TEXT};white-space:normal;overflow-wrap:break-word;">${inner}</div>`;
 
           // Sensor fehlt -> Hinweis (statt leerer Karte)
           if(raw===null){
@@ -245,7 +256,18 @@ cards:
                    <span style="font-size:19px;font-weight:600;color:${MUTED};">Tage</span></div>`;
 
           const heroWhen=`${heroItems[0].wd}, ${heroItems[0].dtxt}`;
-          const heroHint = minDays<=1 ? ' · abends rausstellen' : '';
+          // Der Rausstell-Hinweis haengt NICHT mehr als " · abends rausstellen"
+          // am Datum: als ein langer Textknoten konnte er nur mitten im Satz
+          // umbrechen (und lief mit geerbtem nowrap ueber den Kartenrand).
+          // Jetzt ist er eine eigene, nicht umbrechende Pille in der
+          // Dringlichkeitsfarbe - passt er nicht mehr neben das Datum, rutscht
+          // er als Ganzes in die naechste Zeile.
+          const hintPill = minDays<=1
+            ? `<span style="display:inline-flex;align-items:center;flex:0 0 auto;background:${urgent}1a;border:1px solid ${urgent}33;color:${urgent};font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;">abends rausstellen</span>`
+            : '';
+          const whenLine = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;">
+                    <span style="font-size:12.5px;color:${MUTED};">${heroWhen}</span>${hintPill}
+                  </div>`;
           const multi = heroItems.length>1;   // mehrere Tonnen am selben Tag?
 
           let hero;
@@ -253,11 +275,11 @@ cards:
             // EINE Abholung: grosse Titelzeile + eine Icon-Kachel rechts.
             const i0=heroItems[0];
             hero=`
-              <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
                 <div style="flex:0 0 auto;min-width:74px;">${big}</div>
-                <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;">
+                <div style="display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 130px;">
                   <div style="font-size:18px;font-weight:750;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i0.label}</div>
-                  <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
+                  ${whenLine}
                 </div>
                 <div style="margin-left:auto;">${tile(i0.icon,i0.color,46,24,14)}</div>
               </div>`;
@@ -270,10 +292,10 @@ cards:
                 ${ico(i.icon,i.color,15)}${i.label}
               </span>`).join('');
             hero=`
-              <div style="display:flex;align-items:center;gap:16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;background:${heroBg};border:1px solid ${heroBd};border-radius:18px;padding:16px 18px;">
                 <div style="flex:0 0 auto;min-width:74px;">${big}</div>
-                <div style="display:flex;flex-direction:column;gap:9px;min-width:0;flex:1;">
-                  <div style="font-size:12.5px;color:${MUTED};">${heroWhen}${heroHint}</div>
+                <div style="display:flex;flex-direction:column;gap:9px;min-width:0;flex:1 1 130px;">
+                  ${whenLine}
                   <div style="display:flex;flex-wrap:wrap;gap:6px;">${pills}</div>
                 </div>
               </div>`;
