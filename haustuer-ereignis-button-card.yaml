@@ -5,13 +5,37 @@
 # (haustuer-lock-button-card.yaml), die den Dauerzustand des Schlosses traegt.
 #
 # ---------------------------------------------------------------------------
+# ACHTUNG: VIER GERAETE HEISSEN "HAUSTUER"
+# ---------------------------------------------------------------------------
+#   Ubiquiti G4 Doorbell Pro PoE  -> "Haustür"            = Klingel + Kameras
+#   Ubiquiti Door Hub             -> "Haustür Door Hub"   = UniFi Access
+#   Ubiquiti UA G3 Pro            -> "Haustür"            = Zutrittsleser
+#   eQ-3 HmIP-SWDO-PL-2           -> "Haustür"            = Tuerkontakt
+#
+#   Die Entitaets-IDs verraten das Geraet NICHT zuverlaessig: sowohl
+#   event.haustur_turklingel (Doorbell) als auch
+#   event.eingang_haustur_bewegungserkennung (UA G3 Pro, Leser) heissen
+#   "Haustür ...". Vor dem Verwenden einer Entitaet also immer das Geraet
+#   pruefen, z. B. per device_attr(entity, 'model').
+#
+#   Diese Karte nutzt AUSSCHLIESSLICH die G4 Doorbell Pro PoE:
+#     event.eingang_haustur_paket           Paketerkennung
+#     event.haustur_turklingel              Klingel-Ereignis
+#     binary_sensor.haustur_doorbell        Klingel-Belegtsensor
+#     camera.haustur_package_camera         Paketkamera (Blick nach unten)
+#     camera.haustur_high_resolution_channel  Hauptkamera
+#   Einzige Ausnahme ist binary_sensor.haustur -- der HmIP-Tuerkontakt. Der
+#   ist hier bewusst richtig: er meldet, dass die Tuer wirklich geoeffnet
+#   wurde, und dient als Quittierung.
+#
+# ---------------------------------------------------------------------------
 # WARUM NUR DIESE ZWEI EREIGNISSE (Auswertung ueber 10 Tage Recorder)
 # ---------------------------------------------------------------------------
 #   Intelligente Erkennung   230x  = 23,1/Tag  -> Dauerrauschen einer Strassentuer
 #   Zugang (Door Hub)         24x  =  2,4/Tag  -> "wir kommen heim", kein Ereignis
 #   Paket                      4x  =  0,4/Tag  -> relevant
-#   Klingel (Kamera)           2x  =  0,2/Tag  -> relevant
-#   Klingel Door Hub, NFC, Fingerabdruck, event.*bewegungserkennung
+#   Klingel (Doorbell)         2x  =  0,2/Tag  -> relevant
+#   Door-Hub-Klingel, NFC, Fingerabdruck, Bewegung (UA G3 Pro)
 #                              0x             -> haben nie ausgeloest
 #   Die ersten beiden waeren auf einer Startseite nur Laerm, die letzten vier
 #   waeren toter Code. Uebrig bleiben Klingel und Paket.
@@ -53,8 +77,10 @@
 #     Aktion:    input_boolean.turn_off
 #
 #   automation "Haustür: Klingeln merken"
-#     Trigger:   event.haustur_turklingel / event.haustur_door_hub_turklingel
-#                (not_to: [unknown, unavailable]) + binary_sensor.haustur_doorbell to "on"
+#     Trigger:   event.haustur_turklingel (not_to: [unknown, unavailable])
+#                + binary_sensor.haustur_doorbell to "on"
+#                -- beide auf der G4 Doorbell; die Door-Hub-Klingel gehoert zu
+#                   einem anderen Geraet und ist bewusst NICHT dabei.
 #     Aktion:    input_boolean.turn_on
 #
 #   automation "Haustür: Klingel-Hinweis löschen"
@@ -68,13 +94,18 @@
 # ---------------------------------------------------------------------------
 # ANPASSEN
 # ---------------------------------------------------------------------------
-#   - variables.preview_entity: '' -> Vorschaubild abschalten. Das Bild ist die
-#     Live-Vorschau des Door Hubs, KEIN Schnappschuss des Ereignisses -- es
-#     zeigt die Tuer jetzt. Beim Paket ist genau das die interessante Frage.
-#   - Andere Tuer: Helfer- und Bild-IDs unter variables sowie die ausgeschriebenen
-#     IDs in triggers_update anpassen (triggers_update wird nicht getemplatet).
+#   - Das Vorschaubild rechts folgt der Kopfzeile: beim Paket die Paketkamera
+#     (blickt nach unten auf die Ablageflaeche), beim Klingeln die Hauptkamera
+#     (zeigt, wer davorsteht). Beide Variablen leeren schaltet das Bild ab.
+#     Es ist jeweils das LIVE-Bild, kein Schnappschuss des Ereignisses -- beim
+#     Paket ist genau das die interessante Frage: liegt es noch da?
+#   - Andere Tuer: Helfer- und Kamera-IDs unter variables sowie die
+#     ausgeschriebenen IDs in triggers_update anpassen (triggers_update wird
+#     nicht getemplatet).
 #   - sensor.time steht in triggers_update, damit "vor 12 Min." im Minutentakt
-#     nachzieht statt bis zum naechsten Reload stehenzubleiben.
+#     nachzieht. Die Kameras stehen dort, weil das Zugriffstoken in ihrer
+#     entity_picture-URL regelmaessig rotiert -- ohne Neurendern zeigte das
+#     Bild irgendwann ins Leere.
 #
 # Voraussetzung: custom:button-card (HACS), Integration "Time & Date"
 #                (sensor.time), obige Helfer und Automationen.
@@ -108,13 +139,16 @@ card:
     - input_boolean.haustur_hat_geklingelt
     - input_boolean.paket_vor_der_tur
     - input_datetime.paket_erkannt_um
-    - image.haustur_door_hub_vorschaubild
+    - camera.haustur_package_camera
+    - camera.haustur_high_resolution_channel
     - sensor.time
   variables:
     ring_entity: input_boolean.haustur_hat_geklingelt
     package_entity: input_boolean.paket_vor_der_tur
     package_time_entity: input_datetime.paket_erkannt_um
-    preview_entity: image.haustur_door_hub_vorschaubild
+    # Beide auf der G4 Doorbell Pro PoE.
+    package_camera: camera.haustur_package_camera
+    door_camera: camera.haustur_high_resolution_channel
   styles:
     card:
       - padding: 16px 18px
@@ -199,12 +233,16 @@ card:
           : { text: 'Paket vor der Tür', when: `liegt ${seit(pkgSince)} draußen`, level: 'warn', icon: pkgIcon };
         const t0 = tone[head.level];
 
-        // ---------- Vorschaubild (Live-Bild, kein Ereignis-Schnappschuss) ----------
-        const prevEnt = variables.preview_entity ? states[variables.preview_entity] : null;
-        const prevUrl = (prevEnt && prevEnt.attributes) ? prevEnt.attributes.entity_picture : null;
-        const preview = prevUrl
+        // ---------- Vorschaubild: passend zur Kopfzeile ----------
+        // Klingeln -> Hauptkamera (wer steht davor), Paket -> Paketkamera
+        // (blickt nach unten auf die Ablageflaeche). Beides Live-Bilder der
+        // G4 Doorbell, keine Schnappschuesse des Ereignisses.
+        const camId = ringOn ? variables.door_camera : variables.package_camera;
+        const camEnt = camId ? states[camId] : null;
+        const camUrl = (camEnt && camEnt.attributes) ? camEnt.attributes.entity_picture : null;
+        const preview = camUrl
           ? `<div style="flex:0 0 auto; width:56px; height:56px; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.07); background:#232a37;">
-               <img src="${prevUrl}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;">
+               <img src="${camUrl}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;">
              </div>`
           : '';
 
