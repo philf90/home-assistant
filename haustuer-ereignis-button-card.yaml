@@ -1,0 +1,270 @@
+# Haustuer-Ereignis im Design der ueberarbeiteten Owlet-Smart-Sock-Karte
+# ============================================================================
+# Zeigt genau zwei Dinge, und nur wenn sie zutreffen: es hat gerade geklingelt,
+# oder es liegt ein Paket vor der Tuer. Ergaenzt die Schloss-Karte
+# (haustuer-lock-button-card.yaml), die den Dauerzustand des Schlosses traegt.
+#
+# ---------------------------------------------------------------------------
+# ACHTUNG: VIER GERAETE HEISSEN "HAUSTUER"
+# ---------------------------------------------------------------------------
+#   Ubiquiti G4 Doorbell Pro PoE  -> "Haustür"            = Klingel + Kameras
+#   Ubiquiti Door Hub             -> "Haustür Door Hub"   = UniFi Access
+#   Ubiquiti UA G3 Pro            -> "Haustür"            = Zutrittsleser
+#   eQ-3 HmIP-SWDO-PL-2           -> "Haustür"            = Tuerkontakt
+#
+#   Die Entitaets-IDs verraten das Geraet NICHT zuverlaessig: sowohl
+#   event.haustur_turklingel (Doorbell) als auch
+#   event.eingang_haustur_bewegungserkennung (UA G3 Pro, Leser) heissen
+#   "Haustür ...". Vor dem Verwenden einer Entitaet also immer das Geraet
+#   pruefen, z. B. per device_attr(entity, 'model').
+#
+#   Diese Karte nutzt AUSSCHLIESSLICH die G4 Doorbell Pro PoE:
+#     event.eingang_haustur_paket           Paketerkennung
+#     event.haustur_turklingel              Klingel-Ereignis
+#     binary_sensor.haustur_doorbell        Klingel-Belegtsensor
+#     camera.haustur_package_camera         Paketkamera (Blick nach unten)
+#     camera.haustur_high_resolution_channel  Hauptkamera
+#   Einzige Ausnahme ist binary_sensor.haustur -- der HmIP-Tuerkontakt. Der
+#   ist hier bewusst richtig: er meldet, dass die Tuer wirklich geoeffnet
+#   wurde, und dient als Quittierung.
+#
+# ---------------------------------------------------------------------------
+# WARUM NUR DIESE ZWEI EREIGNISSE (Auswertung ueber 10 Tage Recorder)
+# ---------------------------------------------------------------------------
+#   Intelligente Erkennung   230x  = 23,1/Tag  -> Dauerrauschen einer Strassentuer
+#   Zugang (Door Hub)         24x  =  2,4/Tag  -> "wir kommen heim", kein Ereignis
+#   Paket                      4x  =  0,4/Tag  -> relevant
+#   Klingel (Doorbell)         2x  =  0,2/Tag  -> relevant
+#   Door-Hub-Klingel, NFC, Fingerabdruck, Bewegung (UA G3 Pro)
+#                              0x             -> haben nie ausgeloest
+#   Die ersten beiden waeren auf einer Startseite nur Laerm, die letzten vier
+#   waeren toter Code. Uebrig bleiben Klingel und Paket.
+#
+#   NICHT verwenden: binary_sensor.haustur_detections_*. Das sind
+#   Konfigurationsschalter ("Paketerkennung ist aktiviert"), die dauerhaft auf
+#   "on" stehen -- keine Erkennungen.
+#
+# ---------------------------------------------------------------------------
+# WARUM HELFER STATT ZEITFENSTER
+# ---------------------------------------------------------------------------
+#   1. Die event-Entitaeten fallen bei jedem Neustart auf "unknown", und diese
+#      Instanz startet rund einmal pro Tag neu. Ein Zustand, der Stunden tragen
+#      soll, kann dort nicht leben.
+#   2. Bei 4 von 4 Paket-Ereignissen stand die Haustuer im selben Moment offen
+#      (jeweils vorher geoeffnet). Die Kamera meldet "Paket" auch, wenn jemand
+#      mit einem Paket in der offenen Tuer steht -- das Paket ist dann laengst
+#      drin. Ein reines Zeitfenster haette genau dann Alarm geschlagen.
+#   Deshalb: ein Moment (Klingel) und ein Zustand (Paket), beide in Helfern,
+#   beide durch echte Ereignisse gesetzt und geloescht -- nie durch Zeitablauf
+#   allein.
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICHE HELFER UND AUTOMATIONEN (einmalig, via UI oder API angelegt)
+# ---------------------------------------------------------------------------
+#   input_boolean.paket_vor_der_tur      "Paket vor der Tür"
+#   input_boolean.haustur_hat_geklingelt "Haustür hat geklingelt"
+#   input_datetime.paket_erkannt_um      "Paket erkannt um"   (Datum + Zeit)
+#   Alle drei OHNE "initial" anlegen, sonst geht der Zustand beim Neustart
+#   verloren -- genau das, was hier vermieden werden soll.
+#
+#   automation "Haustür: Paket vor der Tür merken"
+#     Trigger:   event.eingang_haustur_paket, not_to: [unknown, unavailable]
+#     Bedingung: binary_sensor.haustur ist "off" seit 00:02:00
+#     Aktion:    input_boolean.turn_on + input_datetime.set_datetime ({{ now() }})
+#
+#   automation "Haustür: Paket-Hinweis löschen"
+#     Trigger:   binary_sensor.haustur to "on"   (Tuer auf = Paket geholt)
+#     Aktion:    input_boolean.turn_off
+#
+#   automation "Haustür: Klingeln merken"
+#     Trigger:   event.haustur_turklingel (not_to: [unknown, unavailable])
+#                + binary_sensor.haustur_doorbell to "on"
+#                -- beide auf der G4 Doorbell; die Door-Hub-Klingel gehoert zu
+#                   einem anderen Geraet und ist bewusst NICHT dabei.
+#     Aktion:    input_boolean.turn_on
+#
+#   automation "Haustür: Klingel-Hinweis löschen"
+#     Trigger:   binary_sensor.haustur to "on"  ODER  Helfer "on" for 00:05:00
+#     Aktion:    input_boolean.turn_off
+#
+#   Der Zeitstempel liegt bewusst im input_datetime und nicht in last_changed:
+#   last_changed wird bei jedem Neustart neu gestempelt, "liegt seit 3 Std."
+#   wuerde sonst auf "gerade eben" zurueckspringen.
+#
+# ---------------------------------------------------------------------------
+# ANPASSEN
+# ---------------------------------------------------------------------------
+#   - Das Vorschaubild rechts folgt der Kopfzeile: beim Paket die Paketkamera
+#     (blickt nach unten auf die Ablageflaeche), beim Klingeln die Hauptkamera
+#     (zeigt, wer davorsteht). Beide Variablen leeren schaltet das Bild ab.
+#     Es ist jeweils das LIVE-Bild, kein Schnappschuss des Ereignisses -- beim
+#     Paket ist genau das die interessante Frage: liegt es noch da?
+#   - Andere Tuer: Helfer- und Kamera-IDs unter variables sowie die
+#     ausgeschriebenen IDs in triggers_update anpassen (triggers_update wird
+#     nicht getemplatet).
+#   - sensor.time steht in triggers_update, damit "vor 12 Min." im Minutentakt
+#     nachzieht. Die Kameras stehen dort, weil das Zugriffstoken in ihrer
+#     entity_picture-URL regelmaessig rotiert -- ohne Neurendern zeigte das
+#     Bild irgendwann ins Leere.
+#
+# Voraussetzung: custom:button-card (HACS), Integration "Time & Date"
+#                (sensor.time), obige Helfer und Automationen.
+# ============================================================================
+type: conditional
+# Sichtbarkeit nativ statt per JS: Die Karte existiert nur, solange einer der
+# beiden Helfer gesetzt ist. Damit gibt es keinen zweiten Codepfad, der mit dem
+# Inhalt der Karte auseinanderlaufen koennte.
+conditions:
+  - condition: or
+    conditions:
+      - condition: state
+        entity: input_boolean.haustur_hat_geklingelt
+        state: "on"
+      - condition: state
+        entity: input_boolean.paket_vor_der_tur
+        state: "on"
+card:
+  type: custom:button-card
+  entity: input_boolean.paket_vor_der_tur
+  show_name: false
+  show_state: false
+  show_icon: false
+  show_label: false
+  tap_action:
+    action: navigate
+    navigation_path: /dashboard-home/kamera
+  hold_action:
+    action: more-info
+  triggers_update:
+    - input_boolean.haustur_hat_geklingelt
+    - input_boolean.paket_vor_der_tur
+    - input_datetime.paket_erkannt_um
+    - camera.haustur_package_camera
+    - camera.haustur_high_resolution_channel
+    - sensor.time
+  variables:
+    ring_entity: input_boolean.haustur_hat_geklingelt
+    package_entity: input_boolean.paket_vor_der_tur
+    package_time_entity: input_datetime.paket_erkannt_um
+    # Beide auf der G4 Doorbell Pro PoE.
+    package_camera: camera.haustur_package_camera
+    door_camera: camera.haustur_high_resolution_channel
+  styles:
+    card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - border: 1px solid rgba(255, 255, 255, 0.05)
+      - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
+      - box-shadow: '0 18px 44px -22px rgba(0,0,0,0.7)'
+      - overflow: hidden
+      # Statusrand links (wie Schloss- und Personenkarten). Muss NACH "border"
+      # stehen, sonst ueberschreibt die Kurzform ihn wieder. Klingeln hat
+      # Vorrang, weil dann jemand jetzt gerade vor der Tuer steht.
+      - border-left: |
+          [[[
+            const r = states[variables.ring_entity];
+            return (r && r.state === 'on') ? '4px solid #f0736a' : '4px solid #e6b566';
+          ]]]
+    grid:
+      - grid-template-areas: '"body"'
+    custom_fields:
+      body:
+        - width: 100%
+        - min-width: 0
+  custom_fields:
+    body: |
+      [[[
+        // ---------- Palette (identisch zur Owlet-Karte) ----------
+        const value = '#f2f5f8';
+        const muted = '#6e7988';
+        const amber = '#e6b566';
+        const red   = '#f0736a';
+
+        // Flaeche ~12 %, Rand ~24 % desselben Tons -- Repo-Konvention.
+        const tone = {
+          alert: { color: red,   tint: 'rgba(240,115,106,0.14)', border: 'rgba(240,115,106,0.26)' },
+          warn:  { color: amber, tint: 'rgba(230,181,102,0.13)', border: 'rgba(230,181,102,0.24)' }
+        };
+
+        // ---------- Icons (Linienstil wie Pollenflug-Karte) ----------
+        const svg = (c, inner, size) => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:${size || 23}px;height:${size || 23}px;">${inner}</svg>`;
+        const bellIcon = (c, s) => svg(c, '<path d="M18 9.2a6 6 0 1 0-12 0c0 5.4-2 6.8-2 6.8h16s-2-1.4-2-6.8z"/><path d="M13.7 19.6a2 2 0 0 1-3.4 0"/>', s);
+        const pkgIcon = (c, s) => svg(c, '<path d="M3.5 7.6L12 3.4l8.5 4.2v8.8L12 20.6 3.5 16.4z"/><path d="M3.5 7.6L12 11.8l8.5-4.2M12 11.8v8.8"/>', s);
+
+        // ---------- Zustaende ----------
+        const ringEnt = states[variables.ring_entity];
+        const pkgEnt = states[variables.package_entity];
+        const ringOn = !!(ringEnt && ringEnt.state === 'on');
+        const pkgOn = !!(pkgEnt && pkgEnt.state === 'on');
+
+        const now = Date.now();
+
+        // Klingeln laeuft nach 5 Minuten aus -- last_changed reicht dafuer.
+        const ringSince = ringOn ? Date.parse(ringEnt.last_changed) : NaN;
+
+        // Das Paket kann Stunden liegen. last_changed wird bei jedem Neustart
+        // neu gestempelt, deshalb der eigene Zeitstempel im input_datetime.
+        const stampEnt = states[variables.package_time_entity];
+        const stampSec = (stampEnt && stampEnt.attributes) ? stampEnt.attributes.timestamp : null;
+        let pkgSince = NaN;
+        if (pkgOn) {
+          pkgSince = stampSec ? (stampSec * 1000) : Date.parse(pkgEnt.last_changed);
+        }
+
+        // ---------- Dauer ----------
+        const dur = (ms) => {
+          if (isNaN(ms)) return '';
+          const min = Math.floor((now - ms) / 60000);
+          if (min < 1) return 'gerade eben';
+          if (min < 60) return `${min} Min.`;
+          const h = Math.floor(min / 60);
+          if (h < 24) return `${h} Std.`;
+          const d = Math.floor(h / 24);
+          return d === 1 ? 'einem Tag' : `${d} Tagen`;
+        };
+        const seit = (ms) => {
+          const t = dur(ms);
+          return t === 'gerade eben' ? 'gerade eben' : `seit ${t}`;
+        };
+
+        // ---------- Kopfzeile: Klingeln vor Paket ----------
+        const head = ringOn
+          ? { text: 'Es hat geklingelt', when: dur(ringSince) === 'gerade eben' ? 'gerade eben' : `vor ${dur(ringSince)}`, level: 'alert', icon: bellIcon }
+          : { text: 'Paket vor der Tür', when: `liegt ${seit(pkgSince)} draußen`, level: 'warn', icon: pkgIcon };
+        const t0 = tone[head.level];
+
+        // ---------- Vorschaubild: passend zur Kopfzeile ----------
+        // Klingeln -> Hauptkamera (wer steht davor), Paket -> Paketkamera
+        // (blickt nach unten auf die Ablageflaeche). Beides Live-Bilder der
+        // G4 Doorbell, keine Schnappschuesse des Ereignisses.
+        const camId = ringOn ? variables.door_camera : variables.package_camera;
+        const camEnt = camId ? states[camId] : null;
+        const camUrl = (camEnt && camEnt.attributes) ? camEnt.attributes.entity_picture : null;
+        const preview = camUrl
+          ? `<div style="flex:0 0 auto; width:56px; height:56px; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.07); background:#232a37;">
+               <img src="${camUrl}" alt="" style="width:100%; height:100%; object-fit:cover; display:block;">
+             </div>`
+          : '';
+
+        // ---------- Zweite Zeile: Paket, wenn die Klingel oben steht ----------
+        const second = (ringOn && pkgOn)
+          ? `<div style="margin-top:9px; padding-top:11px; border-top:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:9px;">
+               <div style="flex:0 0 auto; width:16px; height:16px; display:grid; place-items:center;">${pkgIcon(muted, 16)}</div>
+               <div style="font-size:13px; color:${muted}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Paket vor der Tür</div>
+               <div style="margin-left:auto; font-size:12.5px; font-weight:600; color:${muted}; font-variant-numeric:tabular-nums; white-space:nowrap;">${seit(pkgSince)}</div>
+             </div>`
+          : '';
+
+        return `
+          <div style="width:100%; color:${value}; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif; text-align:left;">
+            <div style="display:flex; align-items:center; gap:15px;">
+              <div style="flex:0 0 auto; width:46px; height:46px; border-radius:14px; background:${t0.tint}; border:1px solid ${t0.border}; display:grid; place-items:center;">${head.icon(t0.color)}</div>
+              <div style="flex:1 1 auto; min-width:0;">
+                <div style="font-size:17px; font-weight:700; letter-spacing:-0.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${head.text}</div>
+                <div style="font-size:13px; font-weight:600; color:${t0.color}; margin-top:2px;">${head.when}</div>
+              </div>
+              ${preview}
+            </div>
+            ${second}
+          </div>`;
+      ]]]
