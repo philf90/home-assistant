@@ -1,0 +1,1510 @@
+# Autos V2 (Passat + Touran) -- gespeist aus der Volkswagen-Connect-Integration
+# (volkswagencarnet), nicht mehr aus dem EU-Data-Act-Zwischenstand.
+#
+# Warum V2: Die urspruengliche autos-button-card.yaml haengt komplett an der
+# Integration "cupra_eu_data_act" (Entitaeten
+# sensor.passat_variant_elegance_20_l_tdi_scr_*). Volkswagen Connect liefert
+# wieder Daten und bringt gegenueber dem Zwischenstand mit:
+#   - echte lock-Entitaeten (lock.*_door_locked, lock.*_trunk_locked) statt
+#     reiner Schloss-Kontakte
+#   - Sammelmelder Fenster/Tueren ("windows_closed", "doors_locked")
+#   - Motorhaube, Heckklappe, Schiebedach, Standlicht, Bewegung
+#   - Standort als device_tracker inkl. Parkzeitpunkt
+#   - Wartung getrennt nach Inspektion und Oelwechsel, je Strecke UND Tage
+#   - Standheizung als climate-Entitaet (nur Passat)
+#   - Datenstand (zuletzt verbunden / letzter Abruf) und einen Aktualisieren-
+#     Schalter
+#
+# AUSNAHME Fahrtdaten: Volkswagen Connect legt je Fahrzeug rund 25 Trip-Sensoren
+# an (last_trip_*, long_term_trip_*, refuel_trip_*), die stehen aber saemtlich
+# auf 'unavailable' -- die Trips kommen ueber die API nicht durch. Die beiden
+# Fahrten-Bloecke unten lesen deshalb zweiquellig: erst die Volkswagen-Connect-
+# Entitaet, und nur wenn die keine Zahl liefert, den Kurzzeit-/Langzeit-Wert aus
+# cupra_eu_data_act. Sobald Volkswagen Connect die Trips liefert, schaltet die
+# Karte von allein um -- ohne Aenderung an dieser Datei. Die Reihenfolge steckt
+# je Kachel in variables.ids.
+#
+# Begriffe: "Letzte Fahrt" ist der Kurzzeitspeicher des Bordcomputers (seit
+# Start, wird bei jeder Zuendung zurueckgesetzt), "Langzeit" der Gesamtspeicher
+# seit dem letzten manuellen Reset. Beide Bloecke nennen im Kopf den Kilometer-
+# stand, ab dem sie zaehlen.
+#
+# on/off-Semantik der Volkswagen-Connect-Melder: Die Namen lauten zwar
+# "... closed" / "... locked", die Entitaeten folgen aber der normalen
+# device_class-Logik -- 'off' = zu bzw. verriegelt, 'on' = offen bzw. offen
+# verriegelt. Die Chips unten sind entsprechend gebaut (on = Handlungsbedarf).
+#
+# Aufbau je Fahrzeug: Kopf (Kennzeichen + Modell), Fahrzeugbild, Sicherheits-
+# leiste (Tuer- und Heckklappenschloss), acht Status-Chips, sechs Kennzahl-
+# Kacheln, Aktionsleiste und Datenstand-Zeile. Am Ende beide Fahrzeuge auf
+# einer gemeinsamen Karte.
+#
+# Bewusst nur more-info statt Fernbedienung: Ver-/Entriegeln braucht die
+# S-PIN und ist kein Ziel fuer einen versehentlichen Tap. Einzige aktive
+# Aktion ist "Daten aktualisieren" -- mit Rueckfrage.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &frame,
+# &bar_*, &chip_*, &loc_*, &lbl_val, &lbl_time, &name_due, &tile_styles,
+# &sub_styles, &mini_styles, &lbl_dual, &lbl_dur, &lbl_speed, &act_styles.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+cards:
+  # ================================ PASSAT ================================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 11px !important;
+        }
+    cards:
+      - type: custom:button-card
+        entity: sensor.wvwzzz3czpe076722_car_type
+        icon: mdi:car-estate
+        name: OF - LC 728
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        variables: { modell: Passat Variant }
+        label: &header_label |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const t=(e&&e.state&&e.state!=='unknown'&&e.state!=='unavailable')?e.state:'';
+            return [variables.modell, t].filter(Boolean).join(' · ');
+          ]]]
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 2px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: min-content 1fr
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          label:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 1px
+      - type: picture
+        image: /local/auto/passat/passat_b8.png
+        card_mod: &frame
+          style: |
+            ha-card {
+              border-radius: 16px !important;
+              overflow: hidden !important;
+              border: 1px solid rgba(255,255,255,0.06) !important;
+              box-shadow: none !important;
+              background: rgba(255,255,255,0.02) !important;
+            }
+      # ---- Sicherheitsleiste (lock_ids und lock_names in gleicher Reihenfolge) ----
+      # lock-Domain: 'locked' / 'unlocked' -- nicht die on/off-Logik der Chips.
+      - type: custom:button-card
+        entity: lock.wvwzzz3czpe076722_door_locked
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        variables:
+          lock_ids:
+            - lock.wvwzzz3czpe076722_door_locked
+            - lock.wvwzzz3czpe076722_trunk_locked
+          lock_names:
+            - Türen
+            - Heckklappe
+        name: &bar_name |
+          [[[
+            const ids=variables.lock_ids||[], nms=variables.lock_names||[];
+            let open=[], unknown=0;
+            ids.forEach((id,i)=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state!=='locked') open.push(nms[i]||id);
+            });
+            if(open.length===1) return open[0]+' nicht verriegelt';
+            if(open.length>1) return open.join(' und ')+' nicht verriegelt';
+            if(unknown>0) return 'Schlossstatus unbekannt';
+            return 'Fahrzeug abgeschlossen';
+          ]]]
+        icon: &bar_icon |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=0, unknown=0;
+            ids.forEach(id=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state!=='locked') open++;
+            });
+            if(open>0) return 'mdi:lock-open-variant';
+            if(unknown>0) return 'mdi:lock-question';
+            return 'mdi:lock';
+          ]]]
+        label: &bar_label |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=[], all=[];
+            ids.forEach(id=>{ const s=states[id]; if(!s) return;
+              const t=new Date(s.last_changed).getTime(); if(isNaN(t)) return;
+              all.push(t); if(s.state!=='locked') open.push(t);
+            });
+            const pool=open.length?open:all;
+            if(!pool.length) return '';
+            const d=new Date(Math.max(...pool)), n=new Date();
+            const p=v=>String(v).padStart(2,'0');
+            const hm=`${p(d.getHours())}:${p(d.getMinutes())}`;
+            return 'seit '+(d.toDateString()===n.toDateString()
+              ? hm : `${p(d.getDate())}.${p(d.getMonth()+1)}. ${hm}`);
+          ]]]
+        styles: &bar_styles
+          card:
+            - border-radius: 13px
+            - padding: 10px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 20px
+            - height: 20px
+            - margin: 0 11px 0 0
+            - align-self: center
+          icon:
+            - width: 20px
+            - height: 20px
+            - color: &bar_col |
+                [[[
+                  const ids=variables.lock_ids||[];
+                  let open=0, unknown=0;
+                  ids.forEach(id=>{ const s=states[id];
+                    if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+                    if(s.state!=='locked') open++;
+                  });
+                  if(open>0) return '#e6b566';
+                  if(unknown>0) return '#8794a5';
+                  return '#a6d49e';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 12.5px
+            - font-weight: 600
+            - letter-spacing: -0.01em
+            - color: *bar_col
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - margin-left: 10px
+      # ---- Status-Chips (Fenster/Tueren aus je 4 Einzelmeldern kombiniert) ----
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_windows_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.wvwzzz3czpe076722_window_closed_left_front
+                - binary_sensor.wvwzzz3czpe076722_window_closed_right_front
+                - binary_sensor.wvwzzz3czpe076722_window_closed_left_back
+                - binary_sensor.wvwzzz3czpe076722_window_closed_right_back
+              off_txt: Fenster zu
+              open_word: Fenster offen
+              on_col: '#e6b566'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-windshield
+              off_icon: mdi:car-windshield-outline
+            name: &chip_name |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                  return o>0 ? (o+' '+(variables.open_word||'offen')) : (variables.off_txt||'zu'); }
+                return (e&&e.state==='on')?variables.on_txt:variables.off_txt;
+              ]]]
+            icon: &chip_icon |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                  return o>0 ? variables.on_icon : variables.off_icon; }
+                return (e&&e.state==='on')?variables.on_icon:variables.off_icon;
+              ]]]
+            styles: &chip_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 6px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i" "n"'
+                - grid-template-columns: 1fr
+                - justify-items: center
+              img_cell:
+                - width: 28px
+                - height: 28px
+                - margin: 0
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &chip_col |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null;
+                      if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                        return o>0 ? variables.on_col : variables.off_col; }
+                      return (e&&e.state==='on')?variables.on_col:variables.off_col;
+                    ]]]
+              name:
+                - font-size: 11px
+                - margin-top: 5px
+                - text-align: center
+                - white-space: normal
+                - line-height: 1.2
+                - color: *chip_col
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_door_closed_left_front
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.wvwzzz3czpe076722_door_closed_left_front
+                - binary_sensor.wvwzzz3czpe076722_door_closed_right_front
+                - binary_sensor.wvwzzz3czpe076722_door_closed_left_back
+                - binary_sensor.wvwzzz3czpe076722_door_closed_right_back
+              off_txt: Türen zu
+              open_word: Türen offen
+              on_col: '#f0736a'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-door
+              off_icon: mdi:car-door-lock
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_trunk_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_hood_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_sunroof_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_parking_light
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.wvwzzz3czpe076722_vehicle_moving
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fährt, off_txt: Steht, on_col: '#7fb3d5', off_col: '#8794a5', on_icon: mdi:car-speed-limiter, off_icon: mdi:car-brake-parking }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          # Standort: device_tracker liefert Zonennamen statt on/off, deshalb
+          # eigene Templates statt der Chip-Anker oben.
+          - type: custom:button-card
+            entity: device_tracker.wvwzzz3czpe076722_position
+            show_icon: true
+            show_name: true
+            show_state: false
+            tap_action:
+              action: more-info
+            name: &loc_name |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e) return 'Standort';
+                if(e.state==='home') return 'Zuhause';
+                if(e.state==='not_home') return 'Unterwegs';
+                if(e.state==='unavailable'||e.state==='unknown') return 'Unbekannt';
+                return e.state;
+              ]]]
+            icon: &loc_icon |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e) return 'mdi:map-marker-question';
+                if(e.state==='home') return 'mdi:home-map-marker';
+                if(e.state==='unavailable'||e.state==='unknown') return 'mdi:map-marker-question';
+                return 'mdi:map-marker-radius';
+              ]]]
+            styles: &loc_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 6px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i" "n"'
+                - grid-template-columns: 1fr
+                - justify-items: center
+              img_cell:
+                - width: 28px
+                - height: 28px
+                - margin: 0
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &loc_col |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null;
+                      if(!e||e.state==='unavailable'||e.state==='unknown') return '#8794a5';
+                      return (e.state==='home') ? '#a6d49e' : '#7fb3d5';
+                    ]]]
+              name:
+                - font-size: 11px
+                - margin-top: 5px
+                - text-align: center
+                - white-space: normal
+                - line-height: 1.2
+                - color: *loc_col
+      # ---- Kennzahl-Kacheln ----
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_odometer
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: &lbl_val |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                if(variables.abs && !isNaN(v)) v=Math.abs(v);
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                let n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                const pre=variables.prefix?`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-right:2px;">${variables.prefix}</span>`:'';
+                return `${pre}${n}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 11px 13px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[ return (variables.accent||'#7fb3d5')+'29'; ]]]
+                - border: |
+                    [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[ return variables.accent||'#7fb3d5'; ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 750
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 11.5px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_fuel_range
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_fuel_level
+            variables: { accent: '#e6b566', unit: km, decimals: 0, level_id: sensor.wvwzzz3czpe076722_fuel_level }
+            name: &name_level |
+              [[[
+                const s=states[variables.level_id];
+                const v=s?parseFloat(s.state):NaN;
+                return 'Tank: ' + (isNaN(v) ? '–' : v + ' %');
+              ]]]
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_service_inspection_distance
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_service_inspection_days
+            variables: { accent: '#7fb3d5', unit: km, decimals: 0, days_id: sensor.wvwzzz3czpe076722_service_inspection_days, due_prefix: 'Inspektion: ' }
+            # Volkswagen Connect liefert die Faelligkeit in Tagen, nicht als
+            # Datum -- deshalb hier aus "heute + Tage" gerechnet.
+            name: &name_due |
+              [[[
+                const s=states[variables.days_id];
+                const d=s?parseFloat(s.state):NaN;
+                const pre=variables.due_prefix||'';
+                if(isNaN(d)) return pre+'–';
+                const dt=new Date(Date.now()+d*86400000);
+                const p=n=>String(n).padStart(2,'0');
+                return pre+`${p(dt.getDate())}.${p(dt.getMonth()+1)}.${dt.getFullYear()}`;
+              ]]]
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_oil_inspection_distance
+            icon: mdi:oil
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_oil_inspection_days
+            variables: { accent: '#b399d4', unit: km, decimals: 0, days_id: sensor.wvwzzz3czpe076722_oil_inspection_days, due_prefix: 'Ölwechsel: ' }
+            name: *name_due
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_adblue_level
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.wvwzzz3czpe076722_parking_time
+            icon: mdi:car-clock
+            name: Geparkt seit
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5' }
+            label: &lbl_time |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                const dt=e?new Date(e.state):null;
+                if(!dt||isNaN(dt.getTime())) return '–';
+                const p=v=>String(v).padStart(2,'0');
+                const n=new Date();
+                const hm=`${p(dt.getHours())}:${p(dt.getMinutes())}`;
+                if(dt.toDateString()===n.toDateString()) return hm;
+                return `<span style="font-size:0.7em;color:#6e7988;margin-right:4px;">${p(dt.getDate())}.${p(dt.getMonth()+1)}.</span>${hm}`;
+              ]]]
+            styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      - type: custom:button-card
+        entity: sensor.passat_variant_elegance_20_l_tdi_scr_start_km_kurzzeit
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: &sub_km |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=e?parseFloat(e.state):NaN;
+            if(isNaN(v)) return '';
+            return 'ab ' + v.toLocaleString('de-DE',{maximumFractionDigits:0}) + ' km';
+          ]]]
+        styles: &sub_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 4px 4px 0
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 16px
+            - height: 16px
+            - margin: 0 8px 0 0
+            - align-self: center
+          icon:
+            - width: 16px
+            - height: 16px
+            - color: '#6e7988'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - font-weight: 700
+            - letter-spacing: 0.07em
+            - text-transform: uppercase
+            - color: '#6e7988'
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_length_2
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_length_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            # Zweiquellig: erste Entitaet mit einer Zahl gewinnt (siehe Kopf).
+            label: &lbl_dual |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v)) return '–';
+                if(variables.abs) v=Math.abs(v);
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                const t=v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                return `${t}<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &mini_styles
+              card:
+                - border-radius: 13px
+                - padding: 9px 9px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"l" "n"'
+                - grid-template-columns: 1fr
+              label:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - font-variant-numeric: tabular-nums
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - font-size: 10.5px
+                - color: '#6e7988'
+                - margin-top: 1px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_duration_2
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_duration_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Minuten bleiben Minuten, ab 90 wird auf Stunden umgestellt.
+            label: &lbl_dur |
+              [[[
+                const ids=variables.ids||[];
+                let m=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ m=n; break; } }
+                if(isNaN(m)) return '–';
+                const u=t=>`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${t}</span>`;
+                if(m<90) return Math.round(m)+u('min');
+                return (m/60).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+u('h');
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_average_speed_2
+              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_average_speed_2
+              dist_id: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+              time_id: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Fuer den Kurzzeitspeicher liefert keine Quelle ein Durchschnitts-
+            # tempo -- ersatzweise aus Strecke und Fahrzeit gerechnet.
+            label: &lbl_speed |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v) && variables.dist_id && variables.time_id){
+                  const d=parseFloat((states[variables.dist_id]||{}).state);
+                  const t=parseFloat((states[variables.time_id]||{}).state);
+                  if(!isNaN(d) && !isNaN(t) && t>0) v=d/t*60;
+                }
+                if(isNaN(v)) return '–';
+                return Math.round(v)+'<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">km/h</span>';
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_average_fuel_consumption_2
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_average_fuel_consumption_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        entity: sensor.passat_variant_elegance_20_l_tdi_scr_start_km_langzeit
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_length_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_length_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_length
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_duration_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_duration
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_duration_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_duration
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_speed_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_speed
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_speed_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_speed
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Aktionen: Datenabruf und Standheizung ----
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: switch.wvwzzz3czpe076722_force_data_refresh
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update:
+              - binary_sensor.wvwzzz3czpe076722_request_in_progress
+            variables: { busy_id: binary_sensor.wvwzzz3czpe076722_request_in_progress }
+            tap_action:
+              action: toggle
+              confirmation:
+                text: Fahrzeugdaten jetzt neu abrufen?
+            name: &act_refresh_name |
+              [[[
+                const b=states[variables.busy_id];
+                return (b&&b.state==='on') ? 'Abruf läuft …' : 'Daten aktualisieren';
+              ]]]
+            icon: &act_refresh_icon |
+              [[[
+                const b=states[variables.busy_id];
+                return (b&&b.state==='on') ? 'mdi:cloud-sync' : 'mdi:cloud-refresh-variant';
+              ]]]
+            styles: &act_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 12px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i n"'
+                - grid-template-columns: min-content 1fr
+                - align-items: center
+              img_cell:
+                - width: 20px
+                - height: 20px
+                - margin: 0 10px 0 0
+                - align-self: center
+              icon:
+                - width: 20px
+                - height: 20px
+                - color: &act_col |
+                    [[[
+                      const b=states[variables.busy_id];
+                      return (b&&b.state==='on') ? '#7fb3d5' : '#8794a5';
+                    ]]]
+              name:
+                - justify-self: start
+                - align-self: center
+                - font-size: 12px
+                - font-weight: 600
+                - letter-spacing: -0.01em
+                - color: *act_col
+          # Standheizung nur beim Passat -- der Touran hat keine climate-Entitaet.
+          - type: custom:button-card
+            entity: climate.wvwzzz3czpe076722_auxiliary_climatisation
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_auxiliary_heater_heating_ventilation_duration
+            variables: { duration_id: sensor.wvwzzz3czpe076722_auxiliary_heater_heating_ventilation_duration }
+            tap_action:
+              action: more-info
+            name: |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e||e.state==='unavailable') return 'Standheizung offline';
+                return (e.state==='off') ? 'Standheizung aus' : 'Standheizung läuft';
+              ]]]
+            icon: |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                return (e&&e.state!=='off'&&e.state!=='unavailable') ? 'mdi:radiator' : 'mdi:radiator-off';
+              ]]]
+            label: |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e||e.state==='unavailable') return '';
+                const rest=e.attributes?e.attributes.auxiliary_remaining_time_minutes:null;
+                if(e.state!=='off' && rest) return 'noch ' + rest + ' min';
+                const d=states[variables.duration_id];
+                const v=d?parseFloat(d.state):NaN;
+                return isNaN(v) ? '' : v + ' min';
+              ]]]
+            styles: &heat_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 12px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i n l"'
+                - grid-template-columns: min-content 1fr min-content
+                - align-items: center
+              img_cell:
+                - width: 20px
+                - height: 20px
+                - margin: 0 10px 0 0
+                - align-self: center
+              icon:
+                - width: 20px
+                - height: 20px
+                - color: &heat_col |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null;
+                      if(!e||e.state==='unavailable') return '#8794a5';
+                      return (e.state==='off') ? '#8794a5' : '#e6b566';
+                    ]]]
+              name:
+                - justify-self: start
+                - align-self: center
+                - font-size: 12px
+                - font-weight: 600
+                - letter-spacing: -0.01em
+                - color: *heat_col
+              label:
+                - justify-self: end
+                - align-self: center
+                - font-size: 11px
+                - color: '#6e7988'
+                - white-space: nowrap
+                - margin-left: 8px
+      # ---- Datenstand: wann war das Auto zuletzt online, wann kam der Abruf ----
+      - type: custom:button-card
+        entity: sensor.wvwzzz3czpe076722_last_connected
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update:
+          - sensor.wvwzzz3czpe076722_last_data_refresh
+        variables: { refresh_id: sensor.wvwzzz3czpe076722_last_data_refresh }
+        tap_action:
+          action: more-info
+        name: &data_name |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const dt=e?new Date(e.state):null;
+            if(!dt||isNaN(dt.getTime())) return 'Fahrzeugdaten: kein Zeitstempel';
+            const p=v=>String(v).padStart(2,'0');
+            const n=new Date();
+            const hm=`${p(dt.getHours())}:${p(dt.getMinutes())}`;
+            return 'Fahrzeugdaten von ' + (dt.toDateString()===n.toDateString()
+              ? hm : `${p(dt.getDate())}.${p(dt.getMonth()+1)}. ${hm}`);
+          ]]]
+        icon: &data_icon |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const dt=e?new Date(e.state):null;
+            if(!dt||isNaN(dt.getTime())) return 'mdi:cloud-question';
+            const h=(Date.now()-dt.getTime())/3600000;
+            return (h>48) ? 'mdi:cloud-alert' : 'mdi:cloud-check-variant';
+          ]]]
+        label: &data_label |
+          [[[
+            const s=states[variables.refresh_id];
+            const dt=s?new Date(s.state):null;
+            if(!dt||isNaN(dt.getTime())) return '';
+            const p=v=>String(v).padStart(2,'0');
+            return 'Abruf ' + `${p(dt.getHours())}:${p(dt.getMinutes())}`;
+          ]]]
+        styles: &data_styles
+          card:
+            - border-radius: 13px
+            - padding: 9px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.02)'
+            - border: 1px solid rgba(255,255,255,0.05)
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 18px
+            - height: 18px
+            - margin: 0 10px 0 0
+            - align-self: center
+          icon:
+            - width: 18px
+            - height: 18px
+            - color: &data_col |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  const dt=e?new Date(e.state):null;
+                  if(!dt||isNaN(dt.getTime())) return '#8794a5';
+                  const h=(Date.now()-dt.getTime())/3600000;
+                  if(h>48) return '#e6b566';
+                  return '#6e7988';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - color: *data_col
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - margin-left: 10px
+
+  # ================================ TOURAN ================================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        entity: sensor.touran_car_type
+        icon: mdi:car-estate
+        name: SÜW - PM 226
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        variables: { modell: Touran Highline }
+        label: *header_label
+        styles: *header_styles
+      - type: picture
+        image: /local/auto/touran/touran.png
+        card_mod: *frame
+      - type: custom:button-card
+        entity: lock.touran_door_locked
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        variables:
+          lock_ids:
+            - lock.touran_door_locked
+            - lock.touran_trunk_locked
+          lock_names:
+            - Türen
+            - Heckklappe
+        name: *bar_name
+        icon: *bar_icon
+        label: *bar_label
+        styles: *bar_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.touran_windows_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.touran_window_closed_left_front
+                - binary_sensor.touran_window_closed_right_front
+                - binary_sensor.touran_window_closed_left_back
+                - binary_sensor.touran_window_closed_right_back
+              off_txt: Fenster zu
+              open_word: Fenster offen
+              on_col: '#e6b566'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-windshield
+              off_icon: mdi:car-windshield-outline
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_door_closed_left_front
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.touran_door_closed_left_front
+                - binary_sensor.touran_door_closed_right_front
+                - binary_sensor.touran_door_closed_left_back
+                - binary_sensor.touran_door_closed_right_back
+              off_txt: Türen zu
+              open_word: Türen offen
+              on_col: '#f0736a'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-door
+              off_icon: mdi:car-door-lock
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_trunk_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_hood_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_sunroof_closed
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_parking_light
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.touran_vehicle_moving
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Fährt, off_txt: Steht, on_col: '#7fb3d5', off_col: '#8794a5', on_icon: mdi:car-speed-limiter, off_icon: mdi:car-brake-parking }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: device_tracker.touran_position
+            show_icon: true
+            show_name: true
+            show_state: false
+            tap_action:
+              action: more-info
+            name: *loc_name
+            icon: *loc_icon
+            styles: *loc_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_odometer
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_fuel_range
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_fuel_level
+            variables: { accent: '#e6b566', unit: km, decimals: 0, level_id: sensor.touran_fuel_level }
+            name: *name_level
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_service_inspection_distance
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_service_inspection_days
+            variables: { accent: '#7fb3d5', unit: km, decimals: 0, days_id: sensor.touran_service_inspection_days, due_prefix: 'Inspektion: ' }
+            name: *name_due
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_oil_inspection_distance
+            icon: mdi:oil
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_oil_inspection_days
+            variables: { accent: '#b399d4', unit: km, decimals: 0, days_id: sensor.touran_oil_inspection_days, due_prefix: 'Ölwechsel: ' }
+            name: *name_due
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_adblue_level
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.touran_parking_time
+            icon: mdi:car-clock
+            name: Geparkt seit
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5' }
+            label: *lbl_time
+            styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      - type: custom:button-card
+        entity: sensor.touran_highline_20_l_tdi_scr_start_km_kurzzeit
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_length_2
+              - sensor.touran_last_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.touran_last_trip_length_2
+                - sensor.touran_last_trip_length
+                - sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_duration_2
+              - sensor.touran_last_trip_duration
+            variables:
+              ids:
+                - sensor.touran_last_trip_duration_2
+                - sensor.touran_last_trip_duration
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_average_speed_2
+              - sensor.touran_last_trip_average_speed
+              - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              ids:
+                - sensor.touran_last_trip_average_speed_2
+                - sensor.touran_last_trip_average_speed
+              dist_id: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+              time_id: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_average_fuel_consumption_2
+              - sensor.touran_last_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.touran_last_trip_average_fuel_consumption_2
+                - sensor.touran_last_trip_average_fuel_consumption
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        entity: sensor.touran_highline_20_l_tdi_scr_start_km_langzeit
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_length_2
+              - sensor.touran_long_term_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.touran_long_term_trip_length_2
+                - sensor.touran_long_term_trip_length
+                - sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_duration_2
+              - sensor.touran_long_term_trip_duration
+            variables:
+              ids:
+                - sensor.touran_long_term_trip_duration_2
+                - sensor.touran_long_term_trip_duration
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_average_speed_2
+              - sensor.touran_long_term_trip_average_speed
+            variables:
+              ids:
+                - sensor.touran_long_term_trip_average_speed_2
+                - sensor.touran_long_term_trip_average_speed
+                - sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_average_fuel_consumption_2
+              - sensor.touran_long_term_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.touran_long_term_trip_average_fuel_consumption_2
+                - sensor.touran_long_term_trip_average_fuel_consumption
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      - type: custom:button-card
+        entity: switch.touran_force_data_refresh
+        show_icon: true
+        show_name: true
+        show_state: false
+        triggers_update:
+          - binary_sensor.touran_request_in_progress
+        variables: { busy_id: binary_sensor.touran_request_in_progress }
+        tap_action:
+          action: toggle
+          confirmation:
+            text: Fahrzeugdaten jetzt neu abrufen?
+        name: *act_refresh_name
+        icon: *act_refresh_icon
+        styles: *act_styles
+      - type: custom:button-card
+        entity: sensor.touran_last_connected
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update:
+          - sensor.touran_last_data_refresh
+        variables: { refresh_id: sensor.touran_last_data_refresh }
+        tap_action:
+          action: more-info
+        name: *data_name
+        icon: *data_icon
+        label: *data_label
+        styles: *data_styles
+
+  # =============================== STANDORTE ===============================
+  # Beide Fahrzeuge auf einer Karte -- der device_tracker aus Volkswagen
+  # Connect liefert die Parkposition, nicht die Fahrt.
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:map-marker-multiple
+        name: Standorte
+        show_icon: true
+        show_name: true
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: map
+        entities:
+          - device_tracker.wvwzzz3czpe076722_position
+          - device_tracker.touran_position
+        theme_mode: dark
+        hours_to_show: 24
+        card_mod: *frame
