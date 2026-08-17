@@ -15,6 +15,20 @@
 #   - Datenstand (zuletzt verbunden / letzter Abruf) und einen Aktualisieren-
 #     Schalter
 #
+# AUSNAHME Fahrtdaten: Volkswagen Connect legt je Fahrzeug rund 25 Trip-Sensoren
+# an (last_trip_*, long_term_trip_*, refuel_trip_*), die stehen aber saemtlich
+# auf 'unavailable' -- die Trips kommen ueber die API nicht durch. Die beiden
+# Fahrten-Bloecke unten lesen deshalb zweiquellig: erst die Volkswagen-Connect-
+# Entitaet, und nur wenn die keine Zahl liefert, den Kurzzeit-/Langzeit-Wert aus
+# cupra_eu_data_act. Sobald Volkswagen Connect die Trips liefert, schaltet die
+# Karte von allein um -- ohne Aenderung an dieser Datei. Die Reihenfolge steckt
+# je Kachel in variables.ids.
+#
+# Begriffe: "Letzte Fahrt" ist der Kurzzeitspeicher des Bordcomputers (seit
+# Start, wird bei jeder Zuendung zurueckgesetzt), "Langzeit" der Gesamtspeicher
+# seit dem letzten manuellen Reset. Beide Bloecke nennen im Kopf den Kilometer-
+# stand, ab dem sie zaehlen.
+#
 # on/off-Semantik der Volkswagen-Connect-Melder: Die Namen lauten zwar
 # "... closed" / "... locked", die Entitaeten folgen aber der normalen
 # device_class-Logik -- 'off' = zu bzw. verriegelt, 'on' = offen bzw. offen
@@ -31,7 +45,7 @@
 #
 # Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &frame,
 # &bar_*, &chip_*, &loc_*, &lbl_val, &lbl_time, &name_due, &tile_styles,
-# &act_styles.
+# &sub_styles, &mini_styles, &lbl_dual, &lbl_dur, &lbl_speed, &act_styles.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS).
 type: vertical-stack
@@ -561,6 +575,278 @@ cards:
                 return `<span style="font-size:0.7em;color:#6e7988;margin-right:4px;">${p(dt.getDate())}.${p(dt.getMonth()+1)}.</span>${hm}`;
               ]]]
             styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      - type: custom:button-card
+        entity: sensor.passat_variant_elegance_20_l_tdi_scr_start_km_kurzzeit
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: &sub_km |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=e?parseFloat(e.state):NaN;
+            if(isNaN(v)) return '';
+            return 'ab ' + v.toLocaleString('de-DE',{maximumFractionDigits:0}) + ' km';
+          ]]]
+        styles: &sub_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 4px 4px 0
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 16px
+            - height: 16px
+            - margin: 0 8px 0 0
+            - align-self: center
+          icon:
+            - width: 16px
+            - height: 16px
+            - color: '#6e7988'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - font-weight: 700
+            - letter-spacing: 0.07em
+            - text-transform: uppercase
+            - color: '#6e7988'
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_length_2
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_length_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            # Zweiquellig: erste Entitaet mit einer Zahl gewinnt (siehe Kopf).
+            label: &lbl_dual |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v)) return '–';
+                if(variables.abs) v=Math.abs(v);
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                const t=v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                return `${t}<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &mini_styles
+              card:
+                - border-radius: 13px
+                - padding: 9px 9px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"l" "n"'
+                - grid-template-columns: 1fr
+              label:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - font-variant-numeric: tabular-nums
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - font-size: 10.5px
+                - color: '#6e7988'
+                - margin-top: 1px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_duration_2
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_duration_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Minuten bleiben Minuten, ab 90 wird auf Stunden umgestellt.
+            label: &lbl_dur |
+              [[[
+                const ids=variables.ids||[];
+                let m=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ m=n; break; } }
+                if(isNaN(m)) return '–';
+                const u=t=>`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${t}</span>`;
+                if(m<90) return Math.round(m)+u('min');
+                return (m/60).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+u('h');
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_average_speed_2
+              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_average_speed_2
+              dist_id: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+              time_id: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Fuer den Kurzzeitspeicher liefert keine Quelle ein Durchschnitts-
+            # tempo -- ersatzweise aus Strecke und Fahrzeit gerechnet.
+            label: &lbl_speed |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v) && variables.dist_id && variables.time_id){
+                  const d=parseFloat((states[variables.dist_id]||{}).state);
+                  const t=parseFloat((states[variables.time_id]||{}).state);
+                  if(!isNaN(d) && !isNaN(t) && t>0) v=d/t*60;
+                }
+                if(isNaN(v)) return '–';
+                return Math.round(v)+'<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">km/h</span>';
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_last_trip_average_fuel_consumption_2
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.wvwzzz3czpe076722_last_trip_average_fuel_consumption_2
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        entity: sensor.passat_variant_elegance_20_l_tdi_scr_start_km_langzeit
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_length_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_length_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_length
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_duration_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_duration
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_duration_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_duration
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_speed_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_speed
+            variables:
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_speed_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_speed
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption_2
+              - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption_2
+                - sensor.wvwzzz3czpe076722_long_term_trip_average_fuel_consumption
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
       # ---- Aktionen: Datenabruf und Standheizung ----
       - type: grid
         columns: 2
@@ -988,6 +1274,186 @@ cards:
             variables: { accent: '#8794a5' }
             label: *lbl_time
             styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      - type: custom:button-card
+        entity: sensor.touran_highline_20_l_tdi_scr_start_km_kurzzeit
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_length_2
+              - sensor.touran_last_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.touran_last_trip_length_2
+                - sensor.touran_last_trip_length
+                - sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_duration_2
+              - sensor.touran_last_trip_duration
+            variables:
+              ids:
+                - sensor.touran_last_trip_duration_2
+                - sensor.touran_last_trip_duration
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_average_speed_2
+              - sensor.touran_last_trip_average_speed
+              - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              ids:
+                - sensor.touran_last_trip_average_speed_2
+                - sensor.touran_last_trip_average_speed
+              dist_id: sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+              time_id: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_last_trip_average_fuel_consumption_2
+              - sensor.touran_last_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.touran_last_trip_average_fuel_consumption_2
+                - sensor.touran_last_trip_average_fuel_consumption
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        entity: sensor.touran_highline_20_l_tdi_scr_start_km_langzeit
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        label: *sub_km
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_length_2
+              - sensor.touran_long_term_trip_length
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.touran_long_term_trip_length_2
+                - sensor.touran_long_term_trip_length
+                - sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_duration_2
+              - sensor.touran_long_term_trip_duration
+            variables:
+              ids:
+                - sensor.touran_long_term_trip_duration_2
+                - sensor.touran_long_term_trip_duration
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_average_speed_2
+              - sensor.touran_long_term_trip_average_speed
+            variables:
+              ids:
+                - sensor.touran_long_term_trip_average_speed_2
+                - sensor.touran_long_term_trip_average_speed
+                - sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_long_term_trip_average_fuel_consumption_2
+              - sensor.touran_long_term_trip_average_fuel_consumption
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.touran_long_term_trip_average_fuel_consumption_2
+                - sensor.touran_long_term_trip_average_fuel_consumption
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
       - type: custom:button-card
         entity: switch.touran_force_data_refresh
         show_icon: true
