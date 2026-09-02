@@ -121,3 +121,7 @@ Weg.
 
 CARTO baut Raster- auf Vektorkacheln um; die Raster-Basemaps laufen langfristig
 aus. Eine CARTO-Lösung wäre also ohnehin nur eine Zwischenstation.
+
+## Nachtrag: mehr Plattenplatz
+
+Zum Vergrößern der Proxmox-VM siehe `proxmox-haos-speicher-erweitern.md`.
