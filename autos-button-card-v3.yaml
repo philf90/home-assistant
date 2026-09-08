@@ -1,0 +1,1347 @@
+# Autos V3 (Passat + Touran) -- gespeist aus der Integration "VW Group Connect"
+# (Domain vag_connect), nachdem Volkswagen den API-Zugang der bisherigen
+# Volkswagen-Connect-Integration (volkswagencarnet) gesperrt hat. Deren
+# Entitaeten stehen seitdem samtlich auf 'unavailable', V2 laeuft also leer.
+#
+# Layout, Palette, Kachelraster und saemtliche Style-Anker sind unveraendert
+# aus autos-button-card-v2.yaml uebernommen -- getauscht ist nur, woher die
+# Werte kommen. Geraete in der neuen Integration:
+#   Volkswagen 076722 -> Passat   (sensor.garage_volkswagen_076722_*)
+#   Volkswagen 027935 -> Touran   (sensor.garage_volkswagen_027935_*)
+#
+# on/off-Semantik von vag_connect: Die Melder heissen zwar "Tueren verriegelt",
+# folgen aber der normalen device_class-Logik -- 'off' = verriegelt bzw. zu,
+# 'on' = nicht verriegelt bzw. offen. Gegengeprueft gegen die parallel laufende
+# EU-Data-Act-Integration: beide Quellen melden fuer beide Fahrzeuge denselben
+# Zustand. Die Sicherheitsleiste unten wertet deshalb 'on' als "nicht
+# verriegelt" (V2 pruefte auf die lock-Domain mit 'locked'/'unlocked').
+#
+# Das Motorhaubenschloss bleibt wie in V1/V2 aussen vor: es haengt am
+# mechanischen Fanghaken und meldet dauerhaft 'on'.
+#
+# FEHLENDE ENTITAETEN gegenueber V2 -- vag_connect liefert dafuer nichts:
+#   - Standort (device_tracker) und damit die gemeinsame Standort-Karte
+#   - Parkzeitpunkt ("Geparkt seit")
+#   - Bewegung ("faehrt/steht")
+#   - Standheizung (climate) inkl. Restlaufzeit
+#   - Startkilometerstand der beiden Fahrtspeicher ("ab X km" im Blockkopf)
+#   - Dauer und Durchschnittstempo der letzten Fahrt
+# Die betroffenen Plaetze sind mit vorhandenen Werten neu belegt (Verbindung,
+# Feststellbremse, Oelstand); Standort-Karte und Standheizung entfallen. Details
+# im Vorschlagsdokument autos-karten-v2-vorschlaege.html.
+#
+# ZWEITQUELLE: Fuer Dauer und Ø Tempo der letzten Fahrt gibt es in vag_connect
+# keine Entsprechung -- diese beiden Zellen lesen den Kurzzeitspeicher des
+# Bordcomputers aus cupra_eu_data_act, das weiterhin liefert. Alle uebrigen
+# Fahrten-Zellen fragen vag_connect zuerst und fallen nur dann auf
+# cupra_eu_data_act zurueck, wenn dort keine Zahl steht. Die Reihenfolge steckt
+# je Kachel in variables.ids.
+#
+# Begriffe: "Letzte Fahrt" ist der Kurzzeitspeicher (seit Start), "Langzeit"
+# der Gesamtspeicher seit dem letzten Reset. Der Verbrauch im Langzeit-Block
+# ist der Lebensdauer-Durchschnitt, den vag_connect als einzigen Langzeitwert
+# fuehrt.
+#
+# Aufbau je Fahrzeug: Kopf (Kennzeichen + Modell), Fahrzeugbild, Sicherheits-
+# leiste (Tuer- und Kofferraumverriegelung), acht Status-Chips, sechs Kennzahl-
+# Kacheln, zwei Fahrten-Bloecke, Aktualisieren-Leiste und Datenstand-Zeile.
+#
+# Bewusst nur more-info statt Fernbedienung: vag_connect bietet ohnehin keine
+# Verriegelung an. Einzige aktive Aktion ist "Daten aktualisieren" -- ein
+# button.press mit Rueckfrage.
+#
+# Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles, &frame,
+# &bar_*, &chip_*, &conn_*, &lbl_val, &name_date, &tile_styles, &sub_styles,
+# &mini_styles, &lbl_dual, &lbl_dur, &lbl_speed, &act_styles, &data_*.
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+cards:
+  # ================================ PASSAT ================================
+  - type: vertical-stack
+    card_mod: &shell
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 11px !important;
+        }
+    cards:
+      # Kein Fahrzeugtyp-Sensor in vag_connect -- Modell und Kraftstoff stehen
+      # deshalb fest im Label statt aus einer Entitaet zu kommen.
+      - type: custom:button-card
+        icon: mdi:car-estate
+        name: OF - LC 728
+        label: Passat Variant · Diesel
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        styles: &header_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 2px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: min-content 1fr
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'rgba(166, 212, 158, 0.12)'
+            - border: 1px solid rgba(166, 212, 158, 0.2)
+          icon:
+            - width: 23px
+            - height: 23px
+            - color: '#a6d49e'
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+          label:
+            - justify-self: start
+            - align-self: start
+            - font-size: 11.5px
+            - color: '#6e7988'
+            - margin-top: 1px
+      - type: picture
+        image: /local/auto/passat/passat_b8.png
+        card_mod: &frame
+          style: |
+            ha-card {
+              border-radius: 16px !important;
+              overflow: hidden !important;
+              border: 1px solid rgba(255,255,255,0.06) !important;
+              box-shadow: none !important;
+              background: rgba(255,255,255,0.02) !important;
+            }
+      # ---- Sicherheitsleiste (lock_ids und lock_names in gleicher Reihenfolge) ----
+      # 'on' = nicht verriegelt (device_class lock), siehe Kopf der Datei.
+      - type: custom:button-card
+        entity: binary_sensor.garage_volkswagen_076722_turen_verriegelt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        variables:
+          lock_ids:
+            - binary_sensor.garage_volkswagen_076722_turen_verriegelt
+            - binary_sensor.garage_volkswagen_076722_kofferraum_verriegelt
+          lock_names:
+            - Türen
+            - Heckklappe
+        name: &bar_name |
+          [[[
+            const ids=variables.lock_ids||[], nms=variables.lock_names||[];
+            let open=[], unknown=0;
+            ids.forEach((id,i)=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state==='on') open.push(nms[i]||id);
+            });
+            if(open.length===1) return open[0]+' nicht verriegelt';
+            if(open.length>1) return open.join(' und ')+' nicht verriegelt';
+            if(unknown>0) return 'Schlossstatus unbekannt';
+            return 'Fahrzeug abgeschlossen';
+          ]]]
+        icon: &bar_icon |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=0, unknown=0;
+            ids.forEach(id=>{ const s=states[id];
+              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+              if(s.state==='on') open++;
+            });
+            if(open>0) return 'mdi:lock-open-variant';
+            if(unknown>0) return 'mdi:lock-question';
+            return 'mdi:lock';
+          ]]]
+        label: &bar_label |
+          [[[
+            const ids=variables.lock_ids||[];
+            let open=[], all=[];
+            ids.forEach(id=>{ const s=states[id]; if(!s) return;
+              const t=new Date(s.last_changed).getTime(); if(isNaN(t)) return;
+              all.push(t); if(s.state==='on') open.push(t);
+            });
+            const pool=open.length?open:all;
+            if(!pool.length) return '';
+            const d=new Date(Math.max(...pool)), n=new Date();
+            const p=v=>String(v).padStart(2,'0');
+            const hm=`${p(d.getHours())}:${p(d.getMinutes())}`;
+            return 'seit '+(d.toDateString()===n.toDateString()
+              ? hm : `${p(d.getDate())}.${p(d.getMonth()+1)}. ${hm}`);
+          ]]]
+        styles: &bar_styles
+          card:
+            - border-radius: 13px
+            - padding: 10px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 20px
+            - height: 20px
+            - margin: 0 11px 0 0
+            - align-self: center
+          icon:
+            - width: 20px
+            - height: 20px
+            - color: &bar_col |
+                [[[
+                  const ids=variables.lock_ids||[];
+                  let open=0, unknown=0;
+                  ids.forEach(id=>{ const s=states[id];
+                    if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
+                    if(s.state==='on') open++;
+                  });
+                  if(open>0) return '#e6b566';
+                  if(unknown>0) return '#8794a5';
+                  return '#a6d49e';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 12.5px
+            - font-weight: 600
+            - letter-spacing: -0.01em
+            - color: *bar_col
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - margin-left: 10px
+      # ---- Status-Chips (Fenster/Tueren aus je 4 Einzelmeldern kombiniert) ----
+      # Statt Bewegung und Standort (fehlen in vag_connect) stehen hier
+      # Feststellbremse und Verbindungsstatus.
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_fenster_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.garage_volkswagen_076722_fenster_vorne_links
+                - binary_sensor.garage_volkswagen_076722_fenster_vorne_rechts
+                - binary_sensor.garage_volkswagen_076722_fenster_hinten_links
+                - binary_sensor.garage_volkswagen_076722_fenster_hinten_rechts
+              off_txt: Fenster zu
+              open_word: Fenster offen
+              on_col: '#e6b566'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-windshield
+              off_icon: mdi:car-windshield-outline
+            name: &chip_name |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                  return o>0 ? (o+' '+(variables.open_word||'offen')) : (variables.off_txt||'zu'); }
+                return (e&&e.state==='on')?variables.on_txt:variables.off_txt;
+              ]]]
+            icon: &chip_icon |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                  return o>0 ? variables.on_icon : variables.off_icon; }
+                return (e&&e.state==='on')?variables.on_icon:variables.off_icon;
+              ]]]
+            styles: &chip_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 6px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i" "n"'
+                - grid-template-columns: 1fr
+                - justify-items: center
+              img_cell:
+                - width: 28px
+                - height: 28px
+                - margin: 0
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &chip_col |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null;
+                      if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
+                        return o>0 ? variables.on_col : variables.off_col; }
+                      return (e&&e.state==='on')?variables.on_col:variables.off_col;
+                    ]]]
+              name:
+                - font-size: 11px
+                - margin-top: 5px
+                - text-align: center
+                - white-space: normal
+                - line-height: 1.2
+                - color: *chip_col
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_tur_vorne_links
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.garage_volkswagen_076722_tur_vorne_links
+                - binary_sensor.garage_volkswagen_076722_tur_vorne_rechts
+                - binary_sensor.garage_volkswagen_076722_tur_hinten_links
+                - binary_sensor.garage_volkswagen_076722_tur_hinten_rechts
+              off_txt: Türen zu
+              open_word: Türen offen
+              on_col: '#f0736a'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-door
+              off_icon: mdi:car-door-lock
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_kofferraum_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_motorhaube_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_schiebedach_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          # Standlicht kommt als sensor mit den Textzustaenden on/off, nicht als
+          # binary_sensor -- die Chip-Templates pruefen ohnehin auf 'on'.
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_standlicht
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_076722_feststellbremse
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Angezogen, off_txt: Gelöst, on_col: '#a6d49e', off_col: '#8794a5', on_icon: mdi:car-brake-parking, off_icon: mdi:car-brake-parking }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          # Verbindung: der Sensor liefert online/offline statt on/off, deshalb
+          # eigene Templates statt der Chip-Anker oben.
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_verbindungsstatus
+            show_icon: true
+            show_name: true
+            show_state: false
+            tap_action:
+              action: more-info
+            name: &conn_name |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e||e.state==='unavailable'||e.state==='unknown') return 'Unbekannt';
+                if(e.state==='online') return 'Online';
+                if(e.state==='offline') return 'Offline';
+                return e.state;
+              ]]]
+            icon: &conn_icon |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                if(!e||e.state==='unavailable'||e.state==='unknown') return 'mdi:cloud-question';
+                return (e.state==='online') ? 'mdi:cloud-check-variant' : 'mdi:cloud-off-outline';
+              ]]]
+            styles: &conn_styles
+              card:
+                - border-radius: 13px
+                - padding: 10px 6px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"i" "n"'
+                - grid-template-columns: 1fr
+                - justify-items: center
+              img_cell:
+                - width: 28px
+                - height: 28px
+                - margin: 0
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: &conn_col |
+                    [[[
+                      const e=(typeof entity!=='undefined')?entity:null;
+                      if(!e||e.state==='unavailable'||e.state==='unknown') return '#8794a5';
+                      return (e.state==='online') ? '#a6d49e' : '#e6b566';
+                    ]]]
+              name:
+                - font-size: 11px
+                - margin-top: 5px
+                - text-align: center
+                - white-space: normal
+                - line-height: 1.2
+                - color: *conn_col
+      # ---- Kennzahl-Kacheln ----
+      # Statt "Geparkt seit" (kein Parkzeitpunkt in vag_connect) steht hier der
+      # Oelstand -- er ergaenzt die Oelwechsel-Kachel daneben.
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_kilometerstand
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: &lbl_val |
+              [[[
+                const e=(typeof entity!=='undefined')?entity:null;
+                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                if(variables.abs && !isNaN(v)) v=Math.abs(v);
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                let n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                const pre=variables.prefix?`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-right:2px;">${variables.prefix}</span>`:'';
+                return `${pre}${n}<span style="font-size:0.5em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &tile_styles
+              card:
+                - border-radius: 16px
+                - padding: 11px 13px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-columns: min-content 1fr
+                - grid-template-areas: '"i l" "i n"'
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 42px
+                - height: 42px
+                - border-radius: 12px
+                - margin-right: 13px
+                - align-self: center
+                - background: |
+                    [[[ return (variables.accent||'#7fb3d5')+'29'; ]]]
+                - border: |
+                    [[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]
+              icon:
+                - width: 22px
+                - height: 22px
+                - color: |
+                    [[[ return variables.accent||'#7fb3d5'; ]]]
+              label:
+                - justify-self: start
+                - align-self: end
+                - font-size: 20px
+                - font-weight: 750
+                - letter-spacing: -0.02em
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - align-self: start
+                - font-size: 11.5px
+                - color: '#6e7988'
+                - margin-top: 2px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_reichweite
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_076722_tankstand
+            variables: { accent: '#e6b566', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_076722_tankstand }
+            name: &name_level |
+              [[[
+                const s=states[variables.level_id];
+                const v=s?parseFloat(s.state):NaN;
+                return 'Tank: ' + (isNaN(v) ? '–' : v + ' %');
+              ]]]
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_nachste_inspektion
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_076722_inspektionsdatum
+            variables: { accent: '#7fb3d5', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_076722_inspektionsdatum, due_prefix: 'Inspektion: ' }
+            # vag_connect liefert das Faelligkeitsdatum direkt (device_class
+            # date, ISO) -- V2 musste es noch aus "heute + Tage" rechnen.
+            name: &name_date |
+              [[[
+                const s=states[variables.date_id];
+                const pre=variables.due_prefix||'';
+                if(!s||!s.state||s.state==='unknown'||s.state==='unavailable') return pre+'–';
+                const dt=new Date(s.state);
+                if(isNaN(dt.getTime())) return pre+s.state;
+                const p=n=>String(n).padStart(2,'0');
+                return pre+`${p(dt.getDate())}.${p(dt.getMonth()+1)}.${dt.getFullYear()}`;
+              ]]]
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_nachster_olwechsel
+            icon: mdi:oil
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_076722_olwechseldatum
+            variables: { accent: '#b399d4', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_076722_olwechseldatum, due_prefix: 'Ölwechsel: ' }
+            name: *name_date
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_adblue_reichweite
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_olstand_prozent
+            icon: mdi:oil-level
+            name: Ölstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', unit: '%', decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      # Ohne Label im Kopf: den Startkilometerstand legt vag_connect zwar im
+      # Register an, die Entitaet existiert aber nicht.
+      - type: custom:button-card
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: &sub_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 4px 4px 0
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 16px
+            - height: 16px
+            - margin: 0 8px 0 0
+            - align-self: center
+          icon:
+            - width: 16px
+            - height: 16px
+            - color: '#6e7988'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - font-weight: 700
+            - letter-spacing: 0.07em
+            - text-transform: uppercase
+            - color: '#6e7988'
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_kurzzeit
+            # Zweiquellig: erste Entitaet mit einer Zahl gewinnt (siehe Kopf).
+            label: &lbl_dual |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v)) return '–';
+                if(variables.abs) v=Math.abs(v);
+                const d=(variables.decimals===undefined?0:variables.decimals);
+                const t=v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+                return `${t}<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              ]]]
+            styles: &mini_styles
+              card:
+                - border-radius: 13px
+                - padding: 9px 9px
+                - box-shadow: none
+                - background: 'rgba(255,255,255,0.028)'
+                - border: 1px solid rgba(255,255,255,0.06)
+              grid:
+                - grid-template-areas: '"l" "n"'
+                - grid-template-columns: 1fr
+              label:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - font-variant-numeric: tabular-nums
+                - color: '#f2f5f8'
+              name:
+                - justify-self: start
+                - font-size: 10.5px
+                - color: '#6e7988'
+                - margin-top: 1px
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
+          # Dauer und Ø Tempo der letzten Fahrt kennt vag_connect nicht --
+          # einzige Quelle ist hier der Kurzzeitspeicher aus cupra_eu_data_act.
+          - type: custom:button-card
+            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            variables:
+              ids:
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Minuten bleiben Minuten, ab 90 wird auf Stunden umgestellt.
+            label: &lbl_dur |
+              [[[
+                const ids=variables.ids||[];
+                let m=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ m=n; break; } }
+                if(isNaN(m)) return '–';
+                const u=t=>`<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">${t}</span>`;
+                if(m<90) return Math.round(m)+u('min');
+                return (m/60).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+u('h');
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              dist_id: sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+              time_id: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            # Kein Durchschnittstempo fuer die letzte Fahrt in beiden Quellen --
+            # ersatzweise aus Strecke und Fahrzeit gerechnet.
+            label: &lbl_speed |
+              [[[
+                const ids=variables.ids||[];
+                let v=NaN;
+                for(const id of ids){ const s=states[id]; if(!s) continue;
+                  const n=parseFloat(s.state); if(!isNaN(n)){ v=n; break; } }
+                if(isNaN(v) && variables.dist_id && variables.time_id){
+                  const d=parseFloat((states[variables.dist_id]||{}).state);
+                  const t=parseFloat((states[variables.time_id]||{}).state);
+                  if(!isNaN(d) && !isNaN(t) && t>0) v=d/t*60;
+                }
+                if(isNaN(v)) return '–';
+                return Math.round(v)+'<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">km/h</span>';
+              ]]]
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_letzte_fahrt_o_kraftstoffverbrauch
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.garage_volkswagen_076722_letzte_fahrt_o_kraftstoffverbrauch
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_langzeit_fahrtstrecke
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_076722_langzeit_fahrtstrecke
+                - sensor.passat_variant_elegance_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_fahrzeit_gesamt
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            variables:
+              ids:
+                - sensor.garage_volkswagen_076722_fahrzeit_gesamt
+                - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_o_geschwindigkeit_gesamt
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            variables:
+              ids:
+                - sensor.garage_volkswagen_076722_o_geschwindigkeit_gesamt
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          # vag_connect fuehrt als einzigen Langzeitverbrauch den Lebensdauer-
+          # Durchschnitt -- er entspricht dem bisherigen Langzeitwert.
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_076722_durchschnittsverbrauch_lebensdauer
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.garage_volkswagen_076722_durchschnittsverbrauch_lebensdauer
+                - sensor.passat_variant_elegance_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Aktion: Datenabruf anstossen (button.press, mit Rueckfrage) ----
+      # Die Standheizungs-Kachel aus V2 entfaellt: vag_connect hat keine
+      # climate-Entitaet.
+      - type: custom:button-card
+        entity: button.garage_volkswagen_076722_daten_aktualisieren
+        icon: mdi:cloud-refresh-variant
+        name: Daten aktualisieren
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.garage_volkswagen_076722_daten_aktualisieren
+          confirmation:
+            text: Fahrzeugdaten jetzt neu abrufen?
+        styles: &act_styles
+          card:
+            - border-radius: 13px
+            - padding: 10px 12px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: min-content 1fr
+            - align-items: center
+          img_cell:
+            - width: 20px
+            - height: 20px
+            - margin: 0 10px 0 0
+            - align-self: center
+          icon:
+            - width: 20px
+            - height: 20px
+            - color: '#8794a5'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 12px
+            - font-weight: 600
+            - letter-spacing: -0.01em
+            - color: '#8794a5'
+      # ---- Datenstand: Zeitpunkt des letzten Datensatzes und Abfragetakt ----
+      - type: custom:button-card
+        entity: sensor.garage_volkswagen_076722_letzte_aktualisierung
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update:
+          - number.vw_group_connect_abfrageintervall
+        variables: { interval_id: number.vw_group_connect_abfrageintervall }
+        tap_action:
+          action: more-info
+        name: &data_name |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const dt=e?new Date(e.state):null;
+            if(!dt||isNaN(dt.getTime())) return 'Fahrzeugdaten: kein Zeitstempel';
+            const p=v=>String(v).padStart(2,'0');
+            const n=new Date();
+            const hm=`${p(dt.getHours())}:${p(dt.getMinutes())}`;
+            return 'Fahrzeugdaten von ' + (dt.toDateString()===n.toDateString()
+              ? hm : `${p(dt.getDate())}.${p(dt.getMonth()+1)}. ${hm}`);
+          ]]]
+        icon: &data_icon |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const dt=e?new Date(e.state):null;
+            if(!dt||isNaN(dt.getTime())) return 'mdi:cloud-question';
+            const h=(Date.now()-dt.getTime())/3600000;
+            return (h>48) ? 'mdi:cloud-alert' : 'mdi:cloud-check-variant';
+          ]]]
+        label: &data_label |
+          [[[
+            const s=states[variables.interval_id];
+            const v=s?parseFloat(s.state):NaN;
+            return isNaN(v) ? '' : 'alle ' + Math.round(v) + ' min';
+          ]]]
+        styles: &data_styles
+          card:
+            - border-radius: 13px
+            - padding: 9px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.02)'
+            - border: 1px solid rgba(255,255,255,0.05)
+          grid:
+            - grid-template-areas: '"i n l"'
+            - grid-template-columns: min-content 1fr min-content
+            - align-items: center
+          img_cell:
+            - width: 18px
+            - height: 18px
+            - margin: 0 10px 0 0
+            - align-self: center
+          icon:
+            - width: 18px
+            - height: 18px
+            - color: &data_col |
+                [[[
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  const dt=e?new Date(e.state):null;
+                  if(!dt||isNaN(dt.getTime())) return '#8794a5';
+                  const h=(Date.now()-dt.getTime())/3600000;
+                  if(h>48) return '#e6b566';
+                  return '#6e7988';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - color: *data_col
+          label:
+            - justify-self: end
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - white-space: nowrap
+            - margin-left: 10px
+
+  # ================================ TOURAN ================================
+  - type: vertical-stack
+    card_mod: *shell
+    cards:
+      - type: custom:button-card
+        icon: mdi:car-estate
+        name: SÜW - PM 226
+        label: Touran Highline · Diesel
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: none
+        styles: *header_styles
+      - type: picture
+        image: /local/auto/touran/touran.png
+        card_mod: *frame
+      - type: custom:button-card
+        entity: binary_sensor.garage_volkswagen_027935_turen_verriegelt
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update: all
+        tap_action:
+          action: more-info
+        variables:
+          lock_ids:
+            - binary_sensor.garage_volkswagen_027935_turen_verriegelt
+            - binary_sensor.garage_volkswagen_027935_kofferraum_verriegelt
+          lock_names:
+            - Türen
+            - Heckklappe
+        name: *bar_name
+        icon: *bar_icon
+        label: *bar_label
+        styles: *bar_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_fenster_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.garage_volkswagen_027935_fenster_vorne_links
+                - binary_sensor.garage_volkswagen_027935_fenster_vorne_rechts
+                - binary_sensor.garage_volkswagen_027935_fenster_hinten_links
+                - binary_sensor.garage_volkswagen_027935_fenster_hinten_rechts
+              off_txt: Fenster zu
+              open_word: Fenster offen
+              on_col: '#e6b566'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-windshield
+              off_icon: mdi:car-windshield-outline
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_tur_vorne_links
+            show_icon: true
+            show_name: true
+            show_state: false
+            triggers_update: all
+            variables:
+              ids:
+                - binary_sensor.garage_volkswagen_027935_tur_vorne_links
+                - binary_sensor.garage_volkswagen_027935_tur_vorne_rechts
+                - binary_sensor.garage_volkswagen_027935_tur_hinten_links
+                - binary_sensor.garage_volkswagen_027935_tur_hinten_rechts
+              off_txt: Türen zu
+              open_word: Türen offen
+              on_col: '#f0736a'
+              off_col: '#a6d49e'
+              on_icon: mdi:car-door
+              off_icon: mdi:car-door-lock
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_kofferraum_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_motorhaube_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_schiebedach_offen
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: '#e6b566', off_col: '#a6d49e', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_standlicht
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: '#e6b566', off_col: '#8794a5', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: binary_sensor.garage_volkswagen_027935_feststellbremse
+            show_icon: true
+            show_name: true
+            show_state: false
+            variables: { on_txt: Angezogen, off_txt: Gelöst, on_col: '#a6d49e', off_col: '#8794a5', on_icon: mdi:car-brake-parking, off_icon: mdi:car-brake-parking }
+            name: *chip_name
+            icon: *chip_icon
+            styles: *chip_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_verbindungsstatus
+            show_icon: true
+            show_name: true
+            show_state: false
+            tap_action:
+              action: more-info
+            name: *conn_name
+            icon: *conn_icon
+            styles: *conn_styles
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_kilometerstand
+            icon: mdi:counter
+            name: Kilometerstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#a6d49e', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_reichweite
+            icon: mdi:gas-station
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_027935_tankstand
+            variables: { accent: '#e6b566', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_027935_tankstand }
+            name: *name_level
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_nachste_inspektion
+            icon: mdi:wrench-clock
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_027935_inspektionsdatum
+            variables: { accent: '#7fb3d5', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_027935_inspektionsdatum, due_prefix: 'Inspektion: ' }
+            name: *name_date
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_nachster_olwechsel
+            icon: mdi:oil
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_027935_olwechseldatum
+            variables: { accent: '#b399d4', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_027935_olwechseldatum, due_prefix: 'Ölwechsel: ' }
+            name: *name_date
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_adblue_reichweite
+            icon: mdi:fuel
+            name: AdBlue
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#7fd0d5', unit: km, decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_olstand_prozent
+            icon: mdi:oil-level
+            name: Ölstand
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables: { accent: '#8794a5', unit: '%', decimals: 0 }
+            label: *lbl_val
+            styles: *tile_styles
+      # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
+      - type: custom:button-card
+        icon: mdi:map-marker-path
+        name: Letzte Fahrt
+        show_icon: true
+        show_name: true
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_letzte_fahrt_strecke
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_027935_letzte_fahrt_strecke
+                - sensor.touran_highline_20_l_tdi_scr_strecke_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            variables:
+              ids:
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_letzte_fahrt_strecke
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            variables:
+              dist_id: sensor.garage_volkswagen_027935_letzte_fahrt_strecke
+              time_id: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_letzte_fahrt_o_kraftstoffverbrauch
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.garage_volkswagen_027935_letzte_fahrt_o_kraftstoffverbrauch
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_kurzzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      # ---- Langzeit (Gesamtspeicher seit letztem Reset) ----
+      - type: custom:button-card
+        icon: mdi:chart-timeline-variant
+        name: Langzeit
+        show_icon: true
+        show_name: true
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: *sub_styles
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_langzeit_fahrtstrecke
+            name: Strecke
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            variables:
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_027935_langzeit_fahrtstrecke
+                - sensor.touran_highline_20_l_tdi_scr_strecke_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_fahrzeit_gesamt
+            name: Dauer
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            variables:
+              ids:
+                - sensor.garage_volkswagen_027935_fahrzeit_gesamt
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_langzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_o_geschwindigkeit_gesamt
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            variables:
+              ids:
+                - sensor.garage_volkswagen_027935_o_geschwindigkeit_gesamt
+                - sensor.touran_highline_20_l_tdi_scr_o_geschwindigkeit_langzeit
+            label: *lbl_speed
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_027935_durchschnittsverbrauch_lebensdauer
+            name: Verbrauch
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            variables:
+              unit: l/100km
+              decimals: 1
+              ids:
+                - sensor.garage_volkswagen_027935_durchschnittsverbrauch_lebensdauer
+                - sensor.touran_highline_20_l_tdi_scr_o_verbrauch_benzin_langzeit
+            label: *lbl_dual
+            styles: *mini_styles
+      - type: custom:button-card
+        entity: button.garage_volkswagen_027935_daten_aktualisieren
+        icon: mdi:cloud-refresh-variant
+        name: Daten aktualisieren
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.garage_volkswagen_027935_daten_aktualisieren
+          confirmation:
+            text: Fahrzeugdaten jetzt neu abrufen?
+        styles: *act_styles
+      - type: custom:button-card
+        entity: sensor.garage_volkswagen_027935_letzte_aktualisierung
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        triggers_update:
+          - number.vw_group_connect_abfrageintervall
+        variables: { interval_id: number.vw_group_connect_abfrageintervall }
+        tap_action:
+          action: more-info
+        name: *data_name
+        icon: *data_icon
+        label: *data_label
+        styles: *data_styles
