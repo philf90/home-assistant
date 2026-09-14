@@ -1,0 +1,516 @@
+# Live Activities (iOS) / Live Updates (Android) fuer die Hausgeraete
+# ==================================================================
+#
+# Analyse, Feldreferenz und die Bewertung weiterer Kandidaten: live-activities.md
+#
+# Einbau: Inhalt nach automations.yaml uebernehmen (oder pro Block ueber
+# Einstellungen -> Automationen -> Neue Automation -> YAML bearbeiten).
+#
+# Zielgeraet ist ueberall notify.mobile_app_philipps_iphone17pro. Fuer ein
+# zweites Geraet den action-Block duplizieren -- Android braucht zusaetzlich
+# Android 16 und zwingend ein gesetztes "title".
+#
+# Zwei Entwurfsentscheidungen, die aus den Messwerten der Instanz stammen:
+#
+#   1. Getriggert wird ausschliesslich der Betriebszustand (operationstate).
+#      Er wechselt 4-6 mal pro Zyklus. Der naheliegende programprogress
+#      wechselt dagegen jede Minute um 1 % -- gemessene 113 Zustandsaenderungen
+#      in einem einzigen Waschgang. Als Trigger wuerde das iOS drosseln lassen.
+#
+#   2. Countdown und Fortschrittsbalken laufen ueber "chronometer" + "when" auf
+#      dem iPhone selbst weiter. Zwischen den Zustandswechseln wird deshalb
+#      gar nichts gesendet.
+#
+# Die Zeitbasis dafuer ist sensor.<ID>_bsh_common_option_remainingprogramtime.
+# Der Sensor hat device_class "timestamp", liefert also den absoluten
+# Endzeitpunkt -- as_timestamp() macht daraus direkt den Unix-Wert fuer "when".
+# Deshalb steht hier bewusst kein when_relative.
+
+# ---------------------------------------------------------------------------
+# Waschmaschine (Siemens, Home Connect 484090394196000250)
+# Gemessener Zyklus: 13.09. 11:40 -> 13:32, 112 Minuten
+# ---------------------------------------------------------------------------
+- id: live_activity_waschmaschine
+  alias: "Live Activity: Waschmaschine"
+  description: >-
+    Spiegelt den Waschgang auf den Lockscreen: Start, Phasenwechsel, Pause,
+    Eingriff noetig, Fertigmeldung und Aufraeumen beim Ausraeumen.
+  mode: restart
+  max_exceeded: silent
+
+  triggers:
+    - trigger: state
+      entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Run"
+      for: "00:00:05"
+      id: start
+      note: >-
+        Die 5 Sekunden entprellen das gemessene Start-Flattern der
+        Home-Connect-Cloud (Run -> Ready -> Run innerhalb von 2 Sekunden).
+    - trigger: state
+      entity_id: sensor.484090394196000250_laundrycare_common_option_processphase
+      id: phase
+      note: Waschen / Spuelen / Schleudern -- wenige Wechsel pro Lauf.
+    - trigger: state
+      entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Pause"
+      id: pause
+    - trigger: state
+      entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.ActionRequired"
+      id: eingriff
+    - trigger: state
+      entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Finished"
+      id: fertig
+    - trigger: state
+      entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+      to:
+        - "BSH.Common.EnumType.OperationState.Inactive"
+        - "BSH.Common.EnumType.OperationState.Aborting"
+      for: "00:00:30"
+      id: ende
+      note: >-
+        Bewusst ohne "Ready": nach Finished schaltet das Geraet von selbst auf
+        Ready zurueck -- die Fertigmeldung soll aber stehen bleiben.
+    - trigger: state
+      entity_id: binary_sensor.484090394196000250_bsh_common_status_doorstate
+      to: "on"
+      id: ende
+      note: Tuer geht auf -- die Waesche wird entnommen, die Activity kann weg.
+
+  variables:
+    restzeit: >-
+      {{ as_timestamp(states('sensor.484090394196000250_bsh_common_option_remainingprogramtime'), 0) | int(0) }}
+    fortschritt: >-
+      {{ states('sensor.484090394196000250_bsh_common_option_programprogress') | int(0) }}
+    programm: >-
+      {% set p = states('sensor.484090394196000250_active_program') %}{{ p.split('.')[-1] if '.' in p else 'Waschgang' }}
+    phase: >-
+      {% set p = states('sensor.484090394196000250_laundrycare_common_option_processphase') %}{{ p.split('.')[-1] if '.' in p else '' }}
+
+  actions:
+    - choose:
+        # -- laeuft: Start und jeder Phasenwechsel -------------------------
+        - conditions:
+            - condition: trigger
+              id:
+                - start
+                - phase
+            - condition: state
+              entity_id: sensor.484090394196000250_bsh_common_status_operationstate
+              state: "BSH.Common.EnumType.OperationState.Run"
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Waschmaschine
+                message: "{{ programm }}{{ ' - ' ~ phase if phase else '' }}"
+                data:
+                  tag: waschmaschine
+                  live_update: true
+                  critical_text: "{{ phase if phase else programm }}"
+                  progress: "{{ fortschritt }}"
+                  progress_max: 100
+                  chronometer: "{{ restzeit > 0 }}"
+                  when: "{{ restzeit }}"
+                  progress_bar_direction: increasing
+                  notification_icon: mdi:washing-machine
+                  notification_icon_color: "#2196F3"
+                  color: "#2196F3"
+
+        # -- pausiert ------------------------------------------------------
+        - conditions:
+            - condition: trigger
+              id: pause
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Waschmaschine
+                message: Programm pausiert
+                data:
+                  tag: waschmaschine
+                  live_update: true
+                  critical_text: Pause
+                  progress: "{{ fortschritt }}"
+                  progress_max: 100
+                  notification_icon: mdi:pause-circle
+                  notification_icon_color: "#FFA726"
+                  color: "#FFA726"
+
+        # -- Eingriff noetig -----------------------------------------------
+        - conditions:
+            - condition: trigger
+              id: eingriff
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Waschmaschine
+                message: Eingriff noetig
+                data:
+                  tag: waschmaschine
+                  live_update: true
+                  critical_text: Achtung
+                  notification_icon: mdi:alert-circle
+                  notification_icon_color: "#EF5350"
+                  color: "#EF5350"
+
+        # -- fertig ---------------------------------------------------------
+        - conditions:
+            - condition: trigger
+              id: fertig
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Waschmaschine
+                message: Waschgang fertig
+                data:
+                  tag: waschmaschine
+                  live_update: true
+                  critical_text: Fertig
+                  progress: 100
+                  progress_max: 100
+                  notification_icon: mdi:washing-machine
+                  notification_icon_color: "#4CAF50"
+                  color: "#4CAF50"
+
+        # -- aufraeumen -----------------------------------------------------
+        - conditions:
+            - condition: trigger
+              id: ende
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                message: clear_notification
+                data:
+                  tag: waschmaschine
+
+# ---------------------------------------------------------------------------
+# Trockner (Siemens, Home Connect 463120392821005583)
+# Gemessene Zyklen: 13.09. 11:36 -> 14:14 (158 min) und 14:25 -> 16:30 (125 min)
+# ---------------------------------------------------------------------------
+- id: live_activity_trockner
+  alias: "Live Activity: Trockner"
+  description: >-
+    Wie die Waschmaschinen-Automation. Der Trockner zeigte in der Historie das
+    staerkste Start-Flattern, deshalb ist die Entprellung hier besonders wichtig.
+  mode: restart
+  max_exceeded: silent
+
+  triggers:
+    - trigger: state
+      entity_id: sensor.463120392821005583_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Run"
+      for: "00:00:05"
+      id: start
+    - trigger: state
+      entity_id: sensor.463120392821005583_laundrycare_common_option_processphase
+      id: phase
+    - trigger: state
+      entity_id: sensor.463120392821005583_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Pause"
+      id: pause
+    - trigger: state
+      entity_id: sensor.463120392821005583_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Finished"
+      id: fertig
+    - trigger: state
+      entity_id: sensor.463120392821005583_bsh_common_status_operationstate
+      to:
+        - "BSH.Common.EnumType.OperationState.Inactive"
+        - "BSH.Common.EnumType.OperationState.Aborting"
+      for: "00:00:30"
+      id: ende
+    - trigger: state
+      entity_id: binary_sensor.463120392821005583_bsh_common_status_doorstate
+      to: "on"
+      id: ende
+
+  variables:
+    restzeit: >-
+      {{ as_timestamp(states('sensor.463120392821005583_bsh_common_option_remainingprogramtime'), 0) | int(0) }}
+    fortschritt: >-
+      {{ states('sensor.463120392821005583_bsh_common_option_programprogress') | int(0) }}
+    programm: >-
+      {% set p = states('sensor.463120392821005583_active_program') %}{{ p.split('.')[-1] if '.' in p else 'Trockengang' }}
+    phase: >-
+      {% set p = states('sensor.463120392821005583_laundrycare_common_option_processphase') %}{{ p.split('.')[-1] if '.' in p else '' }}
+
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id:
+                - start
+                - phase
+            - condition: state
+              entity_id: sensor.463120392821005583_bsh_common_status_operationstate
+              state: "BSH.Common.EnumType.OperationState.Run"
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Trockner
+                message: "{{ programm }}{{ ' - ' ~ phase if phase else '' }}"
+                data:
+                  tag: trockner
+                  live_update: true
+                  critical_text: "{{ phase if phase else programm }}"
+                  progress: "{{ fortschritt }}"
+                  progress_max: 100
+                  chronometer: "{{ restzeit > 0 }}"
+                  when: "{{ restzeit }}"
+                  progress_bar_direction: increasing
+                  notification_icon: mdi:tumble-dryer
+                  notification_icon_color: "#26A69A"
+                  color: "#26A69A"
+
+        - conditions:
+            - condition: trigger
+              id: pause
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Trockner
+                message: Programm pausiert
+                data:
+                  tag: trockner
+                  live_update: true
+                  critical_text: Pause
+                  progress: "{{ fortschritt }}"
+                  progress_max: 100
+                  notification_icon: mdi:pause-circle
+                  notification_icon_color: "#FFA726"
+                  color: "#FFA726"
+
+        - conditions:
+            - condition: trigger
+              id: fertig
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Trockner
+                message: Waesche ist trocken
+                data:
+                  tag: trockner
+                  live_update: true
+                  critical_text: Fertig
+                  progress: 100
+                  progress_max: 100
+                  notification_icon: mdi:tumble-dryer
+                  notification_icon_color: "#4CAF50"
+                  color: "#4CAF50"
+
+        - conditions:
+            - condition: trigger
+              id: ende
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                message: clear_notification
+                data:
+                  tag: trockner
+
+# ---------------------------------------------------------------------------
+# Geschirrspueler (Siemens, Home Connect 013120394858001191)
+# Gemessener Zyklus: 12.09. 22:27 -> 23:30, 63 Minuten
+# Hat keinen processphase-Sensor, dafuer energyforecast/waterforecast.
+# ---------------------------------------------------------------------------
+- id: live_activity_geschirrspueler
+  alias: "Live Activity: Geschirrspueler"
+  description: >-
+    Laeuft haeufig nachts durch. Ohne Phasensensor genuegen Start, Fertigmeldung
+    und Aufraeumen -- der Countdown dazwischen laeuft auf dem Geraet.
+  mode: restart
+  max_exceeded: silent
+
+  triggers:
+    - trigger: state
+      entity_id: sensor.013120394858001191_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Run"
+      for: "00:00:05"
+      id: start
+    - trigger: state
+      entity_id: sensor.013120394858001191_bsh_common_status_operationstate
+      to: "BSH.Common.EnumType.OperationState.Finished"
+      id: fertig
+    - trigger: state
+      entity_id: sensor.013120394858001191_bsh_common_status_operationstate
+      to:
+        - "BSH.Common.EnumType.OperationState.Inactive"
+        - "BSH.Common.EnumType.OperationState.Aborting"
+      for: "00:00:30"
+      id: ende
+    - trigger: state
+      entity_id: binary_sensor.013120394858001191_bsh_common_status_doorstate
+      to: "on"
+      id: ende
+
+  variables:
+    restzeit: >-
+      {{ as_timestamp(states('sensor.013120394858001191_bsh_common_option_remainingprogramtime'), 0) | int(0) }}
+    fortschritt: >-
+      {{ states('sensor.013120394858001191_bsh_common_option_programprogress') | int(0) }}
+    programm: >-
+      {% set p = states('sensor.013120394858001191_active_program') %}{% set s = states('sensor.013120394858001191_selected_program') %}{{ (p if '.' in p else s).split('.')[-1] if ('.' in p or '.' in s) else 'Spuelgang' }}
+
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: start
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Geschirrspueler
+                message: "{{ programm }}"
+                data:
+                  tag: geschirrspueler
+                  live_update: true
+                  critical_text: "{{ programm }}"
+                  progress: "{{ fortschritt }}"
+                  progress_max: 100
+                  chronometer: "{{ restzeit > 0 }}"
+                  when: "{{ restzeit }}"
+                  progress_bar_direction: increasing
+                  notification_icon: mdi:dishwasher
+                  notification_icon_color: "#26C6DA"
+                  color: "#26C6DA"
+
+        - conditions:
+            - condition: trigger
+              id: fertig
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Geschirrspueler
+                message: Spuelgang fertig
+                data:
+                  tag: geschirrspueler
+                  live_update: true
+                  critical_text: Fertig
+                  progress: 100
+                  progress_max: 100
+                  notification_icon: mdi:dishwasher
+                  notification_icon_color: "#4CAF50"
+                  color: "#4CAF50"
+
+        - conditions:
+            - condition: trigger
+              id: ende
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                message: clear_notification
+                data:
+                  tag: geschirrspueler
+
+# ---------------------------------------------------------------------------
+# Bonus: Saugroboter (Roborock S6 MaxV)
+# Zeigt das Muster ohne Restzeit-Sensor: chronometer als Count-up ab jetzt.
+# ---------------------------------------------------------------------------
+- id: live_activity_staubsauger
+  alias: "Live Activity: Staubsauger"
+  description: >-
+    Kein Restzeit-Sensor vorhanden -- deshalb laeuft die Uhr vorwaerts
+    (when: 0 / when_relative: true = "seit jetzt") und der aktuelle Raum
+    steht im critical_text.
+  mode: restart
+  max_exceeded: silent
+
+  triggers:
+    - trigger: state
+      entity_id: vacuum.roborock_s6_maxv
+      to: cleaning
+      for: "00:00:10"
+      id: start
+    - trigger: state
+      entity_id: sensor.roborock_s6_maxv_aktueller_raum
+      id: raum
+    - trigger: state
+      entity_id: vacuum.roborock_s6_maxv
+      to: returning
+      id: rueckkehr
+    - trigger: vacuum.returned_to_dock
+      target:
+        entity_id: vacuum.roborock_s6_maxv
+      id: ende
+    - trigger: state
+      entity_id: vacuum.roborock_s6_maxv
+      to: error
+      id: fehler
+
+  variables:
+    raum: >-
+      {% set r = states('sensor.roborock_s6_maxv_aktueller_raum') %}{{ r if r not in ['unknown', 'unavailable', 'none'] else '' }}
+    akku: >-
+      {{ states('sensor.roborock_s6_maxv_batterie') | int(0) }}
+
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id:
+                - start
+                - raum
+            - condition: state
+              entity_id: vacuum.roborock_s6_maxv
+              state: cleaning
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Staubsauger
+                message: "{{ 'Saugt: ' ~ raum if raum else 'Saugt' }}"
+                data:
+                  tag: staubsauger
+                  live_update: true
+                  critical_text: "{{ raum if raum else 'Saugt' }}"
+                  chronometer: true
+                  when: 0
+                  when_relative: true
+                  notification_icon: mdi:robot-vacuum
+                  notification_icon_color: "#7E57C2"
+                  color: "#7E57C2"
+                  url: /lovelace/staubsauger
+
+        - conditions:
+            - condition: trigger
+              id: rueckkehr
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Staubsauger
+                message: Faehrt zur Ladestation
+                data:
+                  tag: staubsauger
+                  live_update: true
+                  critical_text: "{{ akku }}%"
+                  progress: "{{ akku }}"
+                  progress_max: 100
+                  notification_icon: mdi:home-import-outline
+                  notification_icon_color: "#7E57C2"
+                  color: "#7E57C2"
+
+        - conditions:
+            - condition: trigger
+              id: fehler
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                title: Staubsauger
+                message: "Stoerung: {{ states('sensor.roborock_s6_maxv_staubsauger_fehler') }}"
+                data:
+                  tag: staubsauger
+                  live_update: true
+                  critical_text: Fehler
+                  notification_icon: mdi:robot-vacuum-alert
+                  notification_icon_color: "#EF5350"
+                  color: "#EF5350"
+
+        - conditions:
+            - condition: trigger
+              id: ende
+          sequence:
+            - action: notify.mobile_app_philipps_iphone17pro
+              data:
+                message: clear_notification
+                data:
+                  tag: staubsauger
