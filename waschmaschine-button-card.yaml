@@ -1,9 +1,10 @@
 # Waschmaschine (Home Connect / BSH) im Design der ueberarbeiteten
 # Owlet-Smart-Sock-Karte.
 #
-# Icon in rundlich-quadratischer Kachel (Farbe nach Zustand), Owlet-Huelle,
-# Fortschrittsbalken + Restzeit in der Owlet-Palette. Zustandsfarben:
-# laeuft -> gruen, fertig -> teal, pausiert -> amber, Fehler -> rot, sonst gedaempft.
+# Icon in zustandsgefaerbter Owlet-Kachel, Owlet-Huelle, separate Programmzeile
+# (gruen, nur beim Laufen), Fortschrittsbalken + Restzeit in Owlet-Palette.
+# Zustandsfarben: laeuft -> gruen, fertig -> teal, pausiert -> amber, Fehler -> rot,
+# sonst gedaempft.
 #
 # Voraussetzung: custom:button-card (HACS).
 type: custom:button-card
@@ -41,9 +42,9 @@ styles:
           return '4px solid #2a3346';
         ]]]
   grid:
-    - grid-template-areas: '"i n" "i status" "i progress" "i time"'
+    - grid-template-areas: '"i n" "i status" "i program" "i progress" "i time"'
     - grid-template-columns: min-content auto
-    - grid-template-rows: auto auto auto auto
+    - grid-template-rows: auto auto auto auto auto
   img_cell:
     - width: 52px
     - height: 52px
@@ -98,6 +99,13 @@ styles:
       - justify-self: start
       - align-self: start
       - margin-top: 2px
+    program:
+      - font-size: 12.5px
+      - font-weight: 600
+      - color: '#a6d49e'
+      - text-align: left
+      - justify-self: start
+      - align-self: start
       - padding-bottom: 8px
       - white-space: nowrap
       - overflow: hidden
@@ -126,24 +134,55 @@ custom_fields:
         'BSH.Common.EnumType.OperationState.Error':          'Fehler',
         'BSH.Common.EnumType.OperationState.Aborting':       'Wird abgebrochen',
       };
-      const statusLabel = stateMap[state] || state;
+      return stateMap[state] || state;
+    ]]]
+  program: |
+    [[[
+      const operationState = entity.state;
+      if (!operationState.includes('Run')) return '';
 
-      const isRunning = state.includes('Run');
       const programEntity = states[variables.program_entity];
-      const programRaw = programEntity ? programEntity.state : null;
+      if (!programEntity || programEntity.state === 'unavailable' || programEntity.state === 'unknown') return '';
 
-      // BSH-Programmnamen kürzen: letztes Segment nach dem letzten Punkt
-      let programLabel = '';
-      if (isRunning && programRaw && programRaw !== 'unavailable' && programRaw !== 'unknown') {
-        const parts = programRaw.split('.');
-        programLabel = parts[parts.length - 1]
-          .replace(/([A-Z])/g, ' $1').trim(); // CamelCase → lesbar
-      }
+      const programMap = {
+        'LaundryCare.Washer.Program.Cotton':                  'Baumwolle',
+        'LaundryCare.Washer.Program.Cotton.Eco4060':          'Eco 40-60',
+        'LaundryCare.Washer.Program.Cotton.CottonEco':        'Baumwolle Eco',
+        'LaundryCare.Washer.Program.Cotton.Colour':           'Buntwäsche',
+        'LaundryCare.Washer.Program.EasyCare':                'Pflegeleicht',
+        'LaundryCare.Washer.Program.Mix':                     'Mischgewebe',
+        'LaundryCare.Washer.Program.Mix.NightWash':           'Nachtwaschen',
+        'LaundryCare.Washer.Program.DelicatesSilk':           'Fein/Seide',
+        'LaundryCare.Washer.Program.Wool':                    'Wolle',
+        'LaundryCare.Washer.Program.Sensitive':               'Sensitiv',
+        'LaundryCare.Washer.Program.Auto30':                  'Auto 30°',
+        'LaundryCare.Washer.Program.Auto40':                  'Auto 40°',
+        'LaundryCare.Washer.Program.Auto60':                  'Auto 60°',
+        'LaundryCare.Washer.Program.Chiffon':                 'Chiffon',
+        'LaundryCare.Washer.Program.Curtains':                'Gardinen',
+        'LaundryCare.Washer.Program.DarkWash':                'Dunkle Wäsche',
+        'LaundryCare.Washer.Program.Dessous':                 'Dessous',
+        'LaundryCare.Washer.Program.Monsoon':                 'Monsoon',
+        'LaundryCare.Washer.Program.Outdoor':                 'Outdoor',
+        'LaundryCare.Washer.Program.PlushToy':                'Plüschtiere',
+        'LaundryCare.Washer.Program.ShirtsBlouses':           'Hemden/Blusen',
+        'LaundryCare.Washer.Program.SportFitness':            'Sportwäsche',
+        'LaundryCare.Washer.Program.Towels':                  'Handtücher',
+        'LaundryCare.Washer.Program.WaterProof':              'Imprägnieren',
+        'LaundryCare.Washer.Program.PowerSpeed59':            'Power/Speed 59\'',
+        'LaundryCare.Washer.Program.Super153045.Super15':     'Super 15\'',
+        'LaundryCare.Washer.Program.Super153045.Super1530':   'Super 15/30\'',
+        'LaundryCare.Washer.Program.DrumClean':               'Trommel reinigen',
+        'LaundryCare.Washer.Program.Rinse.RinseSpinDrain':    'Spülen/Schleudern',
+      };
 
-      if (programLabel) {
-        return `${statusLabel} <span style="opacity:0.5">·</span> ${programLabel}`;
-      }
-      return statusLabel;
+      const programRaw = programEntity.state;
+      if (programMap[programRaw]) return programMap[programRaw];
+
+      // Unbekanntes Programm: letztes Segment nach dem letzten Punkt,
+      // CamelCase → lesbar (statt der rohen BSH-Kennung)
+      const parts = programRaw.split('.');
+      return parts[parts.length - 1].replace(/([A-Z])/g, ' $1').trim();
     ]]]
   progress: |
     [[[
