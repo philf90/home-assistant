@@ -1,10 +1,10 @@
 # Geschirrspueler (Home Connect / BSH) im Design der ueberarbeiteten
 # Owlet-Smart-Sock-Karte.
 #
-# Icon in zustandsgefaerbter Owlet-Kachel, Owlet-Huelle, Status + Programm in
-# einer Zeile, Fortschrittsbalken + Restzeit (aus ISO-Endzeitpunkt) in der
-# Owlet-Palette. Zustandsfarben: laeuft -> gruen, fertig -> teal, pausiert -> amber,
-# Fehler -> rot, sonst gedaempft.
+# Icon in zustandsgefaerbter Owlet-Kachel, Owlet-Huelle, separate Programmzeile
+# (gruen, nur beim Laufen), Fortschrittsbalken + Restzeit (aus ISO-Endzeitpunkt)
+# in der Owlet-Palette. Zustandsfarben: laeuft -> gruen, fertig -> teal,
+# pausiert -> amber, Fehler -> rot, sonst gedaempft.
 #
 # Voraussetzung: custom:button-card (HACS).
 type: custom:button-card
@@ -42,9 +42,9 @@ styles:
           return '4px solid #2a3346';
         ]]]
   grid:
-    - grid-template-areas: '"i n" "i status" "i progress" "i time"'
+    - grid-template-areas: '"i n" "i status" "i program" "i progress" "i time"'
     - grid-template-columns: min-content auto
-    - grid-template-rows: auto auto auto auto
+    - grid-template-rows: auto auto auto auto auto
   img_cell:
     - width: 52px
     - height: 52px
@@ -99,6 +99,13 @@ styles:
       - justify-self: start
       - align-self: start
       - margin-top: 2px
+    program:
+      - font-size: 12.5px
+      - font-weight: 600
+      - color: '#a6d49e'
+      - text-align: left
+      - justify-self: start
+      - align-self: start
       - padding-bottom: 8px
       - white-space: nowrap
       - overflow: hidden
@@ -127,43 +134,41 @@ custom_fields:
         'BSH.Common.EnumType.OperationState.Error':          'Fehler',
         'BSH.Common.EnumType.OperationState.Aborting':       'Wird abgebrochen',
       };
-      const statusLabel = stateMap[state] || state;
+      return stateMap[state] || state;
+    ]]]
+  program: |
+    [[[
+      const operationState = entity.state;
+      if (!operationState.includes('Run')) return '';
 
-      const isRunning = state.includes('Run');
       const programEntity = states[variables.program_entity];
-      const programRaw = programEntity ? programEntity.state : null;
+      if (!programEntity || programEntity.state === 'unavailable' || programEntity.state === 'unknown') return '';
 
+      // Achtung: Die Kennung schreibt sich "Dishwasher", nicht "DishWasher" --
+      // mit dem falschen Binnen-W greift die Map nie und es bleibt beim Rohwert.
       const programMap = {
-        'Dishcare.DishWasher.Program.Auto1':         'Auto 45-65°',
-        'Dishcare.DishWasher.Program.Auto2':         'Auto 50-65°',
-        'Dishcare.DishWasher.Program.Auto3':         'Auto 60-70°',
-        'Dishcare.DishWasher.Program.Eco50':         'Eco 50°',
-        'Dishcare.DishWasher.Program.Quick45':       'Quick 45°',
-        'Dishcare.DishWasher.Program.Intensiv70':    'Intensiv 70°',
-        'Dishcare.DishWasher.Program.Normal65':      'Normal 65°',
-        'Dishcare.DishWasher.Program.GlassShine':    'Glanz & Frische',
-        'Dishcare.DishWasher.Program.PreRinse':      'Vorspülen',
-        'Dishcare.DishWasher.Program.MachineCare':   'Maschinenpflege',
-        'Dishcare.DishWasher.Program.SteamFresh':    'Steam Fresh',
-        'Dishcare.DishWasher.Program.MixedLoad':     'Gemischte Beladung',
+        'Dishcare.Dishwasher.Program.Auto1':         'Auto 45-65°',
+        'Dishcare.Dishwasher.Program.Auto2':         'Auto 50-65°',
+        'Dishcare.Dishwasher.Program.Auto3':         'Auto 60-70°',
+        'Dishcare.Dishwasher.Program.Eco50':         'Eco 50°',
+        'Dishcare.Dishwasher.Program.Quick45':       'Quick 45°',
+        'Dishcare.Dishwasher.Program.Quick65':       'Quick 65°',
+        'Dishcare.Dishwasher.Program.Intensiv70':    'Intensiv 70°',
+        'Dishcare.Dishwasher.Program.Normal65':      'Normal 65°',
+        'Dishcare.Dishwasher.Program.GlassShine':    'Glanz & Frische',
+        'Dishcare.Dishwasher.Program.PreRinse':      'Vorspülen',
+        'Dishcare.Dishwasher.Program.MachineCare':   'Maschinenpflege',
+        'Dishcare.Dishwasher.Program.SteamFresh':    'Steam Fresh',
+        'Dishcare.Dishwasher.Program.MixedLoad':     'Gemischte Beladung',
       };
 
-      let programLabel = '';
-      if (isRunning && programRaw && programRaw !== 'unavailable' && programRaw !== 'unknown') {
-        if (programMap[programRaw]) {
-          programLabel = programMap[programRaw];
-        } else {
-          // Letztes Segment nach dem letzten Punkt, CamelCase → lesbar
-          const parts = programRaw.split('.');
-          programLabel = parts[parts.length - 1]
-            .replace(/([A-Z])/g, ' $1').trim();
-        }
-      }
+      const programRaw = programEntity.state;
+      if (programMap[programRaw]) return programMap[programRaw];
 
-      if (programLabel) {
-        return `${statusLabel} <span style="opacity:0.5">·</span> ${programLabel}`;
-      }
-      return statusLabel;
+      // Unbekanntes Programm: letztes Segment nach dem letzten Punkt,
+      // CamelCase → lesbar (statt der rohen BSH-Kennung)
+      const parts = programRaw.split('.');
+      return parts[parts.length - 1].replace(/([A-Z])/g, ' $1').trim();
     ]]]
   progress: |
     [[[
