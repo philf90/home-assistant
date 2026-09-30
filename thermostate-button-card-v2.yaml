@@ -6,6 +6,9 @@
 #        Klima-Skala (min_temp..max_temp), Ist-Temperatur gross in der Mitte,
 #        darunter "Soll x,x" + Status. Farb-Semantik wie v1:
 #          Heizt = Amber, Kuehlt = Blau, Bereit = Gruen, Aus = gedaempft.
+#   Kopfzeilen-Badge folgt derselben Semantik: "N heizen" (Amber) sobald
+#   ein Thermostat heizt, sonst "Alle bereit" bzw. "N bereit" (Gruen),
+#   "Alle aus" (grau) wenn kein Thermostat aktiv ist.
 #   Tap = more-info (voller Klima-Dialog mit +/--Reglern), wie v1.
 #
 # Rein aus den Klima-Attributen berechnet (current_temperature, temperature,
@@ -28,7 +31,7 @@ card_mod:
       gap: 10px !important;
     }
 cards:
-  # ---- Kopfzeile mit "N heizen"-Badge ----
+  # ---- Kopfzeile mit Status-Badge (N heizen / Alle bereit / N bereit / Alle aus) ----
   - type: custom:button-card
     icon: mdi:radiator
     name: Heizung
@@ -55,15 +58,26 @@ cards:
             'climate.hmip_heating_int0000003','climate.hmip_heating_int0000005',
             'climate.hmip_heating_int0000007','climate.hmip_heating_int0000008'
           ];
-          let heat=0;
-          ids.forEach(id=>{ const s=states[id]; if(s&&s.attributes&&s.attributes.hvac_action==='heating') heat++; });
-          const heating=heat>0;
-          const c=heating?'#e6b566':'#6e7988';
-          const bg=heating?'rgba(230,181,102,0.15)':'rgba(255,255,255,0.05)';
-          const bd=heating?'rgba(230,181,102,0.28)':'rgba(255,255,255,0.08)';
-          const txt=heating?(heat+' heizen'):'Alle bereit';
+          // Zaehlen wie die Kacheln bewerten: heizt / aus / bereit.
+          // Nicht erreichbare Thermostate (unavailable/unknown) zaehlen nirgends mit.
+          let heat=0, off=0, ready=0;
+          ids.forEach(id=>{
+            const s=states[id];
+            if(!s||s.state==='unavailable'||s.state==='unknown') return;
+            const act=s.attributes?s.attributes.hvac_action:undefined;
+            if(act==='heating') heat++;
+            else if(s.state==='off') off++;
+            else ready++;
+          });
+          // Farb-Semantik identisch zu den Kacheln:
+          //   Heizt = Amber, Bereit = Gruen, Aus = gedaempft (grau)
+          let c='#6e7988', bg='rgba(255,255,255,0.05)', bd='rgba(255,255,255,0.08)', txt='Alle aus';
+          if(heat>0){ c='#e6b566'; bg='rgba(230,181,102,0.15)'; bd='rgba(230,181,102,0.28)'; txt=heat+' heizen'; }
+          else if(ready>0){ c='#a6d49e'; bg='rgba(166,212,158,0.12)'; bd='rgba(166,212,158,0.2)'; txt=(off>0?(ready+' bereit'):'Alle bereit'); }
+          // Flammen-Pfad belegt im 24er-Raster nur x 8..16 / y 3..14.8 (Mitte 12/8.9).
+          // viewBox auf diese Mitte gelegt, damit das Icon optisch zentriert zum Text sitzt.
           return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${bg};border:1px solid ${bd};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.2 3 4 4.2 4 7.8a4 4 0 0 1-8 0c0-1.3.5-2.3 1.1-3.2.4 1.9 1.9 2 1.9.2 0-1.6-1-2.8 1-4.8Z"/></svg>${txt}</span>`;
+            <svg viewBox="3.5 0.4 17 17" width="14" height="14" fill="none" stroke="${c}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><path d="M12 3c1.2 3 4 4.2 4 7.8a4 4 0 0 1-8 0c0-1.3.5-2.3 1.1-3.2.4 1.9 1.9 2 1.9.2 0-1.6-1-2.8 1-4.8Z"/></svg>${txt}</span>`;
         ]]]
     styles: &header_styles
       card:
@@ -208,7 +222,7 @@ cards:
         styles: *therm_styles
       - type: custom:button-card
         entity: climate.hmip_heating_int0000004
-        name: Büro
+        name: Moritz
         show_icon: false
         show_name: true
         show_state: false
