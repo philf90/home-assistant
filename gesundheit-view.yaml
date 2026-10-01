@@ -1,0 +1,1769 @@
+# Gesundheit – komplette Ansicht (View) im Owlet-Stil
+#
+# Apple-Health-Daten aus der Companion App (Geraet "Philipps iPhone17Pro",
+# Sensoren sensor.philipps_iphone17pro_*), aufgeteilt in sechs Owlet-Huellen:
+#   - Aktivitaet heute: drei Ringe (Bewegung / Training / Schritte) gegen die
+#     Ziel-Helfer, Badge "x / 3 Ziele", Distanz, Stockwerke, Schritte 7 Tage
+#   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
+#   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
+#   - Vitalwerte: SpO2-Bogen (wie Heizung), Atemfrequenz, VO2max, Training
+#   - Energieumsatz: Gesamt-Badge, Ruhe/aktiv, 7 Tage gestapelt
+#   - Koerperwerte: nur sichtbar, sobald mindestens ein Wert existiert
+#
+# Passt zur Route /dashboard-home/gesundheit (Eintrag im "More"-Menue von
+# navbar-card.yaml / decluttering-templates.yaml, hinter "Netzwerk").
+#
+# Sichtbarkeit: View (visible) und jede Huelle (visibility) nur fuer Philipp.
+# Das versteckt nur die Darstellung -- andere Nutzer koennen die Sensoren
+# weiterhin z. B. im Verlauf oeffnen.
+#
+# Ziel-Helfer (UI: Einstellungen > Geraete & Dienste > Helfer > Zahlenwert,
+# ohne "initial", damit der Wert Neustarts ueberlebt):
+#   input_number.ziel_aktive_energie   400 kcal  (100-2000, Schritt 10)
+#   input_number.ziel_trainingszeit     30 min   (5-180, Schritt 5)
+#   input_number.ziel_schritte        7500 steps (1000-30000, Schritt 500)
+#
+# Hinweise zu den Diagrammen (apexcharts-card v2.2.3 / ApexCharts 5.3.3):
+#   - Gestapelte Saeulen brauchen einen gemeinsamen stack_group. Ohne ihn legt
+#     ApexCharts 5 jede Serie in eine eigene Gruppe -> Saeulen nebeneinander.
+#   - Legendentext hat in ApexCharts 5 padding-left:15px + margin-left:-15px
+#     (liegt ueber dem Farbpunkt); card_mod neutralisiert beides.
+#   - Verlaeufe lesen den Recorder (Standard 10 Tage) -> 7 Tage passen.
+#
+# Voraussetzung: custom:button-card + custom:apexcharts-card +
+#                custom:decluttering-card + card-mod (alle via HACS).
+title: Gesundheit
+path: gesundheit
+icon: mdi:heart-pulse
+visible:
+- user: 04c7352352c44b94a1c5557bb90aa99b
+type: sections
+max_columns: 2
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:fire
+      type: custom:button-card
+      name: Aktivität heute
+      label: Apple Health · Ziele über Helfer
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: |
+          [[[
+            // Zaehlt erreichte Tagesziele. Gruen = alle, Amber = teilweise, gedaempft = keins
+            const v=id=>parseFloat(states[id]?.state);
+            const pairs=[['sensor.philipps_iphone17pro_active_energy','input_number.ziel_aktive_energie'],['sensor.philipps_iphone17pro_exercise_time','input_number.ziel_trainingszeit'],['sensor.philipps_iphone17pro_health_steps','input_number.ziel_schritte']];
+            let ok=0; pairs.forEach(([a,g])=>{ if(!isNaN(v(a))&&!isNaN(v(g))&&v(g)>0&&v(a)>=v(g)) ok++; });
+            const c= ok===3?'#a6d49e':(ok>0?'#e6b566':'#6e7988');
+            const txt=ok+' / 3 Ziele';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${txt}</span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#f0736a'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(240, 115, 106, 0.12)
+        - border: 1px solid rgba(240, 115, 106, 0.2)
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.philipps_iphone17pro_active_energy
+      - sensor.philipps_iphone17pro_exercise_time
+      - sensor.philipps_iphone17pro_health_steps
+      - input_number.ziel_aktive_energie
+      - input_number.ziel_trainingszeit
+      - input_number.ziel_schritte
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      custom_fields:
+        rings: |
+          [[[
+            // Drei konzentrische Ringe (Bewegung / Training / Schritte) gegen die Ziel-Helfer.
+            // Strichstaerke 8 und Spur rgba(255,255,255,0.07) wie die Heizungs-Boegen.
+            const v=id=>{ const x=parseFloat(states[id]?.state); return isNaN(x)?null:x; };
+            const de=n=>n===null?'–':Math.round(n).toLocaleString('de-DE');
+            const rows=[
+              {id:'sensor.philipps_iphone17pro_active_energy', g:'input_number.ziel_aktive_energie', c:'#f0736a', r:50, l:'Bewegung', u:'kcal'},
+              {id:'sensor.philipps_iphone17pro_exercise_time', g:'input_number.ziel_trainingszeit', c:'#a6d49e', r:38, l:'Training', u:'min'},
+              {id:'sensor.philipps_iphone17pro_health_steps', g:'input_number.ziel_schritte', c:'#7fb3d5', r:26, l:'Schritte', u:''}
+            ];
+            const ring=x=>{ const C=2*Math.PI*x.r; const val=v(x.id), goal=v(x.g);
+              const p=(val!==null&&goal)?Math.max(0,Math.min(1,val/goal)):0;
+              return `<circle cx="60" cy="60" r="${x.r}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>`+
+                (p>0?`<circle cx="60" cy="60" r="${x.r}" fill="none" stroke="${x.c}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}"/>`:''); };
+            const leg=rows.map(x=>{ const val=v(x.id), goal=v(x.g); const pct=(val!==null&&goal)?Math.round(val/goal*100):null;
+              return `<div style="display:flex;flex-direction:column;gap:2px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#6e7988;"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.l}${pct!==null?' · '+pct+' %':''}</div>
+                <div style="color:#f2f5f8;font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;">${de(val)}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> / ${de(goal)} ${x.u}</span></div></div>`; }).join('');
+            return `<div style="display:flex;align-items:center;justify-content:space-evenly;gap:16px;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+              <svg viewBox="0 0 120 120" style="width:120px;height:120px;flex:none;transform:rotate(-90deg);">${rows.map(ring).join('')}</svg>
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;text-align:left;">${leg}</div></div>`;
+          ]]]
+      styles:
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0 2px 4px
+        custom_fields:
+          rings:
+          - width: 100%
+        grid:
+        - grid-template-areas: '"rings"'
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.philipps_iphone17pro_active_energy
+      - sensor.philipps_iphone17pro_exercise_time
+      - sensor.philipps_iphone17pro_health_steps
+      - input_number.ziel_aktive_energie
+      - input_number.ziel_trainingszeit
+      - input_number.ziel_schritte
+    - type: grid
+      cards:
+      - icon: mdi:map-marker-distance
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_walking_running_distance
+        name: Gehen + Laufen
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 2
+          factor: 1
+          unit: km
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#7fb3d5'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#7fb3d5'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#7fb3d514'
+          - border: '1px solid #7fb3d526'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      - icon: mdi:stairs-up
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_flights_climbed
+        name: Stockwerke
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: ''
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#e6b566'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#e6b566'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#e6b56614'
+          - border: '1px solid #e6b56626'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      columns: 2
+      square: false
+    - type: custom:apexcharts-card
+      apex_config:
+        chart:
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#6e7988'
+          height: 170
+          stacked: false
+          toolbar:
+            show: false
+        dataLabels:
+          enabled: false
+        grid:
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend:
+          fontSize: 11px
+          itemMargin:
+            horizontal: 10
+            vertical: 2
+          labels:
+            colors: '#8794a5'
+          markers:
+            size: 5
+            strokeWidth: 0
+          show: false
+        markers:
+          size: 4
+          strokeWidth: 0
+        plotOptions:
+          bar:
+            borderRadius: 4
+            columnWidth: 55%
+        stroke:
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+        xaxis:
+          labels:
+            format: dd.MM.
+      card_mod:
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          /* ApexCharts 5.3.3 setzt am Legendentext padding-left:15px + margin-left:-15px (Text liegt ueber dem Punkt).
+             Beides neutralisieren und echten Abstand zum Farbpunkt setzen. */
+          .apexcharts-legend-text {
+            margin-left: 0 !important;
+            padding-left: 6px !important;
+          }
+      graph_span: 7d
+      header:
+        show: false
+      series:
+      - type: column
+        entity: sensor.philipps_iphone17pro_health_steps
+        name: Schritte
+        color: '#7fb3d5'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: max
+        opacity: 1
+      span:
+        end: day
+      stacked: false
+      yaxis:
+      - apex_config:
+          forceNiceScale: true
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+          tickAmount: 4
+        decimals: 0
+        min: 0
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:heart-pulse
+      type: custom:button-card
+      name: Herz
+      label: Ruhepuls und HRV · 7 Tage
+      show_icon: true
+      show_name: true
+      show_label: true
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#f0736a'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(240, 115, 106, 0.12)
+        - border: 1px solid rgba(240, 115, 106, 0.2)
+      tap_action:
+        action: none
+    - type: grid
+      cards:
+      - icon: mdi:heart
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_resting_heart_rate
+        name: Ruhepuls
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: bpm
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#f0736a'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#f0736a'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#f0736a14'
+          - border: '1px solid #f0736a26'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      - icon: mdi:heart-flash
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_heart_rate_variability
+        name: HRV
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 1
+          factor: 1
+          unit: ms
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#b399d4'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#b399d4'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#b399d414'
+          - border: '1px solid #b399d426'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      - icon: mdi:walk
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_walking_heart_rate_average
+        name: Puls beim Gehen
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: bpm
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#e6b566'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#e6b566'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#e6b56614'
+          - border: '1px solid #e6b56626'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      - icon: mdi:heart-outline
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_heart_rate
+        name: Herzfrequenz
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: bpm
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#f0736a'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#f0736a'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#f0736a14'
+          - border: '1px solid #f0736a26'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      columns: 2
+      square: false
+    - type: custom:apexcharts-card
+      apex_config:
+        chart:
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#6e7988'
+          height: 170
+          stacked: false
+          toolbar:
+            show: false
+        dataLabels:
+          enabled: false
+        grid:
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend:
+          fontSize: 11px
+          itemMargin:
+            horizontal: 10
+            vertical: 2
+          labels:
+            colors: '#8794a5'
+          markers:
+            size: 5
+            strokeWidth: 0
+          show: true
+        markers:
+          size: 4
+          strokeWidth: 0
+        plotOptions:
+          bar:
+            borderRadius: 4
+            columnWidth: 55%
+        stroke:
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+        xaxis:
+          labels:
+            format: dd.MM.
+      card_mod:
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          /* ApexCharts 5.3.3 setzt am Legendentext padding-left:15px + margin-left:-15px (Text liegt ueber dem Punkt).
+             Beides neutralisieren und echten Abstand zum Farbpunkt setzen. */
+          .apexcharts-legend-text {
+            margin-left: 0 !important;
+            padding-left: 6px !important;
+          }
+      graph_span: 7d
+      header:
+        show: false
+      series:
+      - type: line
+        entity: sensor.philipps_iphone17pro_resting_heart_rate
+        name: Ruhepuls
+        color: '#f0736a'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: avg
+        yaxis_id: hr
+      - type: line
+        entity: sensor.philipps_iphone17pro_heart_rate_variability
+        name: HRV
+        color: '#b399d4'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: avg
+        yaxis_id: hrv
+      span:
+        end: day
+      stacked: false
+      yaxis:
+      - align_to: 5
+        apex_config:
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+          tickAmount: 3
+        decimals: 0
+        id: hr
+        max: '|+5|'
+        min: '|-5|'
+      - align_to: 5
+        apex_config:
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+          tickAmount: 3
+        decimals: 0
+        id: hrv
+        max: '|+5|'
+        min: '|-5|'
+        opposite: true
+- type: grid
+  cards:
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:sleep
+      type: custom:button-card
+      name: Schlaf
+      label: Letzte Nacht · 7 Nächte
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: |
+          [[[
+            const v=parseFloat(states['sensor.philipps_iphone17pro_sleep_duration']?.state);
+            const txt=isNaN(v)?'–':(Math.floor(v/60)+' h '+String(Math.round(v%60)).padStart(2,'0')+' min');
+            const c='#b399d4';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${txt}</span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#b399d4'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(179, 153, 212, 0.12)
+        - border: 1px solid rgba(179, 153, 212, 0.2)
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.philipps_iphone17pro_sleep_duration
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      custom_fields:
+        seg: |
+          [[[
+            // Segmentbalken der letzten Nacht, Breite proportional zur Dauer
+            const ph=[['sensor.philipps_iphone17pro_deep_sleep','Tief','#b399d4'],['sensor.philipps_iphone17pro_core_sleep','Kern','#7fb3d5'],['sensor.philipps_iphone17pro_rem_sleep','REM','#77d4d0'],['sensor.philipps_iphone17pro_awake','Wach','#e6b566']];
+            const d=ph.map(([id,n,c])=>({n,c,v:parseFloat(states[id]?.state)})).filter(x=>!isNaN(x.v)&&x.v>0);
+            if(!d.length) return `<div style="color:#6e7988;font-size:12.5px;">Noch keine Schlafdaten</div>`;
+            const bar=d.map(x=>`<span style="flex:${x.v};background:${x.c};"></span>`).join('');
+            const leg=d.map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.n} <b style="color:#f2f5f8;font-weight:700;">${Math.round(x.v)} min</b></span>`).join('');
+            return `<div style="display:flex;flex-direction:column;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">
+              <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;">${bar}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11.5px;color:#8794a5;font-variant-numeric:tabular-nums;">${leg}</div></div>`;
+          ]]]
+      styles:
+        card:
+        - border-radius: 14px
+        - padding: 12px
+        - box-shadow: none
+        - background: rgba(255,255,255,0.028)
+        - border: 1px solid rgba(255,255,255,0.06)
+        custom_fields:
+          seg:
+          - width: 100%
+        grid:
+        - grid-template-areas: '"seg"'
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.philipps_iphone17pro_deep_sleep
+      - sensor.philipps_iphone17pro_core_sleep
+      - sensor.philipps_iphone17pro_rem_sleep
+      - sensor.philipps_iphone17pro_awake
+    - type: custom:apexcharts-card
+      apex_config:
+        chart:
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#6e7988'
+          height: 170
+          stacked: true
+          toolbar:
+            show: false
+        dataLabels:
+          enabled: false
+        grid:
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend:
+          fontSize: 11px
+          itemMargin:
+            horizontal: 10
+            vertical: 2
+          labels:
+            colors: '#8794a5'
+          markers:
+            size: 5
+            strokeWidth: 0
+          show: true
+        markers:
+          size: 4
+          strokeWidth: 0
+        plotOptions:
+          bar:
+            borderRadius: 4
+            columnWidth: 55%
+        stroke:
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+        xaxis:
+          labels:
+            format: dd.MM.
+      card_mod:
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          /* ApexCharts 5.3.3 setzt am Legendentext padding-left:15px + margin-left:-15px (Text liegt ueber dem Punkt).
+             Beides neutralisieren und echten Abstand zum Farbpunkt setzen. */
+          .apexcharts-legend-text {
+            margin-left: 0 !important;
+            padding-left: 6px !important;
+          }
+      graph_span: 7d
+      header:
+        show: false
+      series:
+      - type: column
+        entity: sensor.philipps_iphone17pro_deep_sleep
+        name: Tief
+        color: '#b399d4'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: last
+        opacity: 1
+        stack_group: tag
+        transform: return x / 60;
+        unit: h
+      - type: column
+        entity: sensor.philipps_iphone17pro_core_sleep
+        name: Kern
+        color: '#7fb3d5'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: last
+        opacity: 1
+        stack_group: tag
+        transform: return x / 60;
+        unit: h
+      - type: column
+        entity: sensor.philipps_iphone17pro_rem_sleep
+        name: REM
+        color: '#77d4d0'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: last
+        opacity: 1
+        stack_group: tag
+        transform: return x / 60;
+        unit: h
+      - type: column
+        entity: sensor.philipps_iphone17pro_awake
+        name: Wach
+        color: '#e6b566'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: last
+        opacity: 1
+        stack_group: tag
+        transform: return x / 60;
+        unit: h
+      span:
+        end: day
+      stacked: true
+      yaxis:
+      - apex_config:
+          forceNiceScale: true
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:1}); }
+          tickAmount: 4
+        decimals: 1
+        min: 0
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:lungs
+      type: custom:button-card
+      name: Vitalwerte
+      label: letzte Messwerte aus Apple Health
+      show_icon: true
+      show_name: true
+      show_label: true
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#77d4d0'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(119, 212, 208, 0.12)
+        - border: 1px solid rgba(119, 212, 208, 0.2)
+      tap_action:
+        action: none
+    - type: grid
+      cards:
+      - type: custom:button-card
+        entity: sensor.philipps_iphone17pro_blood_oxygen
+        name: Blutsauerstoff
+        show_icon: false
+        show_name: true
+        show_state: false
+        custom_fields:
+          dial: |
+            [[[
+              // 270-Grad-Bogen wie Heizung. Skala 80-100 %.
+              // Farbe: gruen ab 95 % (ueblicher Ruhe-Referenzbereich), amber 90-94, rot darunter. Anzeigehilfe, keine Diagnose.
+              const e=(typeof entity!=='undefined')?entity:null;
+              const v=e?parseFloat(e.state):NaN;
+              let col='#6e7988', txt='Keine Daten';
+              if(!isNaN(v)){ if(v>=95){col='#a6d49e';txt='Referenzbereich';} else if(v>=90){col='#e6b566';txt='unter 95 %';} else {col='#f0736a';txt='unter 90 %';} }
+              const R=48, C=2*Math.PI*R, track=C*0.75;
+              const frac=isNaN(v)?0:Math.max(0,Math.min(1,(v-80)/20));
+              return `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                <div style="position:relative;width:118px;height:118px;">
+                  <svg viewBox="0 0 118 118" style="width:118px;height:118px;"><g transform="rotate(135 59 59)">
+                    <circle cx="59" cy="59" r="${R}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8" stroke-linecap="round" stroke-dasharray="${track.toFixed(1)} ${C.toFixed(1)}"/>
+                    ${frac>0?`<circle cx="59" cy="59" r="${R}" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(track*frac).toFixed(1)} ${C.toFixed(1)}"/>`:''}
+                  </g></svg>
+                  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
+                    <div style="color:#f2f5f8;font-weight:750;letter-spacing:-0.02em;"><span style="font-size:26px;font-variant-numeric:tabular-nums;">${isNaN(v)?'–':Math.round(v)}</span><span style="font-size:14px;">%</span></div>
+                    <div style="font-size:11px;color:#6e7988;margin-top:3px;">SpO₂</div>
+                  </div></div>
+                <div style="font-size:11.5px;font-weight:600;color:${col};">${txt}</div></div>`;
+            ]]]
+        styles:
+          name:
+          - justify-self: start
+          - align-self: start
+          - width: 100%
+          - font-size: 13px
+          - font-weight: 700
+          - letter-spacing: -0.01em
+          - color: '#f2f5f8'
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          card:
+          - border-radius: 16px
+          - padding: 13px 12px 12px
+          - box-shadow: none
+          - background: rgba(255,255,255,0.028)
+          - border: 1px solid rgba(255,255,255,0.06)
+          custom_fields:
+            dial:
+            - align-self: center
+            - margin-top: 4px
+          grid:
+          - grid-template-areas: '"n" "dial"'
+          - grid-template-rows: min-content min-content
+          - justify-items: center
+      - type: vertical-stack
+        cards:
+        - icon: mdi:lungs
+          type: custom:button-card
+          entity: sensor.philipps_iphone17pro_respiratory_rate
+          name: Atemfrequenz
+          label: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+              const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+              return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+            ]]]
+          show_icon: true
+          show_name: true
+          show_label: true
+          show_state: false
+          variables:
+            decimals: 0
+            factor: 1
+            unit: /min
+          styles:
+            icon:
+            - width: 16px
+            - height: 16px
+            - color: '#77d4d0'
+            - align-self: center
+            - transform: translateY(-4px)
+            name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - margin-top: 0px
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+            - line-height: 1
+            label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#77d4d0'
+            card:
+            - border-radius: 14px
+            - padding: 10px 12px
+            - box-shadow: none
+            - background: '#77d4d014'
+            - border: '1px solid #77d4d026'
+            grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"l l" "i n"'
+            - grid-template-rows: min-content min-content
+            - align-items: center
+            img_cell:
+            - width: 16px
+            - height: 16px
+            - margin-right: 6px
+            - align-self: center
+            - margin-top: 0px
+        - icon: mdi:run
+          type: custom:button-card
+          entity: sensor.philipps_iphone17pro_vo2_max
+          name: VO2max
+          label: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+              const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+              return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+            ]]]
+          show_icon: true
+          show_name: true
+          show_label: true
+          show_state: false
+          variables:
+            decimals: 1
+            factor: 1
+            unit: ml/kg·min
+          styles:
+            icon:
+            - width: 16px
+            - height: 16px
+            - color: '#a6d49e'
+            - align-self: center
+            - transform: translateY(-4px)
+            name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - margin-top: 0px
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+            - line-height: 1
+            label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#a6d49e'
+            card:
+            - border-radius: 14px
+            - padding: 10px 12px
+            - box-shadow: none
+            - background: '#a6d49e14'
+            - border: '1px solid #a6d49e26'
+            grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"l l" "i n"'
+            - grid-template-rows: min-content min-content
+            - align-items: center
+            img_cell:
+            - width: 16px
+            - height: 16px
+            - margin-right: 6px
+            - align-self: center
+            - margin-top: 0px
+        - icon: mdi:run-fast
+          type: custom:button-card
+          entity: sensor.philipps_iphone17pro_exercise_time
+          name: Training heute
+          label: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+              const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+              return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+            ]]]
+          show_icon: true
+          show_name: true
+          show_label: true
+          show_state: false
+          variables:
+            decimals: 0
+            factor: 1
+            unit: min
+          styles:
+            icon:
+            - width: 16px
+            - height: 16px
+            - color: '#a6d49e'
+            - align-self: center
+            - transform: translateY(-4px)
+            name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 11px
+            - color: '#6e7988'
+            - margin-top: 0px
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+            - line-height: 1
+            label:
+            - justify-self: start
+            - align-self: end
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#a6d49e'
+            card:
+            - border-radius: 14px
+            - padding: 10px 12px
+            - box-shadow: none
+            - background: '#a6d49e14'
+            - border: '1px solid #a6d49e26'
+            grid:
+            - grid-template-columns: min-content 1fr
+            - grid-template-areas: '"l l" "i n"'
+            - grid-template-rows: min-content min-content
+            - align-items: center
+            img_cell:
+            - width: 16px
+            - height: 16px
+            - margin-right: 6px
+            - align-self: center
+            - margin-top: 0px
+      columns: 2
+      square: false
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:lightning-bolt
+      type: custom:button-card
+      name: Energieumsatz
+      label: heute · Ruhe + aktiv
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: |
+          [[[
+            const a=parseFloat(states['sensor.philipps_iphone17pro_active_energy']?.state), r=parseFloat(states['sensor.philipps_iphone17pro_resting_energy']?.state);
+            const t=(isNaN(a)?0:a)+(isNaN(r)?0:r);
+            const txt=(isNaN(a)&&isNaN(r))?'–':Math.round(t).toLocaleString('de-DE')+' kcal';
+            const c='#e6b566';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${txt}</span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#e6b566'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(230, 181, 102, 0.12)
+        - border: 1px solid rgba(230, 181, 102, 0.2)
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.philipps_iphone17pro_active_energy
+      - sensor.philipps_iphone17pro_resting_energy
+    - type: grid
+      cards:
+      - icon: mdi:sofa
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_resting_energy
+        name: Ruheenergie
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: kcal
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#8794a5'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#8794a5'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#8794a514'
+          - border: '1px solid #8794a526'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      - icon: mdi:fire
+        type: custom:button-card
+        entity: sensor.philipps_iphone17pro_active_energy
+        name: Aktive Energie
+        label: |
+          [[[
+            const e=(typeof entity!=='undefined')?entity:null;
+            const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+            const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
+            return `${n}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          decimals: 0
+          factor: 1
+          unit: kcal
+        styles:
+          icon:
+          - width: 16px
+          - height: 16px
+          - color: '#f0736a'
+          - align-self: center
+          - transform: translateY(-4px)
+          name:
+          - justify-self: start
+          - align-self: center
+          - font-size: 11px
+          - color: '#6e7988'
+          - margin-top: 0px
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - line-height: 1
+          label:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#f0736a'
+          card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: '#f0736a14'
+          - border: '1px solid #f0736a26'
+          grid:
+          - grid-template-columns: min-content 1fr
+          - grid-template-areas: '"l l" "i n"'
+          - grid-template-rows: min-content min-content
+          - align-items: center
+          img_cell:
+          - width: 16px
+          - height: 16px
+          - margin-right: 6px
+          - align-self: center
+          - margin-top: 0px
+      columns: 2
+      square: false
+    - type: custom:apexcharts-card
+      apex_config:
+        chart:
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#6e7988'
+          height: 170
+          stacked: true
+          toolbar:
+            show: false
+        dataLabels:
+          enabled: false
+        grid:
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend:
+          fontSize: 11px
+          itemMargin:
+            horizontal: 10
+            vertical: 2
+          labels:
+            colors: '#8794a5'
+          markers:
+            size: 5
+            strokeWidth: 0
+          show: true
+        markers:
+          size: 4
+          strokeWidth: 0
+        plotOptions:
+          bar:
+            borderRadius: 4
+            columnWidth: 55%
+        stroke:
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+        xaxis:
+          labels:
+            format: dd.MM.
+      card_mod:
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          /* ApexCharts 5.3.3 setzt am Legendentext padding-left:15px + margin-left:-15px (Text liegt ueber dem Punkt).
+             Beides neutralisieren und echten Abstand zum Farbpunkt setzen. */
+          .apexcharts-legend-text {
+            margin-left: 0 !important;
+            padding-left: 6px !important;
+          }
+      graph_span: 7d
+      header:
+        show: false
+      series:
+      - type: column
+        entity: sensor.philipps_iphone17pro_resting_energy
+        name: Ruhe
+        color: '#8794a5'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: max
+        opacity: 1
+        stack_group: tag
+      - type: column
+        entity: sensor.philipps_iphone17pro_active_energy
+        name: Aktiv
+        color: '#f0736a'
+        group_by:
+          duration: 1d
+          fill: 'null'
+          func: max
+        opacity: 1
+        stack_group: tag
+      span:
+        end: day
+      stacked: true
+      yaxis:
+      - apex_config:
+          forceNiceScale: true
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+          tickAmount: 4
+        decimals: 0
+        min: 0
+  - type: conditional
+    conditions:
+    - conditions:
+      - entity: sensor.philipps_iphone17pro_weight
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_body_fat_percentage
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_lean_body_mass
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_height
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_blood_pressure_systolic
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_blood_pressure_diastolic
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_body_temperature
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_basal_body_temperature
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_blood_glucose
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      - entity: sensor.philipps_iphone17pro_water
+        condition: state
+        state_not:
+        - unavailable
+        - unknown
+      condition: or
+    visibility:
+    - condition: user
+      users:
+      - 04c7352352c44b94a1c5557bb90aa99b
+    card:
+      type: vertical-stack
+      card_mod:
+        style: |
+          #root {
+            background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+            padding: 16px 18px !important;
+            gap: 10px !important;
+          }
+      cards:
+      - icon: mdi:human
+        type: custom:button-card
+        name: Körperwerte
+        label: erscheint, sobald Apple Health Werte liefert
+        show_icon: true
+        show_name: true
+        show_label: true
+        styles:
+          icon:
+          - width: 23px
+          - height: 23px
+          - color: '#7fb3d5'
+          name:
+          - justify-self: start
+          - align-self: end
+          - font-size: 17px
+          - font-weight: 700
+          - letter-spacing: -0.02em
+          - color: '#f2f5f8'
+          label:
+          - justify-self: start
+          - align-self: start
+          - font-size: 12.5px
+          - color: '#6e7988'
+          - margin-top: 1px
+          card:
+          - background: none
+          - box-shadow: none
+          - border: none
+          - padding: 2px 2px 6px
+          custom_fields:
+            badge:
+            - justify-self: end
+            - align-self: center
+          grid:
+          - grid-template-areas: '"i n badge" "i l badge"'
+          - grid-template-columns: min-content 1fr min-content
+          - grid-template-rows: min-content min-content
+          img_cell:
+          - width: 44px
+          - height: 44px
+          - border-radius: 13px
+          - margin-right: 14px
+          - align-self: center
+          - background: rgba(127, 179, 213, 0.12)
+          - border: 1px solid rgba(127, 179, 213, 0.2)
+        tap_action:
+          action: none
+      - type: custom:button-card
+        show_icon: false
+        show_name: false
+        show_state: false
+        custom_fields:
+          list: |
+            [[[
+              // Listet nur Sensoren mit Wert, damit keine leeren Kacheln entstehen
+              const L=[['sensor.philipps_iphone17pro_weight','Gewicht','kg',1],['sensor.philipps_iphone17pro_body_fat_percentage','Körperfett','%',1],['sensor.philipps_iphone17pro_lean_body_mass','Fettfreie Masse','kg',1],['sensor.philipps_iphone17pro_height','Größe','cm',0],['sensor.philipps_iphone17pro_blood_pressure_systolic','Blutdruck sys.','mmHg',0],['sensor.philipps_iphone17pro_blood_pressure_diastolic','Blutdruck dia.','mmHg',0],['sensor.philipps_iphone17pro_body_temperature','Körpertemperatur','°C',1],['sensor.philipps_iphone17pro_basal_body_temperature','Basaltemperatur','°C',1],['sensor.philipps_iphone17pro_blood_glucose','Blutzucker','mg/dL',0],['sensor.philipps_iphone17pro_water','Wasser','ml',0]];
+              const rows=L.map(([id,n,u,d])=>({n,u,v:parseFloat(states[id]?.state),d})).filter(x=>!isNaN(x.v));
+              return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">${rows.map(x=>`
+                <div style="border-radius:14px;padding:10px 12px;background:#7fb3d514;border:1px solid #7fb3d526;text-align:left;">
+                  <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#7fb3d5;font-variant-numeric:tabular-nums;">${x.v.toFixed(x.d).replace('.',',')}<span style="font-size:0.55em;color:#6e7988;font-weight:600;margin-left:3px;">${x.u}</span></div>
+                  <div style="font-size:11px;color:#6e7988;margin-top:2px;">${x.n}</div></div>`).join('')}</div>`;
+            ]]]
+        styles:
+          card:
+          - background: none
+          - box-shadow: none
+          - border: none
+          - padding: '0'
+          custom_fields:
+            list:
+            - width: 100%
+          grid:
+          - grid-template-areas: '"list"'
+        tap_action:
+          action: none
+        triggers_update:
+        - sensor.philipps_iphone17pro_weight
+        - sensor.philipps_iphone17pro_body_fat_percentage
+        - sensor.philipps_iphone17pro_lean_body_mass
+        - sensor.philipps_iphone17pro_height
+        - sensor.philipps_iphone17pro_blood_pressure_systolic
+        - sensor.philipps_iphone17pro_blood_pressure_diastolic
+        - sensor.philipps_iphone17pro_body_temperature
+        - sensor.philipps_iphone17pro_basal_body_temperature
+        - sensor.philipps_iphone17pro_blood_glucose
+        - sensor.philipps_iphone17pro_water
+  - type: custom:decluttering-card
+    template: floating_navbar
