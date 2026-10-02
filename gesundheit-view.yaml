@@ -29,6 +29,10 @@
 #   - Legendentext hat in ApexCharts 5 padding-left:15px + margin-left:-15px
 #     (liegt ueber dem Farbpunkt); card_mod neutralisiert beides.
 #   - Verlaeufe lesen den Recorder (Standard 10 Tage) -> 7 Tage passen.
+#   - Gestapelte Diagramme haben KEINE Karten-yaxis: deren "auto"-max nimmt die
+#     groesste Einzelserie statt der Stapelsumme und schneidet obere Segmente ab.
+#     Die Achse steht stattdessen in apex_config.yaxis (ApexCharts rechnet mit Summe).
+#   - Schlafdauern: ueber 60 min als "x h mm min", sonst "n min" (erst runden).
 #
 # Voraussetzung: custom:button-card + custom:apexcharts-card +
 #                custom:decluttering-card + card-mod (alle via HACS).
@@ -813,7 +817,8 @@ sections:
         badge: |
           [[[
             const v=parseFloat(states['sensor.philipps_iphone17pro_sleep_duration']?.state);
-            const txt=isNaN(v)?'–':(Math.floor(v/60)+' h '+String(Math.round(v%60)).padStart(2,'0')+' min');
+            const m=Math.round(v);
+            const txt=isNaN(v)?'–':(Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min');
             const c='#b399d4';
             return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${txt}</span>`;
           ]]]
@@ -868,11 +873,13 @@ sections:
         seg: |
           [[[
             // Segmentbalken der letzten Nacht, Breite proportional zur Dauer
+            // Ueber 60 min als Stunden + Minuten, sonst nur Minuten. Erst runden, damit nie "1 h 60 min" entsteht.
+            const fmt=v=>{ const m=Math.round(v); return m>60?(Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'):(m+' min'); };
             const ph=[['sensor.philipps_iphone17pro_deep_sleep','Tief','#b399d4'],['sensor.philipps_iphone17pro_core_sleep','Kern','#7fb3d5'],['sensor.philipps_iphone17pro_rem_sleep','REM','#77d4d0'],['sensor.philipps_iphone17pro_awake','Wach','#e6b566']];
             const d=ph.map(([id,n,c])=>({n,c,v:parseFloat(states[id]?.state)})).filter(x=>!isNaN(x.v)&&x.v>0);
             if(!d.length) return `<div style="color:#6e7988;font-size:12.5px;">Noch keine Schlafdaten</div>`;
             const bar=d.map(x=>`<span style="flex:${x.v};background:${x.c};"></span>`).join('');
-            const leg=d.map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.n} <b style="color:#f2f5f8;font-weight:700;">${Math.round(x.v)} min</b></span>`).join('');
+            const leg=d.map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.n} <b style="color:#f2f5f8;font-weight:700;">${fmt(x.v)}</b></span>`).join('');
             return `<div style="display:flex;flex-direction:column;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">
               <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;">${bar}</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11.5px;color:#8794a5;font-variant-numeric:tabular-nums;">${leg}</div></div>`;
@@ -937,6 +944,12 @@ sections:
         xaxis:
           labels:
             format: dd.MM.
+        yaxis:
+          forceNiceScale: true
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:1}); }
+          min: 0
+          tickAmount: 4
       card_mod:
         style: |
           ha-card {
@@ -1005,14 +1018,6 @@ sections:
       span:
         end: day
       stacked: true
-      yaxis:
-      - apex_config:
-          forceNiceScale: true
-          labels:
-            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:1}); }
-          tickAmount: 4
-        decimals: 1
-        min: 0
   - type: vertical-stack
     visibility:
     - condition: user
@@ -1559,6 +1564,12 @@ sections:
         xaxis:
           labels:
             format: dd.MM.
+        yaxis:
+          forceNiceScale: true
+          labels:
+            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+          min: 0
+          tickAmount: 4
       card_mod:
         style: |
           ha-card {
@@ -1599,14 +1610,6 @@ sections:
       span:
         end: day
       stacked: true
-      yaxis:
-      - apex_config:
-          forceNiceScale: true
-          labels:
-            formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
-          tickAmount: 4
-        decimals: 0
-        min: 0
   - type: conditional
     conditions:
     - conditions:
