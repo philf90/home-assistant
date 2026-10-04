@@ -6,6 +6,7 @@
 #     Ziel-Helfer, Badge "x / 3 Ziele", Distanz, Stockwerke, Schritte 7 Tage
 #   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
+#     (aus sensor.schlaf_letzte_nacht, siehe unten; Naechte ohne Uhr bleiben leer)
 #   - Vitalwerte: SpO2-Bogen (wie Heizung), Atemfrequenz, VO2max, Training
 #   - Energieumsatz: Gesamt-Badge, Ruhe/aktiv, 7 Tage gestapelt
 #   - Koerperwerte: nur sichtbar, sobald mindestens ein Wert existiert
@@ -34,8 +35,75 @@
 #     Die Achse steht stattdessen in apex_config.yaxis (ApexCharts rechnet mit Summe).
 #   - Schlafdauern: ueber 60 min als "x h mm min", sonst "n min" (erst runden).
 #
+# WARUM EIN ZUSAETZLICHER SCHLAF-SENSOR?
+#   Nach einer Nacht ohne Uhr liefert die Companion App keine leeren Werte,
+#   sondern behaelt die der Vornacht -- und schreibt sie u. U. sogar mit neuem
+#   Zeitstempel erneut (beobachtet 03.10.2026 20:49: 464/36/303/125/11 min wie
+#   am 02.10.). Das Diagramm zeigte so eine Kopie der Vornacht, "Letzte Nacht"
+#   eine veraltete Nacht. Der Sensor unten uebernimmt Werte nur, wenn sich die
+#   Kombination Gesamt/Tief/Kern/REM/Wach aendert (zwei echte Naechte sind
+#   praktisch nie in allen fuenf Werten minutengenau gleich). Bleibt sie gleich,
+#   entsteht kein Verlaufseintrag -> der Tag bleibt dank fill: 'null' leer.
+#   Ausgeloest von allen fuenf Sensoren, weil die App sie nacheinander schreibt;
+#   der letzte Durchlauf sieht den vollstaendigen neuen Stand.
+#   Grenze: Eine Nacht zaehlt fuer den Tag, an dem die Daten ankommen.
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICHER SENSOR  (configuration.yaml bzw. packages/) - EINMALIG:
+# Danach: Entwicklerwerkzeuge > YAML > "Template-Entitaeten" neu laden.
+# ---------------------------------------------------------------------------
+# template:
+#   - triggers:
+#       - trigger: state
+#         entity_id:
+#           - sensor.philipps_iphone17pro_sleep_duration
+#           - sensor.philipps_iphone17pro_deep_sleep
+#           - sensor.philipps_iphone17pro_core_sleep
+#           - sensor.philipps_iphone17pro_rem_sleep
+#           - sensor.philipps_iphone17pro_awake
+#         not_to: [unavailable, unknown]
+#     sensor:
+#       - name: Schlaf letzte Nacht
+#         unique_id: schlaf_letzte_nacht
+#         default_entity_id: sensor.schlaf_letzte_nacht
+#         icon: mdi:sleep
+#         unit_of_measurement: min
+#         device_class: duration
+#         state_class: measurement
+#         variables:
+#           sig: >-
+#             {{ ['sleep_duration','deep_sleep','core_sleep','rem_sleep','awake']
+#                | map('regex_replace','^','sensor.philipps_iphone17pro_')
+#                | map('states') | join('/') }}
+#         # this = Zustand VOR dieser Auswertung -> Vergleich mit letzter Signatur
+#         state: >-
+#           {{ states('sensor.philipps_iphone17pro_sleep_duration')
+#              if sig != this.attributes.get('sig') else this.state }}
+#         attributes:
+#           sig: "{{ sig }}"
+#           tief: >-
+#             {{ states('sensor.philipps_iphone17pro_deep_sleep') | float(0)
+#                if sig != this.attributes.get('sig') else this.attributes.get('tief') }}
+#           kern: >-
+#             {{ states('sensor.philipps_iphone17pro_core_sleep') | float(0)
+#                if sig != this.attributes.get('sig') else this.attributes.get('kern') }}
+#           rem: >-
+#             {{ states('sensor.philipps_iphone17pro_rem_sleep') | float(0)
+#                if sig != this.attributes.get('sig') else this.attributes.get('rem') }}
+#           wach: >-
+#             {{ states('sensor.philipps_iphone17pro_awake') | float(0)
+#                if sig != this.attributes.get('sig') else this.attributes.get('wach') }}
+#           aktualisiert: >-
+#             {{ now().isoformat()
+#                if sig != this.attributes.get('sig') else this.attributes.get('aktualisiert') }}
+#
+#   -> Ergebnis: sensor.schlaf_letzte_nacht = Gesamtdauer (min), Attribute
+#      tief/kern/rem/wach (min) + aktualisiert (ISO-Zeitpunkt der Nacht-Uebernahme).
+#      Die Karte nennt die Nacht nur "Letzte Nacht", wenn aktualisiert = heute.
+#
 # Voraussetzung: custom:button-card + custom:apexcharts-card +
-#                custom:decluttering-card + card-mod (alle via HACS).
+#                custom:decluttering-card + card-mod (alle via HACS)
+#                + obiger Template-Sensor.
 title: Gesundheit
 path: gesundheit
 icon: mdi:heart-pulse
@@ -816,7 +884,11 @@ sections:
       custom_fields:
         badge: |
           [[[
-            const v=parseFloat(states['sensor.philipps_iphone17pro_sleep_duration']?.state);
+            // Nur eine heute uebernommene Nacht ist "Letzte Nacht" (siehe sensor.schlaf_letzte_nacht)
+            const s=states['sensor.schlaf_letzte_nacht'];
+            const akt=s?.attributes?.aktualisiert?new Date(s.attributes.aktualisiert):null;
+            const heute=!!akt&&akt.toDateString()===new Date().toDateString();
+            const v=heute?parseFloat(s.state):NaN;
             const m=Math.round(v);
             const txt=isNaN(v)?'–':(Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min');
             const c='#b399d4';
@@ -864,7 +936,7 @@ sections:
       tap_action:
         action: none
       triggers_update:
-      - sensor.philipps_iphone17pro_sleep_duration
+      - sensor.schlaf_letzte_nacht
     - type: custom:button-card
       show_icon: false
       show_name: false
@@ -875,9 +947,16 @@ sections:
             // Segmentbalken der letzten Nacht, Breite proportional zur Dauer
             // Ueber 60 min als Stunden + Minuten, sonst nur Minuten. Erst runden, damit nie "1 h 60 min" entsteht.
             const fmt=v=>{ const m=Math.round(v); return m>60?(Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'):(m+' min'); };
-            const ph=[['sensor.philipps_iphone17pro_deep_sleep','Tief','#b399d4'],['sensor.philipps_iphone17pro_core_sleep','Kern','#7fb3d5'],['sensor.philipps_iphone17pro_rem_sleep','REM','#77d4d0'],['sensor.philipps_iphone17pro_awake','Wach','#e6b566']];
-            const d=ph.map(([id,n,c])=>({n,c,v:parseFloat(states[id]?.state)})).filter(x=>!isNaN(x.v)&&x.v>0);
-            if(!d.length) return `<div style="color:#6e7988;font-size:12.5px;">Noch keine Schlafdaten</div>`;
+            const s=states['sensor.schlaf_letzte_nacht'];
+            const a=s?.attributes||{};
+            const ph=[['tief','Tief','#b399d4'],['kern','Kern','#7fb3d5'],['rem','REM','#77d4d0'],['wach','Wach','#e6b566']];
+            const d=ph.map(([k,n,c])=>({n,c,v:parseFloat(a[k])})).filter(x=>!isNaN(x.v)&&x.v>0);
+            const hinweis=t=>`<div style="color:#6e7988;font-size:12.5px;">${t}</div>`;
+            if(!d.length||!a.aktualisiert) return hinweis('Noch keine Schlafdaten');
+            // Nacht ohne Uhr: App liefert keine neue Nacht -> keine veralteten Werte als "Letzte Nacht" zeigen
+            const akt=new Date(a.aktualisiert);
+            if(akt.toDateString()!==new Date().toDateString())
+              return hinweis(`Keine Schlafdaten für letzte Nacht · zuletzt ${akt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})}`);
             const bar=d.map(x=>`<span style="flex:${x.v};background:${x.c};"></span>`).join('');
             const leg=d.map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.n} <b style="color:#f2f5f8;font-weight:700;">${fmt(x.v)}</b></span>`).join('');
             return `<div style="display:flex;flex-direction:column;gap:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">
@@ -899,10 +978,7 @@ sections:
       tap_action:
         action: none
       triggers_update:
-      - sensor.philipps_iphone17pro_deep_sleep
-      - sensor.philipps_iphone17pro_core_sleep
-      - sensor.philipps_iphone17pro_rem_sleep
-      - sensor.philipps_iphone17pro_awake
+      - sensor.schlaf_letzte_nacht
     - type: custom:apexcharts-card
       apex_config:
         chart:
@@ -968,7 +1044,8 @@ sections:
         show: false
       series:
       - type: column
-        entity: sensor.philipps_iphone17pro_deep_sleep
+        entity: sensor.schlaf_letzte_nacht
+        attribute: tief
         name: Tief
         color: '#b399d4'
         group_by:
@@ -980,7 +1057,8 @@ sections:
         transform: return x / 60;
         unit: h
       - type: column
-        entity: sensor.philipps_iphone17pro_core_sleep
+        entity: sensor.schlaf_letzte_nacht
+        attribute: kern
         name: Kern
         color: '#7fb3d5'
         group_by:
@@ -992,7 +1070,8 @@ sections:
         transform: return x / 60;
         unit: h
       - type: column
-        entity: sensor.philipps_iphone17pro_rem_sleep
+        entity: sensor.schlaf_letzte_nacht
+        attribute: rem
         name: REM
         color: '#77d4d0'
         group_by:
@@ -1004,7 +1083,8 @@ sections:
         transform: return x / 60;
         unit: h
       - type: column
-        entity: sensor.philipps_iphone17pro_awake
+        entity: sensor.schlaf_letzte_nacht
+        attribute: wach
         name: Wach
         color: '#e6b566'
         group_by:
