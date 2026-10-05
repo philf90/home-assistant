@@ -25,17 +25,26 @@
 #   - Bewegung ("faehrt/steht")
 #   - Standheizung (climate) inkl. Restlaufzeit
 #   - Startkilometerstand der beiden Fahrtspeicher ("ab X km" im Blockkopf)
-#   - Dauer und Durchschnittstempo der letzten Fahrt
 # Die betroffenen Plaetze sind mit vorhandenen Werten neu belegt (Verbindung,
 # Feststellbremse, Oelstand); Standort-Karte und Standheizung entfallen. Details
 # im Vorschlagsdokument autos-karten-v2-vorschlaege.html.
 #
-# ZWEITQUELLE: Fuer Dauer und Ø Tempo der letzten Fahrt gibt es in vag_connect
-# keine Entsprechung -- diese beiden Zellen lesen den Kurzzeitspeicher des
-# Bordcomputers aus cupra_eu_data_act, das weiterhin liefert. Alle uebrigen
-# Fahrten-Zellen fragen vag_connect zuerst und fallen nur dann auf
-# cupra_eu_data_act zurueck, wenn dort keine Zahl steht. Die Reihenfolge steckt
-# je Kachel in variables.ids.
+# LETZTE FAHRT: Seit vag_connect v4.11.0 liefert der Volkswagen.de-Lesekanal
+# (Optionen -> "Volkswagen.de-Lesekanal hinzufuegen") den Kurzzeitspeicher des
+# Bordcomputers: Strecke, Fahrzeit, Ø Geschwindigkeit, Ø Verbrauch. Das
+# EU-Data-Act-Portal liefert diese Werte nicht. Faellt der vw.de-Kanal aus
+# (VW verlangt alle paar Wochen einen neuen E-Mail-Code), stehen die Zellen
+# auf '–' bzw. auf der Zweitquelle.
+#
+# ZWEITQUELLE: Alle Fahrten-Zellen fragen vag_connect zuerst und fallen nur
+# dann auf cupra_eu_data_act zurueck, wenn dort keine Zahl steht. Die
+# Reihenfolge steckt je Kachel in variables.ids. Ø Tempo nimmt den Wert des
+# Bordcomputers und rechnet ersatzweise Strecke / Fahrzeit aus vag_connect.
+#
+# Achtung Namensschema: Die Ø-Geschwindigkeit der letzten Fahrt ist erst mit
+# dem vw.de-Kanal entstanden und heisst
+# sensor.garage_volkswagen_<modell>_letzte_fahrt_o_geschwindigkeit statt
+# sensor.garage_volkswagen_<vin6>_*.
 #
 # Begriffe: "Letzte Fahrt" ist der Kurzzeitspeicher (seit Start), "Langzeit"
 # der Gesamtspeicher seit dem letzten Reset. Der Verbrauch im Langzeit-Block
@@ -672,17 +681,18 @@ cards:
                 - white-space: nowrap
                 - overflow: hidden
                 - text-overflow: ellipsis
-          # Dauer und Ø Tempo der letzten Fahrt kennt vag_connect nicht --
-          # einzige Quelle ist hier der Kurzzeitspeicher aus cupra_eu_data_act.
           - type: custom:button-card
-            entity: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+            entity: sensor.garage_volkswagen_076722_letzte_fahrt_fahrzeit
             name: Dauer
             show_icon: false
             show_name: true
             show_label: true
             show_state: false
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
             variables:
               ids:
+                - sensor.garage_volkswagen_076722_letzte_fahrt_fahrzeit
                 - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
             # Minuten bleiben Minuten, ab 90 wird auf Stunden umgestellt.
             label: &lbl_dur |
@@ -698,19 +708,22 @@ cards:
               ]]]
             styles: *mini_styles
           - type: custom:button-card
-            entity: sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+            entity: sensor.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_letzte_fahrt_o_geschwindigkeit
             name: Ø Tempo
             show_icon: false
             show_name: true
             show_label: true
             show_state: false
             triggers_update:
-              - sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
+              - sensor.garage_volkswagen_076722_letzte_fahrt_strecke
+              - sensor.garage_volkswagen_076722_letzte_fahrt_fahrzeit
             variables:
+              ids:
+                - sensor.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_letzte_fahrt_o_geschwindigkeit
               dist_id: sensor.garage_volkswagen_076722_letzte_fahrt_strecke
-              time_id: sensor.passat_variant_elegance_20_l_tdi_scr_fahrzeit_kurzzeit
-            # Kein Durchschnittstempo fuer die letzte Fahrt in beiden Quellen --
-            # ersatzweise aus Strecke und Fahrzeit gerechnet.
+              time_id: sensor.garage_volkswagen_076722_letzte_fahrt_fahrzeit
+            # Ø Geschwindigkeit des Bordcomputers; fehlt sie, wird aus Strecke
+            # und Fahrzeit gerechnet.
             label: &lbl_speed |
               [[[
                 const ids=variables.ids||[];
@@ -1194,20 +1207,8 @@ cards:
             label: *lbl_dual
             styles: *mini_styles
           - type: custom:button-card
-            entity: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            entity: sensor.garage_volkswagen_027935_letzte_fahrt_fahrzeit
             name: Dauer
-            show_icon: false
-            show_name: true
-            show_label: true
-            show_state: false
-            variables:
-              ids:
-                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
-            label: *lbl_dur
-            styles: *mini_styles
-          - type: custom:button-card
-            entity: sensor.garage_volkswagen_027935_letzte_fahrt_strecke
-            name: Ø Tempo
             show_icon: false
             show_name: true
             show_label: true
@@ -1215,8 +1216,26 @@ cards:
             triggers_update:
               - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
             variables:
+              ids:
+                - sensor.garage_volkswagen_027935_letzte_fahrt_fahrzeit
+                - sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+            label: *lbl_dur
+            styles: *mini_styles
+          - type: custom:button-card
+            entity: sensor.garage_volkswagen_touran_highline_20_l_tdi_scr_letzte_fahrt_o_geschwindigkeit
+            name: Ø Tempo
+            show_icon: false
+            show_name: true
+            show_label: true
+            show_state: false
+            triggers_update:
+              - sensor.garage_volkswagen_027935_letzte_fahrt_strecke
+              - sensor.garage_volkswagen_027935_letzte_fahrt_fahrzeit
+            variables:
+              ids:
+                - sensor.garage_volkswagen_touran_highline_20_l_tdi_scr_letzte_fahrt_o_geschwindigkeit
               dist_id: sensor.garage_volkswagen_027935_letzte_fahrt_strecke
-              time_id: sensor.touran_highline_20_l_tdi_scr_fahrzeit_kurzzeit
+              time_id: sensor.garage_volkswagen_027935_letzte_fahrt_fahrzeit
             label: *lbl_speed
             styles: *mini_styles
           - type: custom:button-card
