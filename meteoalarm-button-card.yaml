@@ -32,7 +32,11 @@ card:
       # Dialog-Oberflaeche auf Owlet-Navy statt Schwarz (wie im Navbar-Menue).
       # Breite: min() statt Media-Query, damit ohne Umweg beides passt -
       # auf dem iPhone volle Viewport-Breite, auf dem Desktop bei 720px gedeckelt.
-      # Weniger Content-Padding holt auf dem Handy ~24px Textbreite zurueck.
+      # Seitenabstand: browser_mod >= 3.0 setzt --dialog-content-padding am
+      # ha-dialog fest auf 0 und gibt Karten-Inhalt (content: {type: ...})
+      # ein eigenes Padding von 8px links/rechts. Eine Variable von hier
+      # kommt dort nicht an - die Inhaltsbreite steht deshalb unten in
+      # widthCap und muss zu diesen 2x8px passen.
       style: |
         --mdc-theme-surface: #1b2231;
         --ha-card-background: #1b2231;
@@ -46,7 +50,6 @@ card:
         --mdc-dialog-max-width: min(100vw, 720px);
         --popup-min-width: min(100vw, 720px);
         --popup-max-width: min(100vw, 720px);
-        --dialog-content-padding: 12px;
       content:
         type: custom:button-card
         entity: sensor.kreis_sudliche_weinstrasse_aktuelle_warnstufe
@@ -110,8 +113,13 @@ card:
               // Die Karte haengt im Dialog in einer shrink-to-fit-Kette: dort ist
               // width/max-width 100% zirkulaer und setzt keine Grenze, der
               // Fliesstext bliebe einzeilig und liefe aus dem Viewport. Deshalb
-              // eine *definite* Laenge - volle Viewport-Breite am Handy, 720px
-              // am Desktop.
+              // eine *definite* Laenge: Popup-Breite minus das Karten-Padding von
+              // browser_mod (>= 3.0: 8px links + 8px rechts, nicht einstellbar).
+              // Handy: Popup = 100vw abzgl. Safe-Area links/rechts (Notch im
+              // Querformat) -> davon nochmal 16px. Desktop: Popup = 720px
+              // -> 704px. Ist die Grenze kleiner als der Platz, sitzt die Karte
+              // links am Padding und der Rest landet rechts - genau so entstand
+              // der ungleiche Rand (frueher 100vw - 28px: links 8px, rechts 20px).
               // Zwei max-width-Deklarationen als Fallback-Kette: verschachteltes
               // calc() in min() haben aeltere WebKit-Versionen nicht geparst,
               // wodurch die ganze Deklaration weggefallen waere. Bleibt min()
@@ -124,7 +132,7 @@ card:
               // Die Boxen sind dann zwar korrekt breit, der Text bricht aber
               // nie um und quillt ueber den Kasten hinaus - deshalb blieb auch
               // overflow-wrap wirkungslos, das greift nur bei erlaubtem Umbruch.
-              const widthCap = 'width:100%;max-width:94vw;max-width:min(720px, 100vw - 28px);box-sizing:border-box;white-space:normal;';
+              const widthCap = 'width:100%;max-width:94vw;max-width:min(704px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));box-sizing:border-box;white-space:normal;';
 
               // ---------- Stufen-Normalisierung ----------
               const lvlMeta = {
