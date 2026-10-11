@@ -18,6 +18,34 @@
 #   flug_karte_kopf / flug_karte    K1: Kartenausschnitt mit Spuren
 #   flug_liste_kopf / flug_liste    E2: Liste "Jetzt ueber uns"
 #   flug_detail                     D1: Inhalt des Bubble-Card-Popups #flug
+#   flug_verkehr_kopf               P5: Kopf mit Umschalter 24 h / 7 Tage
+#                                   (Diagramme in flugradar-view.yaml)
+#   flug_heute_kopf / flug_heute    P6 Tageszaehler, P7 naechster Ueberflug
+#   flug_verfolgen_kopf / flug_verfolgen   P10 Flug verfolgen
+#   flug_meldungen_kopf / flug_meldungen   P8 Schalter der Meldungen
+#   Helfer und Automationen dazu: siehe Kopf von flugradar-view.yaml.
+#
+# Popup (P2): Abschnitt "Ankunft" mit Abweichung vom Flugplan
+#   (time_estimated_arrival bzw. time_real_arrival minus
+#   time_scheduled_arrival; unter 5 min "puenktlich"), Landung, Ortszeit am
+#   Ziel (airport_destination_timezone_offset, nur wenn abweichend),
+#   Restflugzeit, Reststrecke (Grosskreis zur Zielposition), Terminal.
+#   Die Liste zeigt die Abweichung als Chip (+47 / -21).
+# Karte (P3): gestrichelter Grosskreis vom gewaehlten Flug zum Ziel; liegt
+#   das Ziel ausserhalb, steht "SOF · 1.373 km" am Rand des Ausschnitts
+#   (neu berechnet bei jedem Verschieben/Zoomen).
+#
+# Eingabefeld (P10): button-card zeichnet Felder bei jeder Aenderung neu,
+#   setzt sie aber per unsafeHTML ein (button-card.ts _unsafeHTMLorNot); lit
+#   uebernimmt das DOM unveraendert, wenn der String gleich bleibt. Das Feld
+#   "eingabe" liefert deshalb immer denselben String (fr.EINGABE), Text und
+#   Fokus bleiben erhalten. Tastendruecke werden angehalten (keine
+#   HA-Tastenkuerzel). Die Integration sucht innerhalb von text.set_value
+#   (exakte Flugnummer, Callsign oder Kennzeichen); ohne Treffer schreibt sie
+#   nur ins Log, die Karte meldet das nach 4 s selbst.
+# button-card: custom_fields tragen class "ellipsis" (white-space: nowrap);
+#   mehrzeilige Inhalte setzen white-space: normal. Arrays aus Templates
+#   (z. B. triggers_update) werden verkettet, nicht ersetzt (helpers.ts).
 #
 # Karte (K1):
 #   - Leaflet 1.9.4 von unpkg, dieselbe Datei wie die Karte der Integration
@@ -78,7 +106,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 7, vorher = window.__flugradar;
+          const VERSION = 8, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -109,7 +137,7 @@ button_card_templates:
           fr.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
           fr.id = f => String(f.id ?? '').replace(/[^A-Za-z0-9_-]/g, '');
           fr.de = n => Number(n).toLocaleString('de-DE');
-          fr.hinweis = t => `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;">${t}</div>`;
+          fr.hinweis = t => `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
           fr.badge = (c, t, puls) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
           fr.notfall = f => ['7500', '7600', '7700'].includes(String(f.squawk || ''));
           fr.sonder = f => f.aircraft_category === 'Helicopter'
@@ -136,6 +164,81 @@ button_card_templates:
           };
           fr.himmel = d => ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
           fr.uhr = t => t ? new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
+          fr.kachel = (k, v, u, unter) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
+              <div style="font-size:11px;font-weight:600;color:#6e7988;">${k}</div>
+              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> ${u}</span></div>
+              ${unter ? `<div style="font-size:11px;font-weight:600;color:#6e7988;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>` : ''}</div>`;
+          fr.titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#6e7988;">${t}</div>`;
+
+          // ---------- Grosskreis (P2 Reststrecke, P3 Ziellinie) ----------
+          fr.winkel = (a, b) => {
+            const r = Math.PI / 180, la1 = a[0] * r, la2 = b[0] * r;
+            const h = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((b[1] - a[1]) * r / 2) ** 2;
+            return 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+          };
+          fr.km = (a, b) => 6371.0088 * fr.winkel(a, b);
+          fr.gcPunkt = (a, b, t) => {
+            const r = Math.PI / 180, d = fr.winkel(a, b);
+            if (d < 1e-9) return [a[0], a[1]];
+            const A = Math.sin((1 - t) * d) / Math.sin(d), B = Math.sin(t * d) / Math.sin(d);
+            const la1 = a[0] * r, lo1 = a[1] * r, la2 = b[0] * r, lo2 = b[1] * r;
+            const x = A * Math.cos(la1) * Math.cos(lo1) + B * Math.cos(la2) * Math.cos(lo2);
+            const y = A * Math.cos(la1) * Math.sin(lo1) + B * Math.cos(la2) * Math.sin(lo2);
+            const z = A * Math.sin(la1) + B * Math.sin(la2);
+            return [Math.atan2(z, Math.hypot(x, y)) / r, Math.atan2(y, x) / r];
+          };
+          fr.ziel = f => {
+            const la = Number(f.airport_destination_latitude), lo = Number(f.airport_destination_longitude);
+            return f.airport_destination_latitude != null && f.airport_destination_longitude != null && isFinite(la) && isFinite(lo) ? [la, lo] : null;
+          };
+
+          // ---------- Puenktlichkeit und Ankunft (P2) ----------
+          // Abweichung der (geschaetzten oder echten) Ankunft vom Flugplan in Minuten
+          fr.verspaetung = f => {
+            const plan = f.time_scheduled_arrival, ist = f.time_real_arrival || f.time_estimated_arrival;
+            return plan && ist ? Math.round((ist - plan) / 60) : null;
+          };
+          fr.chip = (c, t) => `<span style="display:inline-flex;align-items:center;color:${c};background:${c}1f;border:1px solid ${c}40;font-size:11px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;">${t}</span>`;
+          fr.vChip = (f, kurz) => {
+            const v = fr.verspaetung(f);
+            if (v == null) return '';
+            if (Math.abs(v) < 5) return kurz ? '' : fr.badge('#a6d49e', 'pünktlich', false);
+            const c = v > 0 ? '#e6b566' : '#77d4d0';
+            if (kurz) return fr.chip(c, (v > 0 ? '+' : '−') + Math.abs(v));
+            return fr.badge(c, Math.abs(v) + (v > 0 ? ' min später' : ' min früher'), false);
+          };
+          fr.dauer = s => {
+            const m = Math.max(0, Math.round(s / 60));
+            return m >= 60 ? [Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0'), 'min'] : [String(m), 'min'];
+          };
+          // Ortszeit am Ziel aus dem UTC-Offset des Flughafens (Sekunden)
+          fr.ortszeit = (t, off) => new Date((t + off) * 1000).toISOString().substr(11, 5);
+          fr.ortsUhr = (t, off) => off != null && off !== -new Date(t * 1000).getTimezoneOffset() * 60 ? fr.ortszeit(t, off) : null;
+          fr.ankunft = f => {
+            const plan = f.time_scheduled_arrival, ist = f.time_real_arrival, schaetz = f.time_estimated_arrival;
+            const landung = ist || schaetz || plan;
+            if (!landung) return '';
+            const ziel = fr.ziel(f), stadt = f.airport_destination_city || fr.ap(f, 'destination');
+            const ort = fr.ortsUhr(landung, f.airport_destination_timezone_offset);
+            const unterL = plan && plan !== landung ? 'geplant ' + fr.uhr(plan) : (ist ? 'gelandet' : schaetz ? 'geschätzt' : 'laut Flugplan');
+            const km = ziel && !f.on_ground ? fr.km([f.latitude, f.longitude], ziel) : null;
+            const rest = !ist && !f.on_ground ? landung - Date.now() / 1000 : null;
+            const kacheln = [fr.kachel(ist ? 'Gelandet' : 'Landung', fr.uhr(landung), 'Uhr', unterL)];
+            if (rest != null && rest > 0) {
+              const [v, u] = fr.dauer(rest);
+              kacheln.push(fr.kachel('Restflugzeit', v, u, km != null ? 'noch ~' + fr.de(Math.round(km / 10) * 10) + ' km' : ''));
+            } else if (km != null) {
+              kacheln.push(fr.kachel('Reststrecke', '~' + fr.de(Math.round(km / 10) * 10), 'km', ''));
+            }
+            const zusatz = [ort ? `${ort} Ortszeit ${fr.esc(stadt)}` : '', f.airport_destination_terminal ? 'Terminal ' + fr.esc(f.airport_destination_terminal) : ''].filter(Boolean).join(' · ');
+            return `<div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">${fr.titel('Ankunft')}${fr.vChip(f, false)}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">${kacheln.join('')}</div>
+                ${zusatz ? `<div style="font-size:12px;font-weight:600;color:#aeb8c6;">${zusatz}</div>` : ''}
+              </div>`;
+          };
+          // ---------- Dienste ----------
+          fr.dienst = (domain, service, data) => fr.hass.callService(domain, service, data).catch(e => console.warn('Flugradar:', e));
 
           // ---------- Bereiche, die sich bei Auswahl selbst neu zeichnen ----------
           fr.bereich = (el, key, render) => {
@@ -216,6 +319,8 @@ button_card_templates:
             .fr-ic.sel .l{color:#f2f5f8;}
             .fr-ic .ring{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:2px solid #ff4696;box-sizing:border-box;}
             .fr-home{width:12px;height:12px;border-radius:50%;background:#10151d;border:2.5px solid #f2f5f8;box-sizing:border-box;}
+            .fr-ziel{background:none;border:none;}
+            .fr-ziel span{display:inline-block;white-space:nowrap;font:700 11px/20px ${SANS};padding:0 8px;border-radius:8px;background:rgba(16,21,29,.86);border:1px solid currentColor;font-variant-numeric:tabular-nums;}
           `;
           fr.leaflet = () => {
             if (window.L) return Promise.resolve(window.L);
@@ -254,6 +359,9 @@ button_card_templates:
                 L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="fr-home"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), interactive: false, keyboard: false }).addTo(fr.map);
                 fr.map.attributionControl.setPrefix('Leaflet');
                 fr.layer = L.layerGroup().addTo(fr.map);
+                fr.zielLayer = L.layerGroup().addTo(fr.map);
+                // Beschriftung der Ziellinie haengt am sichtbaren Ausschnitt
+                fr.map.on('moveend', () => fr.zeichneZiel());
               }
               // Ausschnitt (50-km-Ring) erst setzen, wenn die Karte eine Groesse hat;
               // danach bleibt Zoom/Verschiebung des Nutzers erhalten.
@@ -289,6 +397,51 @@ button_card_templates:
               m.on('click', () => fr.waehle(f.id));
               m.addTo(fr.layer);
             });
+            fr.zeichneZiel();
+          };
+          // P3: gestrichelter Grosskreis vom gewaehlten Flug zum Zielflughafen. Liegt das Ziel
+          // ausserhalb des Ausschnitts, steht "SOF · 1.373 km" dort, wo die Linie den Rand verlaesst.
+          fr.zeichneZiel = () => {
+            if (!fr.map || !fr.zielLayer || !window.L) return;
+            const L = window.L;
+            fr.zielLayer.clearLayers();
+            const f = fr.sel ? fr.flights().find(x => x.id === fr.sel) : null, ziel = f ? fr.ziel(f) : null;
+            if (!f || !ziel || f.on_ground) return;
+            const start = [f.latitude, f.longitude], km = fr.km(start, ziel);
+            if (km < 1) return;
+            const n = Math.min(256, Math.max(16, Math.ceil(km / 15)));
+            const pts = [];
+            for (let i = 0; i <= n; i++) {
+              const p = fr.gcPunkt(start, ziel, i / n);
+              // Laengengrad stetig halten (kein Sprung bei +-180 Grad)
+              if (pts.length) { const v = pts[pts.length - 1][1]; while (p[1] - v > 180) p[1] -= 360; while (p[1] - v < -180) p[1] += 360; }
+              pts.push(p);
+            }
+            const c = fr.farbe(f);
+            L.polyline(pts, { color: c, weight: 2, opacity: 0.85, dashArray: '6 7', interactive: false }).addTo(fr.zielLayer);
+            const b = fr.map.getBounds();
+            let pos;
+            if (b.contains(pts[n])) pos = L.latLng(pts[n]);
+            else if (!b.contains(start)) return;
+            else {
+              // Randpunkt per Bisektion auf dem Grosskreis
+              let lo = 0, hi = 1;
+              for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (b.contains(fr.gcPunkt(start, ziel, m))) lo = m; else hi = m; }
+              pos = L.latLng(fr.gcPunkt(start, ziel, lo));
+            }
+            const text = `${fr.esc(fr.ap(f, 'destination') || 'Ziel')} · ${fr.de(Math.round(km))} km`;
+            const w = Math.round(text.length * 6.6 + 18), h = 22, sz = fr.map.getSize(), p = fr.map.latLngToContainerPoint(pos);
+            const x = Math.min(Math.max(p.x - w / 2, 6), sz.x - w - 6);
+            let y = Math.min(Math.max(p.y - h / 2, 6), sz.y - h - 22);
+            // nicht ueber Flugzeug und dessen Beschriftung (rechts unterhalb, ca. 30 px) legen
+            const fp = fr.map.latLngToContainerPoint(start);
+            if (x < fp.x + 100 && x + w > fp.x - 16 && y < fp.y + 32 && y + h > fp.y - 16) {
+              y = fp.y + 40 + h <= sz.y - 22 ? fp.y + 40 : Math.max(6, fp.y - 20 - h);
+            }
+            L.marker(fr.map.containerPointToLatLng([x, y]), {
+              icon: L.divIcon({ className: 'fr-ziel', html: `<span style="color:${c};">${text}</span>`, iconSize: [w, h], iconAnchor: [0, 0] }),
+              interactive: false, keyboard: false
+            }).addTo(fr.zielLayer);
           };
 
           // ---------- Liste (E2) ----------
@@ -304,13 +457,13 @@ button_card_templates:
               return `<div role="button" tabindex="0" ${fr.tippAttr(`window.__flugradar.waehle('${id}')`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.waehle('${id}')}" style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;${rand}">
                 <span style="width:10px;height:10px;border-radius:4px;background:${c};"></span>
                 <div style="min-width:0;">
-                  <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#6e7988;font-weight:600;">${fr.esc(fr.route(f))}</span></div>
+                  <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#6e7988;font-weight:600;">${fr.esc(fr.route(f))}</span> ${fr.vChip(f, true)}</div>
                   <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
                 </div>
                 <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${fr.hoehe(f)}</span></div>
               </div>`;
             }).join('');
-            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;display:flex;flex-direction:column;">${zeilen}</div>`
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`
               + (l.length > N ? fr.hinweis(`+ ${l.length - N} weitere auf der Karte`) : '');
           };
 
@@ -336,10 +489,7 @@ button_card_templates:
             const ab = f.time_real_departure || f.time_scheduled_departure, an = f.time_estimated_arrival || f.time_scheduled_arrival;
             const anteil = ab && an && an > ab ? Math.min(1, Math.max(0, (Date.now() / 1000 - ab) / (an - ab))) : null;
             const foto = f.aircraft_photo_large || f.aircraft_photo_medium;
-            const kachel = (k, v, u, unter) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
-                <div style="font-size:11px;font-weight:600;color:#6e7988;">${k}</div>
-                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> ${u}</span></div>
-                ${unter ? `<div style="font-size:11px;font-weight:600;color:#6e7988;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>` : ''}</div>`;
+            const kachel = fr.kachel;
             const vs = Number(f.vertical_speed) || 0, steig = vs > 100 ? '↑ ' + fr.de(vs) : vs < -100 ? '↓ ' + fr.de(-vs) : '→ 0';
             const p = fr.peilung(f);
             const nummer = f.flight_number || f.callsign || f.aircraft_registration || '?';
@@ -365,7 +515,7 @@ button_card_templates:
             // Link wie die url-Aktion von HA per window.open (funktioniert auch in der App);
             // ein normaler <a>-Klick wird vom Action-Handler von button-card per preventDefault() verworfen.
             const link = `https://www.flightradar24.com/${encodeURIComponent(f.callsign || f.flight_number || '')}/${encodeURIComponent(f.id || '')}`;
-            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;display:flex;flex-direction:column;gap:12px;">
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">
               ${kopf}
               ${bild}
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
@@ -373,6 +523,8 @@ button_card_templates:
                 ${fr.badge(c, fr.band(f), false)}
               </div>
               ${strecke}
+              ${fr.ankunft(f)}
+              ${fr.titel('Jetzt')}
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">
                 ${hoehe}
                 ${kachel('Speed', fr.de(Math.round((Number(f.ground_speed) || 0) * 1.852)), 'km/h', fr.de(Number(f.ground_speed) || 0) + ' kn')}
@@ -385,6 +537,157 @@ button_card_templates:
               </div>
             </div>`;
           };
+
+          // ---------- Umschalter und Schalter (P5, P8) ----------
+          fr.zustand = id => fr.hass && fr.hass.states[id] ? fr.hass.states[id].state : undefined;
+          fr.segment = (eid, optionen) => {
+            const ist = fr.zustand(eid);
+            const knopf = o => {
+              const an = o === ist;
+              return `<button type="button" aria-pressed="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_select','select_option',{entity_id:'${eid}',option:'${o}'})`)} style="${F}font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'transparent'};border:1px solid ${an ? 'rgba(127,179,213,0.34)' : 'transparent'};">${fr.esc(o)}</button>`;
+            };
+            return `<div ${fr.touchAttr} style="pointer-events:auto;display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${optionen.map(knopf).join('')}</div>`;
+          };
+          fr.schalter = (eid, titel, text, hinweis) => {
+            const an = fr.zustand(eid) === 'on';
+            return `<div role="switch" tabindex="0" aria-checked="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.045);">
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:${an ? '#f2f5f8' : '#aeb8c6'};">${titel}</div>
+                  <div style="font-size:12px;color:#6e7988;">${text}</div>
+                  ${hinweis ? `<div style="font-size:11.5px;font-weight:600;color:#e6b566;margin-top:2px;">${hinweis}</div>` : ''}
+                </div>
+                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? 'rgba(127,179,213,0.45)' : 'rgba(255,255,255,0.1)'};border:1px solid ${an ? 'rgba(127,179,213,0.6)' : 'rgba(255,255,255,0.08)'};">
+                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? '#f2f5f8' : '#8794a5'};"></span>
+                </span>
+              </div>`;
+          };
+          fr.MELDUNGEN = [
+            ['input_boolean.flug_meldung_tief', 'Tief und nah', 'unter 1.500 m und unter 5 km'],
+            ['input_boolean.flug_meldung_sonderflug', 'Sonderflüge', 'Hubschrauber, Militär, Polizei, Rettung unter 15 km'],
+            ['input_boolean.flug_meldung_selten', 'Seltene Typen', 'z. B. B748, A388, A124, C17, A400 beim Eintritt'],
+            ['input_boolean.flug_meldung_notfall', 'Notfall-Squawk', '7500 / 7600 / 7700'],
+            ['input_boolean.flug_meldung_verfolgt', 'Verfolgte Flüge', 'Start, Landung, am Gate']
+          ];
+          fr.meldungenAn = () => fr.MELDUNGEN.filter(([e]) => fr.zustand(e) === 'on').length;
+          fr.meldungen = () => {
+            // Squawk liefert die Integration nur mit FR24-Login; ohne Login ist er bei allen Fluegen leer
+            const l = fr.flights(), ohneSquawk = l.length > 0 && l.every(f => !f.squawk);
+            const zeilen = fr.MELDUNGEN.map(([e, t, x]) => fr.zustand(e) === undefined
+              ? fr.hinweis(`${e} fehlt`)
+              : fr.schalter(e, t, x, e.endsWith('_notfall') && ohneSquawk ? 'braucht FR24-Login (Squawk derzeit leer)' : '')).join('');
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`;
+          };
+
+          // ---------- Tageszaehler und naechster Ueberflug (P6, P7) ----------
+          fr.zahl = id => { const v = parseFloat(fr.zustand(id)); return isNaN(v) ? '–' : fr.de(v); };
+          fr.bestwert = () => {
+            const s = fr.zustand('input_text.flug_bestwert');
+            if (!s || s[0] !== '{') return null;
+            try { return JSON.parse(s); } catch (e) { return null; }
+          };
+          fr.heute = () => {
+            const k = (t, id, unter) => fr.kachel(t, fr.zahl(id), '', unter);
+            const zaehler = `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">
+                ${k('Flüge', 'counter.flug_heute', 'im Bereich')}
+                ${k('Nachts', 'counter.flug_nachts', '22–6 Uhr')}
+                ${k('Unter 3 km', 'counter.flug_nah', 'geringster Abstand')}
+                ${k('Unter 1.500 m', 'counter.flug_tief', 'in der Luft')}
+              </div>`;
+            const b = fr.bestwert();
+            let naechst;
+            if (!b) naechst = fr.hinweis('Heute noch kein Überflug erfasst.');
+            else {
+              const jetzt = fr.flights().find(f => f.id === b.id);
+              const route = b.o || b.d ? `${fr.esc(b.oc || b.o || '?')} → ${fr.esc(b.dc || b.d || '?')}` : 'Route unbekannt';
+              const nummer = b.fn || b.cs || '?';
+              const kopf = `<div ${jetzt ? fr.tippAttr(`window.__flugradar.waehle('${fr.id(b)}')`) + ' role="button" tabindex="0"' : ''} style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;${jetzt ? 'cursor:pointer;' : ''}">
+                  <div style="min-width:0;">
+                    <div style="font-size:14px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}${b.cs && b.cs !== nummer ? ` <span style="color:#6e7988;font-weight:600;">${fr.esc(b.cs)}</span>` : ''} · ${fr.esc(b.al || '')}</div>
+                    <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${route}${b.t ? ' · ' + fr.esc(b.t) : ''}${jetzt ? ' · <span style="color:#7fb3d5;font-weight:700;">jetzt im Bereich ›</span>' : ''}</div>
+                  </div>
+                  <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;">${fr.de(b.k)}<span style="font-size:0.55em;color:#6e7988;font-weight:600;"> km</span></div>
+                </div>`;
+              naechst = `${kopf}<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                  ${fr.kachel('Abstand', fr.de(b.k), 'km', '')}
+                  ${fr.kachel('Höhe', fr.de(b.m), 'm', '')}
+                  ${fr.kachel('Zeit', fr.uhr(b.z), 'Uhr', '')}
+                </div>`;
+            }
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:10px;">
+                ${zaehler}
+                ${fr.titel('Nächster Überflug heute')}
+                ${naechst}
+              </div>`;
+          };
+
+          // ---------- Flug verfolgen (P10) ----------
+          const VERFOLGT = 'sensor.flightradar24_additional_tracked';
+          fr.verfolgt = () => {
+            const s = fr.hass && fr.hass.states[VERFOLGT], l = s && s.attributes ? s.attributes.flights : null;
+            return Array.isArray(l) ? l : [];
+          };
+          fr.kennung = f => f.flight_number || f.callsign || f.aircraft_registration || '';
+          fr.status = f => f.tracked_type === 'schedule' ? ['#8794a5', 'geplant']
+            : f.time_real_arrival || f.has_landed ? ['#a6d49e', 'gelandet']
+            : f.on_ground ? ['#6e7988', 'am Boden']
+            : f.latitude != null ? ['#7fb3d5', 'in der Luft'] : ['#8794a5', 'gesucht'];
+          fr.verfolgtListe = () => {
+            if (!fr.hass || !fr.hass.states[VERFOLGT]) return fr.hinweis(`${VERFOLGT} fehlt – ist die Integration Flightradar24 eingerichtet?`);
+            const l = fr.verfolgt();
+            if (!l.length) return fr.hinweis('Kein Flug in Verfolgung. Zum Beispiel einen Flug von Familie oder Freunden eintragen; Meldung bei Start, Landung und am Gate.');
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:8px;">` + l.map(f => {
+              const [c, t] = fr.status(f), nr = fr.kennung(f), o = fr.ap(f, 'origin'), d = fr.ap(f, 'destination');
+              const ab = f.time_real_departure || f.time_estimated_departure || f.time_scheduled_departure;
+              const an = f.time_real_arrival || f.time_estimated_arrival || f.time_scheduled_arrival;
+              const ort = an ? fr.ortsUhr(an, f.airport_destination_timezone_offset) : null;
+              const wer = [f.airline_short || f.airline, f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
+              const zeiten = o || d ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;font-variant-numeric:tabular-nums;">
+                  <div style="min-width:0;"><span style="font-size:16px;font-weight:700;color:#f2f5f8;">${fr.esc(o || '?')}</span> <span style="font-size:12px;font-weight:700;color:#aeb8c6;">${ab ? 'ab ' + fr.uhr(ab) : ''}</span></div>
+                  <svg viewBox="-8 -8 16 16" width="14" height="14"><path d="${PLANE}" fill="${c}" transform="rotate(90)"/></svg>
+                  <div style="min-width:0;text-align:right;"><span style="font-size:12px;font-weight:700;color:#aeb8c6;">${an ? 'an ' + fr.uhr(an) : ''}</span> <span style="font-size:16px;font-weight:700;color:#f2f5f8;">${fr.esc(d || '?')}</span>${ort ? `<div style="font-size:11px;color:#6e7988;">${ort} Ortszeit</div>` : ''}</div>
+                </div>` : '';
+              return `<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;">
+                    <div style="min-width:0;">
+                      <div style="font-size:14px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nr || '?')} ${fr.vChip(f, true)}</div>
+                      <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || (f.airport_origin_city || f.airport_destination_city ? fr.esc(f.airport_origin_city || '?') + ' → ' + fr.esc(f.airport_destination_city || '?') : '–')}</div>
+                    </div>
+                    ${fr.chip(c, t)}
+                    <button type="button" aria-label="Nicht mehr verfolgen" ${fr.tippAttr(`window.__flugradar.entferne('${fr.esc(nr).replace(/[^A-Za-z0-9-]/g, '')}')`)} style="width:32px;height:32px;padding:0;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                  </div>
+                  ${zeiten}
+                </div>`;
+            }).join('') + '</div>';
+          };
+          // Eingabe: konstantes HTML (siehe Kopf), damit Text und Fokus Neuzeichnen ueberstehen
+          fr.EINGABE = `<div data-fr-eingabe ${fr.touchAttr} style="${F}pointer-events:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;">
+              <input type="text" placeholder="LH400 / DLH400 / D-AIXP" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="12"
+                onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__flugradar.verfolge(this)}" onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
+                style="${F}min-width:0;font-size:16px;font-weight:600;color:#f2f5f8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px 12px;outline:none;text-transform:uppercase;">
+              <button type="button" ${fr.tippAttr('window.__flugradar.verfolge(this)')} style="${F}font-size:13px;font-weight:700;color:#7fb3d5;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.3);border-radius:12px;padding:0 14px;cursor:pointer;">Verfolgen</button>
+              <div data-fr-status style="grid-column:1/-1;white-space:normal;font-size:12px;color:#6e7988;min-height:16px;"></div>
+            </div>`;
+          fr.gefunden = v => fr.verfolgt().some(f => [f.flight_number, f.callsign, f.aircraft_registration].some(x => x && String(x).toUpperCase() === v));
+          fr.verfolge = el => {
+            const box = el.closest('[data-fr-eingabe]'), inp = box.querySelector('input'), st = box.querySelector('[data-fr-status]');
+            const v = (inp.value || '').trim().toUpperCase().replace(/\s+/g, '');
+            const melde = (c, t) => { st.style.color = c; st.textContent = t; };
+            if (!/^[A-Z0-9-]{2,12}$/.test(v)) { melde('#e6b566', 'Flugnummer, Callsign oder Kennzeichen eingeben (z. B. LH400).'); inp.focus(); return; }
+            if (fr.gefunden(v)) { melde('#8794a5', v + ' wird schon verfolgt.'); return; }
+            melde('#8794a5', 'Suche ' + v + ' …');
+            // Die Integration sucht innerhalb von text.set_value; der Sensor ist danach aktualisiert,
+            // im Browser kommt der neue Zustand aber erst kurz darauf an.
+            fr.hass.callService('text', 'set_value', { entity_id: 'text.flightradar24_add_to_track', value: v }).then(() => {
+              let n = 0;
+              const pruefe = () => {
+                if (fr.gefunden(v)) { melde('#a6d49e', v + ' wird verfolgt.'); inp.value = ''; return; }
+                if (++n < 8) { setTimeout(pruefe, 500); return; }
+                melde('#e6b566', 'Kein Flug „' + v + '“ gefunden. Flugnummer (LH400), Callsign (DLH400) oder Kennzeichen (D-AIXP) prüfen.');
+              };
+              setTimeout(pruefe, 300);
+            }).catch(e => melde('#f0736a', 'Fehler: ' + (e && e.message ? e.message : e)));
+          };
+          fr.entferne = nr => { if (nr) fr.dienst('text', 'set_value', { entity_id: 'text.flightradar24_remove_from_track', value: nr }); };
 
           window.__flugradar = fr;
           return fr;
@@ -539,3 +842,133 @@ button_card_templates:
           const fr = variables.fr;
           return fr.bereich(this, 'detail', () => fr.detail());
         ]]]
+
+  # ======================= Verkehr (P5, Kopf mit Umschalter 24 h / 7 Tage) =======================
+  # Die Diagramme selbst stehen in flugradar-view.yaml (apexcharts-card mit data_generator).
+  flug_verkehr_kopf:
+    template: flug_kopf
+    icon: mdi:chart-areaspline
+    name: Verkehr
+    triggers_update:
+    - sensor.flightradar24_current_in_area
+    - input_select.flug_verkehr_zeitraum
+    custom_fields:
+      unter: |
+        [[[
+          return variables.fr.zustand('input_select.flug_verkehr_zeitraum') === '7 Tage'
+            ? 'Ø Flüge je Stunde' : 'Ø Flüge je 15 min';
+        ]]]
+      badge: |
+        [[[ return variables.fr.segment('input_select.flug_verkehr_zeitraum', ['24 h', '7 Tage']); ]]]
+
+  # ======================= Heute (P6 Tageszaehler, P7 naechster Ueberflug) =======================
+  flug_heute_kopf:
+    template: flug_kopf
+    icon: mdi:counter
+    name: Heute
+    triggers_update:
+    - counter.flug_heute
+    custom_fields:
+      unter: seit 0:00 Uhr · Eintritte in den Bereich
+      badge: |
+        [[[
+          const fr = variables.fr, n = parseFloat(fr.zustand('counter.flug_heute'));
+          return isNaN(n) ? '' : fr.badge('#7fb3d5', fr.de(n) + (n === 1 ? ' Flug' : ' Flüge'), false);
+        ]]]
+
+  flug_heute:
+    template: flug_inhalt
+    triggers_update:
+    - sensor.flightradar24_current_in_area
+    - counter.flug_heute
+    - counter.flug_nachts
+    - counter.flug_nah
+    - counter.flug_tief
+    - input_text.flug_bestwert
+    custom_fields:
+      inhalt: |
+        [[[ return variables.fr.heute(); ]]]
+
+  # ======================= Meldungen (P8) =======================
+  flug_meldungen_kopf:
+    template: flug_kopf
+    icon: mdi:bell-ring-outline
+    name: Meldungen
+    triggers_update:
+    - input_boolean.flug_meldung_tief
+    - input_boolean.flug_meldung_sonderflug
+    - input_boolean.flug_meldung_selten
+    - input_boolean.flug_meldung_notfall
+    - input_boolean.flug_meldung_verfolgt
+    custom_fields:
+      unter: aufs iPhone, mit Foto
+      badge: |
+        [[[
+          const fr = variables.fr, n = fr.meldungenAn();
+          return fr.badge(n ? '#7fb3d5' : '#8794a5', `${n} von ${fr.MELDUNGEN.length} an`, false);
+        ]]]
+
+  flug_meldungen:
+    template: flug_inhalt
+    triggers_update:
+    - sensor.flightradar24_current_in_area
+    - input_boolean.flug_meldung_tief
+    - input_boolean.flug_meldung_sonderflug
+    - input_boolean.flug_meldung_selten
+    - input_boolean.flug_meldung_notfall
+    - input_boolean.flug_meldung_verfolgt
+    custom_fields:
+      inhalt: |
+        [[[ return variables.fr.meldungen(); ]]]
+
+  # ======================= Flug verfolgen (P10) =======================
+  flug_verfolgen_kopf:
+    template: flug_kopf
+    icon: mdi:airplane-search
+    name: Flug verfolgen
+    triggers_update:
+    - sensor.flightradar24_additional_tracked
+    custom_fields:
+      unter: Flugnummer, Callsign oder Kennzeichen
+      badge: |
+        [[[
+          const fr = variables.fr, n = fr.verfolgt().length;
+          return n ? fr.badge('#7fb3d5', String(n), false) : '';
+        ]]]
+
+  # Zwei Felder: "liste" wird neu gezeichnet, "eingabe" ist konstant (fr.EINGABE), damit
+  # Text und Fokus im Eingabefeld eine Aktualisierung ueberstehen (lit uebernimmt das DOM
+  # unveraendert, wenn unsafeHTML denselben String bekommt).
+  # Eigenes Raster statt flug_inhalt (dessen Feld "inhalt" laesst sich nicht entfernen).
+  flug_verfolgen:
+    template: flug_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    triggers_update:
+    - sensor.flightradar24_additional_tracked
+    styles:
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 0
+      - cursor: default
+      custom_fields:
+        liste:
+        - width: 100%
+        eingabe:
+        - width: 100%
+      grid:
+      - grid-template-areas: '"liste" "eingabe"'
+      - row-gap: 12px
+    custom_fields:
+      liste: |
+        [[[ return variables.fr.verfolgtListe(); ]]]
+      eingabe: |
+        [[[ return variables.fr.EINGABE; ]]]
