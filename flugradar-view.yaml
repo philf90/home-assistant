@@ -1,0 +1,101 @@
+# Flugradar – komplette Ansicht (View) im Owlet-Stil
+#
+# Flugbewegungen rund um zone.home auf einer Karte; jedes Flugzeug antippbar
+# mit Route, Typ, Kennzeichen, Hoehe und Foto. Entwurf und Varianten:
+# Artefakt "Flugradar-View"; gewaehlt sind
+#   Layout C  Handy zuerst, Details als Popup
+#   K1        Kartenausschnitt mit Spuren (Leaflet, dunkle OSM-Kacheln,
+#             Ringe 10/25/50 km)
+#   D1        Popup mit Foto, Route, Zeiten und Kennzahlen (Bubble Card #flug)
+#   E2        Liste "Jetzt ueber uns", nach Entfernung
+#
+# Daten: HACS-Integration Flightradar24 (AlexandrErohin/
+# home-assistant-flightradar24, v2.3.0), Sensor
+# sensor.flightradar24_current_in_area. Logik und Darstellung stehen in
+# flugradar-button-card-templates.yaml; die View verweist nur auf die
+# Templates.
+#
+# Aufbau (sections, max_columns 2):
+#   Sektion 1: Top-Navigation, Karte (K1), Popup #flug (D1, unsichtbar)
+#   Sektion 2: Liste (E2), Floating-Navbar
+#   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
+#
+# Passt zur Route /dashboard-home/fluege (Eintrag "Flüge" im "More"-Menue von
+# navbar-card.yaml / decluttering-templates.yaml, hinter "Fußball").
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICH (UI, kein configuration.yaml):
+#   - Integration Flightradar24 (HACS) mit Radius 50000 (Meter) um zone.home,
+#     Scan-Intervall 20 s. Optional FR24-Login (Abo) unter "Konfigurieren":
+#     dann auch Squawk.
+#   - button_card_templates aus flugradar-button-card-templates.yaml im
+#     Raw-Konfigurationseditor des Dashboards
+#
+# Hinweis Recorder: Das Attribut "flights" mit Spuren waechst um etwa 3 KB je
+# Flug (gemessen 11.10.2026: 5 Fluege = 15,7 KB). Ab etwa 6 Fluegen liegt es
+# ueber 16 KB; HA speichert die Attribute dieses Sensors dann nicht in der
+# Historie (Warnung im Log). Die Karte braucht nur den aktuellen Zustand.
+#
+# Log: "HTTP Error 429" der Integration ist laut deren README erwartet
+# (FR24 drosselt automatisierte Abrufe); gemessen 4 Meldungen in 8 Minuten.
+#
+# Voraussetzung: custom:button-card + custom:bubble-card + custom:decluttering-card
+#                + card-mod (alle via HACS).
+title: Flüge
+path: fluege
+icon: mdi:airplane
+type: sections
+max_columns: 2
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation
+
+  # ======================= Karte (Variante K1) =======================
+  - type: vertical-stack
+    card_mod: &huelle
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 8px !important;
+        }
+    cards:
+    - type: custom:button-card
+      template: flug_karte_kopf
+    - type: custom:button-card
+      template: flug_karte
+
+  # ======================= Details (Variante D1) =======================
+  # Unsichtbar, bis Karte oder Liste den Hash #flug setzt.
+  - type: custom:bubble-card
+    card_type: pop-up
+    hash: '#flug'
+    name: Flug
+    icon: mdi:airplane
+    popup_mode: fit-content
+    with_bottom_offset: true
+    bg_color: '#171d29'
+    bg_opacity: '100'
+    cards:
+    - type: custom:button-card
+      template: flug_detail
+
+- type: grid
+  cards:
+  # ======================= Liste (Variante E2) =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_liste_kopf
+    - type: custom:button-card
+      template: flug_liste
+
+  - type: custom:decluttering-card
+    template: floating_navbar

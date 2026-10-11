@@ -1,0 +1,459 @@
+# ============================================================================
+# Flugradar – button-card-Templates fuer die View flugradar-view.yaml
+# ----------------------------------------------------------------------------
+# Daten: HACS-Integration "Flightradar24" (AlexandrErohin, getestet v2.3.0),
+# Sensor sensor.flightradar24_current_in_area, Attribut "flights" (Liste mit
+# Position, Hoehe, Kurs, Route, Typ, Kennzeichen, Foto-URL, Spur
+# "coordinates"). Einrichtung: Einstellungen > Geraete & Dienste >
+# Flightradar24; Radius in METERN (50000 = 50 km), Mittelpunkt = zone.home.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> die Eintraege unter
+#   "button_card_templates:" neben den vorhandenen Templates ergaenzen.
+#
+# Aufbau (Varianten aus dem Artefakt "Flugradar-View"):
+#   flug_daten          gemeinsamer Datenzugriff (variables.fr) + Hilfen
+#   flug_kopf           Kopfzeile im Owlet-Stil (Icon-Kachel, Name, Unterzeile,
+#                       Badge rechts)
+#   flug_karte_kopf / flug_karte    K1: Kartenausschnitt mit Spuren
+#   flug_liste_kopf / flug_liste    E2: Liste "Jetzt ueber uns"
+#   flug_detail                     D1: Inhalt des Bubble-Card-Popups #flug
+#
+# Karte (K1):
+#   - Leaflet 1.9.4 von unpkg, dieselbe Datei wie die Karte der Integration
+#     (window.L wird geteilt, kein doppeltes Laden).
+#   - Kacheln: tile.openstreetmap.org, per CSS-Filter abgedunkelt (Owlet-Navy).
+#     Referrer-Policy wie in der Integrationskarte, sonst lehnt OSM ab.
+#   - Ringe 10 / 25 / 50 km um zone.home, Spur aus "coordinates".
+#   - Die Karte wird EINMAL pro Seite angelegt und bei jedem Neuzeichnen von
+#     button-card in den neuen Platzhalter verschoben; Zoom und Ausschnitt
+#     bleiben dadurch erhalten. Am Handy: verschieben mit zwei Fingern aus
+#     (Seite soll scrollen), Zoom ueber +/- und Pinch.
+#
+# Farben (Hoehenband, wie die uebrigen Owlet-Views):
+#   amber  unter 5.000 ft (Anflug, Kleinflugzeuge)
+#   tuerkis 5.000-25.000 ft (Steig- und Sinkflug)
+#   blau   Reiseflug
+#   violett Sonderflug: Hubschrauber, Militaer, Polizei, Rettung (Kategorie
+#           "Helicopter" oder Airline-Name mit Air Force/Army/Navy/Luftwaffe/
+#           Bundeswehr/Police/Polizei/Ambulance/Rettung)
+#   rot    Notfall-Squawk 7500/7600/7700 (Squawk nur mit FR24-Login)
+#   grau   am Boden
+#
+# Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
+# (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
+# #flug wie eine navigate-Aktion (history.pushState + location-changed).
+#
+# Update-sicher: window.__flugradar traegt eine VERSION; eine hoehere Version
+# ersetzt nach einem Dashboard-Update das alte Objekt der offenen Seite.
+#
+# Voraussetzung: custom:button-card (v7.0.1), custom:bubble-card (v3.4.1),
+#                card-mod, Integration Flightradar24 (alle via HACS).
+# ============================================================================
+button_card_templates:
+  flug_daten:
+    entity: sensor.flightradar24_current_in_area
+    triggers_update:
+    - sensor.flightradar24_current_in_area
+    variables:
+      fr: |
+        [[[
+          // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
+          const VERSION = 2, vorher = window.__flugradar;
+          if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
+          if (vorher) {
+            if (vorher.subs) vorher.subs.clear();
+            if (vorher.map) { try { vorher.map.remove(); } catch (e) { /* schon entfernt */ } }
+          }
+          const SENSOR = 'sensor.flightradar24_current_in_area';
+          const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
+          const F = 'font-family:' + SANS + ';';
+          const PLANE = 'M0,-7 L1.2,-2 L7,1.6 L7,3 L1.2,1.6 L0.9,4.8 L2.6,6.3 L2.6,7.3 L0,6.6 L-2.6,7.3 L-2.6,6.3 L-0.9,4.8 L-1.2,1.6 L-7,3 L-7,1.6 L-1.2,-2 Z';
+          const fr = { version: VERSION, hass, F, SENSOR, PLANE, sel: null, subs: new Map(), map: null, mapEl: null, layer: null, laden: null };
+
+          // ---------- Daten ----------
+          fr.sensor = () => fr.hass && fr.hass.states ? fr.hass.states[SENSOR] : undefined;
+          fr.flights = () => {
+            const s = fr.sensor(), l = s && s.attributes ? s.attributes.flights : null;
+            return Array.isArray(l) ? l.filter(f => f && f.latitude != null && f.longitude != null) : [];
+          };
+          fr.nachEntfernung = () => fr.flights().slice().sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9));
+          fr.home = () => {
+            const z = fr.hass && fr.hass.states['zone.home'];
+            if (z && z.attributes.latitude != null) return [z.attributes.latitude, z.attributes.longitude];
+            return [fr.hass.config.latitude, fr.hass.config.longitude];
+          };
+
+          // ---------- Darstellung ----------
+          fr.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+          fr.id = f => String(f.id ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+          fr.de = n => Number(n).toLocaleString('de-DE');
+          fr.hinweis = t => `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;">${t}</div>`;
+          fr.badge = (c, t, puls) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          fr.notfall = f => ['7500', '7600', '7700'].includes(String(f.squawk || ''));
+          fr.sonder = f => f.aircraft_category === 'Helicopter'
+            || /air force|army|navy|luftwaffe|bundeswehr|police|polizei|ambulan|rettung/i.test(f.airline || '');
+          fr.farbe = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#6e7988' : fr.sonder(f) ? '#b399d4'
+            : f.altitude < 5000 ? '#e6b566' : f.altitude < 25000 ? '#77d4d0' : '#7fb3d5';
+          fr.band = f => fr.notfall(f) ? 'Notfall ' + f.squawk : f.on_ground ? 'am Boden' : fr.sonder(f) ? 'Sonderflug'
+            : f.altitude < 5000 ? 'tief' : f.altitude < 25000 ? 'Steig-/Sinkflug' : 'Reiseflug';
+          fr.hoehe = f => f.on_ground ? 'am Boden' : f.altitude >= 10000 ? 'FL' + Math.round(f.altitude / 100) : fr.de(f.altitude || 0) + ' ft';
+          fr.cs = f => f.callsign || f.flight_number || f.aircraft_registration || '?';
+          fr.ap = (f, art) => f['airport_' + art + '_code_iata'] || f['airport_' + art + '_code_icao'] || '';
+          fr.route = f => {
+            const o = fr.ap(f, 'origin'), d = fr.ap(f, 'destination');
+            return o || d ? `${o || '?'} → ${d || '?'}` : 'Route unbekannt';
+          };
+          fr.peilung = f => {
+            const [la, lo] = fr.home(), r = Math.PI / 180;
+            const y = Math.sin((f.longitude - lo) * r) * Math.cos(f.latitude * r);
+            const x = Math.cos(la * r) * Math.sin(f.latitude * r) - Math.sin(la * r) * Math.cos(f.latitude * r) * Math.cos((f.longitude - lo) * r);
+            return (Math.atan2(y, x) / r + 360) % 360;
+          };
+          fr.himmel = d => ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
+          fr.uhr = t => t ? new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
+
+          // ---------- Bereiche, die sich bei Auswahl selbst neu zeichnen ----------
+          fr.bereich = (el, key, render) => {
+            if (el) {
+              if (!fr.subs.has(el)) fr.subs.set(el, new Map());
+              fr.subs.get(el).set(key, render);
+            }
+            let html;
+            try { html = render(); } catch (e) { html = fr.hinweis('Fehler: ' + fr.esc(e.message)); }
+            return `<div data-fr="${key}" style="width:100%;">${html}</div>`;
+          };
+          fr.neu = () => {
+            fr.subs.forEach((s, el) => {
+              if (!el.isConnected) return;
+              s.forEach((render, key) => {
+                const n = el.shadowRoot && el.shadowRoot.querySelector(`[data-fr="${key}"]`);
+                if (n) { try { n.innerHTML = render(); } catch (e) { n.innerHTML = fr.hinweis('Fehler: ' + fr.esc(e.message)); } }
+              });
+            });
+            fr.zeichne();
+          };
+          fr.waehle = id => {
+            fr.sel = id;
+            fr.neu();
+            if (location.hash !== '#flug') {
+              history.pushState(null, '', location.pathname + location.search + '#flug');
+              window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+            }
+          };
+
+          // ---------- Karte (K1) ----------
+          const KARTE_CSS = `
+            .fr-wrap{position:relative;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#141b26;}
+            .fr-wrap .leaflet-container{width:100%;height:100%;background:#141b26;font-family:${SANS};}
+            .fr-wrap .leaflet-tile-pane{filter:invert(1) hue-rotate(185deg) brightness(.8) contrast(.9) saturate(.4);}
+            .fr-wrap .leaflet-bar{border:1px solid rgba(255,255,255,.08);box-shadow:none;border-radius:12px;overflow:hidden;}
+            .fr-wrap .leaflet-bar a{background:#1b2231;color:#aeb8c6;border-bottom-color:rgba(255,255,255,.08);}
+            .fr-wrap .leaflet-bar a:hover{background:#232c3d;color:#f2f5f8;}
+            .fr-wrap .leaflet-control-attribution{background:rgba(16,21,29,.72);color:#6e7988;font-size:9.5px;border-radius:8px 0 0 0;}
+            .fr-wrap .leaflet-control-attribution a{color:#8794a5;}
+            .fr-ic{background:none;border:none;}
+            .fr-ic .p{position:absolute;left:0;top:0;width:28px;height:28px;display:grid;place-items:center;}
+            .fr-ic .l{position:absolute;left:27px;top:1px;white-space:nowrap;font:700 11px/1.15 ${SANS};color:#c3ccd8;text-shadow:0 1px 2px #000,0 0 6px #10151d;pointer-events:none;}
+            .fr-ic .l small{display:block;font-weight:600;font-size:10px;color:#8794a5;}
+            .fr-ic.sel .l{color:#f2f5f8;}
+            .fr-ic .ring{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:2px solid #ff4696;box-sizing:border-box;}
+            .fr-home{width:12px;height:12px;border-radius:50%;background:#10151d;border:2.5px solid #f2f5f8;box-sizing:border-box;}
+          `;
+          fr.leaflet = () => {
+            if (window.L) return Promise.resolve(window.L);
+            if (fr.laden) return fr.laden;
+            fr.laden = new Promise((ok, fehler) => {
+              let s = document.querySelector(`script[src="${LEAFLET_JS}"]`);
+              if (!s) { s = document.createElement('script'); s.src = LEAFLET_JS; document.head.appendChild(s); }
+              s.addEventListener('load', () => ok(window.L));
+              s.addEventListener('error', () => { fr.laden = null; fehler(new Error('Leaflet konnte nicht geladen werden')); });
+              setTimeout(() => { if (window.L) ok(window.L); }, 50);
+            });
+            return fr.laden;
+          };
+          fr.karte = (el, versuch = 0) => {
+            const host = el && el.shadowRoot && el.shadowRoot.querySelector('[data-fr-host]');
+            if (!host) { if (versuch < 20) setTimeout(() => fr.karte(el, versuch + 1), 100); return; }
+            fr.leaflet().then(L => {
+              if (!fr.mapEl) {
+                fr.mapEl = document.createElement('div');
+                fr.mapEl.className = 'fr-wrap';
+                fr.mapEl.innerHTML = `<link rel="stylesheet" href="${LEAFLET_CSS}"><style>${KARTE_CSS}</style><div class="fr-map" style="width:100%;height:100%;"></div>`;
+                fr.mapEl.querySelector('link').addEventListener('load', () => { if (fr.map) fr.map.invalidateSize(); });
+              }
+              if (fr.mapEl.parentNode !== host) { host.innerHTML = ''; host.appendChild(fr.mapEl); }
+              if (!fr.map) {
+                const home = fr.home();
+                fr.map = L.map(fr.mapEl.querySelector('.fr-map'), {
+                  center: home, zoom: 8, scrollWheelZoom: false, dragging: !L.Browser.mobile, attributionControl: true
+                });
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                  maxZoom: 15, referrerPolicy: 'strict-origin-when-cross-origin',
+                  attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+                }).addTo(fr.map);
+                [10, 25, 50].forEach(r => L.circle(home, { radius: r * 1000, color: '#7fb3d5', opacity: 0.3, weight: 1, dashArray: '3 6', fill: false, interactive: false }).addTo(fr.map));
+                L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="fr-home"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), interactive: false, keyboard: false }).addTo(fr.map);
+                fr.map.attributionControl.setPrefix('Leaflet');
+                fr.layer = L.layerGroup().addTo(fr.map);
+              }
+              // Ausschnitt (50-km-Ring) erst setzen, wenn die Karte eine Groesse hat;
+              // danach bleibt Zoom/Verschiebung des Nutzers erhalten.
+              setTimeout(() => {
+                try {
+                  fr.map.invalidateSize();
+                  if (!fr.gepasst && fr.mapEl.clientWidth > 0) { fr.map.fitBounds(L.latLng(fr.home()).toBounds(100000)); fr.gepasst = true; }
+                } catch (e) { /* Karte gerade nicht sichtbar */ }
+              }, 60);
+              fr.zeichne();
+            }).catch(e => { host.innerHTML = fr.hinweis('Karte nicht verfügbar: ' + fr.esc(e.message)); });
+          };
+          fr.zeichne = () => {
+            if (!fr.map || !fr.layer || !window.L) return;
+            const L = window.L, liste = fr.flights();
+            fr.layer.clearLayers();
+            liste.forEach(f => {
+              if (!Array.isArray(f.coordinates) || f.coordinates.length < 2) return;
+              const s = f.id === fr.sel;
+              L.polyline(f.coordinates.concat([[f.latitude, f.longitude]]), {
+                color: fr.farbe(f), weight: s ? 2.5 : 1.5, opacity: s ? 0.9 : 0.4, dashArray: s ? null : '2 6', interactive: false
+              }).addTo(fr.layer);
+            });
+            liste.forEach(f => {
+              const c = fr.farbe(f), s = f.id === fr.sel, beschriftet = s || (f.distance != null && f.distance < 25);
+              const html = (s ? '<span class="ring"></span>' : '')
+                + `<span class="p"><svg viewBox="-8 -8 16 16" width="22" height="22"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
+                + (beschriftet ? `<span class="l">${fr.esc(fr.cs(f))}<small>${fr.hoehe(f)}</small></span>` : '');
+              const m = L.marker([f.latitude, f.longitude], {
+                icon: L.divIcon({ className: 'fr-ic' + (s ? ' sel' : ''), html, iconSize: [28, 28], iconAnchor: [14, 14] }),
+                zIndexOffset: s ? 1000 : 0, title: fr.cs(f)
+              });
+              m.on('click', () => fr.waehle(f.id));
+              m.addTo(fr.layer);
+            });
+          };
+
+          // ---------- Liste (E2) ----------
+          fr.liste = () => {
+            if (!fr.sensor()) return fr.hinweis(`${SENSOR} fehlt – ist die Integration Flightradar24 eingerichtet?`);
+            const l = fr.nachEntfernung(), N = 12;
+            if (!l.length) return fr.hinweis('Gerade kein Flugzeug im Bereich.');
+            const zeilen = l.slice(0, N).map((f, i) => {
+              const id = fr.id(f), c = fr.farbe(f), s = f.id === fr.sel;
+              const rand = s ? 'background:rgba(127,179,213,0.1);border:1px solid rgba(127,179,213,0.26);'
+                : 'border:1px solid transparent;' + (i ? 'border-top-color:rgba(255,255,255,0.045);' : '');
+              const wer = [f.airline_short || f.airline, f.aircraft_code].filter(Boolean).map(fr.esc).join(' · ');
+              return `<div role="button" tabindex="0" onclick="window.__flugradar.waehle('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.waehle('${id}')}" style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;${rand}">
+                <span style="width:10px;height:10px;border-radius:4px;background:${c};"></span>
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#6e7988;font-weight:600;">${fr.esc(fr.route(f))}</span></div>
+                  <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
+                </div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${fr.hoehe(f)}</span></div>
+              </div>`;
+            }).join('');
+            return `<div style="${F}display:flex;flex-direction:column;">${zeilen}</div>`
+              + (l.length > N ? fr.hinweis(`+ ${l.length - N} weitere auf der Karte`) : '');
+          };
+
+          // ---------- Details (D1) ----------
+          fr.detail = () => {
+            if (!fr.sel) return fr.hinweis('Flugzeug in der Karte oder Liste antippen.');
+            const f = fr.flights().find(x => x.id === fr.sel);
+            if (!f) return fr.hinweis('Dieser Flug ist nicht mehr im Bereich.');
+            const c = fr.farbe(f), o = fr.ap(f, 'origin'), d = fr.ap(f, 'destination');
+            const ab = f.time_real_departure || f.time_scheduled_departure, an = f.time_estimated_arrival || f.time_scheduled_arrival;
+            const anteil = ab && an && an > ab ? Math.min(1, Math.max(0, (Date.now() / 1000 - ab) / (an - ab))) : null;
+            const foto = f.aircraft_photo_large || f.aircraft_photo_medium;
+            const kachel = (k, v, u) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
+                <div style="font-size:11px;font-weight:600;color:#6e7988;">${k}</div>
+                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> ${u}</span></div></div>`;
+            const vs = Number(f.vertical_speed) || 0, steig = vs > 100 ? '↑ ' + fr.de(vs) : vs < -100 ? '↓ ' + fr.de(-vs) : '→ 0';
+            const p = fr.peilung(f);
+            const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#1a2232;border:1px solid rgba(255,255,255,0.07);">
+                <img src="${fr.esc(foto)}" alt="" loading="lazy" style="display:block;width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display='none'">
+                <span style="position:absolute;left:10px;bottom:7px;font-size:10.5px;color:#f2f5f8;text-shadow:0 1px 3px #000;">Foto: JetPhotos</span></div>` : '';
+            const strecke = o || d ? `<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;">
+                <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(o || '?')}</div><div style="font-size:11.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${fr.esc(f.airport_origin_city || '')}</div>${ab ? `<div style="font-size:12px;font-weight:700;color:#aeb8c6;">ab ${fr.uhr(ab)}</div>` : ''}</div>
+                <div style="position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,0.1);">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8 -8 16 16" width="16" height="16" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" fill="${c}" transform="rotate(90)"/></svg>` : ''}</div>
+                <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:#aeb8c6;">an ${fr.uhr(an)}</div>` : ''}</div>
+              </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">Route unbekannt</span>`;
+            const unter = [f.airline_short || f.airline, f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
+            const extra = [f.flight_number && f.flight_number !== f.callsign ? 'Flug ' + fr.esc(f.flight_number) : '', 'Kurs ' + (Number(f.heading) || 0) + '°',
+              f.squawk ? 'Squawk ' + fr.esc(f.squawk) : '', f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
+            const link = `https://www.flightradar24.com/${encodeURIComponent(f.callsign || f.flight_number || '')}/${encodeURIComponent(f.id || '')}`;
+            return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
+              ${bild}
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
+                <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(fr.cs(f))}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter || '–'}</div></div>
+                ${fr.badge(c, fr.band(f), false)}
+              </div>
+              ${strecke}
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">
+                ${kachel('Höhe', fr.hoehe(f), '')}
+                ${kachel('Speed', fr.de(Math.round((Number(f.ground_speed) || 0) * 1.852)), 'km/h')}
+                ${kachel('Steigen', steig, 'ft/min')}
+                ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p))}
+              </div>
+              <div style="font-size:12px;color:#6e7988;">${extra}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <a href="${link}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
+              </div>
+            </div>`;
+          };
+
+          window.__flugradar = fr;
+          return fr;
+        ]]]
+    extra_styles: |
+      .pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: fr-pulse 1.6s ease-in-out infinite; }
+      @keyframes fr-pulse { 50% { opacity: 0.25; } }
+      @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  # --------------------------------------------------------------------------
+  # Kopfzeile wie fussball_kopf / gesundheit-view.yaml
+  # --------------------------------------------------------------------------
+  flug_kopf:
+    template: flug_daten
+    show_icon: true
+    show_name: true
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      icon:
+      - width: 23px
+      - height: 23px
+      - color: '#7fb3d5'
+      name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 17px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: '#f2f5f8'
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 6px
+      - cursor: default
+      custom_fields:
+        unter:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        - text-align: left
+        badge:
+        - justify-self: end
+        - align-self: center
+      grid:
+      - grid-template-areas: '"i n badge" "i unter badge"'
+      - grid-template-columns: min-content 1fr min-content
+      - grid-template-rows: min-content min-content
+      img_cell:
+      - width: 44px
+      - height: 44px
+      - border-radius: 13px
+      - margin-right: 14px
+      - align-self: center
+      - background: rgba(127, 179, 213, 0.12)
+      - border: 1px solid rgba(127, 179, 213, 0.2)
+
+  flug_inhalt:
+    template: flug_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 0
+      - cursor: default
+      custom_fields:
+        inhalt:
+        - width: 100%
+      grid:
+      - grid-template-areas: '"inhalt"'
+
+  # ======================= Karte (K1) =======================
+  flug_karte_kopf:
+    template: flug_kopf
+    icon: mdi:airplane
+    name: Luftraum
+    custom_fields:
+      unter: |
+        [[[
+          const fr = variables.fr, l = fr.flights();
+          if (!fr.sensor()) return 'Integration Flightradar24 fehlt';
+          const nah = l.filter(f => f.distance != null && f.distance < 25).length;
+          const tief = l.filter(f => !f.on_ground).sort((a, b) => a.altitude - b.altitude)[0];
+          return `${nah} unter 25 km` + (tief ? ` · tiefster ${fr.esc(fr.cs(tief))} ${fr.hoehe(tief)}` : '');
+        ]]]
+      badge: |
+        [[[
+          const fr = variables.fr, n = fr.flights().length;
+          return fr.badge('#7fb3d5', n === 1 ? '1 Flug' : n + ' Flüge', n > 0);
+        ]]]
+
+  flug_karte:
+    template: flug_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          const fr = variables.fr, el = this;
+          setTimeout(() => fr.karte(el), 0);
+          const leg = [['#e6b566', 'unter 5.000 ft'], ['#77d4d0', '5.000–25.000 ft'], ['#7fb3d5', 'Reiseflug'], ['#b399d4', 'Sonderflug'], ['#6e7988', 'am Boden']]
+            .map(([c, t]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${t}</span>`).join('');
+          return `<div data-fr-host style="width:100%;height:380px;border-radius:16px;border:1px solid rgba(255,255,255,0.07);background:#141b26;overflow:hidden;"></div>`
+            + `<div style="${fr.F}display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;margin-top:10px;">${leg}</div>`;
+        ]]]
+
+  # ======================= Liste (E2) =======================
+  flug_liste_kopf:
+    template: flug_kopf
+    icon: mdi:format-list-bulleted
+    name: Jetzt über uns
+    custom_fields:
+      unter: nach Entfernung
+      badge: |
+        [[[
+          const fr = variables.fr;
+          return fr.badge('#8794a5', String(fr.flights().length), false);
+        ]]]
+
+  flug_liste:
+    template: flug_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          const fr = variables.fr;
+          return fr.bereich(this, 'liste', () => fr.liste());
+        ]]]
+
+  # ======================= Details (D1, Inhalt des Popups #flug) =======================
+  flug_detail:
+    template: flug_inhalt
+    styles:
+      card:
+      - padding: 2px 2px 8px
+    custom_fields:
+      inhalt: |
+        [[[
+          const fr = variables.fr;
+          return fr.bereich(this, 'detail', () => fr.detail());
+        ]]]
