@@ -77,6 +77,9 @@
 # Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
 # (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
 # #flug wie eine navigate-Aktion (history.pushState + location-changed).
+# Direktlink: /dashboard-home/fluege?flug=<FR24-ID> (Benachrichtigungen) waehlt
+# den Flug, zentriert die Karte und oeffnet das Popup, sofern der Flug noch im
+# Bereich ist; der Parameter wird danach per replaceState entfernt.
 #
 # Klickbarkeit: button-card setzt bei Karten ohne Aktion (tap/hold none) die
 # Klasse "disabled" mit pointer-events: none (styles.ts). Liste, Popup-Inhalt
@@ -113,8 +116,8 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 10, vorher = window.__flugradar;
-          if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
+          const VERSION = 11, vorher = window.__flugradar;
+          if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
             if (vorher.map) { try { vorher.map.remove(); } catch (e) { /* schon entfernt */ } }
@@ -321,6 +324,30 @@ button_card_templates:
               window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
             }
           };
+          // Direktlink aus einer Benachrichtigung: /dashboard-home/fluege?flug=<FR24-ID>.
+          // Ist der Flug noch im Bereich, wird er gewaehlt (Ring, Karte zentriert, Popup);
+          // sonst bleibt nur die View offen. Der Parameter wird danach aus der Adresse
+          // entfernt, damit ein Neuladen nichts erneut oeffnet.
+          fr.ausUrl = () => {
+            if (!/\/fluege\/?$/.test(location.pathname)) return;
+            const q = new URLSearchParams(location.search), id = q.get('flug');
+            if (!id) return;
+            q.delete('flug');
+            const rest = q.toString();
+            history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+            if (fr.flights().some(f => f.id === id)) { fr.fokus = id; fr.zentriere(); fr.waehle(id); }
+          };
+          // Gewaehlten Flug in den Ausschnitt holen (Karte kann beim Oeffnen noch fehlen)
+          fr.zentriere = () => {
+            const f = fr.fokus && fr.flights().find(x => x.id === fr.fokus);
+            if (!f || !fr.map || !fr.mapEl || !fr.mapEl.clientWidth) return;
+            fr.fokus = null;
+            if (!fr.map.getBounds().pad(-0.1).contains([f.latitude, f.longitude])) fr.map.panTo([f.latitude, f.longitude], { animate: false });
+          };
+          // App ist schon auf der View: Navigation aendert nur die Adresse
+          if (window.__flugradarUrl) window.removeEventListener('location-changed', window.__flugradarUrl);
+          window.__flugradarUrl = () => setTimeout(() => window.__flugradar && window.__flugradar.ausUrl(), 0);
+          window.addEventListener('location-changed', window.__flugradarUrl);
 
           // ---------- Karte (K1) ----------
           const KARTE_CSS = `
@@ -390,6 +417,7 @@ button_card_templates:
                 try {
                   fr.map.invalidateSize();
                   if (!fr.gepasst && fr.mapEl.clientWidth > 0) { fr.map.fitBounds(L.latLng(fr.home()).toBounds(100000)); fr.gepasst = true; }
+                  fr.zentriere();
                 } catch (e) { /* Karte gerade nicht sichtbar */ }
               }, 60);
               fr.zeichne();
@@ -748,6 +776,7 @@ button_card_templates:
           fr.entferne = nr => { if (nr) fr.dienst('text', 'set_value', { entity_id: 'text.flightradar24_remove_from_track', value: nr }); };
 
           window.__flugradar = fr;
+          fr.ausUrl();
           return fr;
         ]]]
     extra_styles: |
