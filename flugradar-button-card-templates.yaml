@@ -53,6 +53,10 @@
 #   - Kacheln: tile.openstreetmap.org, per CSS-Filter abgedunkelt (Owlet-Navy).
 #     Referrer-Policy wie in der Integrationskarte, sonst lehnt OSM ab.
 #   - Ringe 10 / 25 / 50 km um zone.home, Spur aus "coordinates".
+#   - Beschriftung (Callsign + Hoehe) fuer den gewaehlten Flug und Fluege unter
+#     25 km, ohne Ueberlappung: Rangfolge gewaehlt, dann nach Entfernung; je
+#     Flug 8 Lagen um das Symbol, sonst Kurzform (nur Callsign), sonst keine.
+#     Neu berechnet bei jeder Aktualisierung und nach Zoomen/Verschieben.
 #   - Die Karte wird EINMAL pro Seite angelegt und bei jedem Neuzeichnen von
 #     button-card in den neuen Platzhalter verschoben; Zoom und Ausschnitt
 #     bleiben dadurch erhalten. Am Handy: verschieben mit zwei Fingern aus
@@ -106,7 +110,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 8, vorher = window.__flugradar;
+          const VERSION = 9, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -316,6 +320,7 @@ button_card_templates:
             .fr-ic .p{position:absolute;left:0;top:0;width:28px;height:28px;display:grid;place-items:center;}
             .fr-ic .l{position:absolute;left:27px;top:1px;white-space:nowrap;font:700 11px/1.15 ${SANS};color:#c3ccd8;text-shadow:0 1px 2px #000,0 0 6px #10151d;pointer-events:none;}
             .fr-ic .l small{display:block;font-weight:600;font-size:10px;color:#8794a5;}
+            .fr-ic .l.re{text-align:right;}
             .fr-ic.sel .l{color:#f2f5f8;}
             .fr-ic .ring{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:2px solid #ff4696;box-sizing:border-box;}
             .fr-home{width:12px;height:12px;border-radius:50%;background:#10151d;border:2.5px solid #f2f5f8;box-sizing:border-box;}
@@ -360,8 +365,8 @@ button_card_templates:
                 fr.map.attributionControl.setPrefix('Leaflet');
                 fr.layer = L.layerGroup().addTo(fr.map);
                 fr.zielLayer = L.layerGroup().addTo(fr.map);
-                // Beschriftung der Ziellinie haengt am sichtbaren Ausschnitt
-                fr.map.on('moveend', () => fr.zeichneZiel());
+                // Beschriftungen haengen am Massstab und am sichtbaren Ausschnitt
+                fr.map.on('moveend', () => fr.zeichne());
               }
               // Ausschnitt (50-km-Ring) erst setzen, wenn die Karte eine Groesse hat;
               // danach bleibt Zoom/Verschiebung des Nutzers erhalten.
@@ -385,11 +390,12 @@ button_card_templates:
                 color: fr.farbe(f), weight: s ? 2.5 : 1.5, opacity: s ? 0.9 : 0.4, dashArray: s ? null : '2 6', interactive: false
               }).addTo(fr.layer);
             });
+            const lage = fr.beschriftung(liste);
             liste.forEach(f => {
-              const c = fr.farbe(f), s = f.id === fr.sel, beschriftet = s || (f.distance != null && f.distance < 25);
+              const c = fr.farbe(f), s = f.id === fr.sel, b = lage.get(f.id);
               const html = (s ? '<span class="ring"></span>' : '')
                 + `<span class="p"><svg viewBox="-8 -8 16 16" width="22" height="22"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
-                + (beschriftet ? `<span class="l">${fr.esc(fr.cs(f))}<small>${fr.hoehe(f)}</small></span>` : '');
+                + (b ? `<span class="l${b.rechtsbuendig ? ' re' : ''}" style="left:${Math.round(14 + b.dx)}px;top:${Math.round(14 + b.dy)}px;">${fr.esc(fr.cs(f))}${b.kurz ? '' : `<small>${fr.hoehe(f)}</small>`}</span>` : '');
               const m = L.marker([f.latitude, f.longitude], {
                 icon: L.divIcon({ className: 'fr-ic' + (s ? ' sel' : ''), html, iconSize: [28, 28], iconAnchor: [14, 14] }),
                 zIndexOffset: s ? 1000 : 0, title: fr.cs(f)
@@ -398,6 +404,40 @@ button_card_templates:
               m.addTo(fr.layer);
             });
             fr.zeichneZiel();
+          };
+          // Beschriftungen ohne Ueberlappung: Rangfolge gewaehlter Flug, dann nach Entfernung.
+          // Jede Beschriftung probiert 8 Lagen um ihr Flugzeug (rechts zuerst) und nimmt die
+          // erste, die kein Flugzeug-Symbol, keine schon gesetzte Beschriftung und nicht den
+          // Kartenrand trifft. Passt keine, folgt die Kurzform (nur Callsign), sonst entfaellt
+          // sie; das Flugzeug bleibt antippbar. Der gewaehlte Flug ist immer beschriftet.
+          fr.textBreite = (t, px, gewicht) => {
+            const c = fr._messen || (fr._messen = document.createElement('canvas').getContext('2d'));
+            c.font = `${gewicht} ${px}px ${SANS}`;
+            return c.measureText(t).width;
+          };
+          fr.beschriftung = liste => {
+            const lage = new Map(), sz = fr.map.getSize(), R = 4;
+            const pt = f => fr.map.latLngToContainerPoint([f.latitude, f.longitude]);
+            // Flugzeug-Symbole (22 px) sind belegt, Beschriftungen kommen hinzu
+            const belegt = liste.map(f => { const p = pt(f); return { id: f.id, x1: p.x - 11, y1: p.y - 11, x2: p.x + 11, y2: p.y + 11 }; });
+            const frei = (r, id) => r.x1 >= R && r.y1 >= R && r.x2 <= sz.x - R && r.y2 <= sz.y - R
+              && belegt.every(o => o.id === id && !o.text || r.x2 <= o.x1 || r.x1 >= o.x2 || r.y2 <= o.y1 || r.y1 >= o.y2);
+            const lagen = (w, h) => [[13, -13, 0], [-13 - w, -13, 1], [-w / 2, -13 - h, 0], [-w / 2, 13, 0],
+              [10, -10 - h, 0], [10, 10, 0], [-10 - w, -10 - h, 1], [-10 - w, 10, 1]];
+            liste.filter(f => f.id === fr.sel || (f.distance != null && f.distance < 25))
+              .sort((a, b) => (b.id === fr.sel) - (a.id === fr.sel) || (a.distance ?? 1e9) - (b.distance ?? 1e9))
+              .forEach(f => {
+                const p = pt(f), wCs = fr.textBreite(fr.cs(f), 11, 700) + 2;
+                const formen = [[Math.ceil(Math.max(wCs, fr.textBreite(fr.hoehe(f), 10, 600) + 2)), 25, false], [Math.ceil(wCs), 13, true]];
+                for (const [w, h, kurz] of formen) {
+                  for (const [dx, dy, rb] of lagen(w, h)) {
+                    const r = { id: f.id, text: true, x1: p.x + dx, y1: p.y + dy, x2: p.x + dx + w, y2: p.y + dy + h };
+                    if (frei(r, f.id)) { belegt.push(r); lage.set(f.id, { dx, dy, kurz, rechtsbuendig: !!rb }); return; }
+                  }
+                }
+                if (f.id === fr.sel) lage.set(f.id, { dx: 13, dy: -13, kurz: false, rechtsbuendig: false });
+              });
+            return lage;
           };
           // P3: gestrichelter Grosskreis vom gewaehlten Flug zum Zielflughafen. Liegt das Ziel
           // ausserhalb des Ausschnitts, steht "SOF · 1.373 km" dort, wo die Linie den Rand verlaesst.
