@@ -31,8 +31,8 @@
 #     (Seite soll scrollen), Zoom ueber +/- und Pinch.
 #
 # Farben (Hoehenband, wie die uebrigen Owlet-Views):
-#   amber  unter 5.000 ft (Anflug, Kleinflugzeuge)
-#   tuerkis 5.000-25.000 ft (Steig- und Sinkflug)
+#   amber  unter 1.500 m (Anflug, Kleinflugzeuge)
+#   tuerkis 1.500-7.500 m (Steig- und Sinkflug)
 #   blau   Reiseflug
 #   violett Sonderflug: Hubschrauber, Militaer, Polizei, Rettung (Kategorie
 #           "Helicopter" oder Airline-Name mit Air Force/Army/Navy/Luftwaffe/
@@ -55,8 +55,8 @@
 # flug_detail rendert Flugnummer und Schliessen-Knopf selbst.
 # Links: button-card verwirft auch click per preventDefault(); der
 # FR24-Link oeffnet deshalb wie die url-Aktion von HA per window.open.
-# Hoehe: FR24 liefert Druckhoehe in Fuss; das Popup zeigt Meter, darunter
-# Flugflaeche und Fuss.
+# Hoehe: FR24 liefert Druckhoehe in Fuss; Karte, Liste und Popup zeigen Meter,
+# das Popup darunter Flugflaeche und Fuss.
 #
 # Update-sicher: window.__flugradar traegt eine VERSION; eine hoehere Version
 # ersetzt nach einem Dashboard-Update das alte Objekt der offenen Seite.
@@ -73,7 +73,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 5, vorher = window.__flugradar;
+          const VERSION = 6, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -110,10 +110,13 @@ button_card_templates:
           fr.sonder = f => f.aircraft_category === 'Helicopter'
             || /air force|army|navy|luftwaffe|bundeswehr|police|polizei|ambulan|rettung/i.test(f.airline || '');
           fr.farbe = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#6e7988' : fr.sonder(f) ? '#b399d4'
-            : f.altitude < 5000 ? '#e6b566' : f.altitude < 25000 ? '#77d4d0' : '#7fb3d5';
+            : fr.m(f) < 1500 ? '#e6b566' : fr.m(f) < 7500 ? '#77d4d0' : '#7fb3d5';
           fr.band = f => fr.notfall(f) ? 'Notfall ' + f.squawk : f.on_ground ? 'am Boden' : fr.sonder(f) ? 'Sonderflug'
-            : f.altitude < 5000 ? 'tief' : f.altitude < 25000 ? 'Steig-/Sinkflug' : 'Reiseflug';
-          fr.hoehe = f => f.on_ground ? 'am Boden' : f.altitude >= 10000 ? 'FL' + Math.round(f.altitude / 100) : fr.de(f.altitude || 0) + ' ft';
+            : fr.m(f) < 1500 ? 'tief' : fr.m(f) < 7500 ? 'Steig-/Sinkflug' : 'Reiseflug';
+          // Hoehe in Metern (FR24 liefert Druckhoehe in Fuss), gerundet auf 10 m
+          fr.m = f => (Number(f.altitude) || 0) * 0.3048;
+          fr.meter = f => fr.de(Math.round(fr.m(f) / 10) * 10);
+          fr.hoehe = f => f.on_ground ? 'am Boden' : fr.meter(f) + ' m';
           fr.cs = f => f.callsign || f.flight_number || f.aircraft_registration || '?';
           fr.ap = (f, art) => f['airport_' + art + '_code_iata'] || f['airport_' + art + '_code_icao'] || '';
           fr.route = f => {
@@ -299,7 +302,7 @@ button_card_templates:
                   <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#6e7988;font-weight:600;">${fr.esc(fr.route(f))}</span></div>
                   <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
                 </div>
-                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${f.on_ground ? 'am Boden' : fr.meter(f) + ' m'}</span></div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${fr.hoehe(f)}</span></div>
               </div>`;
             }).join('');
             return `<div ${fr.touchAttr} style="${F}display:flex;flex-direction:column;">${zeilen}</div>`
@@ -320,8 +323,6 @@ button_card_templates:
             ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
             window.dispatchEvent(ev);
           };
-          // Druckhoehe (FR24 liefert Fuss, Flugflaeche = Fuss / 100) in Meter
-          fr.meter = f => fr.de(Math.round((Number(f.altitude) || 0) * 0.3048 / 10) * 10);
           fr.detail = () => {
             if (!fr.sel) return fr.hinweis('Flugzeug in der Karte oder Liste antippen.');
             const f = fr.flights().find(x => x.id === fr.sel);
@@ -493,7 +494,7 @@ button_card_templates:
         [[[
           const fr = variables.fr, el = this;
           setTimeout(() => fr.karte(el), 0);
-          const leg = [['#e6b566', 'unter 5.000 ft'], ['#77d4d0', '5.000–25.000 ft'], ['#7fb3d5', 'Reiseflug'], ['#b399d4', 'Sonderflug'], ['#6e7988', 'am Boden']]
+          const leg = [['#e6b566', 'unter 1.500 m'], ['#77d4d0', '1.500–7.500 m'], ['#7fb3d5', 'Reiseflug'], ['#b399d4', 'Sonderflug'], ['#6e7988', 'am Boden']]
             .map(([c, t]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${t}</span>`).join('');
           return `<div data-fr-host style="width:100%;height:380px;border-radius:16px;border:1px solid rgba(255,255,255,0.07);background:#141b26;overflow:hidden;"></div>`
             + `<div style="${fr.F}display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;margin-top:10px;">${leg}</div>`;
