@@ -44,6 +44,12 @@
 # (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
 # #flug wie eine navigate-Aktion (history.pushState + location-changed).
 #
+# Touch: button-card ruft auf ha-card bei touchend preventDefault() auf, dann
+# feuert am Handy kein click (Marker und Listenzeilen reagierten nicht).
+# Karte, Liste und Details halten touchstart/-end/-cancel deshalb selbst an.
+# Die Karte hat einen eigenen Stapelkontext (isolation: isolate), sonst liegen
+# Leaflets Ebenen (z-index 400-1000) ueber dem Bubble-Popup.
+#
 # Update-sicher: window.__flugradar traegt eine VERSION; eine hoehere Version
 # ersetzt nach einem Dashboard-Update das alte Objekt der offenen Seite.
 #
@@ -59,7 +65,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 2, vorher = window.__flugradar;
+          const VERSION = 3, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -135,6 +141,11 @@ button_card_templates:
             });
             fr.zeichne();
           };
+          // button-card (Action-Handler auf ha-card) ruft bei touchend preventDefault() auf;
+          // dann erzeugt der Browser keinen click. Touch-Ereignisse aus Karte, Liste und
+          // Details deshalb dort anhalten (Leaflet selbst arbeitet mit Pointer-Events).
+          fr.touchStopp = el => ['touchstart', 'touchend', 'touchcancel'].forEach(t => el.addEventListener(t, e => e.stopPropagation(), { passive: true }));
+          fr.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"';
           fr.waehle = id => {
             fr.sel = id;
             fr.neu();
@@ -146,7 +157,7 @@ button_card_templates:
 
           // ---------- Karte (K1) ----------
           const KARTE_CSS = `
-            .fr-wrap{position:relative;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#141b26;}
+            .fr-wrap{position:relative;z-index:0;isolation:isolate;width:100%;height:100%;border-radius:16px;overflow:hidden;background:#141b26;}
             .fr-wrap .leaflet-container{width:100%;height:100%;background:#141b26;font-family:${SANS};}
             .fr-wrap .leaflet-tile-pane{filter:invert(1) hue-rotate(185deg) brightness(.8) contrast(.9) saturate(.4);}
             .fr-wrap .leaflet-bar{border:1px solid rgba(255,255,255,.08);box-shadow:none;border-radius:12px;overflow:hidden;}
@@ -183,6 +194,7 @@ button_card_templates:
                 fr.mapEl.className = 'fr-wrap';
                 fr.mapEl.innerHTML = `<link rel="stylesheet" href="${LEAFLET_CSS}"><style>${KARTE_CSS}</style><div class="fr-map" style="width:100%;height:100%;"></div>`;
                 fr.mapEl.querySelector('link').addEventListener('load', () => { if (fr.map) fr.map.invalidateSize(); });
+                fr.touchStopp(fr.mapEl);
               }
               if (fr.mapEl.parentNode !== host) { host.innerHTML = ''; host.appendChild(fr.mapEl); }
               if (!fr.map) {
@@ -254,7 +266,7 @@ button_card_templates:
                 <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${fr.hoehe(f)}</span></div>
               </div>`;
             }).join('');
-            return `<div style="${F}display:flex;flex-direction:column;">${zeilen}</div>`
+            return `<div ${fr.touchAttr} style="${F}display:flex;flex-direction:column;">${zeilen}</div>`
               + (l.length > N ? fr.hinweis(`+ ${l.length - N} weitere auf der Karte`) : '');
           };
 
@@ -284,7 +296,7 @@ button_card_templates:
             const extra = [f.flight_number && f.flight_number !== f.callsign ? 'Flug ' + fr.esc(f.flight_number) : '', 'Kurs ' + (Number(f.heading) || 0) + '°',
               f.squawk ? 'Squawk ' + fr.esc(f.squawk) : '', f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
             const link = `https://www.flightradar24.com/${encodeURIComponent(f.callsign || f.flight_number || '')}/${encodeURIComponent(f.id || '')}`;
-            return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
+            return `<div ${fr.touchAttr} style="${F}display:flex;flex-direction:column;gap:12px;">
               ${bild}
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
                 <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(fr.cs(f))}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter || '–'}</div></div>
