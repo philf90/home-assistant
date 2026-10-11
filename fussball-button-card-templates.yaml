@@ -1,0 +1,492 @@
+# ============================================================================
+# Fussball – button-card-Templates fuer die View fussball-view.yaml
+# ----------------------------------------------------------------------------
+# Die Karten holen die Daten SELBST im Browser von OpenLigaDB
+# (https://api.openligadb.de, kostenlos, ohne API-Key). Es gibt keine
+# Sensoren, kein Paket und keinen Eintrag in configuration.yaml.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> diesen "button_card_templates:"
+#   Block auf oberster Ebene (neben "views:" und "decluttering_templates:").
+#
+# Aufbau:
+#   fussball_daten       gemeinsamer Datenzugriff (variables.fb) + Puls-CSS
+#   fussball_kopf        Kopfzeile im Owlet-Stil (Icon-Kachel, Name, Unterzeile,
+#                        Badge rechts)
+#   fussball_inhalt      randloser Inhaltsbereich unter der Kopfzeile
+#   fussball_fck_kopf / fussball_fck              Lieblingsverein (F1)
+#   fussball_spieltag_kopf / fussball_spieltag    Spieltag als Liste (S1)
+#   fussball_tabelle_kopf / fussball_tabelle      Tabelle mit Zonen (T1)
+#   Hervorhebung des Lieblingsvereins in Liste und Tabelle nach H1
+#   (FCK-Rot als Flaeche + Kante, ohne Zonenstrich).
+#
+# Variablen in der View: liga (bl1 | bl2), fav (teamId fuer H1),
+#   verein (teamId fuer die Vereinskarte). 1. FC Kaiserslautern = 76.
+#
+# Datenzugriff (window.__fussball, einmal pro Browser-Seite):
+#   - getcurrentgroup/<liga> -> getmatchdata/<liga>/<saison>/<spieltag>.
+#     getmatchdata/<liga> OHNE Saison/Spieltag liefert waehrend eines Spiels
+#     veraltete Staende (gemessen 11.10.2026: Koeln-Gladbach 0:0 statt 1:1).
+#   - getbltable/<liga>/<saison> zaehlt laufende Spiele bereits mit.
+#   - getmatchesbyteamid/<id>/10/3 enthaelt Duplikat-Ligen (z. B. "bl2h") ->
+#     auf leagueShortcut + leagueSeason filtern.
+#   - Saison: ab Juli das laufende Jahr, davor das Vorjahr (2026 = 2026/27).
+#   - Takt: alle 30 s wird neu gezeichnet; abgerufen wird, wenn der Stand
+#     aelter ist als 1 min (Spiel laeuft: 5 min vor bis 150 min nach Anstoss)
+#     bzw. 15 min (sonst), Vereinsspiele 30 min. Nach einem Fehler 1 min Pause.
+#   - Nach einem Abruf schreibt jede Karte ihren Bereich (data-fb) direkt neu,
+#     weil button-card ohne Entitaetsaenderung nicht neu rendert
+#     (shouldUpdate in v7.0.1).
+#   Folgen: Abgerufen wird nur, solange die View in einem Browser offen ist,
+#   und jedes Geraet ruft selbst ab. Es entstehen keine Entitaeten, also auch
+#   keine Historie und keine Automationen auf Tore o. ae.
+#   Voraussetzung: OpenLigaDB erlaubt Abrufe aus dem Browser (CORS); belegt
+#   durch Web-Apps, die die API direkt per fetch nutzen. Schlaegt der Abruf
+#   fehl, zeigt die Karte den Fehler statt leerer Flaechen.
+#
+# Wappen: teamIconUrl aus OpenLigaDB (meist Wikimedia-SVG). Bis das Bild
+# geladen ist bzw. falls es fehlt, stehen die Initialen im Kreis.
+#
+# Voraussetzung: custom:button-card (HACS, getestet mit v7.0.1).
+# ============================================================================
+button_card_templates:
+  fussball_daten:
+    variables:
+      fb: |
+        [[[
+          // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball
+          if (window.__fussball) return window.__fussball;
+          const MIN = 60e3, BASE = 'https://api.openligadb.de/';
+          const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
+          const fb = { F, cache: {}, laeuft: {}, sperre: {}, fehler: null, live: {}, subs: new Map() };
+          fb.saison = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
+          // Abruf mit Cache: liefert sofort den letzten Stand und holt im Hintergrund neu,
+          // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad.
+          fb.get = (pfad, maxAlter) => {
+            const c = fb.cache[pfad], now = Date.now();
+            if ((!c || now - c.t > maxAlter) && !fb.laeuft[pfad] && !(fb.sperre[pfad] > now)) {
+              fb.laeuft[pfad] = true;
+              fetch(BASE + pfad)
+                .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(d => { fb.cache[pfad] = { t: Date.now(), d }; fb.fehler = null; })
+                .catch(e => { fb.fehler = (e && e.message) || String(e); fb.sperre[pfad] = Date.now() + MIN; })
+                .finally(() => { fb.laeuft[pfad] = false; fb.neu(); });
+            }
+            return c ? c.d : undefined;
+          };
+          // Status: pre / live / post / offen (vorbei, aber noch kein Endergebnis)
+          fb.status = m => {
+            const a = Date.parse(m.anstoss), now = Date.now();
+            return m.beendet ? 'post' : (isNaN(a) || now < a ? 'pre' : (now <= a + 3 * 3600e3 ? 'live' : 'offen'));
+          };
+          // Spiel kompakt. Stand: Endergebnis (resultTypeID 2) oder letztes Tor,
+          // je nachdem, was mehr Tore zaehlt (= aktueller).
+          fb.kompakt = m => {
+            const g = m.goals || [], e = (m.matchResults || []).find(r => r.resultTypeID === 2), l = g.length ? g[g.length - 1] : null;
+            let th = null, tg = null;
+            if (e && (!l || e.pointsTeam1 + e.pointsTeam2 >= l.scoreTeam1 + l.scoreTeam2)) { th = e.pointsTeam1; tg = e.pointsTeam2; }
+            else if (l) { th = l.scoreTeam1; tg = l.scoreTeam2; }
+            return {
+              id: m.matchID, anstoss: m.matchDateTimeUTC, beendet: !!m.matchIsFinished,
+              heim: m.team1?.shortName || m.team1?.teamName, heim_id: m.team1?.teamId, heim_logo: m.team1?.teamIconUrl,
+              gast: m.team2?.shortName || m.team2?.teamName, gast_id: m.team2?.teamId, gast_logo: m.team2?.teamIconUrl,
+              th, tg,
+              tore: g.map(x => ({ min: x.matchMinute, name: x.goalGetterName, h: x.scoreTeam1, g: x.scoreTeam2, et: x.isOwnGoal, elf: x.isPenalty }))
+            };
+          };
+          // Aktueller Spieltag einer Liga
+          fb.spieltag = L => {
+            const gr = fb.get('getcurrentgroup/' + L, 15 * MIN);
+            if (!gr || !gr.groupOrderID) return null;
+            const d = fb.get(`getmatchdata/${L}/${fb.saison()}/${gr.groupOrderID}`, fb.live[L] ? MIN : 15 * MIN);
+            if (!Array.isArray(d)) return null;
+            const spiele = d.map(fb.kompakt), now = Date.now();
+            fb.live[L] = spiele.some(m => { const a = Date.parse(m.anstoss); return !m.beendet && now >= a - 5 * MIN && now <= a + 150 * MIN; });
+            return { nr: gr.groupOrderID, spiele };
+          };
+          // Tabelle einer Liga
+          fb.tabelle = L => {
+            const d = fb.get(`getbltable/${L}/${fb.saison()}`, fb.live[L] ? MIN : 15 * MIN);
+            if (!Array.isArray(d)) return null;
+            return d.map((t, i) => ({ platz: i + 1, id: t.teamInfoId, name: t.shortName || t.teamName, logo: t.teamIconUrl, sp: t.matches, td: t.goalDiff, pkt: t.points }));
+          };
+          // Verein: Form der letzten 5 Ligaspiele und naechstes Ligaspiel
+          fb.verein = (id, L) => {
+            const d = fb.get(`getmatchesbyteamid/${id}/10/3`, 30 * MIN);
+            if (!Array.isArray(d)) return null;
+            const s = fb.saison(), form = [];
+            let naechstes = null;
+            d.filter(m => m.leagueShortcut === L && m.leagueSeason === s)
+              .sort((a, b) => Date.parse(a.matchDateTimeUTC) - Date.parse(b.matchDateTimeUTC))
+              .forEach(m => {
+                const heim = m.team1?.teamId === id, e = (m.matchResults || []).find(r => r.resultTypeID === 2);
+                if (m.matchIsFinished && e) {
+                  const a = heim ? e.pointsTeam1 : e.pointsTeam2, b = heim ? e.pointsTeam2 : e.pointsTeam1;
+                  form.push(a > b ? 'S' : (a === b ? 'U' : 'N'));
+                } else if (!m.matchIsFinished && !naechstes) {
+                  const g = heim ? m.team2 : m.team1;
+                  naechstes = { anstoss: m.matchDateTimeUTC, heim, gegner: g?.shortName || g?.teamName, gegner_logo: g?.teamIconUrl };
+                }
+              });
+            return { form: form.slice(-5), naechstes };
+          };
+          // Bereich einer Karte, der nach jedem Abruf und alle 30 s neu gezeichnet wird
+          fb.bereich = (el, key, render) => {
+            if (el) {
+              if (!fb.subs.has(el)) fb.subs.set(el, { r: new Map(), t: Date.now() });
+              fb.subs.get(el).r.set(key, render);
+            }
+            let html;
+            try { html = render(); } catch (e) { html = fb.hinweis('Fehler: ' + fb.esc(e.message)); }
+            return `<div data-fb="${key}" style="width:100%;">${html}</div>`;
+          };
+          fb.neu = () => {
+            const now = Date.now();
+            fb.subs.forEach((s, el) => {
+              if (!el.isConnected) { if (now - s.t > 10 * MIN) fb.subs.delete(el); return; }
+              s.t = now;
+              s.r.forEach((render, key) => {
+                const n = el.shadowRoot && el.shadowRoot.querySelector(`[data-fb="${key}"]`);
+                if (n) { try { n.innerHTML = render(); } catch (e) { n.innerHTML = fb.hinweis('Fehler: ' + fb.esc(e.message)); } }
+              });
+            });
+          };
+          // Hilfen fuer die Darstellung
+          fb.esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+          fb.hinweis = t => `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;">${t}</div>`;
+          fb.warte = was => fb.fehler
+            ? fb.hinweis('OpenLigaDB nicht erreichbar (' + fb.esc(fb.fehler) + ') – neuer Versuch in 1 Min.')
+            : fb.hinweis(was + ' wird geladen …');
+          fb.wappen = (url, name, px) => {
+            const ini = fb.esc(String(name || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
+            const img = url ? `<img src="${fb.esc(url)}" alt="" loading="lazy" style="position:absolute;inset:${Math.round(px * 0.08)}px;width:${Math.round(px * 0.84)}px;height:${Math.round(px * 0.84)}px;object-fit:contain;" onload="this.previousElementSibling.style.visibility='hidden';this.parentNode.style.background='none'" onerror="this.remove()">` : '';
+            return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:rgba(255,255,255,0.07);display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px * 0.33)}px;font-weight:800;color:#8794a5;">${ini}</span>${img}</span>`;
+          };
+          fb.badge = (c, t, puls) => `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          fb.tag = d => d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+          fb.zeit = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          setInterval(fb.neu, 30e3);
+          window.__fussball = fb;
+          return fb;
+        ]]]
+    extra_styles: |
+      .pulse { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: fb-pulse 1.6s ease-in-out infinite; }
+      @keyframes fb-pulse { 50% { opacity: 0.25; } }
+      @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  # --------------------------------------------------------------------------
+  # Kopfzeile wie in gesundheit-view.yaml; Unterzeile als custom_field "unter",
+  # damit sie sich nach einem Abruf selbst aktualisieren kann.
+  # --------------------------------------------------------------------------
+  fussball_kopf:
+    template: fussball_daten
+    show_icon: true
+    show_name: true
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    styles:
+      icon:
+      - width: 23px
+      - height: 23px
+      - color: '#7fb3d5'
+      name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 17px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: '#f2f5f8'
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 6px
+      custom_fields:
+        unter:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        - text-align: left
+        badge:
+        - justify-self: end
+        - align-self: center
+      grid:
+      - grid-template-areas: '"i n badge" "i unter badge"'
+      - grid-template-columns: min-content 1fr min-content
+      - grid-template-rows: min-content min-content
+      img_cell:
+      - width: 44px
+      - height: 44px
+      - border-radius: 13px
+      - margin-right: 14px
+      - align-self: center
+      - background: rgba(127, 179, 213, 0.12)
+      - border: 1px solid rgba(127, 179, 213, 0.2)
+
+  fussball_inhalt:
+    template: fussball_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    styles:
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 0
+      custom_fields:
+        inhalt:
+        - width: 100%
+      grid:
+      - grid-template-areas: '"inhalt"'
+
+  # ======================= Lieblingsverein (F1) =======================
+  fussball_fck_kopf:
+    template: fussball_kopf
+    icon: mdi:shield-star
+    styles:
+      icon:
+      - color: '#ff8a80'
+      custom_fields:
+        unter:
+        - color: '#8794a5'
+      img_cell:
+      - background: rgba(227, 6, 19, 0.16)
+      - border: 1px solid rgba(227, 6, 19, 0.3)
+    custom_fields:
+      unter: |
+        [[[
+          const fb = variables.fb, L = variables.liga;
+          return fb.bereich(this, 'unter', () => {
+            const s = fb.spieltag(L);
+            return (L === 'bl1' ? '1.' : '2.') + ' Bundesliga' + (s ? ` · ${s.nr}. Spieltag` : '');
+          });
+        ]]]
+      badge: |
+        [[[
+          // LIVE / Anstoss / Endstand des aktuellen Vereinsspiels
+          const fb = variables.fb, L = variables.liga, ID = variables.verein;
+          return fb.bereich(this, 'badge', () => {
+            const s = fb.spieltag(L), v = fb.verein(ID, L), now = Date.now();
+            let m = s ? s.spiele.find(x => x.heim_id == ID || x.gast_id == ID) : null;
+            if (m && m.beendet && v?.naechstes && now > Date.parse(m.anstoss) + 36 * 3600e3) m = null;
+            const anstoss = d => fb.tag(d) + ' ' + fb.zeit(d);
+            if (m) {
+              const k = fb.status(m);
+              if (k === 'live') return `<span style="display:inline-flex;align-items:center;gap:6px;color:#fff;background:rgba(227,6,19,0.85);border:1px solid rgba(255,255,255,0.14);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span class="pulse"></span>LIVE</span>`;
+              if (k === 'post') return fb.badge('#a6d49e', 'Endstand');
+              if (k === 'offen') return fb.badge('#6e7988', 'offen');
+              return fb.badge('#7fb3d5', anstoss(new Date(m.anstoss)));
+            }
+            return v?.naechstes ? fb.badge('#7fb3d5', anstoss(new Date(v.naechstes.anstoss))) : '';
+          });
+        ]]]
+
+  fussball_fck:
+    template: fussball_inhalt
+    styles:
+      card:
+      - padding: 0 2px 2px
+    custom_fields:
+      inhalt: |
+        [[[
+          // Spiel (live / naechstes / letztes), Torschuetzen, Platz, Punkte, Form
+          const fb = variables.fb, L = variables.liga, ID = variables.verein, F = fb.F;
+          return fb.bereich(this, 'inhalt', () => {
+            const s = fb.spieltag(L), v = fb.verein(ID, L), t = fb.tabelle(L);
+            if (!s || !v || !t) return fb.warte('Vereinsdaten');
+            const z = t.find(r => r.id == ID) || {}, now = Date.now();
+            let m = s.spiele.find(x => x.heim_id == ID || x.gast_id == ID);
+            const nx = v.naechstes;
+            if (m && m.beendet && nx && now > Date.parse(m.anstoss) + 36 * 3600e3) m = null;
+            let heim, gast, hl, gl, th = null, tg = null, k = 'pre', a, tore = [], heimId = null;
+            if (m) {
+              a = Date.parse(m.anstoss); heim = m.heim; gast = m.gast; hl = m.heim_logo; gl = m.gast_logo;
+              th = m.th; tg = m.tg; tore = m.tore || []; heimId = m.heim_id; k = fb.status(m);
+            } else if (nx) {
+              a = Date.parse(nx.anstoss); const n = z.name || 'Kaiserslautern';
+              heim = nx.heim ? n : nx.gegner; gast = nx.heim ? nx.gegner : n;
+              hl = nx.heim ? z.logo : nx.gegner_logo; gl = nx.heim ? nx.gegner_logo : z.logo;
+            } else return fb.hinweis('Kein Spiel gefunden.');
+            if (k === 'live' && th === null) { th = 0; tg = 0; }
+            let sub;
+            if (k === 'live') {
+              const lt = tore.length ? tore[tore.length - 1] : null;
+              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${lt && lt.min ? ` · Tor ${lt.min}'` : ''}</span>`;
+            } else if (k === 'pre') {
+              const diff = a - now, h = Math.round(diff / 3600e3), d = Math.round(diff / 86400e3);
+              sub = `<span style="color:#8794a5;">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
+            } else sub = `<span style="color:#8794a5;">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+            const score = k === 'pre'
+              ? `<b style="font-size:24px;color:#8794a5;font-variant-numeric:tabular-nums;">${fb.zeit(new Date(a))}</b>`
+              : `<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th ?? '–'} : ${tg ?? '–'}</b>`;
+            const seite = (n, l, r) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:#f2f5f8;min-width:0;">${fb.wappen(l, n, 46)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span><small style="font-size:11px;color:#8794a5;font-weight:600;">${r}</small></div>`;
+            // Torschuetzen: Heim/Gast aus der Aenderung des Spielstands
+            let ph = 0;
+            const tl = tore.map(x => {
+              const heimTor = x.h > ph; ph = x.h;
+              const unser = heimTor === (heimId == ID);
+              return `<span style="color:${unser ? '#f2f5f8' : '#8794a5'};">⚽ ${x.min ? x.min + "' " : ''}${fb.esc(x.name || '')}${x.elf ? ' (E)' : ''}${x.et ? ' (ET)' : ''}</span>`;
+            }).join('');
+            const form = v.form.map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#0f141c;background:${f === 'S' ? '#a6d49e' : (f === 'N' ? '#f0736a' : '#8794a5')};">${f}</i>`).join('');
+            const zelle = (n, inhalt) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:#8794a5;">${n}</div>${inhalt}</div>`;
+            const wert = (w, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:#f2f5f8;">${w}${e ? `<span style="font-size:0.62em;color:#8794a5;font-weight:600;"> ${e}</span>` : ''}</div>`;
+            return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;">
+                ${seite(heim, hl, 'Heim')}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">${score}<span style="font-size:11.5px;font-weight:700;">${sub}</span></div>
+                ${seite(gast, gl, 'Gast')}
+              </div>
+              ${tl ? `<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>` : ''}
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                ${zelle('Platz', wert(z.platz ?? '–'))}
+                ${zelle('Punkte', wert(z.pkt ?? '–', z.sp != null ? z.sp + ' Sp' : ''))}
+                ${zelle('Form', `<div style="display:flex;gap:4px;margin-top:4px;">${form || '<span style="color:#8794a5;font-size:12px;">–</span>'}</div>`)}
+              </div></div>`;
+          });
+        ]]]
+
+  # ======================= Spieltag (S1) =======================
+  fussball_spieltag_kopf:
+    template: fussball_kopf
+    icon: mdi:soccer
+    custom_fields:
+      unter: |
+        [[[
+          const fb = variables.fb, L = variables.liga;
+          return fb.bereich(this, 'unter', () => {
+            const s = fb.spieltag(L);
+            if (!s) return 'Spieltag';
+            let post = 0, pre = 0;
+            s.spiele.forEach(m => { const k = fb.status(m); if (k === 'post') post++; else if (k === 'pre') pre++; });
+            return `${s.nr}. Spieltag · ${post} beendet · ${pre} ausstehend`;
+          });
+        ]]]
+      badge: |
+        [[[
+          // Laufende Spiele (rot), "beendet" (gruen) oder naechster Anstoss (blau)
+          const fb = variables.fb, L = variables.liga;
+          return fb.bereich(this, 'badge', () => {
+            const s = fb.spieltag(L);
+            if (!s) return '';
+            let live = 0, post = 0, next = null;
+            s.spiele.forEach(m => {
+              const k = fb.status(m), a = Date.parse(m.anstoss);
+              if (k === 'live') live++; else if (k === 'post') post++;
+              else if (k === 'pre' && (next === null || a < next)) next = a;
+            });
+            if (live) return fb.badge('#f0736a', live + ' live', true);
+            if (s.spiele.length && post === s.spiele.length) return fb.badge('#a6d49e', 'beendet');
+            if (next) { const d = new Date(next); return fb.badge('#7fb3d5', fb.tag(d) + ' ' + fb.zeit(d)); }
+            return '';
+          });
+        ]]]
+
+  fussball_spieltag:
+    template: fussball_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          // S1: nach Anstoss gruppiert, Heim/Gast untereinander, Tore rechts
+          const fb = variables.fb, L = variables.liga, FAV = variables.fav, F = fb.F;
+          return fb.bereich(this, 'inhalt', () => {
+            const s = fb.spieltag(L);
+            if (!s) return fb.warte('Spieltag');
+            if (!s.spiele.length) return fb.hinweis('Keine Spiele für diesen Spieltag gemeldet.');
+            const spiele = [...s.spiele].sort((x, y) => Date.parse(x.anstoss) - Date.parse(y.anstoss) || x.id - y.id);
+            // Spiele mehr als 4 Tage neben der Mitte (Nachholspiele) mit Datum
+            const mitte = spiele.length ? Date.parse(spiele[Math.floor(spiele.length / 2)].anstoss) : 0;
+            const datum = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+            let html = '', grp = '';
+            spiele.forEach(m => {
+              const a = Date.parse(m.anstoss), d = new Date(a), k = fb.status(m);
+              const g = Math.abs(a - mitte) > 4 * 86400e3 ? `${fb.tag(d)} ${datum(d)} · ${fb.zeit(d)}` : `${fb.tag(d)} · ${fb.zeit(d)}`;
+              if (g !== grp) { html += `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#4f5865;padding:${grp ? '8px' : '0'} 2px 2px;">${g}</div>`; grp = g; }
+              const fav = FAV && (m.heim_id == FAV || m.gast_id == FAV);
+              let th = m.th, tg = m.tg;
+              if (k === 'live' && (th === null || th === undefined)) { th = 0; tg = 0; }
+              const zeile = (n, l, x, y) => {
+                const r = (k === 'post' && x !== y) ? (x > y ? 'w' : 'l') : '', c = r === 'l' ? '#8794a5' : '#f2f5f8';
+                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(l, n, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r === 'w' ? 700 : 500};">${fb.esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k === 'pre' || x === null || x === undefined ? '' : x}</span></div>`;
+              };
+              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>LIVE</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
+              const bg = fav ? 'background:rgba(227,6,19,0.13);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:rgba(240,115,106,0.07);' : '');
+              html += `<div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}"><span style="font-size:11.5px;font-weight:700;color:#6e7988;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div></div>`;
+            });
+            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}</div>`;
+          });
+        ]]]
+
+  # ======================= Tabelle (T1) =======================
+  fussball_tabelle_kopf:
+    template: fussball_kopf
+    icon: mdi:format-list-numbered
+    custom_fields:
+      unter: |
+        [[[
+          const fb = variables.fb, L = variables.liga;
+          return fb.bereich(this, 'unter', () => {
+            const c = fb.cache[`getbltable/${L}/${fb.saison()}`];
+            return c ? 'Tabelle · Stand ' + fb.zeit(new Date(c.t)) + ' Uhr' : 'Tabelle';
+          });
+        ]]]
+      badge: |
+        [[[
+          // Live-Stand, solange Spiele dieser Liga laufen; sonst Spieltag
+          const fb = variables.fb, L = variables.liga;
+          return fb.bereich(this, 'badge', () => {
+            const s = fb.spieltag(L);
+            if (!s) return '';
+            if (s.spiele.some(m => fb.status(m) === 'live')) return fb.badge('#f0736a', 'Live-Stand', true);
+            return `<span style="display:inline-flex;align-items:center;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${s.nr}. Spieltag</span>`;
+          });
+        ]]]
+
+  fussball_tabelle:
+    template: fussball_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          // T1: Platz mit Zonenstrich, Verein, Sp, TD, Pkt; Lieblingsverein nach H1
+          const fb = variables.fb, L = variables.liga, FAV = variables.fav, F = fb.F;
+          return fb.bereich(this, 'inhalt', () => {
+            const rows = fb.tabelle(L);
+            if (!rows) return fb.warte('Tabelle');
+            // 2. Liga: 1-2 Aufstieg, 3 + 16 Relegation, 17-18 Abstieg;
+            // 1. Liga: 1-4 Champions League, 16 Relegation, 17-18 Abstieg
+            const zone = p => L === 'bl2'
+              ? (p <= 2 ? '#a6d49e' : ((p === 3 || p === 16) ? '#e6b566' : (p >= 17 ? '#f0736a' : '')))
+              : (p <= 4 ? '#7fb3d5' : (p === 16 ? '#e6b566' : (p >= 17 ? '#f0736a' : '')));
+            // Vereine mit laufendem Spiel (die Tabelle zaehlt sie schon mit)
+            const s = fb.spieltag(L), live = new Set();
+            (s ? s.spiele : []).forEach(m => { if (fb.status(m) === 'live') { live.add(m.heim_id); live.add(m.gast_id); } });
+            const th = 'font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#4f5865;padding:0 6px 6px;text-align:right;';
+            let body = '';
+            rows.forEach((r, i) => {
+              const fav = FAV && r.id == FAV, z = zone(r.platz);
+              const td = 'padding:5px 6px;text-align:right;color:#8794a5;' + (i ? 'border-top:1px solid rgba(255,255,255,0.04);' : '') + (fav ? 'background:rgba(227,6,19,0.14);' : '');
+              const strich = (!fav && z) ? `<span style="position:absolute;left:0;top:5px;bottom:5px;width:3px;border-radius:3px;background:${z};"></span>` : '';
+              body += `<tr>
+                <td style="${td}${fav ? 'box-shadow:inset 3px 0 0 #e30613;border-radius:8px 0 0 8px;' : ''}position:relative;text-align:center;width:30px;font-weight:700;color:#f2f5f8;">${strich}${r.platz}</td>
+                <td style="${td}text-align:left;color:#f2f5f8;width:100%;max-width:0;"><div style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(r.logo, r.name, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${fav ? 'font-weight:700;' : ''}">${fb.esc(r.name)}</span>${live.has(r.id) ? '<span class="pulse" style="color:#f0736a;flex:0 0 auto;"></span>' : ''}</div></td>
+                <td style="${td}">${r.sp}</td>
+                <td style="${td}">${r.td > 0 ? '+' + r.td : r.td}</td>
+                <td style="${td}${fav ? 'border-radius:0 8px 8px 0;' : ''}color:#f2f5f8;font-weight:700;">${r.pkt}</td></tr>`;
+            });
+            const leg = L === 'bl2'
+              ? [['#a6d49e', 'Aufstieg'], ['#e6b566', 'Relegation'], ['#f0736a', 'Abstieg']]
+              : [['#7fb3d5', 'Champions League'], ['#e6b566', 'Relegation'], ['#f0736a', 'Abstieg']];
+            return `<div style="${F}display:flex;flex-direction:column;gap:10px;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;">
+                <thead><tr><th style="${th}text-align:center;">#</th><th style="${th}text-align:left;">Verein</th><th style="${th}">Sp</th><th style="${th}">TD</th><th style="${th}">Pkt</th></tr></thead>
+                <tbody>${body}</tbody></table>
+              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;">${leg.map(([c, n]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${n}</span>`).join('')}${live.size ? '<span style="display:inline-flex;align-items:center;gap:6px;color:#f0736a;"><span class="pulse"></span>spielt gerade</span>' : ''}</div></div>`;
+          });
+        ]]]
