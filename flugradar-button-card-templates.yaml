@@ -73,7 +73,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 4, vorher = window.__flugradar;
+          const VERSION = 5, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -154,6 +154,34 @@ button_card_templates:
           // Details deshalb dort anhalten (Leaflet selbst arbeitet mit Pointer-Events).
           fr.touchStopp = el => ['touchstart', 'touchend', 'touchcancel'].forEach(t => el.addEventListener(t, e => e.stopPropagation(), { passive: true }));
           fr.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"';
+          // Antippen wie Bubble Card es fuer seine eigenen Knoepfe macht (create.js:
+          // click UND touchend): im Popup und in button-card kommt der vom Browser
+          // erzeugte click am Handy nicht zuverlaessig an. touchend loest nur bei
+          // einem echten Tipp aus (< 10 px Bewegung, < 800 ms), damit Scrollen nichts
+          // auswaehlt; der folgende click wird dann ignoriert (kein Doppelausloesen).
+          fr.tipp = (e, aktion) => {
+            e.stopPropagation();
+            if (e.type === 'touchstart') {
+              const t = e.touches && e.touches[0];
+              fr._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+              return;
+            }
+            if (e.type === 'touchend') {
+              const t = e.changedTouches && e.changedTouches[0], st = fr._tipp;
+              fr._tipp = null;
+              if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+              if (e.cancelable) e.preventDefault();
+              fr._tippZeit = Date.now();
+              if (aktion) aktion();
+              return;
+            }
+            if (e.type === 'click') {
+              e.preventDefault();
+              if (Date.now() - (fr._tippZeit || 0) < 700) return;
+              if (aktion) aktion();
+            }
+          };
+          fr.tippAttr = js => `ontouchstart="window.__flugradar.tipp(event)" ontouchend="window.__flugradar.tipp(event,()=>{${js}})" onclick="window.__flugradar.tipp(event,()=>{${js}})"`;
           fr.waehle = id => {
             fr.sel = id;
             fr.neu();
@@ -265,13 +293,13 @@ button_card_templates:
               const rand = s ? 'background:rgba(127,179,213,0.1);border:1px solid rgba(127,179,213,0.26);'
                 : 'border:1px solid transparent;' + (i ? 'border-top-color:rgba(255,255,255,0.045);' : '');
               const wer = [f.airline_short || f.airline, f.aircraft_code].filter(Boolean).map(fr.esc).join(' · ');
-              return `<div role="button" tabindex="0" onclick="window.__flugradar.waehle('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.waehle('${id}')}" style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;${rand}">
+              return `<div role="button" tabindex="0" ${fr.tippAttr(`window.__flugradar.waehle('${id}')`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.waehle('${id}')}" style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;${rand}">
                 <span style="width:10px;height:10px;border-radius:4px;background:${c};"></span>
                 <div style="min-width:0;">
                   <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#6e7988;font-weight:600;">${fr.esc(fr.route(f))}</span></div>
                   <div style="font-size:12px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
                 </div>
-                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${fr.hoehe(f)}</span></div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#6e7988;font-weight:600;">${f.on_ground ? 'am Boden' : fr.meter(f) + ' m'}</span></div>
               </div>`;
             }).join('');
             return `<div ${fr.touchAttr} style="${F}display:flex;flex-direction:column;">${zeilen}</div>`
@@ -285,7 +313,12 @@ button_card_templates:
           fr.schliesse = () => {
             if (!location.hash) return;
             history.replaceState(history.state, '', location.href.split('#')[0]);
-            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: true } }));
+            // genau wie removeHash(true) in Bubble Card (helpers.js): Event mit
+            // source 'bubble-popup-remove-hash'; Bubble raeumt dann auch den beim
+            // Oeffnen angelegten Verlaufseintrag wieder ab.
+            const ev = new Event('location-changed');
+            ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
+            window.dispatchEvent(ev);
           };
           // Druckhoehe (FR24 liefert Fuss, Flugflaeche = Fuss / 100) in Meter
           fr.meter = f => fr.de(Math.round((Number(f.altitude) || 0) * 0.3048 / 10) * 10);
@@ -308,7 +341,7 @@ button_card_templates:
             const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
                 <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${c}1f;border:1px solid ${c}33;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
                 <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
-                <button type="button" aria-label="Schließen" onclick="event.stopPropagation();window.__flugradar.schliesse()" style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                <button type="button" aria-label="Schließen" ${fr.tippAttr('window.__flugradar.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
               </div>`;
             const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#1a2232;border:1px solid rgba(255,255,255,0.07);">
                 <img src="${fr.esc(foto)}" alt="" loading="lazy" style="display:block;width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display='none'">
@@ -342,7 +375,7 @@ button_card_templates:
               </div>
               <div style="font-size:12px;color:#6e7988;">${extra}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a href="${link}" target="_blank" rel="noopener" onclick="event.preventDefault();event.stopPropagation();window.open(this.href);" style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
+                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
               </div>
             </div>`;
           };
