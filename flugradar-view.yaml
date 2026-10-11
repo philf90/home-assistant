@@ -54,15 +54,40 @@
 #           unter 3 km), Meldung seltener Typen (Liste in variables.selten)
 #       "Fluege: laufend auswerten"  jede Aktualisierung des Sensors: naechster
 #           Ueberflug (input_text.flug_bestwert), counter.flug_tief (in der Luft
-#           unter 1.500 m), Meldungen tief und nah / Sonderflug / Notfall-Squawk
+#           unter 1.500 m), Meldungen tief und nah / Sonderflug
+#       "Fluege: ADS-B abfragen"  jede Minute homeassistant.update_entity fuer
+#           sensor.adsb_notfall (automatisches Intervall des Eintrags ist aus)
+#       "Fluege: Notfall melden (ADS-B)"  neue ICAO-Adresse in sensor.adsb_notfall
+#           -> kritische Meldung; Route, Airline, Foto ueber die ICAO-Adresse
+#           aus der FR24-Integration
 #       "Fluege: Tageswechsel"  00:00 Zaehler und Bestwert zuruecksetzen
 #       "Fluege: verfolgten Flug melden"  Events flightradar24_tracked_took_off,
 #           _landed, _arrived_gate
 #     Meldungen an notify.mobile_app_philipps_iphone17pro, mit Foto
 #     (aircraft_photo_medium), Tippen oeffnet /dashboard-home/fluege.
+#   - Integration Scrape, Eintrag "ADS-B Notfall (adsb.lol)" (UI):
+#       Ressource https://api.adsb.lol/v2/point/49.2002/8.1893/27 (27 nm um
+#       zone.home), Sensor sensor.adsb_notfall, Selektor "body" (lxml packt
+#       JSON-Text direkt in <body>), Wert-Template:
+#       {% set ac = (value | from_json).ac | default([]) %}
+#       {% set ns = namespace(l=[]) %}
+#       {% for a in ac %}
+#         {% set sq = a.squawk | default('') | string %}
+#         {% set em = a.emergency | default('none') | string %}
+#         {% if sq in ['7500', '7600', '7700'] or
+#               em in ['general', 'minfuel', 'nordo', 'unlawful', 'downed'] %}
+#           {% set ns.l = ns.l + [[a.hex | default('') | upper,
+#               a.flight | default('') | trim, sq, em, a.alt_baro | default(''),
+#               ((a.dst | default(0) | float(0)) * 1.852) | round(1)] | join('|')] %}
+#         {% endif %}
+#       {% endfor %}
+#       {{ (ns.l | join(';'))[:250] if ns.l else 'keine' }}
+#       Polling des Eintrags deaktiviert (Systemoptionen), Abfrage per Automation.
 #   Grenzen: Nach einem Neustart feuert die Integration fuer bereits anwesende
 #   Fluege kein Eintritts-Event (api/flight.py, is_first_run); diese zaehlen
-#   nicht. Squawk (Notfall-Meldung) gibt es nur mit FR24-Login.
+#   nicht. Den Squawk liefert die FR24-Integration (v2.3.0) trotz Silver-Login
+#   nicht (in der FR24-App ist er sichtbar); Notfaelle kommen deshalb aus
+#   ADS-B (adsb.lol, frei, ohne Schluessel).
 #
 # Hinweis Diagramm (P5): apexcharts-card laedt den Verlauf ueber
 # history/period MIT Attributen (graphEntry.ts _fetchRecent); bei diesem

@@ -69,7 +69,9 @@
 #   violett Sonderflug: Hubschrauber, Militaer, Polizei, Rettung (Kategorie
 #           "Helicopter" oder Airline-Name mit Air Force/Army/Navy/Luftwaffe/
 #           Bundeswehr/Police/Polizei/Ambulance/Rettung)
-#   rot    Notfall-Squawk 7500/7600/7700 (Squawk nur mit FR24-Login)
+#   rot    Notfall: Squawk 7500/7600/7700 oder ADS-B-Notfallkennung; Quelle
+#          sensor.adsb_notfall (adsb.lol), Zuordnung ueber die ICAO-Adresse
+#          (aircraft_icao_24bit). Der FR24-Squawk kommt trotz Silver-Login leer an.
 #   grau   am Boden
 #
 # Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
@@ -106,11 +108,12 @@ button_card_templates:
     entity: sensor.flightradar24_current_in_area
     triggers_update:
     - sensor.flightradar24_current_in_area
+    - sensor.adsb_notfall
     variables:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 9, vorher = window.__flugradar;
+          const VERSION = 10, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -143,12 +146,25 @@ button_card_templates:
           fr.de = n => Number(n).toLocaleString('de-DE');
           fr.hinweis = t => `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
           fr.badge = (c, t, puls) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
-          fr.notfall = f => ['7500', '7600', '7700'].includes(String(f.squawk || ''));
+          // Notfall: Squawk von FR24 (liefert die Integration derzeit nicht) oder ADS-B
+          // (sensor.adsb_notfall, adsb.lol: "HEX|Callsign|Squawk|Notfallart|Hoehe ft|km;...")
+          const NOTFALL_ARTEN = { general: 'Luftnotfall', minfuel: 'Treibstoffmangel', nordo: 'Funkausfall', unlawful: 'Entführung', downed: 'Notlandung' };
+          fr.adsbNotfall = () => {
+            const s = fr.zustand('sensor.adsb_notfall'), m = new Map();
+            if (s && s.includes('|')) s.split(';').forEach(e => { const p = e.split('|'); if (p[0]) m.set(p[0].toUpperCase(), { sq: p[2] || '', art: p[3] || '' }); });
+            return m;
+          };
+          fr.notfallCode = f => {
+            if (['7500', '7600', '7700'].includes(String(f.squawk || ''))) return String(f.squawk);
+            const a = fr.adsbNotfall().get(String(f.aircraft_icao_24bit || '').toUpperCase());
+            return a ? (['7500', '7600', '7700'].includes(a.sq) ? a.sq : NOTFALL_ARTEN[a.art] || a.art || 'ADS-B') : '';
+          };
+          fr.notfall = f => !!fr.notfallCode(f);
           fr.sonder = f => f.aircraft_category === 'Helicopter'
             || /air force|army|navy|luftwaffe|bundeswehr|police|polizei|ambulan|rettung/i.test(f.airline || '');
           fr.farbe = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#6e7988' : fr.sonder(f) ? '#b399d4'
             : fr.m(f) < 1500 ? '#e6b566' : fr.m(f) < 7500 ? '#77d4d0' : '#7fb3d5';
-          fr.band = f => fr.notfall(f) ? 'Notfall ' + f.squawk : f.on_ground ? 'am Boden' : fr.sonder(f) ? 'Sonderflug'
+          fr.band = f => fr.notfall(f) ? 'Notfall ' + fr.notfallCode(f) : f.on_ground ? 'am Boden' : fr.sonder(f) ? 'Sonderflug'
             : fr.m(f) < 1500 ? 'tief' : fr.m(f) < 7500 ? 'Steig-/Sinkflug' : 'Reiseflug';
           // Hoehe in Metern (FR24 liefert Druckhoehe in Fuss), gerundet auf 10 m
           fr.m = f => (Number(f.altitude) || 0) * 0.3048;
@@ -548,7 +564,7 @@ button_card_templates:
                 <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:#aeb8c6;">an ${fr.uhr(an)}</div>` : ''}</div>
               </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">Route unbekannt</span>`;
             const geraet = [f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
-            const extra = ['Kurs ' + (Number(f.heading) || 0) + '°', f.squawk ? 'Squawk ' + fr.esc(f.squawk) : '',
+            const extra = ['Kurs ' + (Number(f.heading) || 0) + '°', f.squawk ? 'Squawk ' + fr.esc(f.squawk) : fr.notfall(f) ? 'Notfall laut ADS-B: ' + fr.esc(fr.notfallCode(f)) : '',
               f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
             const hoehe = f.on_ground ? kachel('Höhe', 'am Boden', '', '')
               : kachel('Höhe', fr.meter(f), 'm', (f.altitude >= 10000 ? 'FL' + Math.round(f.altitude / 100) + ' · ' : '') + fr.de(f.altitude || 0) + ' ft');
@@ -605,16 +621,18 @@ button_card_templates:
             ['input_boolean.flug_meldung_tief', 'Tief und nah', 'unter 1.500 m und unter 5 km'],
             ['input_boolean.flug_meldung_sonderflug', 'Sonderflüge', 'Hubschrauber, Militär, Polizei, Rettung unter 15 km'],
             ['input_boolean.flug_meldung_selten', 'Seltene Typen', 'z. B. B748, A388, A124, C17, A400 beim Eintritt'],
-            ['input_boolean.flug_meldung_notfall', 'Notfall-Squawk', '7500 / 7600 / 7700'],
+            ['input_boolean.flug_meldung_notfall', 'Notfall-Squawk', '7500 / 7600 / 7700 unter 50 km · Quelle ADS-B (adsb.lol), jede Minute'],
             ['input_boolean.flug_meldung_verfolgt', 'Verfolgte Flüge', 'Start, Landung, am Gate']
           ];
           fr.meldungenAn = () => fr.MELDUNGEN.filter(([e]) => fr.zustand(e) === 'on').length;
           fr.meldungen = () => {
-            // Squawk liefert die Integration nur mit FR24-Login; ohne Login ist er bei allen Fluegen leer
-            const l = fr.flights(), ohneSquawk = l.length > 0 && l.every(f => !f.squawk);
+            // Notfaelle kommen aus ADS-B (sensor.adsb_notfall): FR24 liefert den Squawk trotz
+            // Silver-Login nicht. Hinweis nur, wenn die ADS-B-Abfrage ausfaellt.
+            const adsb = fr.zustand('sensor.adsb_notfall');
+            const adsbFehlt = adsb === undefined ? 'sensor.adsb_notfall fehlt' : ['unavailable', 'unknown'].includes(adsb) ? 'ADS-B-Abfrage derzeit nicht erreichbar' : '';
             const zeilen = fr.MELDUNGEN.map(([e, t, x]) => fr.zustand(e) === undefined
               ? fr.hinweis(`${e} fehlt`)
-              : fr.schalter(e, t, x, e.endsWith('_notfall') && ohneSquawk ? 'braucht FR24-Login (Squawk derzeit leer)' : '')).join('');
+              : fr.schalter(e, t, x, e.endsWith('_notfall') ? adsbFehlt : '')).join('');
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`;
           };
 
