@@ -31,6 +31,13 @@
 #   - getmatchesbyteamid/<id>/10/3 enthaelt Duplikat-Ligen (z. B. "bl2h") ->
 #     auf leagueShortcut + leagueSeason filtern.
 #   - Saison: ab Juli das laufende Jahr, davor das Vorjahr (2026 = 2026/27).
+#   - Spielminute: OpenLigaDB hat keine. Solange in einer Liga ein Spiel laeuft,
+#     holt fb.espn() zusaetzlich das inoffizielle ESPN-Scoreboard (ger.1/ger.2,
+#     ohne Key, alle 45 s). Zuordnung ueber Anstoss (+-10 min) und Vereinsnamen
+#     mit Aliassen fuer englische Namen ("FC Cologne"). Gemessen 11.10.2026:
+#     Minute zaehlt jede Minute hoch, in der Halbzeit steht "45'+x'" -> "HZ"
+#     ueber status.type.name. Faellt ESPN aus (auch CORS), fehlt nur die Minute:
+#     Liste zeigt "LIVE" + Hinweis, Vereinskarte die Minute des letzten Tors.
 #   - Takt: alle 30 s wird neu gezeichnet; abgerufen wird, wenn der Stand
 #     aelter ist als 1 min (Spiel laeuft: 5 min vor bis 150 min nach Anstoss)
 #     bzw. 15 min (sonst), Vereinsspiele 30 min. Nach einem Fehler 1 min Pause.
@@ -40,6 +47,9 @@
 #   Folgen: Abgerufen wird nur, solange die View in einem Browser offen ist,
 #   und jedes Geraet ruft selbst ab. Es entstehen keine Entitaeten, also auch
 #   keine Historie und keine Automationen auf Tore o. ae.
+#   - Update-sicher: window.__fussball traegt eine VERSION; nach einem
+#     Dashboard-Update ersetzt eine hoehere Version das alte Objekt der
+#     offenen Seite (sonst "fb.minute is not a function").
 #   Voraussetzung: OpenLigaDB erlaubt Abrufe aus dem Browser (CORS); belegt
 #   durch Web-Apps, die die API direkt per fetch nutzen. Schlaegt der Abruf
 #   fehl, zeigt die Karte den Fehler statt leerer Flaechen.
@@ -54,23 +64,36 @@ button_card_templates:
     variables:
       fb: |
         [[[
-          // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball
-          if (window.__fussball) return window.__fussball;
-          const MIN = 60e3, BASE = 'https://api.openligadb.de/';
+          // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
+          // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
+          // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
+          const VERSION = 2, alt = window.__fussball;
+          if (alt && alt.version === VERSION) return alt;
+          // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
+          if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
+          const MIN = 60e3;
+          // OpenLigaDB: Spielplan, Stand, Tabelle. ESPN (inoffiziell): nur die Spielminute.
+          const BASIS = { oldb: 'https://api.openligadb.de/', espn: 'https://site.api.espn.com/apis/site/v2/sports/soccer/' };
           const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
-          const fb = { F, cache: {}, laeuft: {}, sperre: {}, fehler: null, live: {}, subs: new Map() };
+          const fb = { version: VERSION, F, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, live: {}, subs: new Map() };
           fb.saison = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
           // Abruf mit Cache: liefert sofort den letzten Stand und holt im Hintergrund neu,
           // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad.
-          fb.get = (pfad, maxAlter) => {
-            const c = fb.cache[pfad], now = Date.now();
-            if ((!c || now - c.t > maxAlter) && !fb.laeuft[pfad] && !(fb.sperre[pfad] > now)) {
-              fb.laeuft[pfad] = true;
-              fetch(BASE + pfad)
+          // ESPN-Fehler stehen getrennt in fehlerEspn: ohne ESPN fehlt nur die Minute.
+          fb.get = (pfad, maxAlter, quelle = 'oldb') => {
+            const key = quelle === 'oldb' ? pfad : quelle + ':' + pfad;
+            const c = fb.cache[key], now = Date.now();
+            if ((!c || now - c.t > maxAlter) && !fb.laeuft[key] && !(fb.sperre[key] > now)) {
+              fb.laeuft[key] = true;
+              fetch(BASIS[quelle] + pfad)
                 .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-                .then(d => { fb.cache[pfad] = { t: Date.now(), d }; fb.fehler = null; })
-                .catch(e => { fb.fehler = (e && e.message) || String(e); fb.sperre[pfad] = Date.now() + MIN; })
-                .finally(() => { fb.laeuft[pfad] = false; fb.neu(); });
+                .then(d => { fb.cache[key] = { t: Date.now(), d }; if (quelle === 'oldb') fb.fehler = null; else fb.fehlerEspn = null; })
+                .catch(e => {
+                  const t = (e && e.message) || String(e);
+                  if (quelle === 'oldb') fb.fehler = t; else fb.fehlerEspn = t;
+                  fb.sperre[key] = Date.now() + (quelle === 'oldb' ? MIN : 5 * MIN);
+                })
+                .finally(() => { fb.laeuft[key] = false; fb.neu(); });
             }
             return c ? c.d : undefined;
           };
@@ -90,6 +113,7 @@ button_card_templates:
               id: m.matchID, anstoss: m.matchDateTimeUTC, beendet: !!m.matchIsFinished,
               heim: m.team1?.shortName || m.team1?.teamName, heim_id: m.team1?.teamId, heim_logo: m.team1?.teamIconUrl,
               gast: m.team2?.shortName || m.team2?.teamName, gast_id: m.team2?.teamId, gast_logo: m.team2?.teamIconUrl,
+              heim_voll: m.team1?.teamName, gast_voll: m.team2?.teamName,
               th, tg,
               tore: g.map(x => ({ min: x.matchMinute, name: x.goalGetterName, h: x.scoreTeam1, g: x.scoreTeam2, et: x.isOwnGoal, elf: x.isPenalty }))
             };
@@ -103,6 +127,47 @@ button_card_templates:
             const spiele = d.map(fb.kompakt), now = Date.now();
             fb.live[L] = spiele.some(m => { const a = Date.parse(m.anstoss); return !m.beendet && now >= a - 5 * MIN && now <= a + 150 * MIN; });
             return { nr: gr.groupOrderID, spiele };
+          };
+          // Spielminute laufender Spiele von ESPN (ger.1 / ger.2), nur solange die Liga live ist.
+          // Zuordnung zu OpenLigaDB ueber Anstoss (+-10 min) und Vereinsnamen; ESPN benennt
+          // einige Vereine englisch (gemessen 11.10.2026: "FC Cologne"), daher Aliasse.
+          const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss');
+          const ALIAS = { cologne: 'koln', munich: 'munchen', nuremberg: 'nurnberg', hanover: 'hannover', brunswick: 'braunschweig' };
+          const STOPP = new Set(['fc', 'sc', 'sv', 'vfl', 'vfb', 'tsg', 'fsv', 'ssv', 'spvgg', 'sg', 'tsv', 'bsc', 'dsc', 'borussia', 'eintracht', 'rb', 'de', 'der']);
+          const woerter = namen => {
+            const w = new Set();
+            namen.forEach(n => norm(n).split(/[^a-z0-9]+/).forEach(t => { t = ALIAS[t] || t; if (t.length >= 3 && !STOPP.has(t)) w.add(t); }));
+            return w;
+          };
+          const passt = (a, b) => { let n = 0; a.forEach(x => b.forEach(y => { if (x === y || (x.length >= 5 && y.length >= 5 && (x.includes(y) || y.includes(x)))) n++; })); return n; };
+          fb.espn = L => {
+            if (!fb.live[L]) return null;
+            const d = fb.get(`${L === 'bl1' ? 'ger.1' : 'ger.2'}/scoreboard`, 45e3, 'espn');
+            if (!d || !Array.isArray(d.events)) return null;
+            return d.events.map(e => {
+              const c = e.competitions?.[0] || {}, t = c.competitors || [];
+              const h = t.find(x => x.homeAway === 'home')?.team || {}, g = t.find(x => x.homeAway === 'away')?.team || {};
+              return {
+                anstoss: Date.parse(e.date), status: e.status?.type?.name || '', zustand: e.status?.type?.state || '',
+                uhr: e.status?.displayClock || '', kurz: e.status?.type?.shortDetail || '',
+                heim: woerter([h.displayName, h.shortDisplayName, h.location]), gast: woerter([g.displayName, g.shortDisplayName, g.location])
+              };
+            });
+          };
+          // Minute fuer ein OpenLigaDB-Spiel: "67'", "45'+2'" oder "HZ"; null, wenn unbekannt
+          fb.minute = (L, m) => {
+            const ev = fb.espn(L);
+            if (!ev) return null;
+            const a = Date.parse(m.anstoss), wh = woerter([m.heim, m.heim_voll]), wg = woerter([m.gast, m.gast_voll]);
+            let best = null, bestN = 0;
+            ev.forEach(e => {
+              if (Math.abs(e.anstoss - a) > 10 * MIN) return;
+              const n = passt(wh, e.heim) + passt(wg, e.gast);
+              if (n > bestN) { best = e; bestN = n; }
+            });
+            if (!best) return null;
+            if (best.status === 'STATUS_HALFTIME' || /^(HT|HZ)$/i.test(best.kurz)) return 'HZ';
+            return best.zustand === 'in' && /\d/.test(best.uhr) ? best.uhr : null;
           };
           // Tabelle einer Liga
           fb.tabelle = L => {
@@ -165,7 +230,7 @@ button_card_templates:
           fb.badge = (c, t, puls) => `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
           fb.tag = d => d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
           fb.zeit = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-          setInterval(fb.neu, 30e3);
+          fb.timer = setInterval(fb.neu, 30e3);
           window.__fussball = fb;
           return fb;
         ]]]
@@ -318,8 +383,10 @@ button_card_templates:
             if (k === 'live' && th === null) { th = 0; tg = 0; }
             let sub;
             if (k === 'live') {
-              const lt = tore.length ? tore[tore.length - 1] : null;
-              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${lt && lt.min ? ` · Tor ${lt.min}'` : ''}</span>`;
+              // Minute von ESPN; ohne ESPN die Minute des letzten Tors
+              const min = fb.minute(L, m), lt = tore.length ? tore[tore.length - 1] : null;
+              const zusatz = min ? (min === 'HZ' ? ' · Halbzeit' : ' · ' + min) : (lt && lt.min ? ` · Tor ${lt.min}'` : '');
+              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${zusatz}</span>`;
             } else if (k === 'pre') {
               const diff = a - now, h = Math.round(diff / 3600e3), d = Math.round(diff / 86400e3);
               sub = `<span style="color:#8794a5;">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
@@ -404,7 +471,7 @@ button_card_templates:
             // Spiele mehr als 4 Tage neben der Mitte (Nachholspiele) mit Datum
             const mitte = spiele.length ? Date.parse(spiele[Math.floor(spiele.length / 2)].anstoss) : 0;
             const datum = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-            let html = '', grp = '';
+            let html = '', grp = '', ohneMinute = 0;
             spiele.forEach(m => {
               const a = Date.parse(m.anstoss), d = new Date(a), k = fb.status(m);
               const g = Math.abs(a - mitte) > 4 * 86400e3 ? `${fb.tag(d)} ${datum(d)} · ${fb.zeit(d)}` : `${fb.tag(d)} · ${fb.zeit(d)}`;
@@ -416,11 +483,16 @@ button_card_templates:
                 const r = (k === 'post' && x !== y) ? (x > y ? 'w' : 'l') : '', c = r === 'l' ? '#8794a5' : '#f2f5f8';
                 return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(l, n, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r === 'w' ? 700 : 500};">${fb.esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k === 'pre' || x === null || x === undefined ? '' : x}</span></div>`;
               };
-              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>LIVE</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
+              // Laufend: Minute von ESPN ("67'", "HZ"), sonst "LIVE"
+              const min = k === 'live' ? fb.minute(L, m) : null;
+              if (k === 'live' && !min) ohneMinute++;
+              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>${min || 'LIVE'}</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
               const bg = fav ? 'background:rgba(227,6,19,0.13);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:rgba(240,115,106,0.07);' : '');
-              html += `<div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}"><span style="font-size:11.5px;font-weight:700;color:#6e7988;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div></div>`;
+              html += `<div style="display:grid;grid-template-columns:60px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}"><span style="font-size:11.5px;font-weight:700;color:#6e7988;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div></div>`;
             });
-            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}</div>`;
+            // Hinweis nur, wenn ESPN beim Abruf scheitert (Minute fehlt dann)
+            const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:#6e7988;padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
+            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}${notiz}</div>`;
           });
         ]]]
 
