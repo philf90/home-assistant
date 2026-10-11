@@ -1,0 +1,608 @@
+# Fussball – komplette Ansicht (View) im Owlet-Stil
+#
+# 1. und 2. Bundesliga: aktueller Spieltag (live) und Tabelle, dazu eine
+# Karte fuer den Lieblingsverein 1. FC Kaiserslautern. Entwurf und Varianten:
+# Artefakt "Bundesliga-View"; gewaehlt sind
+#   Layout C  Liga-Umschalter (input_select.fussball_liga)
+#   F1        FCK-Karte mit Spiel, Platz, Punkten und Form (eigene rote Huelle)
+#   S1        Spieltag als Liste nach Anstosszeit, Heim/Gast untereinander
+#   T1        volle Tabelle mit Zonenstrich (Sp, TD, Pkt)
+#   H1        FCK in Listen: FCK-Rot als Flaeche + Kante, ohne Zonenstrich
+#
+# Aufbau (sections, max_columns 2):
+#   Sektion 1: Top-Navigation, FCK-Karte, Liga-Umschalter, Spieltag
+#   Sektion 2: Tabelle, Floating-Navbar
+#   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
+#
+# Passt zur Route /dashboard-home/fussball (Eintrag im "More"-Menue von
+# navbar-card.yaml / decluttering-templates.yaml, hinter "Gesundheit").
+#
+# Farben: Owlet-Palette wie gesundheit-view.yaml. FCK-Rot #e30613 ist eine
+# Annaeherung (kein offizieller Hex-Wert gefunden) und reine Identitaetsfarbe;
+# Live = Status-Rot #f0736a, Aufstieg gruen, Relegation amber, Abstieg rot,
+# Champions-League-Plaetze der 1. Liga blau.
+#
+# Live: OpenLigaDB liefert keine Spielminute. Laufende Spiele zeigen "LIVE",
+# die FCK-Karte zusaetzlich die Minute des letzten Tors. Die Tabelle von
+# OpenLigaDB zaehlt laufende Spiele bereits mit; die Karte addiert deshalb
+# nichts, sondern markiert nur Vereine, die gerade spielen.
+#
+# Status je Spiel (im Browser berechnet, damit "LIVE" auch zwischen zwei
+# Abrufen puenktlich umspringt): beendet -> "Ende"; vor Anstoss -> Uhrzeit;
+# bis 3 h nach Anstoss ohne Endergebnis -> LIVE; danach -> "offen".
+#
+# Wappen: teamIconUrl aus OpenLigaDB (meist Wikimedia-SVG). Bis das Bild
+# geladen ist bzw. falls es fehlt, stehen die Initialen im Kreis.
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICH:
+#   - fussball-paket.yaml als Paket (liefert sensor.fussball_* und
+#     binary_sensor.fussball_live; Einrichtung steht in der Datei)
+#   - Helfer input_select.fussball_liga ("1. Bundesliga" / "2. Bundesliga",
+#     ohne initial)                                     [per API angelegt]
+#   - Automation "Fussball: Daten aktualisieren"         [per API angelegt]
+#       triggers: time_pattern /15 (id voll), time_pattern /1 (id live),
+#                 binary_sensor.fussball_live on -> off (id voll)
+#       conditions: id voll ODER (id live UND fussball_live an)
+#       actions: event fussball_aktualisieren, event_data umfang: trigger.id
+#       mode: single, max_exceeded: silent
+#
+# Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
+#                (alle via HACS).
+title: Fußball
+path: fussball
+icon: mdi:soccer
+type: sections
+max_columns: 2
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation
+
+  # ======================= FCK (Variante F1) =======================
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, #2a1418 0%, #1f1013 62%) !important;
+          border: 1px solid rgba(227, 6, 19, 0.2) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.75) !important;
+          padding: 16px 18px !important;
+          gap: 8px !important;
+        }
+    cards:
+    - type: custom:button-card
+      icon: mdi:shield-star
+      name: 1. FC Kaiserslautern
+      label: |
+        [[[
+          const s=states['sensor.fussball_bl2_spieltag'];
+          return s&&!isNaN(parseInt(s.state)) ? `2. Bundesliga · ${s.state}. Spieltag` : '2. Bundesliga';
+        ]]]
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: |
+          [[[
+            // LIVE / Anstoss / Endstand des aktuellen FCK-Spiels
+            const FCK=parseInt(states['sensor.fussball_fck']?.attributes?.team_id)||76;
+            const sp=states['sensor.fussball_bl2_spieltag']?.attributes?.spiele||[];
+            const nx=states['sensor.fussball_fck']?.attributes?.naechstes;
+            const now=Date.now();
+            let m=sp.find(x=>x.heim_id==FCK||x.gast_id==FCK);
+            if(m&&m.beendet&&nx&&now>Date.parse(m.anstoss)+36*3600e3) m=null;
+            const b=(c,t,p)=>`<span style="display:inline-flex;align-items:center;gap:6px;color:${c==='fck'?'#fff':c};background:${c==='fck'?'rgba(227,6,19,0.85)':c+'26'};border:1px solid ${c==='fck'?'rgba(255,255,255,0.14)':c+'47'};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${p?'<span class="pulse"></span>':''}${t}</span>`;
+            const tz=d=>d.toLocaleDateString('de-DE',{weekday:'short'}).replace('.','')+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+            if(m){
+              const a=Date.parse(m.anstoss);
+              if(m.beendet) return b('#a6d49e','Endstand');
+              if(now>=a&&now<=a+3*3600e3) return b('fck','LIVE',true);
+              if(now>a) return b('#6e7988','offen');
+              return b('#7fb3d5',tz(new Date(a)));
+            }
+            if(nx) return b('#7fb3d5',tz(new Date(nx.anstoss)));
+            return '';
+          ]]]
+      extra_styles: &pulse_css |
+        .pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: fb-pulse 1.6s ease-in-out infinite; }
+        @keyframes fb-pulse { 50% { opacity: 0.25; } }
+        @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#ff8a80'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#8794a5'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(227, 6, 19, 0.16)
+        - border: 1px solid rgba(227, 6, 19, 0.3)
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_spieltag
+      - sensor.fussball_fck
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      custom_fields:
+        inhalt: |
+          [[[
+            // Spiel (live/naechstes/letztes), Torschuetzen, Platz, Punkte, Form
+            const F="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
+            const fck=states['sensor.fussball_fck'];
+            const sp=states['sensor.fussball_bl2_spieltag']?.attributes?.spiele;
+            if(!fck||!Array.isArray(sp)) return `<div style="${F}color:#8794a5;font-size:12.5px;">Keine Daten – sensor.fussball_fck / sensor.fussball_bl2_spieltag fehlen (Paket fussball-paket.yaml).</div>`;
+            const A=fck.attributes, FCK=parseInt(A.team_id)||76, now=Date.now();
+            const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const crest=(url,name,px)=>{const ini=esc(String(name||'?').replace(/[^A-Za-zÄÖÜäöü0-9]/g,'').slice(0,3).toUpperCase());
+              return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:rgba(255,255,255,0.07);display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px*0.32)}px;font-weight:800;color:#8794a5;">${ini}</span>${url?`<img src="${esc(url)}" alt="" loading="lazy" style="position:absolute;inset:${Math.round(px*0.1)}px;width:${Math.round(px*0.8)}px;height:${Math.round(px*0.8)}px;object-fit:contain;" onload="this.previousElementSibling.style.visibility='hidden';this.parentNode.style.background='none'" onerror="this.remove()">`:''}</span>`;};
+            let m=sp.find(x=>x.heim_id==FCK||x.gast_id==FCK);
+            const nx=A.naechstes;
+            if(m&&m.beendet&&nx&&now>Date.parse(m.anstoss)+36*3600e3) m=null;
+            let heim,gast,hl,gl,th=null,tg=null,k='pre',a,tore=[];
+            if(m){ a=Date.parse(m.anstoss); heim=m.heim; gast=m.gast; hl=m.heim_logo; gl=m.gast_logo; th=m.th; tg=m.tg; tore=m.tore||[];
+              k=m.beendet?'post':(now<a?'pre':(now<=a+3*3600e3?'live':'offen')); }
+            else if(nx){ a=Date.parse(nx.anstoss); const fn=A.name||'Kaiserslautern';
+              heim=nx.heim?fn:nx.gegner; gast=nx.heim?nx.gegner:fn; hl=nx.heim?A.logo:nx.gegner_logo; gl=nx.heim?nx.gegner_logo:A.logo; }
+            else return `<div style="${F}color:#8794a5;font-size:12.5px;">Kein Spiel gefunden.</div>`;
+            if(k==='live'&&th===null){th=0;tg=0;}
+            // Unterzeile unter dem Spielstand
+            let sub='';
+            if(k==='live'){ const lt=tore.length?tore[tore.length-1]:null;
+              sub=`<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${lt&&lt.min?` · Tor ${lt.min}'`:''}</span>`; }
+            else if(k==='pre'){ const d=new Date(a), diff=a-now, h=Math.round(diff/3600e3), t=Math.round(diff/86400e3);
+              sub=`<span style="color:#8794a5;">${diff<3600e3?'in '+Math.max(1,Math.round(diff/60e3))+' Min.':(h<24?'in '+h+' Std.':'in '+t+' Tag'+(t===1?'':'en'))}</span>`; }
+            else if(k==='post') sub='<span style="color:#8794a5;">Endstand</span>';
+            else sub='<span style="color:#8794a5;">Ergebnis offen</span>';
+            const score=(k==='pre')?`<b style="font-size:24px;color:#8794a5;">${new Date(a).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})}</b>`
+              :`<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th??'–'} : ${tg??'–'}</b>`;
+            const side=(n,l,r)=>`<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:#f2f5f8;min-width:0;">${crest(l,n,46)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(n)}</span><small style="font-size:11px;color:#8794a5;font-weight:600;">${r}</small></div>`;
+            // Torschuetzen: Heim/Gast aus der Aenderung des Spielstands
+            let ph=0,pg=0; const tl=tore.map(t=>{const hs=t.h>ph; ph=t.h; pg=t.g; const ours=(hs&&m.heim_id==FCK)||(!hs&&m.gast_id==FCK);
+              return `<span style="color:${ours?'#f2f5f8':'#8794a5'};">⚽ ${t.min?t.min+"' ":''}${esc(t.name||'')}${t.elf?' (E)':''}${t.et?' (ET)':''}</span>`;}).join('');
+            // Platz, Punkte, Form
+            const form=(A.form||[]).slice(-5).map(f=>`<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#0f141c;background:${f==='S'?'#a6d49e':f==='N'?'#f0736a':'#8794a5'};">${f}</i>`).join('');
+            const cell=(k2,v)=>`<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:#8794a5;">${k2}</div>${v}</div>`;
+            const val=(v,u)=>`<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:#f2f5f8;">${v}${u?`<span style="font-size:0.62em;color:#8794a5;font-weight:600;"> ${u}</span>`:''}</div>`;
+            const platz=parseInt(fck.state);
+            return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;">
+                ${side(heim,hl,'Heim')}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">${score}<span style="font-size:11.5px;font-weight:700;">${sub}</span></div>
+                ${side(gast,gl,'Gast')}
+              </div>
+              ${tl?`<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>`:''}
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                ${cell('Platz',val(isNaN(platz)?'–':platz))}
+                ${cell('Punkte',val(A.punkte??'–',A.spiele!=null?A.spiele+' Sp':''))}
+                ${cell('Form',`<div style="display:flex;gap:4px;margin-top:4px;">${form||'<span style="color:#8794a5;font-size:12px;">–</span>'}</div>`)}
+              </div></div>`;
+          ]]]
+      extra_styles: *pulse_css
+      styles:
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0 2px 2px
+        custom_fields:
+          inhalt:
+          - width: 100%
+        grid:
+        - grid-template-areas: '"inhalt"'
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_spieltag
+      - sensor.fussball_fck
+
+  # ======================= Liga-Umschalter (Layout C) =======================
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+    - type: custom:button-card
+      name: 1. Bundesliga
+      show_icon: false
+      variables:
+        option: 1. Bundesliga
+      tap_action: &liga_tap
+        action: perform-action
+        perform_action: input_select.select_option
+        target:
+          entity_id: input_select.fussball_liga
+        data:
+          option: '[[[ return variables.option ]]]'
+      styles: &liga_styles
+        card:
+        - padding: 10px 8px
+        - border-radius: 14px
+        - box-shadow: none
+        - background: |
+            [[[ return states['input_select.fussball_liga']?.state===variables.option ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'; ]]]
+        - border: |
+            [[[ return '1px solid ' + (states['input_select.fussball_liga']?.state===variables.option ? 'rgba(127,179,213,0.34)' : 'rgba(255,255,255,0.06)'); ]]]
+        name:
+        - font-size: 13.5px
+        - font-weight: 700
+        - color: |
+            [[[ return states['input_select.fussball_liga']?.state===variables.option ? '#7fb3d5' : '#8794a5'; ]]]
+      triggers_update: &liga_update
+      - input_select.fussball_liga
+    - type: custom:button-card
+      name: 2. Bundesliga
+      show_icon: false
+      variables:
+        option: 2. Bundesliga
+      tap_action: *liga_tap
+      styles: *liga_styles
+      triggers_update: *liga_update
+
+  # ======================= Spieltag (Variante S1) =======================
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state: 1. Bundesliga
+    card_mod: &huelle
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 8px !important;
+        }
+    cards:
+    - type: custom:button-card
+      icon: mdi:soccer
+      name: 1. Bundesliga
+      variables:
+        liga: bl1
+      label: &spieltag_label |
+        [[[
+          const s=states[`sensor.fussball_${variables.liga}_spieltag`]; const sp=s?.attributes?.spiele||[];
+          if(!s||isNaN(parseInt(s.state))) return 'Spieltag';
+          const now=Date.now(); let post=0, pre=0;
+          sp.forEach(m=>{ if(m.beendet) post++; else if(now<Date.parse(m.anstoss)) pre++; });
+          return `${s.state}. Spieltag · ${post} beendet · ${pre} ausstehend`;
+        ]]]
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: &spieltag_badge |
+          [[[
+            // Anzahl laufender Spiele (rot), "beendet" (gruen) oder naechster Anstoss (blau)
+            const sp=states[`sensor.fussball_${variables.liga}_spieltag`]?.attributes?.spiele||[];
+            const now=Date.now(); let live=0, post=0, next=null;
+            sp.forEach(m=>{const a=Date.parse(m.anstoss); if(m.beendet){post++;return;}
+              if(!isNaN(a)&&now>=a&&now<=a+3*3600e3) live++; else if(!isNaN(a)&&now<a&&(next===null||a<next)) next=a;});
+            let c,t,p='';
+            if(live){c='#f0736a';t=live+' live';p='<span class="pulse"></span>';}
+            else if(sp.length&&post===sp.length){c='#a6d49e';t='beendet';}
+            else if(next){const d=new Date(next);c='#7fb3d5';t=d.toLocaleDateString('de-DE',{weekday:'short'}).replace('.','')+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}
+            else return '';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}26;border:1px solid ${c}47;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${p}${t}</span>`;
+          ]]]
+      extra_styles: *pulse_css
+      styles: &kopf_blau
+        icon:
+        - width: 23px
+        - height: 23px
+        - color: '#7fb3d5'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        custom_fields:
+          badge:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: rgba(127, 179, 213, 0.12)
+        - border: 1px solid rgba(127, 179, 213, 0.2)
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl1_spieltag
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        liga: bl1
+        fav: 76
+      custom_fields:
+        inhalt: &spieltag_liste |
+          [[[
+            // S1: Spiele nach Anstoss gruppiert, Heim/Gast untereinander, Tore rechts
+            const L=variables.liga, FAV=variables.fav;
+            const F="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
+            const s=states[`sensor.fussball_${L}_spieltag`];
+            if(!s||!Array.isArray(s.attributes.spiele)||!s.attributes.spiele.length) return `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;">Keine Daten – sensor.fussball_${L}_spieltag fehlt (Paket fussball-paket.yaml).</div>`;
+            const now=Date.now();
+            const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const crest=(url,name,px)=>{const ini=esc(String(name||'?').replace(/[^A-Za-zÄÖÜäöü0-9]/g,'').slice(0,3).toUpperCase());
+              return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:rgba(255,255,255,0.07);display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px*0.34)}px;font-weight:800;color:#8794a5;">${ini}</span>${url?`<img src="${esc(url)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" onload="this.previousElementSibling.style.visibility='hidden';this.parentNode.style.background='none'" onerror="this.remove()">`:''}</span>`;};
+            const tag=d=>d.toLocaleDateString('de-DE',{weekday:'short'}).replace('.','');
+            const zeit=d=>d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+            const datum=d=>d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+            const spiele=[...s.attributes.spiele].sort((x,y)=>Date.parse(x.anstoss)-Date.parse(y.anstoss)||x.id-y.id);
+            // Spiele ausserhalb von +-4 Tagen um den Spieltag (Nachholspiele) mit Datum
+            const mitte=Date.parse(spiele[Math.floor(spiele.length/2)].anstoss);
+            let html='', grp='';
+            spiele.forEach(m=>{
+              const a=Date.parse(m.anstoss), d=new Date(a);
+              const k=m.beendet?'post':(isNaN(a)||now<a?'pre':(now<=a+3*3600e3?'live':'offen'));
+              const g=Math.abs(a-mitte)>4*86400e3?`${tag(d)} ${datum(d)} · ${zeit(d)}`:`${tag(d)} · ${zeit(d)}`;
+              if(g!==grp){html+=`<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#4f5865;padding:${grp?'8px':'0'} 2px 2px;">${g}</div>`;grp=g;}
+              const fav=FAV&&(m.heim_id==FAV||m.gast_id==FAV);
+              let th=m.th, tg=m.tg; if(k==='live'&&(th===null||th===undefined)){th=0;tg=0;}
+              const line=(n,l,x,y)=>{const r=(k==='post'&&x!==y)?(x>y?'w':'l'):''; const c=r==='l'?'#8794a5':'#f2f5f8';
+                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${crest(l,n,20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r==='w'?700:500};">${esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k==='pre'||x===null||x===undefined?'':x}</span></div>`;};
+              const st=k==='live'?`<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>LIVE</span>`:(k==='post'?'Ende':(k==='offen'?'offen':zeit(d)));
+              const bg=fav?'background:rgba(227,6,19,0.13);box-shadow:inset 3px 0 0 #e30613;':(k==='live'?'background:rgba(240,115,106,0.07);':'');
+              html+=`<div style="display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}"><span style="font-size:11.5px;font-weight:700;color:#6e7988;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${line(m.heim,m.heim_logo,th,tg)}${line(m.gast,m.gast_logo,tg,th)}</div></div>`;
+            });
+            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}</div>`;
+          ]]]
+      extra_styles: *pulse_css
+      styles: &inhalt_styles
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0
+        custom_fields:
+          inhalt:
+          - width: 100%
+        grid:
+        - grid-template-areas: '"inhalt"'
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl1_spieltag
+
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state_not: 1. Bundesliga
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      icon: mdi:soccer
+      name: 2. Bundesliga
+      variables:
+        liga: bl2
+      label: *spieltag_label
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: *spieltag_badge
+      extra_styles: *pulse_css
+      styles: *kopf_blau
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_spieltag
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        liga: bl2
+        fav: 76
+      custom_fields:
+        inhalt: *spieltag_liste
+      extra_styles: *pulse_css
+      styles: *inhalt_styles
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_spieltag
+
+- type: grid
+  cards:
+  # ======================= Tabelle (Variante T1) =======================
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state: 1. Bundesliga
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      icon: mdi:format-list-numbered
+      name: 1. Bundesliga
+      variables:
+        liga: bl1
+      label: &tabelle_label |
+        [[[
+          const t=states[`sensor.fussball_${variables.liga}_tabelle`];
+          const u=t?.attributes?.aktualisiert;
+          if(!t||!u) return 'Tabelle';
+          return 'Tabelle · Stand '+new Date(u).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr';
+        ]]]
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: &tabelle_badge |
+          [[[
+            // Live-Stand, solange Spiele dieser Liga laufen; sonst Anzahl Spieltage
+            const sp=states[`sensor.fussball_${variables.liga}_spieltag`]?.attributes?.spiele||[];
+            const now=Date.now();
+            const live=sp.some(m=>{const a=Date.parse(m.anstoss); return !m.beendet&&now>=a&&now<=a+3*3600e3;});
+            const c=live?'#f0736a':'#6e7988';
+            const t=live?'<span class="pulse"></span>Live-Stand':(states[`sensor.fussball_${variables.liga}_spieltag`]?.state||'–')+'. Spieltag';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${live?c:'#8794a5'};background:${live?c+'26':'rgba(255,255,255,0.04)'};border:1px solid ${live?c+'47':'rgba(255,255,255,0.07)'};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${t}</span>`;
+          ]]]
+      extra_styles: *pulse_css
+      styles: *kopf_blau
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl1_tabelle
+      - sensor.fussball_bl1_spieltag
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        liga: bl1
+        fav: 76
+      custom_fields:
+        inhalt: &tabelle_liste |
+          [[[
+            // T1: Platz mit Zonenstrich, Verein, Sp, TD, Pkt; FCK nach H1
+            const L=variables.liga, FAV=variables.fav;
+            const F="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
+            const t=states[`sensor.fussball_${L}_tabelle`];
+            const rows=t?.attributes?.tabelle;
+            if(!Array.isArray(rows)||!rows.length) return `<div style="${F}color:#6e7988;font-size:12.5px;padding:2px;">Keine Daten – sensor.fussball_${L}_tabelle fehlt (Paket fussball-paket.yaml).</div>`;
+            const esc=x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const crest=(url,name,px)=>{const ini=esc(String(name||'?').replace(/[^A-Za-zÄÖÜäöü0-9]/g,'').slice(0,3).toUpperCase());
+              return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:rgba(255,255,255,0.07);display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px*0.34)}px;font-weight:800;color:#8794a5;">${ini}</span>${url?`<img src="${esc(url)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" onload="this.previousElementSibling.style.visibility='hidden';this.parentNode.style.background='none'" onerror="this.remove()">`:''}</span>`;};
+            // Zonen: 2. Liga 1-2 Aufstieg, 3 Relegation, 16 Relegation, 17-18 Abstieg;
+            // 1. Liga 1-4 Champions League, 16 Relegation, 17-18 Abstieg
+            const zone=p=>L==='bl2'?(p<=2?'#a6d49e':(p===3||p===16)?'#e6b566':p>=17?'#f0736a':''):(p<=4?'#7fb3d5':p===16?'#e6b566':p>=17?'#f0736a':'');
+            // Vereine mit laufendem Spiel (Tabelle von OpenLigaDB zaehlt sie schon mit)
+            const sp=states[`sensor.fussball_${L}_spieltag`]?.attributes?.spiele||[];
+            const now=Date.now(), live=new Set();
+            sp.forEach(m=>{const a=Date.parse(m.anstoss); if(!m.beendet&&now>=a&&now<=a+3*3600e3){live.add(m.heim_id);live.add(m.gast_id);}});
+            const th=`font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#4f5865;padding:0 6px 6px;text-align:right;`;
+            let body='';
+            rows.forEach((r,i)=>{
+              const fav=FAV&&r.id==FAV, z=zone(r.platz);
+              const bg=fav?'background:rgba(227,6,19,0.14);':'';
+              const td='padding:5px 6px;text-align:right;color:#8794a5;'+(i?'border-top:1px solid rgba(255,255,255,0.04);':'')+bg;
+              const strich=(!fav&&z)?`<span style="position:absolute;left:0;top:5px;bottom:5px;width:3px;border-radius:3px;background:${z};"></span>`:'';
+              const first=fav?'box-shadow:inset 3px 0 0 #e30613;border-radius:8px 0 0 8px;':'';
+              const last=fav?'border-radius:0 8px 8px 0;':'';
+              body+=`<tr>
+                <td style="${td}${first}position:relative;text-align:center;width:30px;font-weight:700;color:#f2f5f8;">${strich}${r.platz}</td>
+                <td style="${td}text-align:left;color:#f2f5f8;width:100%;max-width:0;"><div style="display:flex;align-items:center;gap:8px;min-width:0;">${crest(r.logo,r.name,20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${fav?'font-weight:700;':''}">${esc(r.name)}</span>${live.has(r.id)?'<span class="pulse" style="color:#f0736a;flex:0 0 auto;"></span>':''}</div></td>
+                <td style="${td}">${r.sp}</td>
+                <td style="${td}">${r.td>0?'+'+r.td:r.td}</td>
+                <td style="${td}${last}color:#f2f5f8;font-weight:700;">${r.pkt}</td></tr>`;
+            });
+            const leg=L==='bl2'?[['#a6d49e','Aufstieg'],['#e6b566','Relegation'],['#f0736a','Abstieg']]:[['#7fb3d5','Champions League'],['#e6b566','Relegation'],['#f0736a','Abstieg']];
+            return `<div style="${F}display:flex;flex-direction:column;gap:10px;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;">
+                <thead><tr><th style="${th}text-align:center;">#</th><th style="${th}text-align:left;">Verein</th><th style="${th}">Sp</th><th style="${th}">TD</th><th style="${th}">Pkt</th></tr></thead>
+                <tbody>${body}</tbody></table>
+              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;">${leg.map(([c,n])=>`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${n}</span>`).join('')}${live.size?'<span style="display:inline-flex;align-items:center;gap:6px;color:#f0736a;"><span class="pulse"></span>spielt gerade</span>':''}</div></div>`;
+          ]]]
+      extra_styles: *pulse_css
+      styles: *inhalt_styles
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl1_tabelle
+      - sensor.fussball_bl1_spieltag
+
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state_not: 1. Bundesliga
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      icon: mdi:format-list-numbered
+      name: 2. Bundesliga
+      variables:
+        liga: bl2
+      label: *tabelle_label
+      show_icon: true
+      show_name: true
+      show_label: true
+      custom_fields:
+        badge: *tabelle_badge
+      extra_styles: *pulse_css
+      styles: *kopf_blau
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_tabelle
+      - sensor.fussball_bl2_spieltag
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        liga: bl2
+        fav: 76
+      custom_fields:
+        inhalt: *tabelle_liste
+      extra_styles: *pulse_css
+      styles: *inhalt_styles
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.fussball_bl2_tabelle
+      - sensor.fussball_bl2_spieltag
+  - type: custom:decluttering-card
+    template: floating_navbar
