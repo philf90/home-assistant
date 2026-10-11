@@ -50,6 +50,14 @@
 # Die Karte hat einen eigenen Stapelkontext (isolation: isolate), sonst liegen
 # Leaflets Ebenen (z-index 400-1000) ueber dem Bubble-Popup.
 #
+# Popup-Kopf: Bubble zeigt keinen eigenen Kopf (show_header: false), weil
+# Bubble "name" auf dem Server rendert, die Auswahl aber im Browser liegt.
+# flug_detail rendert Flugnummer und Schliessen-Knopf selbst.
+# Links: button-card verwirft auch click per preventDefault(); der
+# FR24-Link oeffnet deshalb wie die url-Aktion von HA per window.open.
+# Hoehe: FR24 liefert Druckhoehe in Fuss; das Popup zeigt Meter, darunter
+# Flugflaeche und Fuss.
+#
 # Update-sicher: window.__flugradar traegt eine VERSION; eine hoehere Version
 # ersetzt nach einem Dashboard-Update das alte Objekt der offenen Seite.
 #
@@ -65,7 +73,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 3, vorher = window.__flugradar;
+          const VERSION = 4, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -271,6 +279,16 @@ button_card_templates:
           };
 
           // ---------- Details (D1) ----------
+          // Eigener Kopf statt Bubble-Kopf: Bubble rendert "name" auf dem Server (Jinja),
+          // die Auswahl lebt aber im Browser. Schliessen wie Bubble selbst (removeHash):
+          // URL ohne Hash per replaceState, dann location-changed.
+          fr.schliesse = () => {
+            if (!location.hash) return;
+            history.replaceState(history.state, '', location.href.split('#')[0]);
+            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: true } }));
+          };
+          // Druckhoehe (FR24 liefert Fuss, Flugflaeche = Fuss / 100) in Meter
+          fr.meter = f => fr.de(Math.round((Number(f.altitude) || 0) * 0.3048 / 10) * 10);
           fr.detail = () => {
             if (!fr.sel) return fr.hinweis('Flugzeug in der Karte oder Liste antippen.');
             const f = fr.flights().find(x => x.id === fr.sel);
@@ -279,11 +297,19 @@ button_card_templates:
             const ab = f.time_real_departure || f.time_scheduled_departure, an = f.time_estimated_arrival || f.time_scheduled_arrival;
             const anteil = ab && an && an > ab ? Math.min(1, Math.max(0, (Date.now() / 1000 - ab) / (an - ab))) : null;
             const foto = f.aircraft_photo_large || f.aircraft_photo_medium;
-            const kachel = (k, v, u) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
+            const kachel = (k, v, u, unter) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
                 <div style="font-size:11px;font-weight:600;color:#6e7988;">${k}</div>
-                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> ${u}</span></div></div>`;
+                <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#6e7988;font-weight:600;"> ${u}</span></div>
+                ${unter ? `<div style="font-size:11px;font-weight:600;color:#6e7988;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>` : ''}</div>`;
             const vs = Number(f.vertical_speed) || 0, steig = vs > 100 ? '↑ ' + fr.de(vs) : vs < -100 ? '↓ ' + fr.de(-vs) : '→ 0';
             const p = fr.peilung(f);
+            const nummer = f.flight_number || f.callsign || f.aircraft_registration || '?';
+            const kopfUnter = [f.callsign && f.callsign !== nummer ? f.callsign : '', f.airline_short || f.airline].filter(Boolean).map(fr.esc).join(' · ');
+            const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${c}1f;border:1px solid ${c}33;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
+                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
+                <button type="button" aria-label="Schließen" onclick="event.stopPropagation();window.__flugradar.schliesse()" style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+              </div>`;
             const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#1a2232;border:1px solid rgba(255,255,255,0.07);">
                 <img src="${fr.esc(foto)}" alt="" loading="lazy" style="display:block;width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display='none'">
                 <span style="position:absolute;left:10px;bottom:7px;font-size:10.5px;color:#f2f5f8;text-shadow:0 1px 3px #000;">Foto: JetPhotos</span></div>` : '';
@@ -292,26 +318,31 @@ button_card_templates:
                 <div style="position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,0.1);">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8 -8 16 16" width="16" height="16" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" fill="${c}" transform="rotate(90)"/></svg>` : ''}</div>
                 <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:#aeb8c6;">an ${fr.uhr(an)}</div>` : ''}</div>
               </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">Route unbekannt</span>`;
-            const unter = [f.airline_short || f.airline, f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
-            const extra = [f.flight_number && f.flight_number !== f.callsign ? 'Flug ' + fr.esc(f.flight_number) : '', 'Kurs ' + (Number(f.heading) || 0) + '°',
-              f.squawk ? 'Squawk ' + fr.esc(f.squawk) : '', f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
+            const geraet = [f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
+            const extra = ['Kurs ' + (Number(f.heading) || 0) + '°', f.squawk ? 'Squawk ' + fr.esc(f.squawk) : '',
+              f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
+            const hoehe = f.on_ground ? kachel('Höhe', 'am Boden', '', '')
+              : kachel('Höhe', fr.meter(f), 'm', (f.altitude >= 10000 ? 'FL' + Math.round(f.altitude / 100) + ' · ' : '') + fr.de(f.altitude || 0) + ' ft');
+            // Link wie die url-Aktion von HA per window.open (funktioniert auch in der App);
+            // ein normaler <a>-Klick wird vom Action-Handler von button-card per preventDefault() verworfen.
             const link = `https://www.flightradar24.com/${encodeURIComponent(f.callsign || f.flight_number || '')}/${encodeURIComponent(f.id || '')}`;
             return `<div ${fr.touchAttr} style="${F}display:flex;flex-direction:column;gap:12px;">
+              ${kopf}
               ${bild}
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
-                <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(fr.cs(f))}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter || '–'}</div></div>
+                <div style="min-width:0;font-size:13px;font-weight:600;color:#aeb8c6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${geraet || '–'}</div>
                 ${fr.badge(c, fr.band(f), false)}
               </div>
               ${strecke}
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">
-                ${kachel('Höhe', fr.hoehe(f), '')}
-                ${kachel('Speed', fr.de(Math.round((Number(f.ground_speed) || 0) * 1.852)), 'km/h')}
-                ${kachel('Steigen', steig, 'ft/min')}
-                ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p))}
+                ${hoehe}
+                ${kachel('Speed', fr.de(Math.round((Number(f.ground_speed) || 0) * 1.852)), 'km/h', fr.de(Number(f.ground_speed) || 0) + ' kn')}
+                ${kachel('Steigen', steig, 'ft/min', '')}
+                ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p), '')}
               </div>
               <div style="font-size:12px;color:#6e7988;">${extra}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a href="${link}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
+                <a href="${link}" target="_blank" rel="noopener" onclick="event.preventDefault();event.stopPropagation();window.open(this.href);" style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
               </div>
             </div>`;
           };
