@@ -77,9 +77,10 @@
 # Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
 # (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
 # #flug wie eine navigate-Aktion (history.pushState + location-changed).
-# Direktlink: /dashboard-home/fluege?flug=<FR24-ID> (Benachrichtigungen) waehlt
-# den Flug, zentriert die Karte und oeffnet das Popup, sofern der Flug noch im
-# Bereich ist; der Parameter wird danach per replaceState entfernt.
+# Direktlink: /dashboard-home/fluege?flug=<FR24-ID>&cs=<Callsign> (Benachrichtigungen)
+# oeffnet das Popup; ist der Flug noch im Bereich, ist er gewaehlt und die Karte
+# zentriert, sonst zeigt das Popup "nicht mehr im Bereich" mit Link auf FR24.
+# Die Parameter werden danach per replaceState entfernt.
 #
 # Klickbarkeit: button-card setzt bei Karten ohne Aktion (tap/hold none) die
 # Klasse "disabled" mit pointer-events: none (styles.ts). Liste, Popup-Inhalt
@@ -116,7 +117,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 11, vorher = window.__flugradar;
+          const VERSION = 12, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -324,18 +325,23 @@ button_card_templates:
               window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
             }
           };
-          // Direktlink aus einer Benachrichtigung: /dashboard-home/fluege?flug=<FR24-ID>.
-          // Ist der Flug noch im Bereich, wird er gewaehlt (Ring, Karte zentriert, Popup);
-          // sonst bleibt nur die View offen. Der Parameter wird danach aus der Adresse
-          // entfernt, damit ein Neuladen nichts erneut oeffnet.
+          // Direktlink aus einer Benachrichtigung: /dashboard-home/fluege?flug=<FR24-ID>&cs=<Callsign>.
+          // Das Popup oeffnet immer. Ist der Flug noch im Bereich, ist er gewaehlt (Ring,
+          // Karte zentriert); sonst zeigt das Popup, dass er den Bereich verlassen hat,
+          // mit Link auf Flightradar24. Die Parameter werden danach aus der Adresse
+          // entfernt, damit ein Neuladen nichts erneut oeffnet. Solange der Sensor noch
+          // nicht geladen ist, bleiben sie stehen (naechster Aufruf mit neuem hass).
           fr.ausUrl = () => {
             if (!/\/fluege\/?$/.test(location.pathname)) return;
             const q = new URLSearchParams(location.search), id = q.get('flug');
-            if (!id) return;
+            if (!id || !fr.sensor()) return;
+            fr.zuletzt = { id, cs: q.get('cs') || '' };
             q.delete('flug');
+            q.delete('cs');
             const rest = q.toString();
             history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
-            if (fr.flights().some(f => f.id === id)) { fr.fokus = id; fr.zentriere(); fr.waehle(id); }
+            if (fr.flights().some(f => f.id === id)) { fr.fokus = id; fr.zentriere(); }
+            fr.waehle(id);
           };
           // Gewaehlten Flug in den Ausschnitt holen (Karte kann beim Oeffnen noch fehlen)
           fr.zentriere = () => {
@@ -565,10 +571,28 @@ button_card_templates:
             ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
             window.dispatchEvent(ev);
           };
+          fr.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fr.tippAttr('window.__flugradar.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+          // Flug nicht (mehr) in der FR24-Liste, z. B. nach Tippen auf eine aeltere Meldung
+          fr.weg = () => {
+            const z = fr.zuletzt && fr.zuletzt.id === fr.sel ? fr.zuletzt : { id: fr.sel, cs: '' };
+            const link = `https://www.flightradar24.com/${encodeURIComponent(z.cs)}/${encodeURIComponent(z.id)}`;
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:#6e79881f;border:1px solid #6e798833;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="#6e7988"/></svg></div>
+                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(z.cs || 'Flug')}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">nicht mehr im Bereich</div></div>
+                ${fr.zuKnopf()}
+              </div>
+              <div style="font-size:13px;line-height:1.45;color:#aeb8c6;">Der Flug hat den Bereich der FR24-Integration (50 km um Zuhause) inzwischen verlassen. Live-Daten gibt es hier nur, solange er im Bereich ist.</div>
+              ${z.cs ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 weiterverfolgen</a>
+              </div>` : ''}
+            </div>`;
+          };
           fr.detail = () => {
             if (!fr.sel) return fr.hinweis('Flugzeug in der Karte oder Liste antippen.');
             const f = fr.flights().find(x => x.id === fr.sel);
-            if (!f) return fr.hinweis('Dieser Flug ist nicht mehr im Bereich.');
+            if (!f) return fr.weg();
+            fr.zuletzt = { id: f.id, cs: f.callsign || f.flight_number || '' };
             const c = fr.farbe(f), o = fr.ap(f, 'origin'), d = fr.ap(f, 'destination');
             const ab = f.time_real_departure || f.time_scheduled_departure, an = f.time_estimated_arrival || f.time_scheduled_arrival;
             const anteil = ab && an && an > ab ? Math.min(1, Math.max(0, (Date.now() / 1000 - ab) / (an - ab))) : null;
@@ -581,7 +605,7 @@ button_card_templates:
             const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
                 <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${c}1f;border:1px solid ${c}33;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
                 <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:#6e7988;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
-                <button type="button" aria-label="Schließen" ${fr.tippAttr('window.__flugradar.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#aeb8c6;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                ${fr.zuKnopf()}
               </div>`;
             const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#1a2232;border:1px solid rgba(255,255,255,0.07);">
                 <img src="${fr.esc(foto)}" alt="" loading="lazy" style="display:block;width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display='none'">
