@@ -73,6 +73,9 @@
 #          sensor.adsb_notfall (adsb.lol), Zuordnung ueber die ICAO-Adresse
 #          (aircraft_icao_24bit). Der FR24-Squawk kommt trotz Silver-Login leer an.
 #   grau   am Boden
+# Seltene Typen (ICAO-Typcode in input_text.flug_seltene_typen, z. B. A388, B748):
+#   Symbol groesser (31 statt 22 px) mit goldenem Leuchten, Farbe bleibt die des
+#   Hoehenbands; gleiche Liste wie die Meldung in "Fluege: Ein- und Austritt zaehlen".
 #
 # Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
 # (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
@@ -113,11 +116,12 @@ button_card_templates:
     triggers_update:
     - sensor.flightradar24_current_in_area
     - sensor.adsb_notfall
+    - input_text.flug_seltene_typen
     variables:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 13, vorher = window.__flugradar;
+          const VERSION = 14, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -164,6 +168,10 @@ button_card_templates:
             return a ? (['7500', '7600', '7700'].includes(a.sq) ? a.sq : NOTFALL_ARTEN[a.art] || a.art || 'ADS-B') : '';
           };
           fr.notfall = f => !!fr.notfallCode(f);
+          // Seltene Typen: ICAO-Typcodes aus input_text.flug_seltene_typen (getrennt durch
+          // Leerzeichen oder Komma), dieselbe Liste wie in "Fluege: Ein- und Austritt zaehlen"
+          fr.selten = f => !!f.aircraft_code && String(fr.zustand('input_text.flug_seltene_typen') || '')
+            .toUpperCase().split(/[\s,;]+/).includes(String(f.aircraft_code).toUpperCase());
           fr.sonder = f => f.aircraft_category === 'Helicopter'
             || /air force|army|navy|luftwaffe|bundeswehr|police|polizei|ambulan|rettung/i.test(f.airline || '');
           fr.farbe = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#6e7988' : fr.sonder(f) ? '#b399d4'
@@ -372,6 +380,8 @@ button_card_templates:
             .fr-ic .l.re{text-align:right;}
             .fr-ic.sel .l{color:#f2f5f8;}
             .fr-ic .ring{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:2px solid #ff4696;box-sizing:border-box;}
+            .fr-ic .ring.g{left:-5px;top:-5px;width:38px;height:38px;}
+            .fr-ic .g svg{filter:drop-shadow(0 0 3px #f2c94c) drop-shadow(0 0 6px rgba(242,201,76,0.6));}
             .fr-home{width:12px;height:12px;border-radius:50%;background:#10151d;border:2.5px solid #f2f5f8;box-sizing:border-box;}
             .fr-ziel{background:none;border:none;}
             .fr-ziel span{display:inline-block;white-space:nowrap;font:700 11px/20px ${SANS};padding:0 8px;border-radius:8px;background:rgba(16,21,29,.86);border:1px solid currentColor;font-variant-numeric:tabular-nums;}
@@ -442,13 +452,14 @@ button_card_templates:
             });
             const lage = fr.beschriftung(liste);
             liste.forEach(f => {
-              const c = fr.farbe(f), s = f.id === fr.sel, b = lage.get(f.id);
-              const html = (s ? '<span class="ring"></span>' : '')
-                + `<span class="p"><svg viewBox="-8 -8 16 16" width="22" height="22"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
+              const c = fr.farbe(f), s = f.id === fr.sel, b = lage.get(f.id), g = fr.selten(f), px = g ? 31 : 22;
+              // seltener Typ: groesser und golden leuchtend, Hoehenfarbe bleibt
+              const html = (s ? `<span class="ring${g ? ' g' : ''}"></span>` : '')
+                + `<span class="p${g ? ' g' : ''}"><svg viewBox="-8 -8 16 16" width="${px}" height="${px}"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
                 + (b ? `<span class="l${b.rechtsbuendig ? ' re' : ''}" style="left:${Math.round(14 + b.dx)}px;top:${Math.round(14 + b.dy)}px;">${fr.esc(fr.cs(f))}${b.kurz ? '' : `<small>${fr.hoehe(f)}</small>`}</span>` : '');
               const m = L.marker([f.latitude, f.longitude], {
                 icon: L.divIcon({ className: 'fr-ic' + (s ? ' sel' : ''), html, iconSize: [28, 28], iconAnchor: [14, 14] }),
-                zIndexOffset: s ? 1000 : 0, title: fr.cs(f)
+                zIndexOffset: s ? 1000 : g ? 500 : 0, title: fr.cs(f) + (g ? ' · ' + f.aircraft_code : '')
               });
               m.on('click', () => fr.waehle(f.id));
               m.addTo(fr.layer);
@@ -468,24 +479,25 @@ button_card_templates:
           fr.beschriftung = liste => {
             const lage = new Map(), sz = fr.map.getSize(), R = 4;
             const pt = f => fr.map.latLngToContainerPoint([f.latitude, f.longitude]);
-            // Flugzeug-Symbole (22 px) sind belegt, Beschriftungen kommen hinzu
-            const belegt = liste.map(f => { const p = pt(f); return { id: f.id, x1: p.x - 11, y1: p.y - 11, x2: p.x + 11, y2: p.y + 11 }; });
+            // Flugzeug-Symbole (22 px, seltene Typen 31 px) sind belegt, Beschriftungen kommen hinzu
+            const rand = f => fr.selten(f) ? 5 : 0;
+            const belegt = liste.map(f => { const p = pt(f), r = 11 + rand(f); return { id: f.id, x1: p.x - r, y1: p.y - r, x2: p.x + r, y2: p.y + r }; });
             const frei = (r, id) => r.x1 >= R && r.y1 >= R && r.x2 <= sz.x - R && r.y2 <= sz.y - R
               && belegt.every(o => o.id === id && !o.text || r.x2 <= o.x1 || r.x1 >= o.x2 || r.y2 <= o.y1 || r.y1 >= o.y2);
-            const lagen = (w, h) => [[13, -13, 0], [-13 - w, -13, 1], [-w / 2, -13 - h, 0], [-w / 2, 13, 0],
-              [10, -10 - h, 0], [10, 10, 0], [-10 - w, -10 - h, 1], [-10 - w, 10, 1]];
+            const lagen = (w, h, e) => [[13 + e, -13 - e, 0], [-13 - e - w, -13 - e, 1], [-w / 2, -13 - e - h, 0], [-w / 2, 13 + e, 0],
+              [10 + e, -10 - e - h, 0], [10 + e, 10 + e, 0], [-10 - e - w, -10 - e - h, 1], [-10 - e - w, 10 + e, 1]];
             liste.filter(f => f.id === fr.sel || (f.distance != null && f.distance < 25))
               .sort((a, b) => (b.id === fr.sel) - (a.id === fr.sel) || (a.distance ?? 1e9) - (b.distance ?? 1e9))
               .forEach(f => {
                 const p = pt(f), wCs = fr.textBreite(fr.cs(f), 11, 700) + 2;
                 const formen = [[Math.ceil(Math.max(wCs, fr.textBreite(fr.hoehe(f), 10, 600) + 2)), 25, false], [Math.ceil(wCs), 13, true]];
                 for (const [w, h, kurz] of formen) {
-                  for (const [dx, dy, rb] of lagen(w, h)) {
+                  for (const [dx, dy, rb] of lagen(w, h, rand(f))) {
                     const r = { id: f.id, text: true, x1: p.x + dx, y1: p.y + dy, x2: p.x + dx + w, y2: p.y + dy + h };
                     if (frei(r, f.id)) { belegt.push(r); lage.set(f.id, { dx, dy, kurz, rechtsbuendig: !!rb }); return; }
                   }
                 }
-                if (f.id === fr.sel) lage.set(f.id, { dx: 13, dy: -13, kurz: false, rechtsbuendig: false });
+                if (f.id === fr.sel) lage.set(f.id, { dx: 13 + rand(f), dy: -13 - rand(f), kurz: false, rechtsbuendig: false });
               });
             return lage;
           };
@@ -923,7 +935,8 @@ button_card_templates:
           const fr = variables.fr, el = this;
           setTimeout(() => fr.karte(el), 0);
           const leg = [['#e6b566', 'unter 1.500 m'], ['#77d4d0', '1.500–7.500 m'], ['#7fb3d5', 'Reiseflug'], ['#b399d4', 'Sonderflug'], ['#6e7988', 'am Boden']]
-            .map(([c, t]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${t}</span>`).join('');
+            .map(([c, t]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${t}</span>`).join('')
+            + '<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:#7fb3d5;box-shadow:0 0 4px 1px #f2c94c;display:inline-block;"></i>seltener Typ (größer, leuchtend)</span>';
           return `<div data-fr-host style="width:100%;height:380px;border-radius:16px;border:1px solid rgba(255,255,255,0.07);background:#141b26;overflow:hidden;"></div>`
             + `<div style="${fr.F}display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;margin-top:10px;">${leg}</div>`;
         ]]]
