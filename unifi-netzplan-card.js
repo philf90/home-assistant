@@ -28,7 +28,8 @@
  *                         entity (Status: binary_sensor oder Messwert),
  *                         device (device_tracker des Modems)
  *   inactive              device_tracker von Geraeten, die bewusst getrennt
- *                         sind: grau statt rot, zaehlen nicht als Stoerung
+ *                         sind: grau statt rot, zaehlen nicht als Stoerung.
+ *                         Meldet sich das Geraet wieder, erscheint es normal.
  *   hide_inactive         true blendet diese Geraete ganz aus
  *   pins                  device_tracker eines Kabel-Clients -> device_tracker
  *                         des Switches/Gateways, an dem er haengt
@@ -160,19 +161,20 @@ class UnifiNetzplanCard extends HTMLElement {
       if (!MAC_RE.test(mac)) continue;
       infraDevs.add(devId);
       const id = tracker ? tracker.entity_id : (stateS || up).entity_id;
-      if (inactive.has(id) && cfg.hide_inactive) continue;
 
       const upState = up && st[up.entity_id];
       const uplink = upState && MAC_RE.test(upState.state) ? upState.state.toLowerCase() : null;
       const raw = stateS && st[stateS.entity_id] ? st[stateS.entity_id].state : null;
       let status;
-      if (inactive.has(id)) status = 'off';
-      else if (raw === 'connected') status = 'ok';
+      // inactive gilt nur, solange das Geraet wirklich getrennt ist
+      if (raw === 'connected') status = 'ok';
+      else if (inactive.has(id)) status = 'off';
       else if (raw === 'disconnected' || raw === 'unavailable') status = 'bad';
       else if (raw && raw !== 'unknown') status = 'warn';
       else status = tState && tState.state === 'home' ? 'ok' : 'bad';
 
       const clientsS = pick(list, 'device_clients', (e) => e.entity_id.startsWith('sensor.') && e.entity_id.endsWith('_clients'));
+      if (status === 'off' && cfg.hide_inactive) continue;
       nodes.set(mac, {
         id,
         mac,
@@ -266,6 +268,7 @@ class UnifiNetzplanCard extends HTMLElement {
     wired.sort(byName);
 
     const infra = [...nodes.values()];
+    const wan = this._wanModel();
     return {
       roots,
       wired,
@@ -275,7 +278,8 @@ class UnifiNetzplanCard extends HTMLElement {
       ok: infra.filter((n) => n.status === 'ok').length,
       off: infra.filter((n) => n.status === 'off').length,
       bad: infra.filter((n) => n.status === 'bad' || n.status === 'warn').length,
-      wan: this._wanModel(),
+      wanBad: wan.filter((w) => w.status === 'bad').length,
+      wan,
     };
   }
 
@@ -401,8 +405,9 @@ class UnifiNetzplanCard extends HTMLElement {
   }
 
   _render(m) {
-    const health = m.bad
-      ? `<span class="badge bad">${m.bad} gestört</span>`
+    const faults = m.bad + m.wanBad;
+    const health = faults
+      ? `<span class="badge bad">${faults} gestört</span>`
       : `<span class="badge ok">${m.ok}/${m.total - m.off} online</span>`;
     const tree = m.roots.length
       ? m.roots.map((r, i) => this._node(r, i === 0 && m.wired.length ? [this._wiredNode(m.wired)] : [])).join('')
