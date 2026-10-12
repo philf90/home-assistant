@@ -44,8 +44,8 @@ influxdb:
     entities:
       - sensor.hmip_esi_stromzahler_energiezahler_ch2
       - sensor.hmip_esi_gaszahler_gas_volumen
-      - sensor.system_muhlweg_tagliche_pv_1
-      - sensor.system_muhlweg_tagliche_pv_2
+      - sensor.pv_anlage_tagliche_pv_1
+      - sensor.pv_anlage_tagliche_pv_2
       - sensor.smart_meter_netzbezug
       - sensor.shelly_plugs_gen3_waschmaschine_switch_0_energy
       - sensor.shelly_plugs_gen3_trockner_switch_0_energy
