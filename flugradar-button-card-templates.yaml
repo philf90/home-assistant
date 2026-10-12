@@ -52,7 +52,13 @@
 #     (window.L wird geteilt, kein doppeltes Laden).
 #   - Kacheln: tile.openstreetmap.org, per CSS-Filter abgedunkelt (Owlet-Navy).
 #     Referrer-Policy wie in der Integrationskarte, sonst lehnt OSM ab.
-#   - Ringe 10 / 25 / 50 km um zone.home, Spur aus "coordinates".
+#   - Ringe 10 / 25 / 50 km um zone.home (beschriftet), Haus-Symbol fuer
+#     Zuhause, Spur aus "coordinates".
+#   - Gewaehlter Flug: gestrichelte Linie von Zuhause, Infozeile unten links
+#     (Entfernung, Richtung, Hoehenwinkel ueber dem Horizont) und, wenn er sich
+#     naehert, der naechste Punkt bei gleichbleibendem Kurs und Tempo (gold,
+#     hoechstens 30 min voraus). Hoehenwinkel: Flughoehe minus hass.config.elevation
+#     und Erdkruemmung, ohne Refraktion. Beides auch im Popup.
 #   - Beschriftung (Callsign + Hoehe) fuer den gewaehlten Flug und Fluege unter
 #     25 km, ohne Ueberlappung: Rangfolge gewaehlt, dann nach Entfernung; je
 #     Flug 8 Lagen um das Symbol, sonst Kurzform (nur Callsign), sonst keine.
@@ -121,7 +127,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 15, vorher = window.__flugradar;
+          const VERSION = 16, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -385,7 +391,11 @@ button_card_templates:
             .fr-ic .ring{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;border:2px solid #ff4696;box-sizing:border-box;}
             .fr-ic .ring.g{left:-5px;top:-5px;width:38px;height:38px;}
             .fr-ic .g svg{filter:drop-shadow(0 0 3px #f2c94c) drop-shadow(0 0 6px rgba(242,201,76,0.6));}
-            .fr-home{width:12px;height:12px;border-radius:50%;background:#10151d;border:2.5px solid #f2f5f8;box-sizing:border-box;}
+            .fr-haus{width:24px;height:24px;border-radius:50%;background:#f2f5f8;display:grid;place-items:center;box-shadow:0 0 0 4px rgba(242,245,248,0.14),0 0 14px rgba(242,245,248,0.35);}
+            .fr-ring{background:none;border:none;font:600 10px/1 ${SANS};color:#7fb3d5;opacity:0.75;text-align:center;text-shadow:0 0 3px #141b26,0 0 3px #141b26;}
+            .fr-info{font:600 11.5px/1.35 ${SANS};color:#aeb8c6;background:rgba(16,21,29,0.88);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:7px 10px;max-width:210px;white-space:normal;pointer-events:none;}
+            .fr-info b{display:block;color:#f2f5f8;font-size:12.5px;}
+            .fr-info i{display:block;font-style:normal;font-weight:700;color:#f2c94c;}
             .fr-ziel{background:none;border:none;}
             .fr-ziel span{display:inline-block;white-space:nowrap;font:700 11px/20px ${SANS};padding:0 8px;border-radius:8px;background:rgba(16,21,29,.86);border:1px solid currentColor;font-variant-numeric:tabular-nums;}
           `;
@@ -422,8 +432,13 @@ button_card_templates:
                   maxZoom: 15, referrerPolicy: 'strict-origin-when-cross-origin',
                   attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
                 }).addTo(fr.map);
-                [10, 25, 50].forEach(r => L.circle(home, { radius: r * 1000, color: '#7fb3d5', opacity: 0.3, weight: 1, dashArray: '3 6', fill: false, interactive: false }).addTo(fr.map));
-                L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="fr-home"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), interactive: false, keyboard: false }).addTo(fr.map);
+                fr.RINGE.forEach(r => L.circle(home, { radius: r * 1000, color: '#7fb3d5', opacity: 0.3, weight: 1, dashArray: '3 6', fill: false, interactive: false }).addTo(fr.map));
+                fr.RINGE.forEach(r => L.marker(fr.ringPunkt(r), { icon: L.divIcon({ className: 'fr-ring', html: r + ' km', iconSize: [40, 12], iconAnchor: [20, 13] }), interactive: false, keyboard: false }).addTo(fr.map));
+                L.marker(home, { icon: L.divIcon({ className: '', html: '<div class="fr-haus"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="#10151d"/></svg></div>', iconSize: [24, 24], iconAnchor: [12, 12] }), zIndexOffset: 2000, interactive: false, keyboard: false }).addTo(fr.map);
+                // Infozeile unten links zum gewaehlten Flug (fr.zeichneBezug)
+                const Info = L.Control.extend({ onAdd: () => L.DomUtil.create('div', 'fr-info') });
+                fr.infoEl = new Info({ position: 'bottomleft' }).addTo(fr.map).getContainer();
+                fr.infoEl.style.display = 'none';
                 fr.map.attributionControl.setPrefix('Leaflet');
                 fr.layer = L.layerGroup().addTo(fr.map);
                 fr.zielLayer = L.layerGroup().addTo(fr.map);
@@ -441,6 +456,36 @@ button_card_templates:
               }, 60);
               fr.zeichne();
             }).catch(e => { host.innerHTML = fr.hinweis('Karte nicht verfügbar: ' + fr.esc(e.message)); });
+          };
+          // Bezug zu Zuhause: Entfernung, Hoehenwinkel (Flughoehe minus Hoehe von Zuhause und
+          // Erdkruemmung; ohne Refraktion) und naechster Punkt bei gleichbleibendem Kurs und Tempo
+          fr.RINGE = [10, 25, 50];
+          fr.ringPunkt = r => { const h = fr.home(); return [h[0] + r / 111.2, h[1]]; };
+          fr.bezug = f => {
+            const h = fr.home(), d = f.distance != null ? Number(f.distance) : fr.km(h, [f.latitude, f.longitude]);
+            const m = fr.m(f) - (Number(fr.hass.config.elevation) || 0) - d * d * 1000 / (2 * 6371);
+            const b = { d, w: f.on_ground ? null : Math.max(0, Math.atan2(m, d * 1000) * 180 / Math.PI), cpa: null };
+            const kx = 111.32 * Math.cos(h[0] * Math.PI / 180), px = (f.longitude - h[1]) * kx, py = (f.latitude - h[0]) * 111.32;
+            const v = (Number(f.ground_speed) || 0) * 1.852 / 60, hd = (Number(f.heading) || 0) * Math.PI / 180, vx = v * Math.sin(hd), vy = v * Math.cos(hd);
+            const t = v > 0 && !f.on_ground ? -(px * vx + py * vy) / (v * v) : 0;
+            // nur wenn er sich naehert und der Punkt hoechstens 30 min entfernt ist
+            if (t > 0.2 && t < 30) { const cx = px + vx * t, cy = py + vy * t; b.cpa = { t, d: Math.hypot(cx, cy), p: [h[0] + cy / 111.32, h[1] + cx / kx] }; }
+            return b;
+          };
+          fr.cpaText = b => b && b.cpa ? `kommt bis ${fr.de(Math.round(b.cpa.d * 10) / 10)} km heran · in ${Math.max(1, Math.round(b.cpa.t))} min` : '';
+          fr.zeichneBezug = liste => {
+            const L = window.L, f = fr.sel && liste.find(x => x.id === fr.sel);
+            if (fr.infoEl) fr.infoEl.style.display = f ? '' : 'none';
+            if (!f) return;
+            const h = fr.home(), b = fr.bezug(f);
+            L.polyline([h, [f.latitude, f.longitude]], { color: '#f2f5f8', weight: 1.5, opacity: 0.55, dashArray: '2 5', interactive: false }).addTo(fr.layer);
+            if (b.cpa) {
+              L.polyline([[f.latitude, f.longitude], b.cpa.p], { color: fr.farbe(f), weight: 1.5, opacity: 0.85, dashArray: '1 5', interactive: false }).addTo(fr.layer);
+              L.polyline([h, b.cpa.p], { color: '#f2c94c', weight: 1, opacity: 0.7, interactive: false }).addTo(fr.layer);
+              L.circleMarker(b.cpa.p, { radius: 3.5, color: '#f2c94c', weight: 1.5, fillColor: '#10151d', fillOpacity: 1, interactive: false }).addTo(fr.layer);
+            }
+            if (fr.infoEl) fr.infoEl.innerHTML = `<b>${fr.esc(fr.cs(f))} von zu Hause</b>${fr.de(Math.round(b.d * 10) / 10)} km Richtung ${fr.himmel(fr.peilung(f))}`
+              + (b.w != null ? ` · ${Math.round(b.w)}° über dem Horizont` : ' · am Boden') + (b.cpa ? `<i>${fr.cpaText(b)}</i>` : '');
           };
           fr.zeichne = () => {
             if (!fr.map || !fr.layer || !window.L) return;
@@ -467,6 +512,7 @@ button_card_templates:
               m.on('click', () => fr.waehle(f.id));
               m.addTo(fr.layer);
             });
+            fr.zeichneBezug(liste);
             fr.zeichneZiel();
           };
           // Beschriftungen ohne Ueberlappung: Rangfolge gewaehlter Flug, dann nach Entfernung.
@@ -485,6 +531,10 @@ button_card_templates:
             // Flugzeug-Symbole (22 px, seltene Typen 31 px) sind belegt, Beschriftungen kommen hinzu
             const rand = f => fr.selten(f) ? 5 : 0;
             const belegt = liste.map(f => { const p = pt(f), r = 11 + rand(f); return { id: f.id, x1: p.x - r, y1: p.y - r, x2: p.x + r, y2: p.y + r }; });
+            // Haus-Symbol (24 px) und Ringbeschriftung (ueber dem Nordpunkt) ebenfalls
+            const hp = fr.map.latLngToContainerPoint(fr.home());
+            belegt.push({ id: '_haus', x1: hp.x - 14, y1: hp.y - 14, x2: hp.x + 14, y2: hp.y + 14 });
+            fr.RINGE.forEach(r => { const q = fr.map.latLngToContainerPoint(fr.ringPunkt(r)); belegt.push({ id: '_ring', x1: q.x - 20, y1: q.y - 14, x2: q.x + 20, y2: q.y }); });
             const frei = (r, id) => r.x1 >= R && r.y1 >= R && r.x2 <= sz.x - R && r.y2 <= sz.y - R
               && belegt.every(o => o.id === id && !o.text || r.x2 <= o.x1 || r.x1 >= o.x2 || r.y2 <= o.y1 || r.y1 >= o.y2);
             const lagen = (w, h, e) => [[13 + e, -13 - e, 0], [-13 - e - w, -13 - e, 1], [-w / 2, -13 - e - h, 0], [-w / 2, 13 + e, 0],
@@ -614,7 +664,7 @@ button_card_templates:
             const foto = f.aircraft_photo_large || f.aircraft_photo_medium;
             const kachel = fr.kachel;
             const vs = Number(f.vertical_speed) || 0, steig = vs > 100 ? '↑ ' + fr.de(vs) : vs < -100 ? '↓ ' + fr.de(-vs) : '→ 0';
-            const p = fr.peilung(f);
+            const p = fr.peilung(f), bz = fr.bezug(f);
             const nummer = f.flight_number || f.callsign || f.aircraft_registration || '?';
             const kopfUnter = [f.callsign && f.callsign !== nummer ? f.callsign : '', f.airline_short || f.airline].filter(Boolean).map(fr.esc).join(' · ');
             const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
@@ -652,8 +702,9 @@ button_card_templates:
                 ${hoehe}
                 ${kachel('Speed', fr.de(Math.round((Number(f.ground_speed) || 0) * 1.852)), 'km/h', fr.de(Number(f.ground_speed) || 0) + ' kn')}
                 ${kachel('Steigen', steig, 'ft/min', '')}
-                ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p), '')}
+                ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p), bz.w != null ? Math.round(bz.w) + '° über dem Horizont' : 'am Boden')}
               </div>
+              ${bz.cpa ? `<div style="font-size:12.5px;font-weight:700;color:#f2c94c;">Bei gleichem Kurs: ${fr.cpaText(bz)}</div>` : ''}
               <div style="font-size:12px;color:#6e7988;">${extra}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.08);border:1px solid rgba(127,179,213,0.18);">Auf Flightradar24 öffnen</a>
