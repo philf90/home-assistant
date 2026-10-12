@@ -26,7 +26,7 @@ Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
 
 1. **Platzhalter in der Zieldatei finden.** Kopfkommentar
    `HINWEIS PLATZHALTER` lesen und die Datei durchsuchen:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert' <datei>`
+   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
