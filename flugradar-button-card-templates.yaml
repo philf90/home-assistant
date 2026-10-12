@@ -80,10 +80,10 @@
 # Auswahl: Antippen in Karte oder Liste merkt den Flug im Browser
 # (window.__flugradar.sel, je Geraet) und oeffnet das Popup ueber den Hash
 # #flug wie eine navigate-Aktion (history.pushState + location-changed).
-# Direktlink: /dashboard-home/fluege?flug=<FR24-ID>&cs=<Callsign> (Benachrichtigungen)
+# Direktlink: /dashboard-home/fluege?flug=<FR24-ID>-<Callsign> (Benachrichtigungen)
 # oeffnet das Popup; ist der Flug noch im Bereich, ist er gewaehlt und die Karte
 # zentriert, sonst zeigt das Popup "nicht mehr im Bereich" mit Link auf FR24.
-# Die Parameter werden danach per replaceState entfernt.
+# Der Parameter wird danach per replaceState entfernt.
 #
 # Klickbarkeit: button-card setzt bei Karten ohne Aktion (tap/hold none) die
 # Klasse "disabled" mit pointer-events: none (styles.ts). Liste, Popup-Inhalt
@@ -121,7 +121,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 14, vorher = window.__flugradar;
+          const VERSION = 15, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -333,7 +333,9 @@ button_card_templates:
               window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
             }
           };
-          // Direktlink aus einer Benachrichtigung: /dashboard-home/fluege?flug=<FR24-ID>&cs=<Callsign>.
+          // Direktlink aus einer Benachrichtigung: /dashboard-home/fluege?flug=<FR24-ID>-<Callsign>.
+          // Nur EIN Parameter: mit einem zweiten (&cs=) oeffnete die iOS-App nur das
+          // Standard-Dashboard. Die FR24-ID ist hexadezimal, der erste Bindestrich trennt.
           // Das Popup oeffnet immer. Ist der Flug noch im Bereich, ist er gewaehlt (Ring,
           // Karte zentriert); sonst zeigt das Popup, dass er den Bereich verlassen hat,
           // mit Link auf Flightradar24. Die Parameter werden danach aus der Adresse
@@ -341,9 +343,10 @@ button_card_templates:
           // nicht geladen ist, bleiben sie stehen (naechster Aufruf mit neuem hass).
           fr.ausUrl = () => {
             if (!/\/fluege\/?$/.test(location.pathname)) return;
-            const q = new URLSearchParams(location.search), id = q.get('flug');
-            if (!id || !fr.sensor()) return;
-            fr.zuletzt = { id, cs: q.get('cs') || '' };
+            const q = new URLSearchParams(location.search), roh = q.get('flug');
+            if (!roh || !fr.sensor()) return;
+            const t = roh.indexOf('-'), id = t < 0 ? roh : roh.slice(0, t);
+            fr.zuletzt = { id, cs: t < 0 ? q.get('cs') || '' : roh.slice(t + 1) };
             q.delete('flug');
             q.delete('cs');
             const rest = q.toString();
