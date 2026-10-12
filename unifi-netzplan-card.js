@@ -31,6 +31,10 @@
  *                         sind: grau statt rot, zaehlen nicht als Stoerung.
  *                         Meldet sich das Geraet wieder, erscheint es normal.
  *   hide_inactive         true blendet diese Geraete ganz aus
+ *   hide                  device_tracker, die nie angezeigt werden sollen
+ *                         (Infrastruktur oder Clients). Geraete, die der
+ *                         Controller nicht mehr meldet (Zustand mit
+ *                         restored: true), blendet die Karte selbst aus.
  *   pins                  device_tracker eines Kabel-Clients -> device_tracker
  *                         des Switches/Gateways, an dem er haengt
  *   labels                device_tracker -> angezeigter Name
@@ -39,7 +43,7 @@
  *                         aufgeklappt sind; "wired" fuer den Sammelknoten
  */
 
-const UNP_VERSION = '0.1.0';
+const UNP_VERSION = '0.2.0';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 const BAND = { ng: '2,4 GHz', na: '5 GHz', '6e': '6 GHz' };
 const KIND_ORDER = { gateway: 0, switch: 1, ap: 2, other: 3 };
@@ -83,7 +87,9 @@ class UnifiNetzplanCard extends HTMLElement {
   setConfig(config) {
     if (!config) throw new Error('Keine Konfiguration');
     if (config.wan !== undefined && !Array.isArray(config.wan)) throw new Error('wan muss eine Liste sein');
-    if (config.inactive !== undefined && !Array.isArray(config.inactive)) throw new Error('inactive muss eine Liste sein');
+    for (const key of ['inactive', 'hide', 'expand']) {
+      if (config[key] !== undefined && !Array.isArray(config[key])) throw new Error(`${key} muss eine Liste sein`);
+    }
     for (const key of ['pins', 'labels']) {
       if (config[key] !== undefined && (typeof config[key] !== 'object' || Array.isArray(config[key]))) {
         throw new Error(`${key} muss eine Zuordnung (Schluessel: Wert) sein`);
@@ -131,6 +137,7 @@ class UnifiNetzplanCard extends HTMLElement {
     const devices = hass.devices || {};
     const labels = cfg.labels || {};
     const inactive = new Set(cfg.inactive || []);
+    const hide = new Set(cfg.hide || []);
     const uni = this._unifiEntities();
 
     const byDev = new Map();
@@ -161,6 +168,10 @@ class UnifiNetzplanCard extends HTMLElement {
       if (!MAC_RE.test(mac)) continue;
       infraDevs.add(devId);
       const id = tracker ? tracker.entity_id : (stateS || up).entity_id;
+      // restored: HA haelt die Entitaet nur noch aus dem Register vor, der
+      // Controller kennt das Geraet nicht mehr (z. B. ausgemusterte Hardware).
+      const probe = tState || (stateS && st[stateS.entity_id]);
+      if (hide.has(id) || (probe && probe.attributes.restored)) continue;
 
       const upState = up && st[up.entity_id];
       const uplink = upState && MAC_RE.test(upState.state) ? upState.state.toLowerCase() : null;
@@ -233,7 +244,7 @@ class UnifiNetzplanCard extends HTMLElement {
     for (const e of uni) {
       if (!e.entity_id.startsWith('device_tracker.')) continue;
       if (e.device_id && infraDevs.has(e.device_id)) continue;
-      if (wanDevs.has(e.entity_id)) continue;
+      if (wanDevs.has(e.entity_id) || hide.has(e.entity_id)) continue;
       const s = st[e.entity_id];
       if (!s) continue;
       const online = s.state === 'home';
