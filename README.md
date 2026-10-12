@@ -8,8 +8,8 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 > **Hinweis:** Die Dateien sind auf eine konkrete Instanz zugeschnitten.
 > Entity-IDs, Gerätenamen, Routen und Pfade müssen vor dem Einsatz an die
 > eigene Installation angepasst werden. Persönliche Angaben sind durch
-> neutrale Platzhalter ersetzt, z. B. `person.bewohner`, `sensor.iphone_*`,
-> `sensor.pv_anlage_*` und die Kennzeichen `AB - CD 123` / `AB - EF 456`.
+> Platzhalter ersetzt, die in keiner Instanz existieren – siehe
+> [Platzhalter ersetzen](#platzhalter-ersetzen).
 
 ## Inhalt
 
@@ -82,6 +82,44 @@ darunter ergänzen.
 ```yaml
 template: !include template-autos-passat.yaml
 ```
+
+## Platzhalter ersetzen
+
+Persönliche Angaben (Namen, Gerätenamen, Adresse, Kennzeichen) sind im Repo
+anonymisiert. Die Platzhalter gibt es in keiner Home-Assistant-Instanz: Eine
+unverändert eingefügte Karte bleibt leer oder meldet „Entität nicht
+verfügbar“. Betroffene Dateien tragen oben den Kommentar
+`HINWEIS PLATZHALTER`.
+
+| Platzhalter | Steht für | Echte ID finden | Dateien |
+|---|---|---|---|
+| `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-…`, `karten-basemap-carto.md` |
+| `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-…` |
+| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml` (Automationen im Kommentar) |
+| `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-*-button-card.yaml` (5), `grafana/` (dort ohne `sensor.`) |
+| `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-button-card*.yaml` |
+| `passat_fenster_kombiniert`, `passat_tueren_kombiniert` | `unique_id` der Template-Sensoren | bisherige `unique_id` übernehmen, sonst legt HA neue Entities an | `template-autos-passat.yaml` |
+
+Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
+`visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-card.yaml`,
+`decluttering-templates.yaml`, `kameras-button-card.yaml`). Am einfachsten
+im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
+
+**Manuell:** Alle Sensoren eines Geräts oder einer Anlage haben denselben
+Präfix. Ein Suchen-und-Ersetzen auf den Präfix genügt, z. B. `sensor.iphone_`
+→ `sensor.<eigener_gerätename>_`. Danach unter Entwicklerwerkzeuge → Zustände
+stichprobenartig prüfen, ob die IDs existieren.
+
+**Mit Claude:** Claude Code in diesem Repo starten, die Home-Assistant-
+Verbindung (MCP) aktivieren und z. B. sagen: *„Bereite
+`gesundheit-view.yaml` für meine Instanz vor.“* Der Projekt-Skill
+[`.claude/skills/platzhalter-einsetzen`](.claude/skills/platzhalter-einsetzen/SKILL.md)
+sucht die echten IDs in der Instanz, legt die Zuordnung zur Bestätigung vor
+und erzeugt eine angepasste Fassung in `lokal/`. Ins Dashboard schreibt Claude
+nur nach ausdrücklicher Freigabe.
+
+Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
+`.gitignore` eingetragen.
 
 ## Grafana
 

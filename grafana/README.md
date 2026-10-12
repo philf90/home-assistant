@@ -59,6 +59,10 @@ influxdb:
       - sensor.shelly_outdoor_plugs_pool_switch_0_energy
 ```
 
+`sensor.pv_anlage_*` ist ein anonymisierter Platzhalter. Er muss hier und in
+`energie-dashboard.json` (dort ohne `sensor.`-Präfix) durch die eigenen
+Entity-IDs ersetzt werden, siehe [Platzhalter ersetzen](../README.md#platzhalter-ersetzen).
+
 Die `include`-Whitelist ist wichtig – ohne sie schreibt Home Assistant jede Entity nach
 Influx. Nach dem Eintragen ist ein **Neustart** von Home Assistant nötig, die Integration
 ist nicht reload-fähig.
