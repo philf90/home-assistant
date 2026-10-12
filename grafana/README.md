@@ -44,8 +44,8 @@ influxdb:
     entities:
       - sensor.hmip_esi_stromzahler_energiezahler_ch2
       - sensor.hmip_esi_gaszahler_gas_volumen
-      - sensor.system_muhlweg_tagliche_pv_1
-      - sensor.system_muhlweg_tagliche_pv_2
+      - sensor.pv_anlage_tagliche_pv_1
+      - sensor.pv_anlage_tagliche_pv_2
       - sensor.smart_meter_netzbezug
       - sensor.shelly_plugs_gen3_waschmaschine_switch_0_energy
       - sensor.shelly_plugs_gen3_trockner_switch_0_energy
@@ -58,6 +58,10 @@ influxdb:
       - sensor.shelly_plus_1pm_heizung_switch_0_energy
       - sensor.shelly_outdoor_plugs_pool_switch_0_energy
 ```
+
+`sensor.pv_anlage_*` ist ein anonymisierter Platzhalter. Er muss hier und in
+`energie-dashboard.json` (dort ohne `sensor.`-Präfix) durch die eigenen
+Entity-IDs ersetzt werden, siehe [Platzhalter ersetzen](../README.md#platzhalter-ersetzen).
 
 Die `include`-Whitelist ist wichtig – ohne sie schreibt Home Assistant jede Entity nach
 Influx. Nach dem Eintragen ist ein **Neustart** von Home Assistant nötig, die Integration

@@ -100,7 +100,7 @@ in HACS verfügbar):
 ```yaml
 type: custom:map-card
 entities:
-  - person.philipp
+  - person.bewohner
 tile_layer_url: https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=DEIN_KEY
 tile_layer_attribution: >-
   &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>,
