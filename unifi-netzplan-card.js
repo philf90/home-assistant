@@ -43,7 +43,7 @@
  *                         aufgeklappt sind; "wired" fuer den Sammelknoten
  */
 
-const UNP_VERSION = '0.2.0';
+const UNP_VERSION = '0.2.1';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 const BAND = { ng: '2,4 GHz', na: '5 GHz', '6e': '6 GHz' };
 const KIND_ORDER = { gateway: 0, switch: 1, ap: 2, other: 3 };
@@ -160,17 +160,24 @@ class UnifiNetzplanCard extends HTMLElement {
       const up = pick(list, 'device_uplink_mac', (e) => e.entity_id.startsWith('sensor.') && e.entity_id.endsWith('_uplink_mac'));
       const stateS = pick(list, 'device_state', () => false);
       if (!up && !stateS) continue;
-      const tracker = list.find((e) => e.entity_id.startsWith('device_tracker.'));
       const dev = devices[devId] || {};
-      const tState = tracker && st[tracker.entity_id];
       const conn = (dev.connections || []).find((c) => c[0] === 'mac');
-      const mac = String((tState && tState.attributes.mac) || (conn && conn[1]) || '').toLowerCase();
+      const connMac = conn ? String(conn[1]).toLowerCase() : '';
+      // An einem Geraet koennen neben dem echten Tracker verwaiste Client-Tracker
+      // haengen (restored: true). Den lebenden mit passender MAC bevorzugen.
+      const trackers = list.filter((e) => e.entity_id.startsWith('device_tracker.'));
+      const live = (e) => st[e.entity_id] && !st[e.entity_id].attributes.restored;
+      const tracker = trackers.find((e) => live(e) && String(st[e.entity_id].attributes.mac || '').toLowerCase() === connMac)
+        || trackers.find(live) || trackers[0];
+      const tState = tracker && st[tracker.entity_id];
+      const mac = String((tState && tState.attributes.mac) || connMac).toLowerCase();
       if (!MAC_RE.test(mac)) continue;
       infraDevs.add(devId);
       const id = tracker ? tracker.entity_id : (stateS || up).entity_id;
       // restored: HA haelt die Entitaet nur noch aus dem Register vor, der
       // Controller kennt das Geraet nicht mehr (z. B. ausgemusterte Hardware).
-      const probe = tState || (stateS && st[stateS.entity_id]);
+      // Massgeblich ist der Zustandssensor des Geraets, nicht ein einzelner Tracker.
+      const probe = (stateS && st[stateS.entity_id]) || tState;
       if (hide.has(id) || (probe && probe.attributes.restored)) continue;
 
       const upState = up && st[up.entity_id];
