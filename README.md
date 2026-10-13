@@ -22,7 +22,7 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
 | Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…`, `staubsauger-button-card.yaml` |
-| Netzwerk & System | `unifi-…`, `unifi-clients-…`, `unifi-steuerung-…`, `unifi-udm-system-…`, `unifi-wan-durchsatz-…`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
+| Netzwerk & System | `unifi-…`, `unifi-clients-…`, `unifi-steuerung-…`, `unifi-udm-system-…`, `unifi-wan-durchsatz-…`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
 | Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3), `template-autos-passat.yaml` |
 | Garten & Pflanzen | `garten-…`, `pflanzen-status-button-card.yaml`, `pflanzen-flower-card.yaml` |
 | Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |
@@ -61,6 +61,12 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
   UniFi-Konsole (Einstellungen → Control Plane → Integrationen). Den
   automatischen Speedtest in ihren Optionen abschalten, sonst testet sie
   standardmäßig stündlich.
+- optional für Kabel-Clients im UniFi-Netzplan: das Paket
+  `unifi-kabel-clients.yaml`. Es fragt alle 5 Minuten die Controller-API ab
+  und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
+  an, was die offizielle Integration nicht liefert. Einbinden unter
+  `homeassistant: packages:` in der `configuration.yaml`; URL und lokaler
+  API-Schlüssel stehen in der `secrets.yaml` (Details im Dateikopf).
 
 Welche Karten und Integrationen eine Datei braucht, steht in ihrem
 Kommentarkopf unter **Voraussetzung**.

@@ -10,9 +10,11 @@
  *     (translation_key device_uplink_mac). Zeigt die MAC auf einen Access
  *     Point, ist die Anbindung Funk-Mesh (abgeleitet, gepunktete Linie).
  *   - WLAN-Client -> Access Point: Attribut ap_mac am device_tracker.
- *   - Kabel-Client -> Switch: liefert die Integration NICHT. Diese Clients
- *     landen im Sammelknoten "Port unbekannt", ausser sie sind per `pins`
- *     einem Geraet fest zugeordnet.
+ *   - Kabel-Client -> Switch und Port: liefert die Integration NICHT. Mit
+ *     `wired_entity` liest die Karte die Zuordnung aus einem Sensor, den
+ *     unifi-kabel-clients.yaml aus der Controller-API fuellt. Ohne ihn (oder
+ *     fuer dort fehlende Clients) landen Kabel-Clients im Sammelknoten,
+ *     ausser sie sind per `pins` einem Geraet fest zugeordnet.
  *   - WAN-Leitungen: liefert die Integration nicht als Topologie, deshalb
  *     per `wan` konfiguriert. IP-Adressen und Erreichbarkeit je Leitung
  *     kommen optional aus einer zweiten Integration (z. B. "UniFi WAN" aus
@@ -43,16 +45,21 @@
  *                         (Infrastruktur oder Clients). Geraete, die der
  *                         Controller nicht mehr meldet (Zustand mit
  *                         restored: true), blendet die Karte selbst aus.
+ *   wired_entity          Sensor mit Attribut ports: { client_mac: [switch_mac,
+ *                         port] }. Kabel-Clients erscheinen dann aufklappbar
+ *                         am Switch, mit Portnummer.
  *   pins                  device_tracker eines Kabel-Clients -> device_tracker
- *                         des Switches/Gateways, an dem er haengt
+ *                         des Switches/Gateways, an dem er haengt (geht vor
+ *                         wired_entity)
  *   labels                device_tracker -> angezeigter Name
  *   show_offline_clients  true zeigt auch abwesende Clients (Standard false)
  *   expand                Liste von device_trackern, deren Clients beim Laden
- *                         aufgeklappt sind; "wired" fuer den Sammelknoten,
- *                         "wan" fuer die Details aller Internetleitungen
+ *                         aufgeklappt sind; "lan:<device_tracker>" fuer die
+ *                         Kabel-Clients eines Geraets, "wired" fuer den
+ *                         Sammelknoten, "wan" fuer alle Internetleitungen
  */
 
-const UNP_VERSION = '0.4.0';
+const UNP_VERSION = '0.5.0';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 // Shared Address Space nach RFC 6598, Adressen hinter Carrier-Grade-NAT
 const CGNAT_RE = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
@@ -109,6 +116,7 @@ class UnifiNetzplanCard extends HTMLElement {
     this._config = { title: 'Netzplan', ...config };
     this._expanded = new Set(config.expand || []);
     if (this._expanded.has('wan')) (config.wan || []).forEach((_, i) => this._expanded.add(`wan:${i}`));
+    if (config.wired_entity !== undefined && typeof config.wired_entity !== 'string') throw new Error('wired_entity muss eine Entitaet sein');
     this._last = '';
     if (this._hass) this._update();
   }
@@ -219,6 +227,7 @@ class UnifiNetzplanCard extends HTMLElement {
         clientsSensor: clientsS ? num(clientsS.entity_id) : null,
         children: [],
         wlan: [],
+        lan: [],
         pinned: [],
       });
     }
@@ -257,6 +266,8 @@ class UnifiNetzplanCard extends HTMLElement {
     const byTracker = new Map([...nodes.values()].map((n) => [n.id, n]));
     const wanDevs = new Set((cfg.wan || []).map((w) => w.device).filter(Boolean));
     const pins = cfg.pins || {};
+    const wiredS = cfg.wired_entity && st[cfg.wired_entity];
+    const ports = (wiredS && wiredS.attributes.ports) || {};
     const wired = [];
     let wlanCount = 0;
     let lanCount = 0;
@@ -270,6 +281,7 @@ class UnifiNetzplanCard extends HTMLElement {
       if (!online && !cfg.show_offline_clients) continue;
       const a = s.attributes;
       const ap = a.ap_mac ? String(a.ap_mac).toLowerCase() : null;
+      const port = !ap && Array.isArray(ports[String(a.mac || '').toLowerCase()]) ? ports[String(a.mac).toLowerCase()] : null;
       // friendly_name ist bei Clients oft "Geraet Geraet", daher Geraetename zuerst
       const dev = (e.device_id && devices[e.device_id]) || {};
       const c = {
@@ -278,12 +290,15 @@ class UnifiNetzplanCard extends HTMLElement {
         ip: a.ip || '',
         band: BAND[a.radio] || '',
         wlan: !!ap,
+        port: port && port[1] != null ? port[1] : null,
         online,
       };
       if (ap) wlanCount++; else lanCount++;
       const pinTarget = pins[e.entity_id] && byTracker.get(pins[e.entity_id]);
+      const swNode = port && nodes.get(String(port[0]).toLowerCase());
       if (pinTarget) pinTarget.pinned.push(c);
       else if (ap && nodes.get(ap)) nodes.get(ap).wlan.push(c);
+      else if (swNode) swNode.lan.push(c);
       else wired.push(c);
     }
 
@@ -291,6 +306,7 @@ class UnifiNetzplanCard extends HTMLElement {
     const sortTree = (n) => {
       n.children.sort((a, b) => (KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) || (a.status === 'off') - (b.status === 'off') || byName(a, b));
       n.wlan.sort(byName);
+      n.lan.sort((a, b) => (a.port ?? 999) - (b.port ?? 999) || byName(a, b));
       n.pinned.sort(byName);
       n.children.forEach(sortTree);
     };
@@ -302,6 +318,7 @@ class UnifiNetzplanCard extends HTMLElement {
     return {
       roots,
       wired,
+      wiredMapped: !!wiredS,
       wlanCount,
       lanCount,
       total: infra.length,
@@ -388,15 +405,20 @@ class UnifiNetzplanCard extends HTMLElement {
 
   _node(n, extra = [], last = false) {
     const open = this._expanded.has(n.id);
+    const lanKey = `lan:${n.id}`;
+    const lanOpen = this._expanded.has(lanKey);
     const tag = n.status === 'off' ? '<span class="tag">inaktiv</span>' : n.mesh ? '<span class="tag mesh">Mesh</span>' : '';
-    let pill = '';
+    const pills = [];
+    if (n.lan.length) {
+      pills.push(`<span class="pill" role="button" tabindex="0" data-toggle="${esc(lanKey)}" aria-expanded="${lanOpen}" title="Kabel-Clients ein-/ausklappen"><ha-icon icon="${ICON.wired}"></ha-icon>${n.lan.length}<span class="chev">${lanOpen ? '▴' : '▾'}</span></span>`);
+    } else if (n.kind !== 'ap' && !n.wlan.length && n.clientsSensor != null && n.status !== 'off') {
+      pills.push(`<span class="pill quiet" title="Kabel-Clients direkt an diesem Geraet (Sensor Clients)"><ha-icon icon="${ICON.wired}"></ha-icon>${n.clientsSensor}</span>`);
+    }
     if (n.kind === 'ap' || n.wlan.length) {
-      const gap = n.clientsSensor != null && n.clientsSensor > n.wlan.length ? `<span class="gap">+${n.clientsSensor - n.wlan.length}</span>` : '';
-      pill = n.wlan.length
+      const gap = n.clientsSensor != null && n.clientsSensor > n.wlan.length + n.lan.length ? `<span class="gap">+${n.clientsSensor - n.wlan.length - n.lan.length}</span>` : '';
+      pills.push(n.wlan.length
         ? `<span class="pill" role="button" tabindex="0" data-toggle="${esc(n.id)}" aria-expanded="${open}" title="WLAN-Clients ein-/ausklappen"><ha-icon icon="${ICON.wlan}"></ha-icon>${n.wlan.length}${gap}<span class="chev">${open ? '▴' : '▾'}</span></span>`
-        : `<span class="pill quiet"><ha-icon icon="${ICON.wlan}"></ha-icon>0${gap}</span>`;
-    } else if (n.clientsSensor != null && n.status !== 'off') {
-      pill = `<span class="pill quiet" title="Kabel-Clients direkt an diesem Geraet (Sensor Clients)"><ha-icon icon="${ICON.wired}"></ha-icon>${n.clientsSensor}</span>`;
+        : `<span class="pill quiet"><ha-icon icon="${ICON.wlan}"></ha-icon>0${gap}</span>`);
     }
     // Beim Gateway ist ip die Adresse der Ausfall-Hauptleitung (Uplink), nicht zwingend die,
     // ueber die der Verkehr laeuft. WAN-Adressen gehoeren deshalb an die Leitungen (ip_entity).
@@ -405,14 +427,17 @@ class UnifiNetzplanCard extends HTMLElement {
       <div class="node k-${n.kind} s-${n.status}" data-more="${esc(n.id)}" role="button" tabindex="0" title="${esc(n.state)}">
         <span class="ico"><ha-icon icon="${ICON[n.kind]}"></ha-icon></span>
         <span class="txt"><span class="nm"><span class="nt">${esc(n.name)}</span>${tag}</span><span class="mt">${esc(meta)}</span></span>
-        ${pill}<span class="dot"></span>
+        ${pills.join('')}<span class="dot"></span>
       </div>`;
-    // WLAN-Clients stehen immer im DOM und werden nur ein-/ausgeblendet:
+    // Clients stehen immer im DOM und werden nur ein-/ausgeblendet:
     // Aufklappen baut die Karte nicht neu auf (kein Fokus- oder Scrollverlust).
+    // Clients zuerst: Aufgeklappte erscheinen direkt unter dem angetippten
+    // Geraet, nicht erst unter dessen ganzem Teilbaum.
     const sub = this._list([
-      ...n.children.map((c) => ({ html: (l) => this._node(c, [], l) })),
-      ...n.pinned.map((c) => ({ html: (l) => this._leaf(c, 'pin', l) })),
+      ...n.lan.map((c) => ({ html: (l) => this._leaf(c, 'lan', l, !lanOpen), hidden: !lanOpen })),
       ...n.wlan.map((c) => ({ html: (l) => this._leaf(c, 'wlan', l, !open), hidden: !open })),
+      ...n.pinned.map((c) => ({ html: (l) => this._leaf(c, 'pin', l) })),
+      ...n.children.map((c) => ({ html: (l) => this._node(c, [], l) })),
       ...extra.map((html) => ({ html })),
     ]);
     const cls = [n.mesh ? 'mesh' : '', n.status === 'off' ? 'off' : '', last ? 'last' : ''].join(' ');
@@ -420,8 +445,9 @@ class UnifiNetzplanCard extends HTMLElement {
   }
 
   _leaf(c, how, last = false, hidden = false) {
-    const meta = [c.ip, c.band, how === 'pin' ? 'fest zugeordnet' : ''].filter(Boolean).join(' · ');
-    const cls = ['leaf', how === 'wlan' ? 'air' : '', how === 'wlan' || how === 'lan' ? 'wl' : '', last ? 'last' : ''].join(' ');
+    const meta = [c.port != null ? `Port ${c.port}` : '', c.ip, c.band, how === 'pin' ? 'fest zugeordnet' : ''].filter(Boolean).join(' · ');
+    // wl/wd: Gruppe, die ein Klapp-Knopf ein- und ausblendet (WLAN bzw. Kabel)
+    const cls = ['leaf', how === 'wlan' ? 'air wl' : '', how === 'lan' ? 'wd' : '', last ? 'last' : ''].join(' ');
     return `<li class="${cls}"${hidden ? ' hidden' : ''}>
       <div class="client ${c.online ? '' : 'away'}" data-more="${esc(c.id)}" role="button" tabindex="0">
         <ha-icon icon="${c.wlan ? ICON.wlan : ICON.wired}"></ha-icon>
@@ -429,14 +455,14 @@ class UnifiNetzplanCard extends HTMLElement {
       </div></li>`;
   }
 
-  _wiredNode(list, last = false) {
+  _wiredNode(list, mapped, last = false) {
     if (!list.length) return '';
     const open = this._expanded.has('wired');
     const rows = this._list(list.map((c) => ({ html: (l) => this._leaf(c, 'lan', l, !open), hidden: !open })));
     return `<li class="unknown ${last ? 'last' : ''}">
       <div class="node k-cluster s-none">
         <span class="ico"><ha-icon icon="${ICON.cluster}"></ha-icon></span>
-        <span class="txt"><span class="nm"><span class="nt">Kabel-Clients</span></span><span class="mt">Switch und Port liefert die Integration nicht</span></span>
+        <span class="txt"><span class="nm"><span class="nt">${mapped ? 'Kabel-Clients ohne Switch' : 'Kabel-Clients'}</span></span><span class="mt">${mapped ? 'Nicht in der Zuordnung der Controller-API' : 'Switch und Port liefert die Integration nicht'}</span></span>
         <span class="pill" role="button" tabindex="0" data-toggle="wired" aria-expanded="${open}"><ha-icon icon="${ICON.wired}"></ha-icon>${list.length}<span class="chev">${open ? '▴' : '▾'}</span></span>
       </div>${rows}</li>`;
   }
@@ -480,7 +506,7 @@ class UnifiNetzplanCard extends HTMLElement {
       ? `<span class="badge bad">${faults} gestört</span>`
       : `<span class="badge ok">${m.ok}/${m.total - m.off} online</span>`;
     const tree = m.roots.length
-      ? m.roots.map((r, i) => this._node(r, i === 0 && m.wired.length ? [(l) => this._wiredNode(m.wired, l)] : [])).join('')
+      ? m.roots.map((r, i) => this._node(r, i === 0 && m.wired.length ? [(l) => this._wiredNode(m.wired, m.wiredMapped, l)] : [])).join('')
       : '<li class="empty">Keine Geräte der UniFi-Integration gefunden.</li>';
 
     this.shadowRoot.innerHTML = `
@@ -520,7 +546,8 @@ class UnifiNetzplanCard extends HTMLElement {
     const li = t.closest('li');
     const ul = li && li.querySelector(':scope > ul');
     if (!ul) return;
-    for (const c of ul.querySelectorAll(':scope > li.wl')) c.hidden = !open;
+    const group = id === 'wired' || id.startsWith('lan:') ? 'wd' : 'wl';
+    for (const c of ul.querySelectorAll(`:scope > li.${group}`)) c.hidden = !open;
     const vis = [...ul.children].filter((c) => !c.hidden);
     for (const c of ul.children) c.classList.toggle('last', c === vis[vis.length - 1]);
   }
@@ -633,6 +660,7 @@ UnifiNetzplanCard.styles = `
   .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 10px;
     color: var(--unp-ok); background: #a6d49e18; border: 1px solid #a6d49e33; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .pill ha-icon { --mdc-icon-size: 15px; }
+  .pill + .pill { margin-left: -3px; }
   .pill.quiet { color: var(--unp-muted); background: transparent; border-color: var(--unp-line); cursor: default; }
   .pill .gap { color: var(--unp-warn); font-weight: 600; margin-left: 2px; }
   .pill .chev { font-size: 10px; margin-left: 2px; }
