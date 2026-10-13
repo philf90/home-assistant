@@ -290,6 +290,8 @@ class UnifiNetzplanCard extends HTMLElement {
         ip: a.ip || '',
         band: BAND[a.radio] || '',
         wlan: !!ap,
+        mac: String(a.mac || '').toLowerCase(),
+        sw: port ? String(port[0]).toLowerCase() : null,
         port: port && port[1] != null ? port[1] : null,
         online,
       };
@@ -300,6 +302,18 @@ class UnifiNetzplanCard extends HTMLElement {
       else if (ap && nodes.get(ap)) nodes.get(ap).wlan.push(c);
       else if (swNode) swNode.lan.push(c);
       else wired.push(c);
+    }
+
+    // Haengt ein Kabel-Client an einem anderen Client statt an einem Switch
+    // (z. B. ein Access-Leser am Access-Hub), kommt er zum Switch dieses Clients.
+    const lanOf = new Map();
+    for (const n of nodes.values()) for (const c of n.lan) lanOf.set(c.mac, [n, c]);
+    for (let i = wired.length - 1; i >= 0; i--) {
+      const hit = wired[i].sw && lanOf.get(wired[i].sw);
+      if (!hit) continue;
+      Object.assign(wired[i], { via: hit[1].name, port: hit[1].port });
+      hit[0].lan.push(wired[i]);
+      wired.splice(i, 1);
     }
 
     const byName = (a, b) => a.name.localeCompare(b.name, 'de');
@@ -445,7 +459,7 @@ class UnifiNetzplanCard extends HTMLElement {
   }
 
   _leaf(c, how, last = false, hidden = false) {
-    const meta = [c.port != null ? `Port ${c.port}` : '', c.ip, c.band, how === 'pin' ? 'fest zugeordnet' : ''].filter(Boolean).join(' · ');
+    const meta = [c.port != null ? `Port ${c.port}` : '', c.via ? `über ${c.via}` : '', c.ip, c.band, how === 'pin' ? 'fest zugeordnet' : ''].filter(Boolean).join(' · ');
     // wl/wd: Gruppe, die ein Klapp-Knopf ein- und ausblendet (WLAN bzw. Kabel)
     const cls = ['leaf', how === 'wlan' ? 'air wl' : '', how === 'lan' ? 'wd' : '', last ? 'last' : ''].join(' ');
     return `<li class="${cls}"${hidden ? ' hidden' : ''}>
