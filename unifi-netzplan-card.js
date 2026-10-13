@@ -59,7 +59,7 @@
  *                         Sammelknoten, "wan" fuer alle Internetleitungen
  */
 
-const UNP_VERSION = '0.5.0';
+const UNP_VERSION = '0.5.1';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 // Shared Address Space nach RFC 6598, Adressen hinter Carrier-Grade-NAT
 const CGNAT_RE = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
@@ -503,7 +503,7 @@ class UnifiNetzplanCard extends HTMLElement {
       return `<div class="wan ${w.primary ? 'primary' : 'standby'} s-${w.status}">
         <div class="wan-head" ${act} ${act ? 'role="button" tabindex="0"' : ''}>
           <ha-icon class="wico" icon="${ICON.wan}"></ha-icon>
-          <span class="nm"><span class="nt">${esc(w.name)}</span><span class="tag">${w.primary ? 'aktiv' : 'Reserve'}</span></span>
+          <span class="nm"><span class="nt">${esc(w.name)}</span><span class="tag">${w.primary ? 'aktiv' : 'Backup'}</span></span>
           ${w.value ? `<span class="val">${esc(w.value)}</span>` : ''}
           ${w.status !== 'none' ? '<span class="dot"></span>' : ''}
           ${body ? `<span class="chev">${open ? '▴' : '▾'}</span>` : ''}
