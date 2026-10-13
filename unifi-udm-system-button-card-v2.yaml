@@ -1,0 +1,184 @@
+# UDM SE · System v2 – kompakte Owlet-Karte (CPU / RAM / Temperatur / PoE)
+#
+# Unterschied zu v1 (unifi-udm-system-button-card.yaml): statt eines
+# 2x2-Rasters mit Icon-Kacheln eine einzige Zeile mit vier Werten und
+# Balken, etwa halb so hoch. Die Uptime steht als Text in der Unterzeile,
+# daneben der Firmware-Status der UDM. Neu ist die PoE-Last des 24er-Switches
+# (aus der Infrastruktur-Karte, die in der Netzwerk-View entfaellt).
+#
+# Balken und Wert faerben sich ab denselben Schwellwerten wie in v1:
+#   CPU 70 / 90 %, RAM 75 / 90 %, Temperatur 70 / 85 °C.
+# PoE: Anteil am Budget des USW Pro Max 24 PoE (400 W laut Datenblatt,
+# techspecs.ui.com), gelb ab 80 %, rot ab 95 %.
+# Tippen auf einen Wert oeffnet dessen Verlauf.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
+# │ CPU-/RAM-Auslastung der UniFi-Integration sind je nach Version            │
+# │ standardmäßig deaktiviert. PoE-Kachel: max = Budget des eigenen Switches. │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 14px 18px 16px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------------------------- Kopfzeile ----------------------------
+  - type: custom:button-card
+    entity: sensor.dream_machine_special_edition_uptime
+    icon: mdi:router-network
+    name: UDM SE
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    variables:
+      firmware: update.dream_machine_special_edition
+    tap_action:
+      action: more-info
+    label: |
+      [[[
+        let txt='–';
+        const t=entity?Date.parse(entity.state):NaN;
+        if(Number.isFinite(t)){
+          const secs=(Date.now()-t)/1000;
+          const d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600);
+          txt=d>0?`läuft seit ${d} T ${h} h`:`läuft seit ${h} h`;
+        } else if(entity && ['unavailable','unknown'].includes(entity.state)) txt='<span style="color:#f0736a;">nicht erreichbar</span>';
+        const f=states[variables.firmware];
+        const fw=f && f.state==='on' ? '<span style="color:#e6b566;">Update verfügbar</span>' : 'Firmware aktuell';
+        return `${txt} · ${fw}`;
+      ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 20px
+        - height: 20px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 15.5px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12px
+        - color: '#6e7988'
+        - margin-top: 1px
+
+  # ---------------------------- Werte ----------------------------
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_cpu_utilization
+        name: CPU
+        variables: { unit: '%', max: 100, warn: 70, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          v: &val |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const n=Number.isFinite(v)?Math.round(v):'–';
+              return `${n}<span style="font-size:0.62em;color:#6e7988;font-weight:600;margin-left:1px;">${variables.unit}</span>`;
+            ]]]
+          bar: &bar |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const pct=Number.isFinite(v)?Math.max(2,Math.min(100,v/variables.max*100)):0;
+              let c='#a6d49e';
+              if(Number.isFinite(v)){ if(v>=variables.bad) c='#f0736a'; else if(v>=variables.warn) c='#e6b566'; }
+              return `<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:3px;background:${c};"></div></div>`;
+            ]]]
+        styles: &metric_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 4px
+          grid:
+            - grid-template-areas: '"v" "bar" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content min-content min-content
+            - row-gap: 5px
+          name:
+            - justify-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+          custom_fields:
+            v:
+              - justify-self: start
+              - font-size: 16px
+              - font-weight: 750
+              - letter-spacing: -0.02em
+              - color: '#f2f5f8'
+              - font-variant-numeric: tabular-nums
+              - white-space: nowrap
+            bar:
+              - justify-self: stretch
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_memory_utilization
+        name: RAM
+        variables: { unit: '%', max: 100, warn: 75, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_dream_machine_special_edition_local_temperature
+        name: Temp.
+        variables: { unit: '°C', max: 85, warn: 70, bad: 85 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      - type: custom:button-card
+        entity: sensor.poe_power_usw_pro_max_24_poe
+        name: PoE 24er
+        # max = PoE-Budget in W, Schwellen 80 / 95 % davon
+        variables: { unit: W, max: 400, warn: 320, bad: 380 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
