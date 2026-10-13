@@ -1,0 +1,275 @@
+# UDM SE · System v2 – kompakte Owlet-Karte (CPU / RAM / Temperatur / PoE)
+#
+# Unterschied zu v1 (unifi-udm-system-button-card.yaml): statt eines
+# 2x2-Rasters mit Icon-Kacheln eine einzige Zeile mit vier Werten und
+# Balken, etwa halb so hoch. Die Uptime steht als Text in der Unterzeile,
+# daneben der Firmware-Status der UDM. Neu ist die PoE-Last des ganzen
+# Netzes: Summe aller PoE-Ports von Gateway und Switches gegen deren
+# gemeinsames PoE-Budget.
+#
+# Balken und Wert faerben sich ab denselben Schwellwerten wie in v1:
+#   CPU 70 / 90 %, RAM 75 / 90 %, Temperatur 70 / 85 °C.
+# PoE: Wert = Summe aller Geraete, Balkenlaenge = Anteil am Gesamtbudget.
+# Budgets laut Datenblatt (techspecs.ui.com): UDM SE 180 W, USW Pro Max 24
+# PoE 400 W, USW Pro 8 PoE 120 W, USW-Lite-8-PoE je 52 W -> 804 W fuer die
+# fuenf Geraete im Summensensor. Gelb bzw. rot wird der Balken, sobald ein
+# einzelnes Geraet 80 % bzw. 95 % seines eigenen Budgets erreicht; der Name
+# nennt dann das Geraet statt "PoE gesamt". Eine eigene Schwelle fuer die
+# Summe gibt es nicht: Die Summe erreicht 80 % von 804 W nur, wenn schon
+# ein Geraet bei 80 % liegt. Das gilt, solange die Geraeteliste der Kachel
+# und die Mitglieder von sensor.poe_power_total uebereinstimmen.
+# Tippen auf einen Wert oeffnet dessen Verlauf.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
+# │ CPU-/RAM-Auslastung der UniFi-Integration sind je nach Version            │
+# │ standardmäßig deaktiviert. PoE: sensor.poe_power_total ist ein Helfer     │
+# │ "Min/Max" (Summe) über die PoE-Summen je Gerät; max = Summe der Budgets   │
+# │ genau dieser Geräte. Kommt ein Gerät dazu, Helfer und max anpassen.       │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + card-mod (HACS).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 14px 18px 16px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------------------------- Kopfzeile ----------------------------
+  # Icon-Kachel als eigenes Flex-Markup statt ueber die Icon-Zelle von
+  # button-card: dort sass das Icon rund 2 px zu tief. Die Glyphe von
+  # mdi:router-network liegt zudem im unteren Teil ihres Rasters (y 9-23
+  # von 24), daher um 4/24 der Icon-Groesse nach oben verschoben.
+  - type: custom:button-card
+    entity: sensor.dream_machine_special_edition_uptime
+    name: UDM SE
+    show_icon: false
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    variables:
+      firmware: update.dream_machine_special_edition
+    tap_action:
+      action: more-info
+    custom_fields:
+      tile: >-
+        <div style="width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(166,212,158,0.12);border:1px solid rgba(166,212,158,0.2);"><ha-icon icon="mdi:router-network" style="--mdc-icon-size:20px;width:20px;height:20px;display:flex;color:#a6d49e;transform:translateY(-3.33px);"></ha-icon></div>
+    label: |
+      [[[
+        let txt='–';
+        const t=entity?Date.parse(entity.state):NaN;
+        if(Number.isFinite(t)){
+          const secs=(Date.now()-t)/1000;
+          const d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600);
+          txt=d>0?`läuft seit ${d} T ${h} h`:`läuft seit ${h} h`;
+        } else if(entity && ['unavailable','unknown'].includes(entity.state)) txt='<span style="color:#f0736a;">nicht erreichbar</span>';
+        const f=states[variables.firmware];
+        const fw=f && f.state==='on' ? '<span style="color:#e6b566;">Update verfügbar</span>' : 'Firmware aktuell';
+        return `${txt} · ${fw}`;
+      ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px
+      grid:
+        - grid-template-areas: '"tile n" "tile l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      custom_fields:
+        tile:
+          - display: flex
+          - align-self: center
+          - margin-right: 12px
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 15.5px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12px
+        - color: '#6e7988'
+        - margin-top: 1px
+
+  # ---------------------------- Werte ----------------------------
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_cpu_utilization
+        name: CPU
+        variables: { unit: '%', max: 100, warn: 70, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          v: &val |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const n=Number.isFinite(v)?Math.round(v):'–';
+              return `${n}<span style="font-size:0.62em;color:#6e7988;font-weight:600;margin-left:1px;">${variables.unit}</span>`;
+            ]]]
+          bar: &bar |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const pct=Number.isFinite(v)?Math.max(2,Math.min(100,v/variables.max*100)):0;
+              let c='#a6d49e';
+              if(Number.isFinite(v)){ if(v>=variables.bad) c='#f0736a'; else if(v>=variables.warn) c='#e6b566'; }
+              return `<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:3px;background:${c};"></div></div>`;
+            ]]]
+        styles: &metric_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 4px
+          grid:
+            - grid-template-areas: '"v" "bar" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content min-content min-content
+            - row-gap: 5px
+          name:
+            - justify-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+          custom_fields:
+            v:
+              - justify-self: start
+              - font-size: 16px
+              - font-weight: 750
+              - letter-spacing: -0.02em
+              - color: '#f2f5f8'
+              - font-variant-numeric: tabular-nums
+              - white-space: nowrap
+            bar:
+              - justify-self: stretch
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_memory_utilization
+        name: RAM
+        variables: { unit: '%', max: 100, warn: 75, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      - type: custom:button-card
+        entity: sensor.dream_machine_special_edition_dream_machine_special_edition_local_temperature
+        name: Temp.
+        variables: { unit: '°C', max: 85, warn: 70, bad: 85 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      # PoE: Wert = Summe aller Geraete. Balken und Name warnen, sobald ein
+      # einzelnes Geraet 80 % (gelb) bzw. 95 % (rot) seines eigenen Budgets
+      # erreicht; der Name nennt dann das Geraet und seinen Anteil. Die
+      # Kurznamen passen bei 374 px Kartenbreite auch mit "100 %" in die
+      # Kachel (gemessen, Roboto 11 px: hoechstens 70 px).
+      - type: custom:button-card
+        entity: sensor.poe_power_total
+        triggers_update:
+          - sensor.poe_power_total
+          - sensor.poe_power_udmse
+          - sensor.poe_power_usw_pro_max_24_poe
+          - sensor.poe_power_usw_pro_8_garage
+          - sensor.poe_power_uswlite_buero
+          - sensor.poe_power_uswlite_wohnzimmer
+          - sensor.poe_power_uswlite_garage
+        variables:
+          unit: W
+          # max = PoE-Budget aller Geraete im Summensensor in W (Balkenlaenge)
+          max: 804
+          # Schwellen je Geraet als Anteil am eigenen Budget
+          device_warn: 0.8
+          device_bad: 0.95
+          # PoE-Summe je Geraet und Budget laut Datenblatt (techspecs.ui.com).
+          # Geraete ohne Wert (z. B. getrennt) werden uebersprungen.
+          devices:
+            - { entity: sensor.poe_power_udmse, budget: 180, name: UDM }
+            - { entity: sensor.poe_power_usw_pro_max_24_poe, budget: 400, name: Max 24 }
+            - { entity: sensor.poe_power_usw_pro_8_garage, budget: 120, name: Pro 8 }
+            - { entity: sensor.poe_power_uswlite_buero, budget: 52, name: L8 Büro }
+            - { entity: sensor.poe_power_uswlite_wohnzimmer, budget: 52, name: L8 WZ }
+            - { entity: sensor.poe_power_uswlite_garage, budget: 52, name: L8 Gar. }
+        name: |
+          [[[
+            const hot=(variables.devices||[]).map(d=>{
+              const s=states[d.entity]; const v=s?parseFloat(s.state):NaN;
+              return {n:d.name, p:Number.isFinite(v)&&d.budget>0 ? v/d.budget : NaN};
+            }).filter(d=>Number.isFinite(d.p) && d.p>=variables.device_warn).sort((a,b)=>b.p-a.p);
+            if(!hot.length) return 'PoE gesamt';
+            const c=hot[0].p>=variables.device_bad?'#f0736a':'#e6b566';
+            const txt=hot.length===1 ? `${hot[0].n} ${Math.round(hot[0].p*100)} %` : `${hot.length} × ≥ ${Math.round(variables.device_warn*100)} %`;
+            return `<span style="color:${c};">${txt}</span>`;
+          ]]]
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          v: *val
+          bar: |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const pct=Number.isFinite(v)?Math.max(2,Math.min(100,v/variables.max*100)):0;
+              // Stufe: 0 = ok, 1 = gelb, 2 = rot; das Geraet mit dem hoechsten Anteil entscheidet
+              let lvl=0;
+              (variables.devices||[]).forEach(d=>{
+                const s=states[d.entity]; const x=s?parseFloat(s.state):NaN;
+                if(!Number.isFinite(x) || !(d.budget>0)) return;
+                const p=x/d.budget;
+                if(p>=variables.device_bad) lvl=2; else if(p>=variables.device_warn) lvl=Math.max(lvl,1);
+              });
+              const c=['#a6d49e','#e6b566','#f0736a'][lvl];
+              return `<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:3px;background:${c};"></div></div>`;
+            ]]]
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 4px
+          grid:
+            - grid-template-areas: '"v" "bar" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content min-content min-content
+            - row-gap: 5px
+          name:
+            - justify-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+            - max-width: 100%
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            v:
+              - justify-self: start
+              - font-size: 16px
+              - font-weight: 750
+              - letter-spacing: -0.02em
+              - color: '#f2f5f8'
+              - font-variant-numeric: tabular-nums
+              - white-space: nowrap
+            bar:
+              - justify-self: stretch

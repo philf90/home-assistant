@@ -22,7 +22,7 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
 | Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…`, `staubsauger-button-card.yaml` |
-| Netzwerk & System | `unifi-…`, `unifi-clients-…`, `unifi-steuerung-…`, `unifi-udm-system-…`, `unifi-wan-durchsatz-…`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
+| Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
 | Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3), `template-autos-passat.yaml` |
 | Garten & Pflanzen | `garten-…`, `pflanzen-status-button-card.yaml`, `pflanzen-flower-card.yaml` |
 | Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |

@@ -1,0 +1,321 @@
+# Leitungen & Durchsatz – Owlet-Karte
+#
+# Ersetzt die Ping/Download/Upload-Kacheln der frueheren Internet-Karte,
+# deren REST-Sensoren keinen Live-Wert lieferten.
+#
+#   Kopf      Icon-Kachel + Titel, Badge "Test läuft" waehrend eines Speedtests
+#   Verlauf   Durchsatz am Gateway, letzte 3 h, Mittelwert je 5 min
+#             (Langzeitstatistik, daher schnell und ohne Recorder-Abfrage)
+#   Leitungen je Leitung das letzte Speedtest-Ergebnis (Down/Up/Ping, Datum)
+#             und ein Knopf "Test", der den Speedtest startet
+#
+# Speedtest-Knopf: drueckt den Button der Integration "UniFi WAN" fuer genau
+# diese Leitung. Die Integration schickt der UDM den Speedtest-Befehl mit der
+# Schnittstelle der Leitung; die UDM fuehrt den Test selbst aus, das Ergebnis
+# erscheint danach in der Zeile (UDM SE, 13.10.2026: nach rund 15 s; die
+# Integration wartet hoechstens 5 Minuten). Lehnt eine Firmware den
+# gezielten Test ab, testet die UDM die aktive Leitung und die Integration
+# schreibt das in das Home-Assistant-Protokoll. Weil der Test die Leitung
+# auslastet, fragt der Knopf vorher nach.
+#
+# Durchsatz: "UniFi WAN Download/Upload" liest den Uplink-Abschnitt der UDM
+# (Raten rx/tx). Welche Leitung er bei aktivem Policy-Routing misst, ist nicht
+# dokumentiert; der Titel nennt deshalb das Gateway, keine Leitung.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ───────────────────────────────────────────┐
+# │ Alle unifi_wan_*-IDs legt "UniFi WAN" an; sie enthalten Host und Site der │
+# │ eigenen Konsole. Die Speedtest-Buttons je Leitung gibt es nur bei mehr als │
+# │ einer WAN-Leitung. Den automatischen Speedtest der Integration aus lassen. │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + custom:apexcharts-card + card-mod (HACS),
+#                Integration "UniFi WAN" (HACS, benutzerdefiniertes Repository).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------------------------- Kopfzeile ----------------------------
+  - type: custom:button-card
+    entity: binary_sensor.unifi_wan_192_168_1_1_default_unifi_speedtest_in_progress
+    icon: mdi:swap-vertical
+    name: Leitungen & Durchsatz
+    label: Live am Gateway · Ø je 5 min, letzte 3 h
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: none
+    custom_fields:
+      badge: |
+        [[[
+          if(!entity || entity.state!=='on') return '';
+          const c='#7fb3d5';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}22;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>Test läuft</span>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 2px
+      grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(127, 179, 213, 0.14)'
+        - border: 1px solid rgba(127, 179, 213, 0.24)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#7fb3d5'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12px
+        - color: '#6e7988'
+        - margin-top: 2px
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+
+  # ---------------------------- Verlauf ----------------------------
+  - type: custom:apexcharts-card
+    graph_span: 3h
+    header:
+      show: false
+    apex_config:
+      chart:
+        background: transparent
+        fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+        foreColor: '#6e7988'
+        height: 150
+        toolbar:
+          show: false
+      dataLabels:
+        enabled: false
+      grid:
+        borderColor: rgba(255,255,255,0.06)
+        strokeDashArray: 3
+        padding:
+          left: 0
+          right: 4
+      legend:
+        show: false
+      stroke:
+        curve: smooth
+        width: 2
+      fill:
+        type: gradient
+        gradient:
+          shadeIntensity: 0
+          opacityFrom: 0.28
+          opacityTo: 0.02
+      tooltip:
+        theme: dark
+        x:
+          format: HH:mm
+      xaxis:
+        labels:
+          format: HH:mm
+    card_mod:
+      style: |
+        ha-card {
+          background: none !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+    yaxis:
+      - min: 0
+        decimals: 0
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 3
+    series:
+      - entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan_download
+        name: Download
+        type: area
+        color: '#a6d49e'
+        unit: Mbit/s
+        float_precision: 1
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan_upload
+        name: Upload
+        type: line
+        color: '#e6b566'
+        unit: Mbit/s
+        float_precision: 1
+        statistics:
+          type: mean
+          period: 5minute
+
+  # ---------------------------- Leitungen ----------------------------
+  - type: custom:button-card
+    entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_speedtest_download
+    name: Deutsche Glasfaser · WAN2
+    variables:
+      up: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_speedtest_upload
+      ping: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_speedtest_ping
+      lastrun: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_speedtest_last_run
+      internet: binary_sensor.unifi_wan_192_168_1_1_default_unifi_wan2_internet
+    show_icon: false
+    show_name: true
+    show_state: false
+    show_label: false
+    triggers_update: all
+    tap_action:
+      action: more-info
+    custom_fields:
+      nums: &nums |
+        [[[
+          const M='#6e7988';
+          const n=(id)=>{ const s=states[id]; const v=s?parseFloat(s.state):NaN; return Number.isFinite(v)?Math.round(v):'–'; };
+          const d=entity?parseFloat(entity.state):NaN;
+          return `${Number.isFinite(d)?Math.round(d):'–'} <span style="color:${M};font-weight:600;">↓</span> · ${n(variables.up)} <span style="color:${M};font-weight:600;">↑ Mbit/s</span> · ${n(variables.ping)} <span style="color:${M};font-weight:600;">ms</span>`;
+        ]]]
+      meta: &meta |
+        [[[
+          const s=states[variables.lastrun];
+          const net=states[variables.internet];
+          const off=net && net.state!=='on' ? '<span style="color:#f0736a;">ohne Internet</span> · ' : '';
+          const t=s?Date.parse(s.state):NaN;
+          if(!Number.isFinite(t)) return `${off}noch kein Speedtest`;
+          const h=(Date.now()-t)/3600000;
+          let when;
+          if(h<1) when=`vor ${Math.max(1,Math.round(h*60))} min`;
+          else if(h<48) when=`vor ${Math.round(h)} h`;
+          else when=new Date(t).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+          return `${off}letzter Speedtest ${when}`;
+        ]]]
+      run:
+        card:
+          type: custom:button-card
+          entity: button.unifi_wan_192_168_1_1_default_unifi_run_speedtest_wan2
+          triggers_update: binary_sensor.unifi_wan_192_168_1_1_default_unifi_speedtest_in_progress
+          show_icon: false
+          show_name: false
+          show_state: false
+          # Icon und Text als eigenes Flex-Markup statt ueber die Icon-Zelle
+          # von button-card: dort sass das 16-px-Icon rund 3 px unter dem Text.
+          custom_fields:
+            btn: &run_btn |
+              [[[
+                const p=states['binary_sensor.unifi_wan_192_168_1_1_default_unifi_speedtest_in_progress'];
+                const txt=p && p.state==='on' ? 'läuft' : 'Test';
+                return `<span style="display:inline-flex;align-items:center;gap:5px;line-height:1;"><ha-icon icon="mdi:speedometer" style="--mdc-icon-size:16px;width:16px;height:16px;display:flex;color:#7fb3d5;"></ha-icon><span style="font-size:12px;font-weight:700;color:#7fb3d5;white-space:nowrap;">${txt}</span></span>`;
+              ]]]
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.unifi_wan_192_168_1_1_default_unifi_run_speedtest_wan2
+            confirmation:
+              text: Speedtest auf Deutsche Glasfaser starten? Die Leitung ist während des Tests ausgelastet.
+          styles: &run_styles
+            card:
+              - padding: 7px 11px
+              - border-radius: 11px
+              - box-shadow: none
+              - background: 'rgba(127, 179, 213, 0.10)'
+              - border: 1px solid rgba(127, 179, 213, 0.28)
+            grid:
+              - grid-template-areas: '"btn"'
+              - grid-template-columns: min-content
+            custom_fields:
+              btn:
+                - display: flex
+                - align-items: center
+    styles: &line_styles
+      card:
+        - border-radius: 16px
+        - padding: 11px 13px
+        - box-shadow: none
+        - background: 'rgba(255,255,255,0.028)'
+        - border: 1px solid rgba(255,255,255,0.06)
+      grid:
+        - grid-template-areas: '"n run" "nums run" "meta run"'
+        - grid-template-columns: 1fr min-content
+        - grid-template-rows: min-content min-content min-content
+        - row-gap: 2px
+      name:
+        - justify-self: start
+        - font-size: 13.5px
+        - font-weight: 650
+        - color: '#f2f5f8'
+      custom_fields:
+        nums:
+          - justify-self: start
+          - font-size: 13px
+          - font-weight: 700
+          - color: '#c3ccd8'
+          - font-variant-numeric: tabular-nums
+        meta:
+          - justify-self: start
+          - font-size: 11.5px
+          - color: '#6e7988'
+        run:
+          - align-self: center
+          - justify-self: end
+          - margin-left: 10px
+
+  - type: custom:button-card
+    entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_speedtest_download
+    name: Telekom VDSL · WAN1
+    variables:
+      up: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_speedtest_upload
+      ping: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_speedtest_ping
+      lastrun: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_speedtest_last_run
+      internet: binary_sensor.unifi_wan_192_168_1_1_default_unifi_wan1_internet
+    show_icon: false
+    show_name: true
+    show_state: false
+    show_label: false
+    triggers_update: all
+    tap_action:
+      action: more-info
+    custom_fields:
+      nums: *nums
+      meta: *meta
+      run:
+        card:
+          type: custom:button-card
+          entity: button.unifi_wan_192_168_1_1_default_unifi_run_speedtest_wan1
+          triggers_update: binary_sensor.unifi_wan_192_168_1_1_default_unifi_speedtest_in_progress
+          show_icon: false
+          show_name: false
+          show_state: false
+          custom_fields:
+            btn: *run_btn
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.unifi_wan_192_168_1_1_default_unifi_run_speedtest_wan1
+            confirmation:
+              text: Speedtest auf Telekom VDSL starten? Die Leitung ist während des Tests ausgelastet.
+          styles: *run_styles
+    styles: *line_styles
