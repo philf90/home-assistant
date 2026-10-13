@@ -63,10 +63,26 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
   standardmäßig stündlich.
 - für die UNAS-Pro-Karte: die Integration
   [UniFi UNAS (non-invasive)](https://github.com/LayerTM/unifi-unas-ha)
-  (HACS-Standardkatalog). Sie liest Pool, Platten, CPU und RAM über die
-  lokale Drive-API des UNAS, ohne SSH und ohne etwas auf dem NAS zu
-  installieren. Zur Einrichtung genügt ein lokaler API-Schlüssel, erzeugt
-  auf dem UNAS selbst (nur lesend).
+  (HACS-Standardkatalog, ab Home Assistant 2025.8). Die offizielle
+  UniFi-Integration sieht ein UNAS nur als Client. Diese Integration liest
+  Pool, Platten (Temperatur, Zustand, Health-Score, Betriebsstunden, defekte
+  Sektoren), CPU und RAM über die lokale Drive-API des UNAS, ohne SSH und
+  ohne etwas auf dem NAS zu installieren. Die API ist von Ubiquiti nicht
+  dokumentiert und kann sich mit Firmware-Updates ändern. Einrichtung:
+  1. Den API-Schlüssel in der UniFi-OS-Oberfläche des UNAS erzeugen, nicht
+     auf der UDM.
+  2. In HACS *UniFi UNAS (non-invasive)* herunterladen, Home Assistant neu
+     starten.
+  3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *UniFi
+     UNAS*: Host `<IP-des-UNAS>`, Port `443`, TLS-Modus und Anmeldung auf
+     der Vorgabe lassen (Zertifikat beim ersten Kontakt hinterlegen,
+     API-Schlüssel), Schlüssel `<API-Schlüssel des UNAS>`.
+
+  Der Schlüssel liegt danach nur im Config-Entry von Home Assistant, nicht
+  in einer Datei des Repos. Mit API-Schlüssel ist die Integration rein
+  lesend. Freigaben, Firmware-Updates, Speicherdurchsatz und Steuerung
+  (Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
+  Passwort); die Karte braucht davon nichts.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
@@ -129,6 +145,10 @@ im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
 Ebenso die Entitäten in `unifi-netzplan-card.yaml`: die `device_tracker` der
 eigenen UniFi-Geräte und die Sensoren von UniFi WAN, deren IDs Host und Site
 der Konsole enthalten (`…_192_168_1_1_default_…`).
+In `unifi-unas-pro-button-card.yaml` hängen die IDs am Gerätenamen des UNAS
+(`sensor.unas_pro_…`) und des Zwischensteckers für die Leistung
+(`sensor.shelly_plugs_unas_pro_…`, optional). Der Hot-Spare-Schacht steht
+als Variable `spare` in der Karte, weil die Integration ihn nicht meldet.
 
 **Manuell:** Alle Sensoren eines Geräts oder einer Anlage haben denselben
 Präfix. Ein Suchen-und-Ersetzen auf den Präfix genügt, z. B. `sensor.iphone_`
