@@ -14,7 +14,9 @@
  *     landen im Sammelknoten "Port unbekannt", ausser sie sind per `pins`
  *     einem Geraet fest zugeordnet.
  *   - WAN-Leitungen: liefert die Integration nicht als Topologie, deshalb
- *     per `wan` konfiguriert.
+ *     per `wan` konfiguriert. IP-Adressen und Erreichbarkeit je Leitung
+ *     kommen optional aus einer zweiten Integration (z. B. "UniFi WAN" aus
+ *     HACS), die Karte liest nur deren Entitaeten.
  *
  * Installation:
  *   1. Datei nach /config/www/unifi-netzplan-card.js kopieren.
@@ -26,7 +28,13 @@
  *   title                 Kartentitel (Standard "Netzplan")
  *   wan                   Liste der Internetleitungen: name, detail, primary,
  *                         entity (Status: binary_sensor oder Messwert),
- *                         device (device_tracker des Modems)
+ *                         device (device_tracker des Modems),
+ *                         internet_entity (binary_sensor Erreichbarkeit; wenn
+ *                         gesetzt, bestimmt er den Status, entity liefert dann
+ *                         nur noch den Messwert),
+ *                         ip_entity / ip6_entity (Sensor mit der IPv4 / IPv6
+ *                         der Leitung; Adressen aus 100.64.0.0/10 werden als
+ *                         CGNAT markiert)
  *   inactive              device_tracker von Geraeten, die bewusst getrennt
  *                         sind: grau statt rot, zaehlen nicht als Stoerung.
  *                         Meldet sich das Geraet wieder, erscheint es normal.
@@ -43,8 +51,10 @@
  *                         aufgeklappt sind; "wired" fuer den Sammelknoten
  */
 
-const UNP_VERSION = '0.2.1';
+const UNP_VERSION = '0.3.0';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
+// Shared Address Space nach RFC 6598, Adressen hinter Carrier-Grade-NAT
+const CGNAT_RE = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
 const BAND = { ng: '2,4 GHz', na: '5 GHz', '6e': '6 GHz' };
 const KIND_ORDER = { gateway: 0, switch: 1, ap: 2, other: 3 };
 const ICON = {
@@ -303,6 +313,10 @@ class UnifiNetzplanCard extends HTMLElement {
 
   _wanModel() {
     const st = this._hass.states;
+    const known = (id) => {
+      const s = id && st[id];
+      return s && !['unknown', 'unavailable', ''].includes(s.state) ? s.state : '';
+    };
     return (this._config.wan || []).map((w) => {
       const s = w.entity && st[w.entity];
       let status = 'none';
@@ -316,6 +330,9 @@ class UnifiNetzplanCard extends HTMLElement {
           value = `${s.state.replace('.', ',')} ${s.attributes.unit_of_measurement || ''}`.trim();
         } else status = 'warn';
       }
+      const net = w.internet_entity && st[w.internet_entity];
+      if (net) status = net.state === 'on' ? 'ok' : net.state === 'off' || net.state === 'unavailable' ? 'bad' : 'warn';
+      const ip = known(w.ip_entity);
       const d = w.device && st[w.device];
       return {
         name: w.name || 'WAN',
@@ -323,7 +340,10 @@ class UnifiNetzplanCard extends HTMLElement {
         primary: !!w.primary,
         status,
         value,
-        more: w.entity || w.device || null,
+        ip,
+        cgnat: CGNAT_RE.test(ip),
+        ip6: known(w.ip6_entity),
+        more: w.entity || w.internet_entity || w.device || null,
         modem: d ? { id: w.device, name: (this._config.labels || {})[w.device] || d.attributes.friendly_name, ok: d.state === 'home' } : null,
       };
     });
@@ -363,7 +383,8 @@ class UnifiNetzplanCard extends HTMLElement {
     } else if (n.clientsSensor != null && n.status !== 'off') {
       pill = `<span class="pill quiet" title="Kabel-Clients direkt an diesem Geraet (Sensor Clients)"><ha-icon icon="${ICON.wired}"></ha-icon>${n.clientsSensor}</span>`;
     }
-    // Beim Gateway ist ip die oeffentliche WAN-Adresse; welche Leitung, verraet die Integration nicht.
+    // Beim Gateway ist ip die Adresse der Ausfall-Hauptleitung (Uplink), nicht zwingend die,
+    // ueber die der Verkehr laeuft. WAN-Adressen gehoeren deshalb an die Leitungen (ip_entity).
     const meta = [n.model, n.kind === 'gateway' ? '' : n.ip].filter(Boolean).join(' · ');
     const body = `
       <div class="node k-${n.kind} s-${n.status}" data-more="${esc(n.id)}" role="button" tabindex="0" title="${esc(n.state)}">
@@ -412,10 +433,14 @@ class UnifiNetzplanCard extends HTMLElement {
       const modem = w.modem
         ? `<span class="mt" data-more="${esc(w.modem.id)}" role="button" tabindex="0">Modem ${esc(w.modem.name)}: ${w.modem.ok ? 'erreichbar' : 'nicht erreichbar'}</span>`
         : '';
+      const ip = [
+        w.ip ? `<span class="mt ip">${esc(w.ip)}${w.cgnat ? ' <span class="cg" title="Carrier-Grade-NAT: geteilte Adresse des Anbieters, nicht die öffentliche IPv4">CGNAT</span>' : ''}</span>` : '',
+        w.ip6 ? `<span class="mt ip ip6">${esc(w.ip6)}</span>` : '',
+      ].join('');
       return `<div class="wan ${w.primary ? 'primary' : 'standby'} s-${w.status}" ${w.more ? `data-more="${esc(w.more)}" role="button" tabindex="0"` : ''}>
         <span class="ico"><ha-icon icon="${ICON.wan}"></ha-icon></span>
         <span class="txt"><span class="nm">${esc(w.name)}<span class="tag">${w.primary ? 'aktiv' : 'Reserve'}</span></span>
-          <span class="mt">${esc([w.detail, w.value].filter(Boolean).join(' · '))}</span>${modem}</span>
+          <span class="mt">${esc([w.detail, w.value].filter(Boolean).join(' · '))}</span>${ip}${modem}</span>
         ${w.status !== 'none' ? '<span class="dot"></span>' : ''}
       </div>`;
     });
@@ -511,6 +536,9 @@ UnifiNetzplanCard.styles = `
   .wan.primary { border-color: #a6d49e66; }
   .wan.standby { border-style: dashed; }
   .wan .ico { color: var(--unp-info); }
+  .wan .ip { font-variant-numeric: tabular-nums; }
+  .wan .ip6 { white-space: normal; overflow-wrap: anywhere; }
+  .wan .cg { font-size: 10px; font-weight: 700; color: var(--unp-warn); }
 
   ul { list-style: none; margin: 0; padding: 0; }
   .tree { margin-top: 6px; }
