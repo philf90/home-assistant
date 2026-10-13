@@ -12,8 +12,9 @@
 # PoE: Anteil am Gesamtbudget, gelb ab 80 %, rot ab 95 %. Budgets laut
 # Datenblatt (techspecs.ui.com): UDM SE 180 W, USW Pro Max 24 PoE 400 W,
 # USW Pro 8 PoE 120 W, USW-Lite-8-PoE je 52 W -> 804 W fuer die fuenf
-# Geraete im Summensensor. Der Gesamtwert zeigt nicht, ob ein einzelner
-# Switch an seiner Grenze ist (z. B. ein Lite 8 bei 50 von 52 W).
+# Geraete im Summensensor. Zusaetzlich warnt die Kachel, sobald ein
+# einzelnes Geraet 80 % (gelb) bzw. 95 % (rot) seines eigenen Budgets
+# erreicht, und nennt es dann statt "PoE gesamt".
 # Tippen auf einen Wert oeffnet dessen Verlauf.
 #
 # ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
@@ -175,15 +176,98 @@ cards:
           action: more-info
         custom_fields: { v: *val, bar: *bar }
         styles: *metric_styles
+      # PoE: Wert = Summe aller Geraete. Balken und Name warnen zusaetzlich,
+      # sobald ein einzelnes Geraet 80 % (gelb) bzw. 95 % (rot) seines eigenen
+      # Budgets erreicht; der Name nennt dann das Geraet und seinen Anteil.
       - type: custom:button-card
         entity: sensor.poe_power_total
-        name: PoE gesamt
-        # max = PoE-Budget aller Geraete im Summensensor in W, Schwellen 80 / 95 %
-        variables: { unit: W, max: 804, warn: 643, bad: 764 }
+        triggers_update:
+          - sensor.poe_power_total
+          - sensor.poe_power_udmse
+          - sensor.poe_power_usw_pro_max_24_poe
+          - sensor.poe_power_usw_pro_8_garage
+          - sensor.poe_power_uswlite_buero
+          - sensor.poe_power_uswlite_wohnzimmer
+          - sensor.poe_power_uswlite_garage
+        variables:
+          unit: W
+          # max = PoE-Budget aller Geraete im Summensensor in W, Schwellen 80 / 95 %
+          max: 804
+          warn: 643
+          bad: 764
+          # Schwellen je Geraet als Anteil am eigenen Budget
+          device_warn: 0.8
+          device_bad: 0.95
+          # PoE-Summe je Geraet und Budget laut Datenblatt (techspecs.ui.com).
+          # Geraete ohne Wert (z. B. getrennt) werden uebersprungen.
+          devices:
+            - { entity: sensor.poe_power_udmse, budget: 180, name: UDM SE }
+            - { entity: sensor.poe_power_usw_pro_max_24_poe, budget: 400, name: Pro Max 24 }
+            - { entity: sensor.poe_power_usw_pro_8_garage, budget: 120, name: Pro 8 Garage }
+            - { entity: sensor.poe_power_uswlite_buero, budget: 52, name: Lite Büro }
+            - { entity: sensor.poe_power_uswlite_wohnzimmer, budget: 52, name: Lite Wohnzimmer }
+            - { entity: sensor.poe_power_uswlite_garage, budget: 52, name: Lite Garage }
+        name: |
+          [[[
+            const hot=(variables.devices||[]).map(d=>{
+              const s=states[d.entity]; const v=s?parseFloat(s.state):NaN;
+              return {n:d.name, p:Number.isFinite(v)&&d.budget>0 ? v/d.budget : NaN};
+            }).filter(d=>Number.isFinite(d.p) && d.p>=variables.device_warn).sort((a,b)=>b.p-a.p);
+            if(!hot.length) return 'PoE gesamt';
+            const c=hot[0].p>=variables.device_bad?'#f0736a':'#e6b566';
+            const txt=hot.length===1 ? `${hot[0].n} ${Math.round(hot[0].p*100)} %` : `${hot.length} Geräte ≥ ${Math.round(variables.device_warn*100)} %`;
+            return `<span style="color:${c};">${txt}</span>`;
+          ]]]
         show_icon: false
         show_name: true
         show_state: false
         tap_action:
           action: more-info
-        custom_fields: { v: *val, bar: *bar }
-        styles: *metric_styles
+        custom_fields:
+          v: *val
+          bar: |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const pct=Number.isFinite(v)?Math.max(2,Math.min(100,v/variables.max*100)):0;
+              // Stufe: 0 = ok, 1 = gelb, 2 = rot; die schlechtere aus Summe und Einzelgeraet gewinnt
+              let lvl=0;
+              if(Number.isFinite(v)){ if(v>=variables.bad) lvl=2; else if(v>=variables.warn) lvl=1; }
+              (variables.devices||[]).forEach(d=>{
+                const s=states[d.entity]; const x=s?parseFloat(s.state):NaN;
+                if(!Number.isFinite(x) || !(d.budget>0)) return;
+                const p=x/d.budget;
+                if(p>=variables.device_bad) lvl=2; else if(p>=variables.device_warn) lvl=Math.max(lvl,1);
+              });
+              const c=['#a6d49e','#e6b566','#f0736a'][lvl];
+              return `<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:3px;background:${c};"></div></div>`;
+            ]]]
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 4px
+          grid:
+            - grid-template-areas: '"v" "bar" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content min-content min-content
+            - row-gap: 5px
+          name:
+            - justify-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+            - max-width: 100%
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            v:
+              - justify-self: start
+              - font-size: 16px
+              - font-weight: 750
+              - letter-spacing: -0.02em
+              - color: '#f2f5f8'
+              - font-variant-numeric: tabular-nums
+              - white-space: nowrap
+            bar:
+              - justify-self: stretch
