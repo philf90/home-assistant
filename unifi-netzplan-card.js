@@ -2,8 +2,8 @@
  * UniFi-Netzplan – custom:unifi-netzplan-card (Prototyp)
  *
  * Zeichnet die Topologie des UniFi-Netzes als Baum, live aus den Entitaeten
- * der offiziellen UniFi-Network-Integration. Keine weitere Integration, kein
- * zweiter Controller-Zugang.
+ * der offiziellen UniFi-Network-Integration. Fuer die Topologie braucht es
+ * keine weitere Integration und keinen zweiten Controller-Zugang.
  *
  * Woher die Verbindungen kommen:
  *   - Geraet -> uebergeordnetes Geraet: Sensor "Uplink-MAC"
