@@ -10,9 +10,12 @@
 # Home Connect verschluckt gelegentlich das Run-Event (beobachtet nach einem
 # Aus/Ein kurz vor dem Start -- beide Integrationen blieben auf "Ready", waehrend
 # Programm, Fortschritt und Endzeit normal aktualisiert wurden). op_state setzt
-# dann "Run" ein, solange ein aktives Programm und ein numerischer Fortschritt
-# gemeldet werden. Nach Programmende fallen beide sofort auf unknown /
-# unavailable, der Fallback greift dann nicht mehr.
+# dann "Run" ein, solange ein aktives Programm und ein Fortschritt > 0 gemeldet
+# werden. Nach Programmende fallen beide sofort auf unknown / unavailable, der
+# Fallback greift dann nicht mehr. "> 0" statt nur "numerisch", weil bei einer
+# Startverzoegerung (DelayedStart) das Programm schon gesetzt ist und der
+# Fortschritt stundenlang auf 0 steht -- ginge dieses Event verloren, stuende
+# sonst die ganze Wartezeit "Laeuft" da.
 #
 # Voraussetzung: custom:button-card (HACS).
 type: custom:button-card
@@ -40,7 +43,7 @@ variables:
       const prog = states[variables.program_entity];
       const prgs = states[variables.progress_entity];
       const hasProgram = prog && !['unknown', 'unavailable', ''].includes(prog.state);
-      const hasProgress = prgs && !isNaN(parseFloat(prgs.state));
+      const hasProgress = prgs && parseFloat(prgs.state) > 0;
       return (hasProgram && hasProgress) ? 'BSH.Common.EnumType.OperationState.Run' : s;
     ]]]
 state:
