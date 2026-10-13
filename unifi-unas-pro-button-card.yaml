@@ -1,0 +1,498 @@
+# UNAS Pro · Speicher – Owlet-Karte (Belegung / CPU / RAM / Temperatur / Schaechte)
+#
+# Aufbau wie unifi-udm-system-button-card-v2.yaml: Kopfzeile mit
+# Icon-Kachel, eine Zeile mit vier Werten und Balken. Darunter die sieben
+# Schaechte des UNAS Pro als Kacheln mit Plattentemperatur und eine
+# Fusszeile mit Pool-Zustand, Belegung und Leistung als einzeln antippbare
+# Chips.
+#
+# Farben (gruen / gelb / rot):
+#   Belegt 80 / 90 %, CPU 70 / 90 %, RAM 75 / 90 % (wie UDM-Karte).
+#   CPU-Temperatur 70 / 85 °C: von der UDM-Karte uebernommen, fuer das
+#   UNAS Pro gibt es keinen veroeffentlichten Grenzwert.
+#   Platten 50 / 55 °C. Die ST6000VN006 (Seagate IronWolf 6 TB) ist laut
+#   Haendler-Datenblaettern bis 65 °C Gehaeusetemperatur spezifiziert;
+#   die Schwellen liegen bewusst darunter. Rot wird ein Schacht ausserdem,
+#   wenn das UNAS die Platte nicht als "optimal" meldet, der Health-Score
+#   nicht 5 ist oder der Problem-Sensor anschlaegt.
+#   Kopf-Kachel: gelb bei Speicherproblem oder gefaehrdeten Platten,
+#   rot wenn das UNAS nicht erreichbar ist.
+#
+# Hot-Spare: Die Integration gibt nicht weiter, welche Platte Reserve ist
+# (API-Feld isGlobalHotSpare). Der Schacht steht deshalb als Variable
+# `spare` an der Schacht-Kachel und muss bei einem Umbau angepasst werden.
+#
+# Tippen auf einen Wert oder Schacht oeffnet dessen Verlauf.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
+# │ Alle sensor.unas_pro_* stammen aus der Integration "UniFi UNAS            │
+# │ (non-invasive)". Die IDs entstehen aus dem Geraetenamen der Konsole;      │
+# │ heisst das UNAS anders, Praefix ersetzen. Die Leistung kommt von einem    │
+# │ Zwischenstecker (hier Shelly PlugS) und ist optional.                     │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: custom:button-card + card-mod (HACS), Integration
+# "UniFi UNAS (non-invasive)" (HACS-Standardkatalog, LayerTM/unifi-unas-ha)
+# mit lokalem API-Schluessel des UNAS (nur lesend). Eingerichtet wird sie
+# im Dialog unter Einstellungen -> Geraete & Dienste:
+#   Host:        <IP-des-UNAS>, Port 443
+#   TLS-Modus:   Vorgabe (Zertifikat beim ersten Kontakt hinterlegen)
+#   Anmeldung:   Vorgabe API-Schluessel, <API-Schluessel des UNAS>
+# Der Schluessel gehoert in diesen Dialog, nie in diese Datei oder ins Repo.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 14px 18px 16px !important;
+      gap: 10px !important;
+    }
+cards:
+  # ---------------------------- Kopfzeile ----------------------------
+  - type: custom:button-card
+    entity: sensor.unas_pro_last_boot
+    name: UNAS Pro
+    show_icon: false
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update:
+      - sensor.unas_pro_last_boot
+      - binary_sensor.unas_pro_online
+      - binary_sensor.unas_pro_storage_problem
+      - sensor.unas_pro_disks_at_risk
+      - sensor.unas_pro_unifi_os_version
+    variables:
+      online: binary_sensor.unas_pro_online
+      problem: binary_sensor.unas_pro_storage_problem
+      at_risk: sensor.unas_pro_disks_at_risk
+      firmware: sensor.unas_pro_unifi_os_version
+    tap_action:
+      action: more-info
+    custom_fields:
+      tile: |
+        [[[
+          const on=states[variables.online];
+          const off=!on || on.state!=='on';
+          const pr=states[variables.problem], rk=states[variables.at_risk];
+          const warn=(pr && pr.state==='on') || (rk && parseFloat(rk.state)>0);
+          const c=off?'#f0736a':(warn?'#e6b566':'#a6d49e');
+          const rgb=off?'240,115,106':(warn?'230,181,102':'166,212,158');
+          return `<div style="width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(${rgb},0.12);border:1px solid rgba(${rgb},0.2);"><ha-icon icon="mdi:nas" style="--mdc-icon-size:20px;width:20px;height:20px;display:flex;color:${c};"></ha-icon></div>`;
+        ]]]
+    label: |
+      [[[
+        const on=states[variables.online];
+        if(!on || on.state!=='on') return '<span style="color:#f0736a;">nicht erreichbar</span>';
+        let txt='–';
+        const t=entity?Date.parse(entity.state):NaN;
+        if(Number.isFinite(t)){
+          const secs=(Date.now()-t)/1000;
+          const d=Math.floor(secs/86400), h=Math.floor((secs%86400)/3600);
+          txt=d>0?`läuft seit ${d} T ${h} h`:`läuft seit ${h} h`;
+        }
+        const rk=states[variables.at_risk];
+        const n=rk?parseInt(rk.state,10):0;
+        if(n>0) return `${txt} · <span style="color:#e6b566;">${n} Platte${n>1?'n':''} gefährdet</span>`;
+        const f=states[variables.firmware];
+        const fw=f && !['unavailable','unknown'].includes(f.state) ? `UniFi OS ${f.state}` : 'UniFi OS –';
+        return `${txt} · ${fw}`;
+      ]]]
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px
+      grid:
+        - grid-template-areas: '"tile n" "tile l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      custom_fields:
+        tile:
+          - display: flex
+          - align-self: center
+          - margin-right: 12px
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 15.5px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12px
+        - color: '#6e7988'
+        - margin-top: 1px
+
+  # ---------------------------- Werte ----------------------------
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.unas_pro_storage_usage
+        name: Belegt
+        variables: { unit: '%', max: 100, warn: 80, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          v: &val |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const n=Number.isFinite(v)?Math.round(v):'–';
+              return `${n}<span style="font-size:0.62em;color:#6e7988;font-weight:600;margin-left:1px;">${variables.unit}</span>`;
+            ]]]
+          bar: &bar |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              const pct=Number.isFinite(v)?Math.max(2,Math.min(100,v/variables.max*100)):0;
+              let c='#a6d49e';
+              if(Number.isFinite(v)){ if(v>=variables.bad) c='#f0736a'; else if(v>=variables.warn) c='#e6b566'; }
+              return `<div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;width:${pct}%;border-radius:3px;background:${c};"></div></div>`;
+            ]]]
+        styles: &metric_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 4px
+          grid:
+            - grid-template-areas: '"v" "bar" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content min-content min-content
+            - row-gap: 5px
+          name:
+            - justify-self: start
+            - font-size: 11px
+            - color: '#6e7988'
+          custom_fields:
+            v:
+              - justify-self: start
+              - font-size: 16px
+              - font-weight: 750
+              - letter-spacing: -0.02em
+              - color: '#f2f5f8'
+              - font-variant-numeric: tabular-nums
+              - white-space: nowrap
+            bar:
+              - justify-self: stretch
+      - type: custom:button-card
+        entity: sensor.unas_pro_cpu_usage
+        name: CPU
+        variables: { unit: '%', max: 100, warn: 70, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_memory_usage
+        name: RAM
+        variables: { unit: '%', max: 100, warn: 75, bad: 90 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_cpu_temperature
+        name: CPU-Temp.
+        variables: { unit: '°C', max: 85, warn: 70, bad: 85 }
+        show_icon: false
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields: { v: *val, bar: *bar }
+        styles: *metric_styles
+
+  # ---------------------------- Schaechte ----------------------------
+  # Je Schacht eine eigene button-card auf den Temperatursensor; Zustand,
+  # Health-Score und Problem-Sensor derselben Platte faerben mit ein.
+  # Ohne Platte (Sensor unavailable) bleibt der Schacht gestrichelt.
+  - type: grid
+    columns: 7
+    square: false
+    cards:
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_1_temperature
+        variables: { slot: '1', spare: '7', warn: 50, bad: 55 }
+        triggers_update: &bay_triggers
+          - sensor.unas_pro_disk_1_temperature
+          - sensor.unas_pro_disk_2_temperature
+          - sensor.unas_pro_disk_3_temperature
+          - sensor.unas_pro_disk_4_temperature
+          - sensor.unas_pro_disk_5_temperature
+          - sensor.unas_pro_disk_6_temperature
+          - sensor.unas_pro_disk_7_temperature
+          - sensor.unas_pro_disk_1_state
+          - sensor.unas_pro_disk_2_state
+          - sensor.unas_pro_disk_3_state
+          - sensor.unas_pro_disk_4_state
+          - sensor.unas_pro_disk_5_state
+          - sensor.unas_pro_disk_6_state
+          - sensor.unas_pro_disk_7_state
+          - binary_sensor.unas_pro_disk_1_problem
+          - binary_sensor.unas_pro_disk_2_problem
+          - binary_sensor.unas_pro_disk_3_problem
+          - binary_sensor.unas_pro_disk_4_problem
+          - binary_sensor.unas_pro_disk_5_problem
+          - binary_sensor.unas_pro_disk_6_problem
+          - binary_sensor.unas_pro_disk_7_problem
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          bay: &bay |
+            [[[
+              const s=variables.slot;
+              const p='unas_pro_disk_'+s+'_';
+              const st=states['sensor.'+p+'state'], hs=states['sensor.'+p+'health_score'], pr=states['binary_sensor.'+p+'problem'];
+              const v=entity?parseFloat(entity.state):NaN;
+              const sub=s===String(variables.spare)?`${s} · HS`:s;
+              if(!Number.isFinite(v)){
+                return `<div style="border-radius:10px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:2px;border:1px dashed rgba(255,255,255,0.1);"><span style="font-size:13px;font-weight:600;color:#6e7988;line-height:1.1;">–</span><span style="font-size:10px;color:#6e7988;line-height:1;white-space:nowrap;">${sub}</span></div>`;
+              }
+              const fault=(st && st.state!=='optimal') || (hs && Number.isFinite(parseFloat(hs.state)) && parseFloat(hs.state)!==5) || (pr && pr.state==='on');
+              let lvl=fault?2:(v>=variables.bad?2:(v>=variables.warn?1:0));
+              const val=['#f2f5f8','#e6b566','#f0736a'][lvl];
+              const rgb=['166,212,158','230,181,102','240,115,106'][lvl];
+              const txt=fault?'!':`${Math.round(v)}°`;
+              return `<div style="border-radius:10px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(${rgb},${lvl?0.1:0.08});border:1px solid rgba(${rgb},${lvl?0.38:0.2});"><span style="font-size:13px;font-weight:750;color:${val};font-variant-numeric:tabular-nums;line-height:1.1;">${txt}</span><span style="font-size:10px;color:#6e7988;line-height:1;white-space:nowrap;">${sub}</span></div>`;
+            ]]]
+        styles: &bay_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 0
+            # gleicher Radius wie die Schacht-Kachel, damit Hover und
+            # Tipp-Effekt genau die Kachel abdecken
+            - border-radius: 10px
+          grid:
+            - grid-template-areas: '"bay"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            bay:
+              - justify-self: stretch
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_2_temperature
+        variables: { slot: '2', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_3_temperature
+        variables: { slot: '3', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_4_temperature
+        variables: { slot: '4', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_5_temperature
+        variables: { slot: '5', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_6_temperature
+        variables: { slot: '6', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+      - type: custom:button-card
+        entity: sensor.unas_pro_disk_7_temperature
+        variables: { slot: '7', spare: '7', warn: 50, bad: 55 }
+        triggers_update: *bay_triggers
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action: { action: more-info }
+        custom_fields: { bay: *bay }
+        styles: *bay_styles
+
+  # ---------------------------- Fusszeile ----------------------------
+  # Je Chip eine eigene button-card: Tippen oeffnet den Verlauf genau dieses
+  # Werts, und der Hover-Effekt bleibt auf dem Chip. Die horizontal-stack
+  # verteilt ihre Karten sonst gleich breit ueber die Zeile; card_mod stellt
+  # sie auf inhaltsbreite Chips mit Umbruch um.
+  # "fullyOperational" ist laut API der gesunde Zustand; jeder andere Wert
+  # erscheint unuebersetzt in Gelb, damit nichts beschoenigt wird.
+  # Der Chip "Datenpruefung laeuft" erscheint nur waehrend eines Scrubs und
+  # steht deshalb am Ende.
+  - type: horizontal-stack
+    card_mod:
+      style: |
+        #root {
+          flex-wrap: wrap !important;
+          justify-content: flex-start !important;
+          gap: 6px !important;
+          padding: 0 2px !important;
+        }
+        #root > * {
+          flex: 0 0 auto !important;
+          min-width: 0 !important;
+          margin: 0 !important;
+        }
+    cards:
+      # RAID-Level und Pool-Zustand
+      - type: custom:button-card
+        entity: sensor.unas_pro_storage_status
+        show_icon: false
+        show_name: false
+        show_state: false
+        triggers_update:
+          - sensor.unas_pro_storage_status
+          - sensor.unas_pro_raid_level
+        variables:
+          raid: sensor.unas_pro_raid_level
+        tap_action:
+          action: more-info
+        custom_fields:
+          chip: |
+            [[[
+              const ok=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex:0 0 auto;"><path d="M5 12.5l4.2 4.2L19 7"/></svg>`;
+              const warn=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex:0 0 auto;"><path d="M12 8v5M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>`;
+              const r=states[variables.raid];
+              const lvl=r && /^raid\d+$/i.test(r.state) ? 'RAID '+r.state.replace(/raid/i,'') : 'Pool';
+              const st=entity?entity.state:'unavailable';
+              if(st==='fullyOperational') return `${ok}${lvl} · intakt`;
+              return `${warn}${lvl} · ${['unavailable','unknown'].includes(st)?'kein Status':st}`;
+            ]]]
+        styles:
+          card:
+            - padding: 4px 10px 4px 8px
+            - border-radius: 11px
+            - box-shadow: none
+            - background: >-
+                [[[ return entity && entity.state==='fullyOperational' ? 'rgba(166,212,158,0.12)' : 'rgba(230,181,102,0.12)'; ]]]
+            - border: >-
+                [[[ return entity && entity.state==='fullyOperational' ? '1px solid rgba(166,212,158,0.3)' : '1px solid rgba(230,181,102,0.3)'; ]]]
+          grid:
+            - grid-template-areas: '"chip"'
+            - grid-template-columns: max-content
+          custom_fields:
+            chip:
+              - display: inline-flex
+              - align-items: center
+              - gap: 6px
+              - font-size: 12px
+              - font-weight: 700
+              - line-height: 1.2
+              - white-space: nowrap
+              - color: >-
+                  [[[ return entity && entity.state==='fullyOperational' ? '#a6d49e' : '#e6b566'; ]]]
+      # Belegung in TiB -> Verlauf des belegten Speichers
+      - type: custom:button-card
+        entity: sensor.unas_pro_storage_used
+        show_icon: false
+        show_name: false
+        show_state: false
+        triggers_update:
+          - sensor.unas_pro_storage_used
+          - sensor.unas_pro_storage_total
+        variables:
+          total: sensor.unas_pro_storage_total
+        tap_action:
+          action: more-info
+        custom_fields:
+          chip: |
+            [[[
+              const f=(s)=>{ const v=s?parseFloat(s.state):NaN; return Number.isFinite(v)?v.toFixed(1).replace('.',','):'–'; };
+              return `${f(entity)} von ${f(states[variables.total])} TiB`;
+            ]]]
+        styles: &chip_muted
+          card:
+            - padding: 4px 10px
+            - border-radius: 11px
+            - box-shadow: none
+            - background: rgba(255,255,255,0.04)
+            - border: 1px solid rgba(255,255,255,0.08)
+          grid:
+            - grid-template-areas: '"chip"'
+            - grid-template-columns: max-content
+          custom_fields:
+            chip:
+              - font-size: 12px
+              - font-weight: 600
+              - line-height: 1.2
+              - white-space: nowrap
+              - color: '#aeb8c6'
+      # Leistung am Zwischenstecker (optional, sonst diese Karte entfernen)
+      - type: custom:button-card
+        entity: sensor.shelly_plugs_unas_pro_switch_0_power
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          chip: |
+            [[[
+              const v=entity?parseFloat(entity.state):NaN;
+              return `${Number.isFinite(v)?v.toFixed(1).replace('.',','):'–'} W`;
+            ]]]
+        styles: *chip_muted
+      # Datenpruefung (Scrub), nur sichtbar solange sie laeuft
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.unas_pro_pool_1_data_scrubbing
+            state_not: idle
+          - condition: state
+            entity: sensor.unas_pro_pool_1_data_scrubbing
+            state_not: unavailable
+          - condition: state
+            entity: sensor.unas_pro_pool_1_data_scrubbing
+            state_not: unknown
+        card:
+          type: custom:button-card
+          entity: sensor.unas_pro_pool_1_data_scrubbing
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: more-info
+          custom_fields:
+            chip: Datenprüfung läuft
+          styles: *chip_muted
