@@ -52,6 +52,15 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
   `xiaomi-vacuum-map-card`
 - die Integrationen der jeweiligen Geräte (z. B. Home Connect, UniFi,
   Homematic IP, VW Group Connect, Flightradar24)
+- optional für den UniFi-Netzplan: die Integration
+  [UniFi WAN](https://github.com/holdestmade/Unifi-WAN). Sie liefert je
+  Internetleitung IPv4, IPv6 und Erreichbarkeit, die die offizielle
+  UniFi-Integration nicht bereitstellt. Sie steht nicht im HACS-Standardkatalog:
+  in HACS unter *Benutzerdefinierte Repositories* mit Typ *Integration*
+  hinzufügen. Zur Einrichtung braucht sie einen lokalen API-Schlüssel der
+  UniFi-Konsole (Einstellungen → Control Plane → Integrationen). Den
+  automatischen Speedtest in ihren Optionen abschalten, sonst testet sie
+  standardmäßig stündlich.
 
 Welche Karten und Integrationen eine Datei braucht, steht in ihrem
 Kommentarkopf unter **Voraussetzung**.
@@ -105,6 +114,9 @@ Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
 `visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-card.yaml`,
 `decluttering-templates.yaml`, `kameras-button-card.yaml`). Am einfachsten
 im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
+Ebenso die Entitäten in `unifi-netzplan-card.yaml`: die `device_tracker` der
+eigenen UniFi-Geräte und die Sensoren von UniFi WAN, deren IDs Host und Site
+der Konsole enthalten (`…_192_168_1_1_default_…`).
 
 **Manuell:** Alle Sensoren eines Geräts oder einer Anlage haben denselben
 Präfix. Ein Suchen-und-Ersetzen auf den Präfix genügt, z. B. `sensor.iphone_`
