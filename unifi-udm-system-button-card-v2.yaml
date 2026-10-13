@@ -3,18 +3,24 @@
 # Unterschied zu v1 (unifi-udm-system-button-card.yaml): statt eines
 # 2x2-Rasters mit Icon-Kacheln eine einzige Zeile mit vier Werten und
 # Balken, etwa halb so hoch. Die Uptime steht als Text in der Unterzeile,
-# daneben der Firmware-Status der UDM. Neu ist die PoE-Last des 24er-Switches
-# (aus der Infrastruktur-Karte, die in der Netzwerk-View entfaellt).
+# daneben der Firmware-Status der UDM. Neu ist die PoE-Last des ganzen
+# Netzes: Summe aller PoE-Ports von Gateway und Switches gegen deren
+# gemeinsames PoE-Budget.
 #
 # Balken und Wert faerben sich ab denselben Schwellwerten wie in v1:
 #   CPU 70 / 90 %, RAM 75 / 90 %, Temperatur 70 / 85 °C.
-# PoE: Anteil am Budget des USW Pro Max 24 PoE (400 W laut Datenblatt,
-# techspecs.ui.com), gelb ab 80 %, rot ab 95 %.
+# PoE: Anteil am Gesamtbudget, gelb ab 80 %, rot ab 95 %. Budgets laut
+# Datenblatt (techspecs.ui.com): UDM SE 180 W, USW Pro Max 24 PoE 400 W,
+# USW Pro 8 PoE 120 W, USW-Lite-8-PoE je 52 W -> 804 W fuer die fuenf
+# Geraete im Summensensor. Der Gesamtwert zeigt nicht, ob ein einzelner
+# Switch an seiner Grenze ist (z. B. ein Lite 8 bei 50 von 52 W).
 # Tippen auf einen Wert oeffnet dessen Verlauf.
 #
 # ┌────────────── ENTITÄTEN PRÜFEN ──────────────────────────────────────────┐
 # │ CPU-/RAM-Auslastung der UniFi-Integration sind je nach Version            │
-# │ standardmäßig deaktiviert. PoE-Kachel: max = Budget des eigenen Switches. │
+# │ standardmäßig deaktiviert. PoE: sensor.poe_power_total ist ein Helfer     │
+# │ "Min/Max" (Summe) über die PoE-Summen je Gerät; max = Summe der Budgets   │
+# │ genau dieser Geräte. Kommt ein Gerät dazu, Helfer und max anpassen.       │
 # └───────────────────────────────────────────────────────────────────────────┘
 #
 # Voraussetzung: custom:button-card + card-mod (HACS).
@@ -170,10 +176,10 @@ cards:
         custom_fields: { v: *val, bar: *bar }
         styles: *metric_styles
       - type: custom:button-card
-        entity: sensor.poe_power_usw_pro_max_24_poe
-        name: PoE 24er
-        # max = PoE-Budget in W, Schwellen 80 / 95 % davon
-        variables: { unit: W, max: 400, warn: 320, bad: 380 }
+        entity: sensor.poe_power_total
+        name: PoE gesamt
+        # max = PoE-Budget aller Geraete im Summensensor in W, Schwellen 80 / 95 %
+        variables: { unit: W, max: 804, warn: 643, bad: 764 }
         show_icon: false
         show_name: true
         show_state: false
