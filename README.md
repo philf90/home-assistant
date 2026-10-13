@@ -22,7 +22,7 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
 | Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…`, `staubsauger-button-card.yaml` |
-| Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
+| Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-unas-pro-button-card.yaml`, `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
 | Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3), `template-autos-passat.yaml` |
 | Garten & Pflanzen | `garten-…`, `pflanzen-status-button-card.yaml`, `pflanzen-flower-card.yaml` |
 | Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |
@@ -61,6 +61,12 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
   UniFi-Konsole (Einstellungen → Control Plane → Integrationen). Den
   automatischen Speedtest in ihren Optionen abschalten, sonst testet sie
   standardmäßig stündlich.
+- für die UNAS-Pro-Karte: die Integration
+  [UniFi UNAS (non-invasive)](https://github.com/LayerTM/unifi-unas-ha)
+  (HACS-Standardkatalog). Sie liest Pool, Platten, CPU und RAM über die
+  lokale Drive-API des UNAS, ohne SSH und ohne etwas auf dem NAS zu
+  installieren. Zur Einrichtung genügt ein lokaler API-Schlüssel, erzeugt
+  auf dem UNAS selbst (nur lesend).
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
