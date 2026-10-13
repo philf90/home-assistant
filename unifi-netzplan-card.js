@@ -48,10 +48,11 @@
  *   labels                device_tracker -> angezeigter Name
  *   show_offline_clients  true zeigt auch abwesende Clients (Standard false)
  *   expand                Liste von device_trackern, deren Clients beim Laden
- *                         aufgeklappt sind; "wired" fuer den Sammelknoten
+ *                         aufgeklappt sind; "wired" fuer den Sammelknoten,
+ *                         "wan" fuer die Details aller Internetleitungen
  */
 
-const UNP_VERSION = '0.3.0';
+const UNP_VERSION = '0.4.0';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 // Shared Address Space nach RFC 6598, Adressen hinter Carrier-Grade-NAT
 const CGNAT_RE = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
@@ -107,6 +108,7 @@ class UnifiNetzplanCard extends HTMLElement {
     }
     this._config = { title: 'Netzplan', ...config };
     this._expanded = new Set(config.expand || []);
+    if (this._expanded.has('wan')) (config.wan || []).forEach((_, i) => this._expanded.add(`wan:${i}`));
     this._last = '';
     if (this._hass) this._update();
   }
@@ -317,7 +319,7 @@ class UnifiNetzplanCard extends HTMLElement {
       const s = id && st[id];
       return s && !['unknown', 'unavailable', ''].includes(s.state) ? s.state : '';
     };
-    return (this._config.wan || []).map((w) => {
+    return (this._config.wan || []).map((w, i) => {
       const s = w.entity && st[w.entity];
       let status = 'none';
       let value = '';
@@ -335,6 +337,7 @@ class UnifiNetzplanCard extends HTMLElement {
       const ip = known(w.ip_entity);
       const d = w.device && st[w.device];
       return {
+        key: `wan:${i}`,
         name: w.name || 'WAN',
         detail: w.detail || '',
         primary: !!w.primary,
@@ -343,7 +346,9 @@ class UnifiNetzplanCard extends HTMLElement {
         ip,
         cgnat: CGNAT_RE.test(ip),
         ip6: known(w.ip6_entity),
-        more: w.entity || w.internet_entity || w.device || null,
+        moreDetail: w.entity || w.internet_entity || null,
+        moreIp: w.ip_entity || null,
+        moreIp6: w.ip6_entity || null,
         modem: d ? { id: w.device, name: (this._config.labels || {})[w.device] || d.attributes.friendly_name, ok: d.state === 'home' } : null,
       };
     });
@@ -360,7 +365,9 @@ class UnifiNetzplanCard extends HTMLElement {
       this._renderError(err);
       return;
     }
-    const sig = JSON.stringify(model) + [...this._expanded].join('|');
+    // Der Klappzustand gehoert nicht in die Signatur: _toggle aendert das DOM
+    // direkt, ein Neuaufbau uebernimmt den Zustand aus _expanded.
+    const sig = JSON.stringify(model);
     if (sig === this._last) return;
     this._last = sig;
     this._render(model);
@@ -370,12 +377,20 @@ class UnifiNetzplanCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px">UniFi-Netzplan: ${esc(err.message)}</div></ha-card>`;
   }
 
-  _node(n, extra = []) {
-    const kids = n.children.length + n.pinned.length + extra.length + (this._expanded.has(n.id) ? n.wlan.length : 0);
+  // Ein <ul> mit Linien. items: { html(last), hidden }. "last" markiert den
+  // letzten sichtbaren Eintrag, damit die senkrechte Linie dort endet.
+  _list(items) {
+    if (!items.length) return '';
+    let lastIdx = -1;
+    items.forEach((it, i) => { if (!it.hidden) lastIdx = i; });
+    return `<ul>${items.map((it, i) => it.html(i === lastIdx)).join('')}</ul>`;
+  }
+
+  _node(n, extra = [], last = false) {
+    const open = this._expanded.has(n.id);
     const tag = n.status === 'off' ? '<span class="tag">inaktiv</span>' : n.mesh ? '<span class="tag mesh">Mesh</span>' : '';
     let pill = '';
     if (n.kind === 'ap' || n.wlan.length) {
-      const open = this._expanded.has(n.id);
       const gap = n.clientsSensor != null && n.clientsSensor > n.wlan.length ? `<span class="gap">+${n.clientsSensor - n.wlan.length}</span>` : '';
       pill = n.wlan.length
         ? `<span class="pill" role="button" tabindex="0" data-toggle="${esc(n.id)}" aria-expanded="${open}" title="WLAN-Clients ein-/ausklappen"><ha-icon icon="${ICON.wlan}"></ha-icon>${n.wlan.length}${gap}<span class="chev">${open ? '▴' : '▾'}</span></span>`
@@ -389,59 +404,71 @@ class UnifiNetzplanCard extends HTMLElement {
     const body = `
       <div class="node k-${n.kind} s-${n.status}" data-more="${esc(n.id)}" role="button" tabindex="0" title="${esc(n.state)}">
         <span class="ico"><ha-icon icon="${ICON[n.kind]}"></ha-icon></span>
-        <span class="txt"><span class="nm">${esc(n.name)}${tag}</span><span class="mt">${esc(meta)}</span></span>
+        <span class="txt"><span class="nm"><span class="nt">${esc(n.name)}</span>${tag}</span><span class="mt">${esc(meta)}</span></span>
         ${pill}<span class="dot"></span>
       </div>`;
-    let sub = '';
-    if (kids) {
-      const items = [
-        ...n.children.map((c) => this._node(c)),
-        ...n.pinned.map((c) => this._leaf(c, 'pin')),
-        ...(this._expanded.has(n.id) ? n.wlan.map((c) => this._leaf(c, 'wlan')) : []),
-        ...extra,
-      ];
-      sub = `<ul>${items.join('')}</ul>`;
-    }
-    const cls = [n.mesh ? 'mesh' : '', n.status === 'off' ? 'off' : ''].join(' ');
+    // WLAN-Clients stehen immer im DOM und werden nur ein-/ausgeblendet:
+    // Aufklappen baut die Karte nicht neu auf (kein Fokus- oder Scrollverlust).
+    const sub = this._list([
+      ...n.children.map((c) => ({ html: (l) => this._node(c, [], l) })),
+      ...n.pinned.map((c) => ({ html: (l) => this._leaf(c, 'pin', l) })),
+      ...n.wlan.map((c) => ({ html: (l) => this._leaf(c, 'wlan', l, !open), hidden: !open })),
+      ...extra.map((html) => ({ html })),
+    ]);
+    const cls = [n.mesh ? 'mesh' : '', n.status === 'off' ? 'off' : '', last ? 'last' : ''].join(' ');
     return `<li class="${cls}">${body}${sub}</li>`;
   }
 
-  _leaf(c, how) {
+  _leaf(c, how, last = false, hidden = false) {
     const meta = [c.ip, c.band, how === 'pin' ? 'fest zugeordnet' : ''].filter(Boolean).join(' · ');
-    return `<li class="leaf ${how === 'wlan' ? 'air' : ''}">
+    const cls = ['leaf', how === 'wlan' ? 'air' : '', how === 'wlan' || how === 'lan' ? 'wl' : '', last ? 'last' : ''].join(' ');
+    return `<li class="${cls}"${hidden ? ' hidden' : ''}>
       <div class="client ${c.online ? '' : 'away'}" data-more="${esc(c.id)}" role="button" tabindex="0">
         <ha-icon icon="${c.wlan ? ICON.wlan : ICON.wired}"></ha-icon>
         <span class="txt"><span class="nm">${esc(c.name)}</span><span class="mt">${esc(meta)}</span></span>
       </div></li>`;
   }
 
-  _wiredNode(list) {
+  _wiredNode(list, last = false) {
     if (!list.length) return '';
     const open = this._expanded.has('wired');
-    const rows = open ? `<ul>${list.map((c) => this._leaf(c, 'lan')).join('')}</ul>` : '';
-    return `<li class="unknown">
+    const rows = this._list(list.map((c) => ({ html: (l) => this._leaf(c, 'lan', l, !open), hidden: !open })));
+    return `<li class="unknown ${last ? 'last' : ''}">
       <div class="node k-cluster s-none">
         <span class="ico"><ha-icon icon="${ICON.cluster}"></ha-icon></span>
-        <span class="txt"><span class="nm">Kabel-Clients</span><span class="mt">Switch und Port liefert die Integration nicht</span></span>
+        <span class="txt"><span class="nm"><span class="nt">Kabel-Clients</span></span><span class="mt">Switch und Port liefert die Integration nicht</span></span>
         <span class="pill" role="button" tabindex="0" data-toggle="wired" aria-expanded="${open}"><ha-icon icon="${ICON.wired}"></ha-icon>${list.length}<span class="chev">${open ? '▴' : '▾'}</span></span>
       </div>${rows}</li>`;
   }
 
+  // Kompakt: Name, Rolle, Messwert, Status. Aufgeklappt: Details, Adressen,
+  // Modem; jede Zeile oeffnet den Mehr-Info-Dialog ihrer Entitaet.
   _wanRow(wan) {
     if (!wan.length) return '';
+    const line = (html, ent, cls = '') => (html
+      ? `<span class="mt ${cls}"${ent ? ` data-more="${esc(ent)}" role="button" tabindex="0"` : ''}>${html}</span>`
+      : '');
     const chips = wan.map((w) => {
-      const modem = w.modem
-        ? `<span class="mt" data-more="${esc(w.modem.id)}" role="button" tabindex="0">Modem ${esc(w.modem.name)}: ${w.modem.ok ? 'erreichbar' : 'nicht erreichbar'}</span>`
-        : '';
-      const ip = [
-        w.ip ? `<span class="mt ip">${esc(w.ip)}${w.cgnat ? ' <span class="cg" title="Carrier-Grade-NAT: geteilte Adresse des Anbieters, nicht die öffentliche IPv4">CGNAT</span>' : ''}</span>` : '',
-        w.ip6 ? `<span class="mt ip ip6">${esc(w.ip6)}</span>` : '',
+      const open = this._expanded.has(w.key);
+      const cg = w.cgnat ? ' <span class="cg" title="Carrier-Grade-NAT: geteilte Adresse des Anbieters, nicht die öffentliche IPv4">CGNAT</span>' : '';
+      const body = [
+        line(esc(w.detail), w.moreDetail),
+        line(w.ip ? esc(w.ip) + cg : '', w.moreIp, 'ip'),
+        line(esc(w.ip6), w.moreIp6, 'ip ip6'),
+        w.modem ? line(`Modem ${esc(w.modem.name)}: ${w.modem.ok ? 'erreichbar' : 'nicht erreichbar'}`, w.modem.id) : '',
       ].join('');
-      return `<div class="wan ${w.primary ? 'primary' : 'standby'} s-${w.status}" ${w.more ? `data-more="${esc(w.more)}" role="button" tabindex="0"` : ''}>
-        <span class="ico"><ha-icon icon="${ICON.wan}"></ha-icon></span>
-        <span class="txt"><span class="nm">${esc(w.name)}<span class="tag">${w.primary ? 'aktiv' : 'Reserve'}</span></span>
-          <span class="mt">${esc([w.detail, w.value].filter(Boolean).join(' · '))}</span>${ip}${modem}</span>
-        ${w.status !== 'none' ? '<span class="dot"></span>' : ''}
+      const act = body
+        ? `data-toggle="${w.key}" aria-expanded="${open}" title="Details ein-/ausklappen"`
+        : (w.moreDetail ? `data-more="${esc(w.moreDetail)}"` : '');
+      return `<div class="wan ${w.primary ? 'primary' : 'standby'} s-${w.status}">
+        <div class="wan-head" ${act} ${act ? 'role="button" tabindex="0"' : ''}>
+          <ha-icon class="wico" icon="${ICON.wan}"></ha-icon>
+          <span class="nm"><span class="nt">${esc(w.name)}</span><span class="tag">${w.primary ? 'aktiv' : 'Reserve'}</span></span>
+          ${w.value ? `<span class="val">${esc(w.value)}</span>` : ''}
+          ${w.status !== 'none' ? '<span class="dot"></span>' : ''}
+          ${body ? `<span class="chev">${open ? '▴' : '▾'}</span>` : ''}
+        </div>
+        ${body ? `<div class="wan-body"${open ? '' : ' hidden'}>${body}</div>` : ''}
       </div>`;
     });
     return `<div class="wanrow">${chips.join('')}</div>`;
@@ -453,7 +480,7 @@ class UnifiNetzplanCard extends HTMLElement {
       ? `<span class="badge bad">${faults} gestört</span>`
       : `<span class="badge ok">${m.ok}/${m.total - m.off} online</span>`;
     const tree = m.roots.length
-      ? m.roots.map((r, i) => this._node(r, i === 0 && m.wired.length ? [this._wiredNode(m.wired)] : [])).join('')
+      ? m.roots.map((r, i) => this._node(r, i === 0 && m.wired.length ? [(l) => this._wiredNode(m.wired, l)] : [])).join('')
       : '<li class="empty">Keine Geräte der UniFi-Integration gefunden.</li>';
 
     this.shadowRoot.innerHTML = `
@@ -475,17 +502,34 @@ class UnifiNetzplanCard extends HTMLElement {
       </ha-card>`;
   }
 
+  // Auf- und Zuklappen nur per Attribut, ohne Neuaufbau: der angetippte
+  // Knoten bleibt im DOM, Fokus und Scrollposition bleiben erhalten.
+  _toggle(t) {
+    const id = t.dataset.toggle;
+    const open = !this._expanded.has(id);
+    if (open) this._expanded.add(id);
+    else this._expanded.delete(id);
+    t.setAttribute('aria-expanded', String(open));
+    const chev = t.querySelector('.chev');
+    if (chev) chev.textContent = open ? '▴' : '▾';
+    if (id.startsWith('wan:')) {
+      const body = t.closest('.wan').querySelector('.wan-body');
+      if (body) body.hidden = !open;
+      return;
+    }
+    const li = t.closest('li');
+    const ul = li && li.querySelector(':scope > ul');
+    if (!ul) return;
+    for (const c of ul.querySelectorAll(':scope > li.wl')) c.hidden = !open;
+    const vis = [...ul.children].filter((c) => !c.hidden);
+    for (const c of ul.children) c.classList.toggle('last', c === vis[vis.length - 1]);
+  }
+
   _onClick(ev) {
     const t = ev.target.closest('[data-toggle]');
     if (t) {
       ev.stopPropagation();
-      const id = t.dataset.toggle;
-      if (this._expanded.has(id)) this._expanded.delete(id);
-      else this._expanded.add(id);
-      this._last = '';
-      this._update();
-      const again = this.shadowRoot.querySelector(`[data-toggle="${CSS.escape(id)}"]`);
-      if (again) again.focus();
+      this._toggle(t);
       return;
     }
     const m = ev.target.closest('[data-more]');
@@ -503,12 +547,14 @@ UnifiNetzplanCard.styles = `
     --unp-tile: rgba(255,255,255,0.028); --unp-tile-line: rgba(255,255,255,0.06);
     --unp-ok: #a6d49e; --unp-warn: #e6b566; --unp-bad: #f0736a; --unp-info: #7fb3d5;
     --unp-edge: rgba(255,255,255,0.18);
-    --unp-ico: 34px; --unp-pad: 6px; --unp-indent: 26px;
+    --unp-ico: 34px; --unp-pad: 6px; --unp-indent: 18px;
     container-type: inline-size; display: block;
   }
   @container (max-width: 460px) {
-    ha-card { --unp-ico: 28px; --unp-pad: 4px; --unp-indent: 16px; padding-inline: 12px; }
+    ha-card { --unp-ico: 26px; --unp-pad: 3px; --unp-indent: 10px; padding-inline: 12px; }
     .node .mt { display: none; }
+    /* Status steckt schon in der Farbe des Geraetesymbols; der Punkt kostet Platz */
+    .node .dot { display: none; }
   }
   ha-card {
     display: block;
@@ -518,8 +564,11 @@ UnifiNetzplanCard.styles = `
     padding: 16px 18px 12px; overflow: hidden;
   }
   ha-icon { --mdc-icon-size: 20px; display: inline-flex; }
+  [hidden] { display: none !important; }
   .txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-  .nm { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .nm { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  /* Der Name kuerzt sich, die Markierung (Mesh, inaktiv, aktiv) bleibt ganz */
+  .nt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .mt { font-size: 11.5px; color: var(--unp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .head .mt { white-space: normal; }
@@ -531,11 +580,18 @@ UnifiNetzplanCard.styles = `
   .badge.bad { color: var(--unp-bad); background: #f0736a22; border: 1px solid #f0736a3d; }
 
   .wanrow { display: flex; flex-wrap: wrap; gap: 8px; }
-  .wan { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; cursor: pointer;
+  .wan { display: flex; flex-direction: column; padding: 7px 12px; border-radius: 14px;
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); flex: 1 1 210px; min-width: 0; }
   .wan.primary { border-color: #a6d49e66; }
   .wan.standby { border-style: dashed; }
-  .wan .ico { color: var(--unp-info); }
+  .wan-head { display: flex; align-items: center; gap: 9px; min-height: 26px; cursor: pointer; }
+  .wan-head .nm { flex: 1; }
+  .wico { --mdc-icon-size: 18px; color: var(--unp-info); flex: none; }
+  .wan .val { font-size: 12px; color: var(--unp-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .wan .chev { font-size: 10px; color: var(--unp-muted); }
+  .wan-body { display: flex; flex-direction: column; gap: 1px; padding: 3px 0 2px 27px; }
+  .wan-body [data-more] { cursor: pointer; }
+  .wan-body [data-more]:hover { color: var(--unp-fg); }
   .wan .ip { font-variant-numeric: tabular-nums; }
   .wan .ip6 { white-space: normal; overflow-wrap: anywhere; }
   .wan .cg { font-size: 10px; font-weight: 700; color: var(--unp-warn); }
@@ -548,14 +604,14 @@ UnifiNetzplanCard.styles = `
   .tree.fed > li::before { content: ''; position: absolute; left: calc(var(--unp-pad) + var(--unp-ico) / 2 - 1px); top: 0; height: 14px; border-left: 2px solid var(--unp-edge); }
   .tree ul { margin-left: calc(var(--unp-pad) + var(--unp-ico) / 2 - 1px); }
   .tree ul > li::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; border-left: 2px solid var(--unp-edge); }
-  .tree ul > li:last-child::before { bottom: auto; height: 27px; }
+  .tree ul > li.last::before { bottom: auto; height: 27px; }
   .tree ul > li::after { content: ''; position: absolute; left: 0; top: 27px; width: calc(var(--unp-indent) - 2px); border-top: 2px solid var(--unp-edge); }
   .tree ul > li.leaf::after { top: 24px; }
-  .tree ul > li.leaf:last-child::before { height: 24px; }
+  .tree ul > li.leaf.last::before { height: 24px; }
   .tree li.mesh::after, .tree li.mesh::before, .tree li.air::after { border-style: dotted; }
   .tree li.unknown::after, .tree li.off::after { border-top-style: dashed; }
 
-  .node { display: flex; align-items: center; gap: 11px; padding: 6px 10px 6px var(--unp-pad); border-radius: 14px; cursor: pointer;
+  .node { display: flex; align-items: center; gap: 9px; padding: 6px 9px 6px var(--unp-pad); border-radius: 14px; cursor: pointer;
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); min-height: 34px; }
   .node:hover, .wan:hover, .client:hover { border-color: rgba(255,255,255,0.16); }
   .node .ico { width: var(--unp-ico); height: var(--unp-ico); border-radius: 10px; display: grid; place-items: center; flex: none; }
@@ -570,7 +626,7 @@ UnifiNetzplanCard.styles = `
   .s-warn .dot { background: var(--unp-warn); box-shadow: 0 0 0 3px #e6b56628; }
   .s-bad .dot { background: var(--unp-bad); box-shadow: 0 0 0 3px #f0736a28; }
   .s-off .dot { background: transparent; border: 1.5px solid var(--unp-muted); }
-  .tag { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; color: var(--unp-muted); border: 1px solid var(--unp-line); }
+  .tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; color: var(--unp-muted); border: 1px solid var(--unp-line); }
   .tag.mesh { color: var(--unp-warn); border-color: #e6b5664d; }
   .wan.primary .tag { color: var(--unp-ok); border-color: #a6d49e4d; }
 
