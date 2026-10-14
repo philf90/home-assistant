@@ -14,6 +14,9 @@ Geprueft wird, was den Import in eine fremde Grafana-Instanz brechen wuerde:
 5. Jede referenzierte Datasource-Variable ist unter "templating" definiert.
 6. Keine "__inputs"/"__requires"-Reste aus dem "Export for sharing"-Dialog --
    die verlangen beim Import eine manuelle Zuordnung.
+7. Farben ("color", "fixedColor", "iconColor") stammen aus der Owlet-Palette
+   (design/palette.yaml). Grafanas Farbnamen wie "green" oder "dark-red" sehen
+   je nach Grafana-Theme anders aus; erlaubt sind nur "text" und "transparent".
 
 Aufruf: python ci/check_grafana.py [datei ...]
 Ohne Argumente werden alle grafana/*.json geprueft.
@@ -27,11 +30,16 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from check_palette import FARBE_HEX, FARBE_RGB, lade_palette, zu_hex
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GRAFANA_DIR = REPO_ROOT / "grafana"
 
 REQUIRED_KEYS = ("uid", "title", "schemaVersion", "panels")
 VARIABLE_RE = re.compile(r"^\$\{?(\w+)\}?$")
+
+FARB_SCHLUESSEL = ("color", "fixedColor", "iconColor")
+GRAFANA_FARBEN_ERLAUBT = {"text", "transparent"}
 
 # Panel-Typen ohne Datenabfrage -- die brauchen keine Datasource.
 DATASOURCE_EXEMPT_TYPES = {"row", "text", "dashlist", "news", "welcome"}
@@ -64,7 +72,40 @@ def collect_datasource_refs(dashboard: dict):
                 yield f"{label}, Target {index}", target["datasource"]
 
 
-def check_file(path: Path) -> tuple[list[str], str | None]:
+def collect_colors(node, where: str = "Dashboard"):
+    """Liefert (ort, farbe) fuer jede Farbangabe unter FARB_SCHLUESSEL."""
+    if isinstance(node, dict):
+        if "type" in node and "title" in node:
+            where = f"Panel '{node.get('title') or node.get('type')}'"
+        for key, value in node.items():
+            if key in FARB_SCHLUESSEL and isinstance(value, str):
+                yield where, value
+            else:
+                yield from collect_colors(value, where)
+    elif isinstance(node, list):
+        for item in node:
+            yield from collect_colors(item, where)
+
+
+def check_colors(path: Path, dashboard: dict, palette) -> list[str]:
+    farben, _vorschlag, nur_deckkraft, _ = palette
+    errors = []
+    for where, value in collect_colors(dashboard):
+        if value in GRAFANA_FARBEN_ERLAUBT:
+            continue
+        treffer = FARBE_HEX.fullmatch(value) or FARBE_RGB.fullmatch(value)
+        if treffer:
+            hexwert, alpha = zu_hex(treffer)
+            if hexwert in farben and not (hexwert in nur_deckkraft and alpha >= 1):
+                continue
+        errors.append(
+            f"{path.name}: {where} nutzt die Farbe '{value}' -- nur Werte aus "
+            "design/palette.yaml (siehe DESIGN.md) oder 'text'/'transparent'"
+        )
+    return errors
+
+
+def check_file(path: Path, palette=None) -> tuple[list[str], str | None]:
     errors: list[str] = []
 
     try:
@@ -128,6 +169,9 @@ def check_file(path: Path) -> tuple[list[str], str | None]:
                 "'templating' nicht definiert ist"
             )
 
+    if palette is not None:
+        errors.extend(check_colors(path, dashboard, palette))
+
     return errors, dashboard.get("uid")
 
 
@@ -144,8 +188,12 @@ def main(argv: list[str]) -> int:
     all_errors: list[str] = []
     uids: dict[str, list[str]] = {}
 
+    palette = lade_palette()
+    if palette[3]:
+        all_errors.extend(f"design/palette.yaml: {f}" for f in palette[3])
+
     for path in paths:
-        errors, uid = check_file(path)
+        errors, uid = check_file(path, palette)
         all_errors.extend(errors)
         if uid:
             uids.setdefault(uid, []).append(path.name)

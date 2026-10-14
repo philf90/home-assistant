@@ -15,7 +15,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus. |
 | `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten). Regeln: `DESIGN.md`. |
-| `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste. |
+| `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste, Farben nur aus `design/palette.yaml` (keine Grafana-Farbnamen ausser `text`/`transparent`). |
 
 Dazu im Workflow:
 
