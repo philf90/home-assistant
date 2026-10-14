@@ -13,6 +13,14 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
   `.claude/skills/platzhalter-einsetzen`. Angepasste Fassungen liegen nur in
   `lokal/` (gitignored).
 
+## Design
+
+- Alle Karten folgen dem Owlet-Stil aus `DESIGN.md`. Farben nur aus
+  `design/palette.yaml`; `ci/check_palette.py` laesst andere nicht durch.
+- Eine neue Farbe zuerst in `design/palette.yaml` aufnehmen und in `DESIGN.md`
+  begruenden, erst dann verwenden. Beim Bauen oder Umfaerben von Karten gilt
+  der Skill `.claude/skills/owlet-design`.
+
 ## Pruefungen
 
 Vor einem Push die Checks aus `ci/README.md` lokal ausfuehren. Neue

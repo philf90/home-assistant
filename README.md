@@ -34,12 +34,14 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
 
 ## Owlet-Stil
 
-- gemeinsame Kartenhülle, Palette (`#a6d49e`, `#f2f5f8`, `#6e7988`) und Typografie
+- gemeinsame Kartenhülle, Palette (Grundtöne `#a6d49e`, `#f2f5f8`, `#6e7988`) und Typografie
 - rundlich-quadratische Icon-Kacheln, die sich nach Zustand färben
 - umgesetzt fast durchgängig mit `custom:button-card`; Styles werden innerhalb
   einer Datei über YAML-Anker geteilt
 - Spezialkarten (Kamera-Stream, Sankey, Power-Flow, Pflanzen …) bleiben
   funktional erhalten und bekommen nur die Owlet-Hülle
+- verbindlich beschrieben in [`DESIGN.md`](DESIGN.md); die Farbwerte stehen in
+  [`design/palette.yaml`](design/palette.yaml) und werden in der CI geprüft
 
 ## Voraussetzungen
 

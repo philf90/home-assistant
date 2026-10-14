@@ -14,6 +14,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 |---|---|
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus. |
+| `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten). Regeln: `DESIGN.md`. |
 | `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste. |
 
 Dazu im Workflow:
@@ -39,6 +40,7 @@ pip install pyyaml yamllint ruff
 
 node ci/check-js-templates.js
 python ci/check_yaml.py
+python ci/check_palette.py
 python ci/check_grafana.py
 yamllint --strict -c .yamllint.yml .
 ruff check grafana/ ci/
@@ -64,6 +66,13 @@ Kartentyp ohne `custom:`-Praefix in `ci/known_cards.txt` eintragen, sonst
 schlaegt `check_yaml.py` fehl. Die Whitelist existiert, damit ein Tippfehler
 im Kartennamen auffaellt, bevor Lovelace nur noch
 "Custom element doesn't exist" anzeigt.
+
+## Neue Farbe verwendet?
+
+`check_palette.py` schlaegt fehl, bis die Farbe in `design/palette.yaml`
+steht. Meist ist ein vorhandener Palettenwert gemeint -- die Meldung nennt den
+naechsten. Ist die Farbe wirklich neu: Eintrag in der Palette und Begruendung
+in `DESIGN.md`, Abschnitt "Eine neue Farbe aufnehmen".
 
 ## Bewusst nicht geprueft
 
