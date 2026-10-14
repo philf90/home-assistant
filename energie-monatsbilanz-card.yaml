@@ -1,0 +1,272 @@
+# HINWEIS PLATZHALTER: sensor.pv_anlage_*
+# Anonymisiert -- vor dem Einfuegen durch die eigenen Werte ersetzen.
+# Tabelle und Vorgehen: README.md, Abschnitt "Platzhalter ersetzen".
+#
+# Monatsbilanz Strom im Owlet-Stil: Netzbezug und Solarertrag je Monat als
+# Saeulen (13 Monate inkl. laufendem), dazu je eine Trendlinie.
+#
+# Datenquelle ist die Langzeitstatistik des Recorders, abgefragt per
+# recorder/statistics_during_period (period: month, types: change) direkt an
+# den Zaehlern. Es braucht dafuer keinen zusaetzlichen Helfer:
+#   - Netzbezug:   sensor.hmip_esi_stromzahler_energiezahler_ch2
+#                  (Quelle der Utility-Meter stromverbrauch_*; dieselbe
+#                  Statistik nutzt das Energie-Dashboard)
+#   - Solarertrag: sensor.pv_anlage_taglicher_solarertrag
+#                  (Tageszaehler der Anlage, total_increasing; der taegliche
+#                  Reset wird von der Statistik als Zaehlerreset verbucht)
+#
+# Warum data_generator statt der eingebauten Option "statistics:": graph_span
+# kennt keine Kalendermonate (parse-duration rechnet einen Monat als
+# 365,25/12 Tage). Damit beginnt das Abfragefenster mitten im ersten Monat und
+# dessen Saeule waere angeschnitten. Der Generator rechnet die Monatsgrenzen
+# selbst in der Zeitzone von Home Assistant.
+#
+# Trendlinie: METHODE im Trend-Generator (&trend) waehlen.
+#   mittel3  gleitender 3-Monats-Durchschnitt (Vorgabe). Folgt der Saison,
+#            ohne sie zu ueberzeichnen.
+#   mittel12 gleitender 12-Monats-Durchschnitt. Rechnet die Saison ganz heraus,
+#            braucht aber 12 Monate Vorlauf -- die Solarlinie erscheint erst,
+#            wenn die Anlage ein volles Jahr Daten hat.
+#   linear   Ausgleichsgerade (kleinste Quadrate) ueber die abgeschlossenen
+#            Monate, verlaengert bis in den laufenden Monat. Bei Solar ueber
+#            Fruehjahr/Sommer zeigt sie steil nach oben, obwohl der Ertrag im
+#            Herbst saisonbedingt faellt.
+# Der laufende Monat ist unvollstaendig und geht in keine Trendberechnung ein.
+#
+# Voraussetzung: custom:button-card + card-mod + custom:apexcharts-card
+# (ab v2.0, data_generator laeuft dort als async-Funktion; getestet v2.2.3).
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      padding: 16px 18px !important;
+      gap: 6px !important;
+    }
+cards:
+  - type: custom:button-card
+    icon: mdi:chart-bar
+    name: Monatsbilanz
+    label: 13 Monate · Netzbezug & Solarertrag
+    show_icon: true
+    show_name: true
+    show_label: true
+    tap_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 8px
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'rgba(166, 212, 158, 0.12)'
+        - border: 1px solid rgba(166, 212, 158, 0.2)
+      icon:
+        - width: 23px
+        - height: 23px
+        - color: '#a6d49e'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: '#f2f5f8'
+      label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: '#6e7988'
+        - margin-top: 1px
+  - type: custom:apexcharts-card
+    # 13 Monate; der Generator setzt jeden Wert auf den Monatsersten. Das
+    # Fenster endet einen halben Monat nach dem laufenden Monatsersten, damit
+    # erste und letzte Saeule vollstaendig sichtbar sind.
+    graph_span: 396d
+    span:
+      end: month
+      offset: -15d
+    update_interval: 30min
+    header:
+      show: false
+    card_mod:
+      style: |
+        ha-card {
+          background: none !important;
+          border: none !important;
+          box-shadow: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
+        .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+    apex_config:
+      chart:
+        background: transparent
+        fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+        foreColor: '#6e7988'
+        height: 260
+        toolbar:
+          show: false
+        zoom:
+          enabled: false
+      plotOptions:
+        bar:
+          columnWidth: 62%
+          borderRadius: 4
+          borderRadiusApplication: end
+      dataLabels:
+        enabled: false
+      grid:
+        borderColor: rgba(255,255,255,0.06)
+        strokeDashArray: 3
+      legend:
+        show: true
+        position: bottom
+        fontSize: 11px
+        labels:
+          colors: '#8794a5'
+        markers:
+          size: 5
+          strokeWidth: 0
+      tooltip:
+        theme: dark
+        shared: true
+        intersect: false
+        x:
+          formatter: |
+            EVAL:function(val) {
+              const d = new Date(val);
+              const n = new Date();
+              const s = d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+              return (d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear()) ? s + ' · läuft' : s;
+            }
+      xaxis:
+        labels:
+          format: MMM
+        axisBorder:
+          show: false
+        axisTicks:
+          show: false
+    yaxis:
+      - min: 0
+        decimals: 0
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 4
+    series:
+      - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
+        name: Netzbezug
+        type: column
+        color: '#7fb3d5'
+        unit: kWh
+        float_precision: 1
+        data_generator: &monat |
+          const n = 13;
+          const tz = hass.config.time_zone;
+          const first = moment.tz(tz).startOf('month').subtract(n - 1, 'months');
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: first.toISOString(),
+            statistic_ids: [entity.entity_id],
+            period: 'month',
+            types: ['change'],
+          });
+          const proMonat = {};
+          (res[entity.entity_id] || []).forEach((r) => {
+            proMonat[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+          });
+          const out = [];
+          for (let i = 0; i < n; i++) {
+            const m = first.clone().add(i, 'months');
+            const v = proMonat[m.format('YYYY-MM')];
+            out.push([m.valueOf(), v == null ? null : Math.round(v * 10) / 10]);
+          }
+          return out;
+      - entity: sensor.pv_anlage_taglicher_solarertrag
+        name: Solarertrag
+        type: column
+        color: '#e6c15a'
+        unit: kWh
+        float_precision: 1
+        data_generator: *monat
+      - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
+        name: Trend Netzbezug
+        type: line
+        curve: smooth
+        color: '#7fb3d5'
+        stroke_width: 2
+        stroke_dash: 5
+        unit: kWh
+        float_precision: 1
+        data_generator: &trend |
+          const METHODE = 'mittel3'; // 'mittel3' | 'mittel12' | 'linear'
+          const n = 13;
+          const fenster = { mittel3: 3, mittel12: 12, linear: 1 }[METHODE];
+          const tz = hass.config.time_zone;
+          const first = moment.tz(tz).startOf('month').subtract(n - 1, 'months');
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: first.clone().subtract(fenster - 1, 'months').toISOString(),
+            statistic_ids: [entity.entity_id],
+            period: 'month',
+            types: ['change'],
+          });
+          const proMonat = {};
+          (res[entity.entity_id] || []).forEach((r) => {
+            proMonat[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+          });
+          const wert = (m) => {
+            const v = proMonat[m.format('YYYY-MM')];
+            return v == null ? null : v;
+          };
+          const monat = (i) => first.clone().add(i, 'months');
+          const rund = (v) => Math.round(v * 10) / 10;
+          const out = [];
+          if (METHODE === 'linear') {
+            const p = [];
+            for (let i = 0; i < n - 1; i++) {
+              const v = wert(monat(i));
+              if (v !== null) p.push([i, v]);
+            }
+            if (p.length < 2) return [];
+            const k = p.length;
+            const sx = p.reduce((s, q) => s + q[0], 0);
+            const sy = p.reduce((s, q) => s + q[1], 0);
+            const sxx = p.reduce((s, q) => s + q[0] * q[0], 0);
+            const sxy = p.reduce((s, q) => s + q[0] * q[1], 0);
+            const b = (k * sxy - sx * sy) / (k * sxx - sx * sx);
+            const a = (sy - b * sx) / k;
+            for (let i = p[0][0]; i < n; i++) out.push([monat(i).valueOf(), Math.max(0, rund(a + b * i))]);
+            return out;
+          }
+          for (let i = 0; i < n - 1; i++) {
+            const w = [];
+            for (let j = 0; j < fenster; j++) w.push(wert(monat(i).subtract(j, 'months')));
+            const ok = !w.includes(null);
+            out.push([monat(i).valueOf(), ok ? rund(w.reduce((s, v) => s + v, 0) / fenster) : null]);
+          }
+          return out;
+      - entity: sensor.pv_anlage_taglicher_solarertrag
+        name: Trend Solar
+        type: line
+        curve: smooth
+        color: '#e6c15a'
+        stroke_width: 2
+        stroke_dash: 5
+        unit: kWh
+        float_precision: 1
+        data_generator: *trend
