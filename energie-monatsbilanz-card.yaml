@@ -26,6 +26,17 @@
 #   so ohne Zutun seinen Chip. ERSTES_JAHR in der Vorlage anpassen. Die
 #   Auswahl gilt fuer alle Geraete, die das Dashboard zeigen.
 #
+# Kennzahlen ueber dem Diagramm: Netzbezug des laufenden Jahres
+# (sensor.stromverbrauch_yearly) und Monats (sensor.stromverbrauch_monthly)
+# sowie die Erzeugung des Balkonkraftwerks im laufenden Monat
+# (sensor.stromerzeugung_balkonkraft_monthly, Einspeisung am Shelly-Stecker).
+# Das sind die Utility-Meter der Instanz; sie aktualisieren live und folgen
+# bewusst nicht der Jahresauswahl. Sie koennen um wenige kWh von der Summe der
+# Saeulen abweichen: Die Saeulen kommen aus der Statistik der Zaehler, die
+# Utility-Meter zaehlen erst ab ihrer Einrichtung und setzen bei Ausfaellen
+# aus. Die Balkonkraftwerk-Kachel misst die Abgabe ins Hausnetz (inkl. Akku),
+# die Solar-Saeule den Ertrag der Module.
+#
 # Warum die Serien den Helfer als entity haben: apexcharts-card laedt nur dann
 # neu, wenn sich eine Entitaet einer Serie aendert, und nur ohne
 # update_interval. Mit dem Helfer laedt das Diagramm rund 1,5 s nach dem
@@ -117,10 +128,110 @@ cards:
         - font-size: 12.5px
         - color: '#6e7988'
         - margin-top: 1px
+  # Kennzahlen: Netzbezug des laufenden Jahres und Monats, Erzeugung des
+  # Balkonkraftwerks im laufenden Monat. Live aus den Utility-Metern, daher
+  # unabhaengig von der Jahresauswahl.
+  - type: horizontal-stack
+    card_mod:
+      style: |
+        #root { gap: 8px !important; }
+    cards:
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_yearly
+        variables:
+          accent: '#7fb3d5'
+          was: Netzbezug
+          zeitraum: jahr
+          stellen: 0
+        show_icon: false
+        show_name: true
+        show_label: true
+        show_state: false
+        name: &kachel_wert |
+          [[[
+            const v = parseFloat(entity ? entity.state : NaN);
+            if (isNaN(v)) return '–';
+            const d = variables.stellen;
+            const t = v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+            return `${t}<span style="font-size:0.6em;color:#6e7988;font-weight:600;margin-left:3px;">kWh</span>`;
+          ]]]
+        label: &kachel_text |
+          [[[
+            const n = new Date();
+            const M = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+              'August', 'September', 'Oktober', 'November', 'Dezember'];
+            const z = variables.zeitraum === 'jahr' ? n.getFullYear() : M[n.getMonth()];
+            return variables.was + '<br>' + z;
+          ]]]
+        tap_action: &kachel_tap
+          action: more-info
+        styles: &kachel_styles
+          card:
+            - border-radius: 14px
+            - padding: 10px 11px
+            - height: 100%
+            - box-shadow: none
+            - background: "[[[ return variables.accent + '14'; ]]]"
+            - border: "[[[ return '1px solid ' + variables.accent + '26'; ]]]"
+          grid:
+            - grid-template-areas: '"l" "n"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: 1fr min-content
+          label:
+            - justify-self: start
+            - align-self: start
+            - text-align: left
+            - font-size: 11.5px
+            - line-height: 1.3
+            - color: '#6e7988'
+            - white-space: normal
+            - hyphens: manual
+            - max-width: 100%
+          name:
+            - justify-self: start
+            - font-size: 18px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: '#f2f5f8'
+            - margin-top: 2px
+            - font-variant-numeric: tabular-nums
+      - type: custom:button-card
+        entity: sensor.stromverbrauch_monthly
+        variables:
+          accent: '#7fb3d5'
+          was: Netzbezug
+          zeitraum: monat
+          stellen: 1
+        show_icon: false
+        show_name: true
+        show_label: true
+        show_state: false
+        name: *kachel_wert
+        label: *kachel_text
+        tap_action: *kachel_tap
+        styles: *kachel_styles
+      - type: custom:button-card
+        entity: sensor.stromerzeugung_balkonkraft_monthly
+        variables:
+          accent: '#e6c15a'
+          # \u00ad = weiches Trennzeichen: bricht auf schmalen Kacheln um
+          was: "Balkon\u00adkraftwerk"
+          zeitraum: monat
+          stellen: 1
+        show_icon: false
+        show_name: true
+        show_label: true
+        show_state: false
+        name: *kachel_wert
+        label: *kachel_text
+        tap_action: *kachel_tap
+        styles: *kachel_styles
   - type: custom:apexcharts-card
-    # Januar bis Dezember des laufenden Jahres; das Fenster beginnt einen
-    # halben Monat frueher, damit die Januar-Saeule ganz sichtbar ist.
-    graph_span: 365d
+    # Januar bis Dezember des laufenden Jahres: Das Fenster beginnt einen
+    # halben Monat frueher (Januar-Saeule ganz sichtbar) und endet um den
+    # 22. Dezember. Bei 365d reichte es bis zum 1. Januar, und die Achse
+    # zeigte dort ein zusaetzliches "Jan".
+    graph_span: 355d
     span:
       start: year
       offset: -15d
