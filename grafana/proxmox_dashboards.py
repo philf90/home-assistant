@@ -35,7 +35,11 @@ import json
 DS = {"type": "influxdb", "uid": "${DS}"}
 API = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_API}"}
 
-GREEN, YELLOW, ORANGE, RED = "green", "#EAB839", "orange", "red"
+# Statusstufen der Owlet-Palette (design/palette.yaml, DESIGN.md): ok, Hinweis,
+# erhoeht, kritisch. Grafanas Farbnamen ("green", "red", ...) sind nicht erlaubt;
+# ci/check_grafana.py prueft das.
+GREEN, YELLOW, ORANGE, RED = "#a6d49e", "#e6b566", "#e7936e", "#f0736a"
+BLUE = "#7fb3d5"
 
 
 class Layout:
@@ -310,9 +314,9 @@ from(bucket: "${bucket}")
         desc="Es gibt kein Statusfeld für den Node. Online heißt: In den letzten "
              "5 Minuten kam ein Datenpunkt. Kein Wert = Metrikkette unterbrochen.",
         mappings=[
-            {"type": "value", "options": {"1": {"text": "Online", "color": "green", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "Online", "color": GREEN, "index": 0}}},
             {"type": "special", "options": {"match": "null", "result": {
-                "text": "Offline", "color": "red", "index": 1}}},
+                "text": "Offline", "color": RED, "index": 1}}},
         ]))
 
     panels.append(stat(
@@ -458,7 +462,7 @@ from(bucket: "${bucket}")
              "warten tatsächlich auf CPU-Zeit.",
         overrides=[ov("CPU-Threads", {
             "custom.lineStyle": {"fill": "dash", "dash": [8, 6]},
-            "color": {"mode": "fixed", "fixedColor": "red"},
+            "color": {"mode": "fixed", "fixedColor": RED},
             "custom.fillOpacity": 0,
         })]))
 
@@ -491,7 +495,7 @@ from(bucket: "${bucket}")
              "wachsen. Das ist eine Konfigurationsentscheidung, keine Auslastung.",
         overrides=[ov("arcmax", {
             "custom.lineStyle": {"fill": "dash", "dash": [8, 6]},
-            "color": {"mode": "fixed", "fixedColor": "red"},
+            "color": {"mode": "fixed", "fixedColor": RED},
             "custom.fillOpacity": 0,
         })]))
 
@@ -544,7 +548,7 @@ from(bucket: "${bucket}")
              "sind identisch, solange keine Root-Reserve gesetzt ist.",
         overrides=[ov("blocks", {
             "custom.lineStyle": {"fill": "dash", "dash": [8, 6]},
-            "color": {"mode": "fixed", "fixedColor": "red"},
+            "color": {"mode": "fixed", "fixedColor": RED},
             "custom.fillOpacity": 0,
         })]))
 
@@ -644,7 +648,7 @@ from(bucket: "${bucket}")
             ov("Netz aus", {"unit": "bytes"}),
             ov("Uptime", {"unit": "s", "decimals": 0}),
             ov("Status", {"mappings": [{"type": "value", "options": {
-                "running": {"color": "green", "index": 0, "text": "running"},
+                "running": {"color": GREEN, "index": 0, "text": "running"},
                 "stopped": {"color": "text", "index": 1, "text": "stopped"}}}],
                 "custom.cellOptions": {"type": "color-text"}}),
         ]))
@@ -968,7 +972,7 @@ from(bucket: "${bucket_pbs}")
         overrides=[
             ov("Dauer", {"unit": "s", "decimals": 0}),
             ov("Status", {"mappings": [{"type": "value", "options": {
-                "OK": {"color": "green", "index": 0}}},
+                "OK": {"color": GREEN, "index": 0}}},
                 {"type": "special", "options": {"match": "empty", "result": {
                     "color": "text", "index": 1, "text": "läuft"}}}],
                 "custom.cellOptions": {"type": "color-text"}}),
@@ -995,10 +999,10 @@ from(bucket: "${bucket_pbs}")
             ov("Größe logisch", {"unit": "bytes"}),
             ov("Verifikation", {"mappings": [
                 {"type": "value", "options": {
-                    "ok": {"color": "green", "index": 0},
-                    "failed": {"color": "red", "index": 1}}},
+                    "ok": {"color": GREEN, "index": 0},
+                    "failed": {"color": RED, "index": 1}}},
                 {"type": "special", "options": {"match": "empty", "result": {
-                    "color": "orange", "index": 2, "text": "nie geprüft"}}}],
+                    "color": YELLOW, "index": 2, "text": "nie geprüft"}}}],
                 "custom.cellOptions": {"type": "color-text"}}),
         ]))
 
@@ -1074,7 +1078,7 @@ from(bucket: "${bucket_pbs}")
              "zwischen den Dashboards kopiert, läuft genau hier auf.",
         overrides=[ov("CPU-Threads", {
             "custom.lineStyle": {"fill": "dash", "dash": [8, 6]},
-            "color": {"mode": "fixed", "fixedColor": "red"},
+            "color": {"mode": "fixed", "fixedColor": RED},
             "custom.fillOpacity": 0})]))
 
     panels.append(timeseries(
@@ -1238,7 +1242,7 @@ def dashboard(uid, title, description, tags, panels, templating, links):
             "builtIn": 1,
             "datasource": {"type": "grafana", "uid": "-- Grafana --"},
             "enable": True, "hide": True,
-            "iconColor": "rgba(0, 211, 255, 1)",
+            "iconColor": BLUE,
             "name": "Annotations & Alerts", "type": "dashboard"}]},
         "description": description,
         "editable": True,

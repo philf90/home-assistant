@@ -13,19 +13,20 @@ Ablauf.
 
 1. **Rolle bestimmen, dann Farbe waehlen.** Nicht nach Optik aussuchen, sondern
    in `DESIGN.md` die Rolle nachschlagen: Status (gruen/amber/orange/rot),
-   Bereichs-Akzent, Flaeche, Text. Kleine Schrift immer `#8794a5`, nie
-   `#6e7988`.
+   Bereichs-Akzent, Flaeche, Text. Text immer mindestens `#8794a5`, nie
+   `#6e7988` -- auch nicht fuer "aus" oder "keine Daten".
 2. **Bausteine aus dem Bestand uebernehmen.** Kartenhuelle, Unterkachel und
    Icon-Kachel genau wie in `DESIGN.md`, Abschnitt "Bausteine". Innerhalb einer
    Datei ueber YAML-Anker teilen, wie die vorhandenen Karten es tun.
 3. **Deckkraft statt neuer Farbtoene.** Getoente Flaechen und Raender aus der
-   Akzentfarbe ableiten (Stufen 0,12 / 0,24 / 0,5), keine neuen dunklen
-   Mischtoene erfinden.
+   Akzentfarbe ableiten, nur mit den Stufen aus `DESIGN.md` (Flaeche 0,12,
+   Icon-Kachel 0,16, Schein 0,18, Rand 0,24, Leuchten 0,5), keine neuen
+   dunklen Mischtoene erfinden.
 4. **Sonderfarben nur fuer ihren Zweck.** Eintraege mit `status: sonder` sind
    an das gebunden, was unter `zweck` steht (Owlet, Personen, Fussball,
    Flugradar, DWD).
-5. **Pruefen:** `python ci/check_palette.py <datei>` und die uebrigen Checks
-   aus `ci/README.md`.
+5. **Pruefen:** `python ci/check_palette.py <datei>` (Grafana:
+   `python ci/check_grafana.py`) und die uebrigen Checks aus `ci/README.md`.
 
 ## Wenn die Pruefung eine Farbe meldet
 

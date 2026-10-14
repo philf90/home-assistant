@@ -584,7 +584,7 @@ class UnifiNetzplanCard extends HTMLElement {
 UnifiNetzplanCard.styles = `
   :host {
     --unp-bg: linear-gradient(180deg, #1b2231 0%, #171d29 55%);
-    --unp-fg: #f2f5f8; --unp-muted: #6e7988; --unp-line: rgba(255,255,255,0.10);
+    --unp-fg: #f2f5f8; --unp-muted: #8794a5; --unp-line: rgba(255,255,255,0.10);
     --unp-tile: rgba(255,255,255,0.028); --unp-tile-line: rgba(255,255,255,0.06);
     --unp-ok: #a6d49e; --unp-warn: #e6b566; --unp-bad: #f0736a; --unp-info: #7fb3d5;
     --unp-edge: rgba(255,255,255,0.18);
@@ -614,16 +614,16 @@ UnifiNetzplanCard.styles = `
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .head .mt { white-space: normal; }
   .hico { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex: none;
-    background: rgba(166,212,158,0.12); border: 1px solid rgba(166,212,158,0.2); color: var(--unp-ok); }
+    background: rgba(166,212,158,0.12); border: 1px solid rgba(166,212,158,0.24); color: var(--unp-ok); }
   .title { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
   .badge { font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 12px; white-space: nowrap; }
-  .badge.ok { color: var(--unp-ok); background: #a6d49e22; border: 1px solid #a6d49e3d; }
-  .badge.bad { color: var(--unp-bad); background: #f0736a22; border: 1px solid #f0736a3d; }
+  .badge.ok { color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; }
+  .badge.bad { color: var(--unp-bad); background: #f0736a1f; border: 1px solid #f0736a3d; }
 
   .wanrow { display: flex; flex-wrap: wrap; gap: 8px; }
   .wan { display: flex; flex-direction: column; padding: 7px 12px; border-radius: 14px;
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); flex: 1 1 210px; min-width: 0; }
-  .wan.primary { border-color: #a6d49e66; }
+  .wan.primary { border-color: #a6d49e3d; }
   .wan.standby { border-style: dashed; }
   .wan-head { display: flex; align-items: center; gap: 9px; min-height: 26px; cursor: pointer; }
   .wan-head .nm { flex: 1; }
@@ -656,23 +656,23 @@ UnifiNetzplanCard.styles = `
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); min-height: 34px; }
   .node:hover, .wan:hover, .client:hover { border-color: rgba(255,255,255,0.16); }
   .node .ico { width: var(--unp-ico); height: var(--unp-ico); border-radius: 10px; display: grid; place-items: center; flex: none; }
-  .s-ok .ico { color: var(--unp-ok); background: #a6d49e22; border: 1px solid #a6d49e3a; }
-  .s-warn .ico { color: var(--unp-warn); background: #e6b56622; border: 1px solid #e6b5663a; }
-  .s-bad .ico { color: var(--unp-bad); background: #f0736a22; border: 1px solid #f0736a3a; }
+  .s-ok .ico { color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; }
+  .s-warn .ico { color: var(--unp-warn); background: #e6b5661f; border: 1px solid #e6b5663d; }
+  .s-bad .ico { color: var(--unp-bad); background: #f0736a1f; border: 1px solid #f0736a3d; }
   .s-off .ico, .s-none .ico { color: var(--unp-muted); background: rgba(255,255,255,0.04); border: 1px dashed var(--unp-line); }
   .s-off { opacity: 0.65; border-style: dashed; }
   .k-cluster { border-style: dashed; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--unp-muted); }
-  .s-ok .dot { background: var(--unp-ok); box-shadow: 0 0 0 3px #a6d49e28; }
-  .s-warn .dot { background: var(--unp-warn); box-shadow: 0 0 0 3px #e6b56628; }
-  .s-bad .dot { background: var(--unp-bad); box-shadow: 0 0 0 3px #f0736a28; }
+  .s-ok .dot { background: var(--unp-ok); box-shadow: 0 0 0 3px #a6d49e2e; }
+  .s-warn .dot { background: var(--unp-warn); box-shadow: 0 0 0 3px #e6b5662e; }
+  .s-bad .dot { background: var(--unp-bad); box-shadow: 0 0 0 3px #f0736a2e; }
   .s-off .dot { background: transparent; border: 1.5px solid var(--unp-muted); }
   .tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; color: var(--unp-muted); border: 1px solid var(--unp-line); }
-  .tag.mesh { color: var(--unp-warn); border-color: #e6b5664d; }
-  .wan.primary .tag { color: var(--unp-ok); border-color: #a6d49e4d; }
+  .tag.mesh { color: var(--unp-warn); border-color: #e6b5663d; }
+  .wan.primary .tag { color: var(--unp-ok); border-color: #a6d49e3d; }
 
   .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 10px;
-    color: var(--unp-ok); background: #a6d49e18; border: 1px solid #a6d49e33; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .pill ha-icon { --mdc-icon-size: 15px; }
   .pill + .pill { margin-left: -3px; }
   .pill.quiet { color: var(--unp-muted); background: transparent; border-color: var(--unp-line); cursor: default; }

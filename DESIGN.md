@@ -4,8 +4,8 @@ Verbindliche Regeln für alle Karten und Views in diesem Repo. Die Farbwerte
 selbst stehen in [`design/palette.yaml`](design/palette.yaml); diese Datei
 erklärt, wofür sie gedacht sind und wie die Bausteine aussehen.
 
-**Verbindlich heißt:** `ci/check_palette.py` lässt keine Farbe durch, die nicht
-in `design/palette.yaml` steht. Die Prüfung läuft in der CI bei jedem Push und
+**Verbindlich heißt:** `ci/check_palette.py` (Karten) und `ci/check_grafana.py`
+(Grafana) lassen keine Farbe durch, die nicht in `design/palette.yaml` steht. Die Prüfung läuft in der CI bei jedem Push und
 Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 
 ## Geltungsbereich
@@ -13,7 +13,7 @@ Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 | Bereich | Geprüft | Anmerkung |
 |---|---|---|
 | Karten und Views (`*.yaml`, `*.js` im Wurzelverzeichnis) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
-| Grafana (`grafana/*.json`) | nein | nutzt Grafanas Farbnamen, Umstellung siehe [Offene Punkte](#offene-punkte) |
+| Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
 | Entwurfsseiten (`*-vorschlaege.html`) | nein | Mockups, keine Karten |
 | Dashboards in der Instanz | nein | werden in der HA-Oberfläche bearbeitet; die CI sieht sie nicht |
 
@@ -54,8 +54,8 @@ Icon in der vollen Farbe.
 
 **Gefüllte Kachel** – für „an/läuft“, wie die Lichtkachel: Verlauf von der
 aufgehellten zur vollen Farbe, Schrift und Icon in der passenden dunklen Farbe
-(`schrift_auf_fuellung` in der Palette), Leuchten
-`0 0 14px -3px` in der Farbe mit 0,6 Deckkraft.
+(`schrift_auf_fuellung` in der Palette), Rand und Leuchten
+(`0 0 14px -3px`) in der Farbe mit 0,5 Deckkraft.
 
 | Füllung | Schrift | Kontrast |
 |---|---|---|
@@ -87,11 +87,13 @@ der Karte darunter.
 |---|---|---|
 | `#f2f5f8` | 14,5:1 | Primärtext, Messwerte |
 | `#e7ecf3` | 13,4:1 | Titel, Kopfzeilen |
-| `#8794a5` | 5,2:1 | Sekundärtext und **jede kleine Schrift** |
-| `#6e7988` | 3,6:1 | nur Icons, inaktive Zustände, Dekoration |
+| `#b4c0cf` | 8,6:1 | helle Labels, Hinweistext, Kartenbeschriftung |
+| `#8794a5` | 5,2:1 | Sekundärtext und **jede kleine Schrift**, auch inaktive Zustände |
+| `#6e7988` | 3,6:1 | **nie für Text** – nur Icons, inaktive Symbole, Dekoration |
 
-`#6e7988` erreicht für normale Schrift nicht die 4,5:1 aus WCAG AA. In neuen
-Karten deshalb kleinen Text immer in `#8794a5` setzen.
+`#6e7988` erreicht für normale Schrift nicht die 4,5:1 aus WCAG AA. Text, auch
+grauer Text für „aus“ oder „keine Daten“, steht deshalb immer in `#8794a5`.
+Färbt eine Variable Text und Icon zugleich, bekommt sie `#8794a5`.
 
 Weiß kommt nur mit Deckkraft vor (`rgba(255,255,255,…)`); deckend ist das
 Text-Weiß `#f2f5f8`.
@@ -104,7 +106,7 @@ Text-Weiß `#f2f5f8`.
 | `#e6b566` Amber | Hinweis, Warnung, offen (unkritisch) |
 | `#e7936e` Koralle-Orange | erhöht – Stufe zwischen Amber und Rot |
 | `#f0736a` Rot | kritisch, Alarm, Netzbezug, Akku leer |
-| `#3a4453` / `#6e7988` | aus, inaktiv, keine Daten |
+| `#3a4453` / `#6e7988` | aus, inaktiv, keine Daten (Fläche, Icon) – als Text `#8794a5` |
 
 Koralle-Orange liegt nah an Amber und Rot. Wer sie verwendet, schreibt die Stufe
 immer auch als Text dazu.
@@ -119,7 +121,7 @@ immer auch als Text dazu.
 | `#79b8c9` Petrol | Heizung |
 | `#b399d4` Violett | Geräte, Netzwerk, Homematic |
 | `#f0736a` Rot | Kamera |
-| `#9ccc5a` Limette | Garten (Ablösung durch `#bdd27f` geplant) |
+| `#bdd27f` Limette | Garten |
 | `#a6d49e` Grün | Pflanzen |
 | `#cdd6e0` Wolkengrau | Wetter |
 | `#8794a5` Grau | Auto |
@@ -133,15 +135,37 @@ raus“ nicht wie „Zustand in Ordnung“ aussieht.
 
 ### Tönungen
 
-Für neue Karten drei feste Deckkraft-Stufen einer Akzentfarbe:
+Getönte Akzentfarben nutzen nur diese Deckkraft-Stufen:
 
 | Stufe | Deckkraft | Hex-Suffix | Einsatz |
 |---|---|---|---|
-| Fläche | 0,12 | `1f` | getönter Kachelgrund |
-| Rand | 0,24 | `3d` | Rand getönter Kacheln |
-| Leuchten | 0,5 | `80` | Glow, aktive Ränder |
+| Fläche | 0,12 | `1f` | getönter Kachel- und Pillengrund |
+| Icon-Kachel | 0,16 | `29` | Grund der Icon-Kachel, hebt sie von einer getönten Fläche ab |
+| Schein | 0,18 | `2e` | weicher Farbschatten, Ring um Statuspunkte |
+| Rand | 0,24 | `3d` | Rand getönter Kacheln und Pillen |
+| Leuchten | 0,5 | `80` | Glow, Rand aktiver (gefüllter) Kacheln |
 
-Die Icon-Kachel bleibt bei 16 % Grund (`29`), wie überall im Bestand.
+Ausgenommen sind Füllungen ab 0,65 (z. B. das rote Live-Badge), Weiß und Schwarz
+mit Deckkraft sowie Textfarben mit Deckkraft.
+
+### Grafana
+
+Gleiche Rollen wie in den Karten, als Hex-Wert statt Grafana-Farbname:
+
+| Verwendung | Farbe |
+|---|---|
+| Schwellwerte ok / Hinweis / erhöht / kritisch | `#a6d49e` / `#e6b566` / `#e7936e` / `#f0736a` |
+| Autarkie ab 85 % (oberste Stufe) | `#89d2b0` Mint |
+| Netzbezug, Netzbezugsleistung | `#f0736a` |
+| PV | `#e6c15a` |
+| Hausverbrauch, Annotationen | `#7fb3d5` |
+| Gas | `#e6b566` |
+| Kosten | `#b399d4` |
+| Zählerstände | `text` (Theme-Textfarbe) |
+
+Die Proxmox-Dashboards entstehen aus `grafana/proxmox_dashboards.py`; Farben
+dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` setzen und
+das JSON neu erzeugen.
 
 ### Sonderfarben
 
@@ -165,16 +189,3 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
    `#1b2231` mindestens 4,5:1, wenn sie Text färben.
 3. Eintrag in `design/palette.yaml` mit `hex`, `name`, `status` und `zweck`.
 4. Rolle hier in `DESIGN.md` ergänzen.
-
-## Offene Punkte
-
-Bewusst nicht in derselben Änderung wie der Guide, weil sie das Aussehen
-bestehender Karten sichtbar verändern:
-
-- `#6e7988` als kleiner Text in den bestehenden Karten auf `#8794a5` umstellen.
-- Hellgrau-Trio `#aeb8c6`, `#b4c0cf`, `#c3ccd8` auf einen Ton zusammenlegen.
-- Tönungen auf die drei Stufen vereinheitlichen.
-- Navigation Garten von `#9ccc5a` auf `#bdd27f` umstellen.
-- Grafana-Dashboards auf die Palette umstellen (`green` → `#a6d49e`, `red` →
-  `#f0736a`, `#EAB839` → `#e6c15a`, `orange` → `#e6b566`) und
-  `ci/check_grafana.py` um die Farbprüfung erweitern.
