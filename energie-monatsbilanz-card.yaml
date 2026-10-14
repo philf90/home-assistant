@@ -157,15 +157,21 @@ cards:
       xaxis:
         labels:
           format: MMM
+          hideOverlappingLabels: false
+          rotate: 0
+        tooltip:
+          enabled: false
         axisBorder:
           show: false
         axisTicks:
           show: false
+    # align_to rundet das Maximum auf das naechste Vielfache von 150 kWh,
+    # sonst endet die Achse beim hoechsten Monatswert (z. B. 539).
     yaxis:
       - min: 0
         decimals: 0
+        align_to: 150
         apex_config:
-          forceNiceScale: true
           tickAmount: 4
     series:
       - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
@@ -174,6 +180,8 @@ cards:
         color: '#7fb3d5'
         unit: kWh
         float_precision: 1
+        show: &legende
+          legend_value: false
         data_generator: &monat |
           const n = 13;
           const tz = hass.config.time_zone;
@@ -202,6 +210,7 @@ cards:
         color: '#e6c15a'
         unit: kWh
         float_precision: 1
+        show: *legende
         data_generator: *monat
       - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
         name: Trend Netzbezug
@@ -210,8 +219,10 @@ cards:
         color: '#7fb3d5'
         stroke_width: 2
         stroke_dash: 5
+        extend_to: false
         unit: kWh
         float_precision: 1
+        show: *legende
         data_generator: &trend |
           const METHODE = 'mittel3'; // 'mittel3' | 'mittel12' | 'linear'
           const n = 13;
@@ -250,13 +261,15 @@ cards:
             const sxy = p.reduce((s, q) => s + q[0] * q[1], 0);
             const b = (k * sxy - sx * sy) / (k * sxx - sx * sx);
             const a = (sy - b * sx) / k;
-            for (let i = p[0][0]; i < n; i++) out.push([monat(i).valueOf(), Math.max(0, rund(a + b * i))]);
+            for (let i = 0; i < n; i++) out.push([monat(i).valueOf(), i < p[0][0] ? null : Math.max(0, rund(a + b * i))]);
             return out;
           }
-          for (let i = 0; i < n - 1; i++) {
+          // Immer n Punkte (laufender Monat = null): der gemeinsame Tooltip
+          // zeigt nur dann alle Serien, wenn jede Serie dieselben x-Werte hat.
+          for (let i = 0; i < n; i++) {
             const w = [];
             for (let j = 0; j < fenster; j++) w.push(wert(monat(i).subtract(j, 'months')));
-            const ok = !w.includes(null);
+            const ok = i < n - 1 && !w.includes(null);
             out.push([monat(i).valueOf(), ok ? rund(w.reduce((s, v) => s + v, 0) / fenster) : null]);
           }
           return out;
@@ -267,6 +280,8 @@ cards:
         color: '#e6c15a'
         stroke_width: 2
         stroke_dash: 5
+        extend_to: false
         unit: kWh
         float_precision: 1
+        show: *legende
         data_generator: *trend
