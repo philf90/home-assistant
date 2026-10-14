@@ -45,7 +45,7 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
 
 - Home Assistant mit [HACS](https://hacs.xyz/)
 - Frontend-Karten aus HACS, je nach Datei: `button-card`, `card-mod`,
-  `apexcharts-card`, `bubble-card`, `decluttering-card`, `expander-card`,
+  `apexcharts-card`, `auto-entities`, `bubble-card`, `decluttering-card`, `expander-card`,
   `flower-card`, `homematicip-system-health-card`, `mushroom` (entity, light,
   vacuum), `navbar-card`, `power-flow-card-plus`, `sankey-chart`,
   `slider-button-card`, `trash-card`, `uptime-card`, `webrtc-camera`,

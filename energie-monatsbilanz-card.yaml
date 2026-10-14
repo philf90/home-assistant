@@ -2,39 +2,54 @@
 # Anonymisiert -- vor dem Einfuegen durch die eigenen Werte ersetzen.
 # Tabelle und Vorgehen: README.md, Abschnitt "Platzhalter ersetzen".
 #
-# Monatsbilanz Strom im Owlet-Stil: Netzbezug und Solarertrag je Monat als
-# Saeulen (13 Monate inkl. laufendem), dazu je eine Trendlinie.
+# Monatsbilanz Strom im Owlet-Stil: Netzbezug und Solarertrag je Monat eines
+# Kalenderjahres als Saeulen, dazu je eine Trendlinie (gleitender
+# 3-Monats-Durchschnitt). Unter dem Diagramm waehlen Chips das Jahr; ohne
+# Auswahl zeigt die Karte das laufende Jahr. Noch nicht begonnene Monate
+# bleiben leer.
 #
 # Datenquelle ist die Langzeitstatistik des Recorders, abgefragt per
 # recorder/statistics_during_period (period: month, types: change) direkt an
-# den Zaehlern. Es braucht dafuer keinen zusaetzlichen Helfer:
+# den Zaehlern:
 #   - Netzbezug:   sensor.hmip_esi_stromzahler_energiezahler_ch2
-#                  (Quelle der Utility-Meter stromverbrauch_*; dieselbe
-#                  Statistik nutzt das Energie-Dashboard)
 #   - Solarertrag: sensor.pv_anlage_taglicher_solarertrag
-#                  (Tageszaehler der Anlage, total_increasing; der taegliche
-#                  Reset wird von der Statistik als Zaehlerreset verbucht)
+#                  (Tageszaehler, total_increasing; der taegliche Reset wird
+#                  von der Statistik als Zaehlerreset verbucht)
+# Die IDs stehen als Konstante ID am Anfang jedes Generators.
 #
-# Warum data_generator statt der eingebauten Option "statistics:": graph_span
-# kennt keine Kalendermonate (parse-duration rechnet einen Monat als
-# 365,25/12 Tage). Damit beginnt das Abfragefenster mitten im ersten Monat und
-# dessen Saeule waere angeschnitten. Der Generator rechnet die Monatsgrenzen
-# selbst in der Zeitzone von Home Assistant.
+# Jahresauswahl: Helfer input_number.energie_monatsbilanz_jahr
+#   (Einstellungen -> Helfer -> Zahlenwert: min 0, max 2100, Schritt 1,
+#   Eingabefeld). 0 = laufendes Jahr, sonst die Jahreszahl. Die Chips setzen
+#   ihn; der Chip des laufenden Jahres setzt 0, damit die Karte an Neujahr von
+#   selbst ins neue Jahr wechselt. Die Chips erzeugt auto-entities aus einer
+#   Vorlage mit range(ERSTES_JAHR, now().year + 1) -- jedes neue Jahr bekommt
+#   so ohne Zutun seinen Chip. ERSTES_JAHR in der Vorlage anpassen. Die
+#   Auswahl gilt fuer alle Geraete, die das Dashboard zeigen.
 #
-# Trendlinie: METHODE im Trend-Generator (&trend) waehlen.
-#   mittel3  gleitender 3-Monats-Durchschnitt (Vorgabe). Folgt der Saison,
-#            ohne sie zu ueberzeichnen.
-#   mittel12 gleitender 12-Monats-Durchschnitt. Rechnet die Saison ganz heraus,
-#            braucht aber 12 Monate Vorlauf -- die Solarlinie erscheint erst,
-#            wenn die Anlage ein volles Jahr Daten hat.
-#   linear   Ausgleichsgerade (kleinste Quadrate) ueber die abgeschlossenen
-#            Monate, verlaengert bis in den laufenden Monat. Bei Solar ueber
-#            Fruehjahr/Sommer zeigt sie steil nach oben, obwohl der Ertrag im
-#            Herbst saisonbedingt faellt.
-# Der laufende Monat ist unvollstaendig und geht in keine Trendberechnung ein.
+# Warum die Serien den Helfer als entity haben: apexcharts-card laedt nur dann
+# neu, wenn sich eine Entitaet einer Serie aendert, und nur ohne
+# update_interval. Mit dem Helfer laedt das Diagramm rund 1,5 s nach dem
+# Antippen eines Chips neu; die unsichtbare Serie mit sensor.date sorgt
+# zusaetzlich fuer ein Neuladen nach Mitternacht. Die Zaehler selbst als
+# entity wuerden bei jeder Zaehleraenderung (etwa minuetlich) neu laden.
+#
+# Achse: Die Karte zeichnet jedes gewaehlte Jahr auf die Monate des
+# laufenden Jahres (span start: year), denn graph_span/span sind fest und
+# kennen kein waehlbares Jahr. Die Achse zeigt nur Monatsnamen; das Jahr
+# steht in der Kopfzeile, der Tooltip nennt deshalb nur den Monat.
+#
+# Trend: Durchschnitt aus dem Monat und den zwei Vormonaten (fuer Januar
+# aus dem Vorjahr). Der laufende Monat ist unvollstaendig und zaehlt nicht.
+# Prognose (gepunktet, nur im laufenden Jahr): Trendwert fuer den laufenden
+# Monat, wobei der Monat selbst durch den Durchschnitt der letzten drei
+# abgeschlossenen Monate ersetzt wird. Gezeichnet wird sie nur, wenn dieselbe
+# Prognose fuer die letzten 12 Monate (mindestens 6) im Mittel hoechstens
+# SCHWELLE (10 %) danebenlag. Weiter als einen Monat sagt die Karte nichts
+# voraus: Im Rueckblick lag der Fehler ab zwei Monaten bei 15 % und mehr.
 #
 # Voraussetzung: custom:button-card + card-mod + custom:apexcharts-card
-# (ab v2.0, data_generator laeuft dort als async-Funktion; getestet v2.2.3).
+# (ab v2.0, data_generator laeuft dort als async-Funktion; getestet v2.2.3)
+# + custom:auto-entities (getestet v1.16.1).
 type: vertical-stack
 card_mod:
   style: |
@@ -48,12 +63,23 @@ card_mod:
     }
 cards:
   - type: custom:button-card
+    entity: input_number.energie_monatsbilanz_jahr
     icon: mdi:chart-bar
     name: Monatsbilanz
-    label: 13 Monate · Netzbezug & Solarertrag
+    label: |
+      [[[
+        const n = new Date();
+        const w = parseInt(entity ? entity.state : '0', 10);
+        const j = w >= 2000 ? w : n.getFullYear();
+        const M = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+          'August', 'September', 'Oktober', 'November', 'Dezember'];
+        const lauf = j === n.getFullYear() ? ' · ' + M[n.getMonth()] + ' läuft' : '';
+        return j + lauf + ' · Netzbezug & Solarertrag';
+      ]]]
     show_icon: true
     show_name: true
     show_label: true
+    show_state: false
     tap_action:
       action: none
     styles:
@@ -92,14 +118,12 @@ cards:
         - color: '#6e7988'
         - margin-top: 1px
   - type: custom:apexcharts-card
-    # 13 Monate; der Generator setzt jeden Wert auf den Monatsersten. Das
-    # Fenster endet einen halben Monat nach dem laufenden Monatsersten, damit
-    # erste und letzte Saeule vollstaendig sichtbar sind.
-    graph_span: 396d
+    # Januar bis Dezember des laufenden Jahres; das Fenster beginnt einen
+    # halben Monat frueher, damit die Januar-Saeule ganz sichtbar ist.
+    graph_span: 365d
     span:
-      end: month
+      start: year
       offset: -15d
-    update_interval: 30min
     header:
       show: false
     card_mod:
@@ -133,14 +157,23 @@ cards:
       grid:
         borderColor: rgba(255,255,255,0.06)
         strokeDashArray: 3
+      # Groesse je Serie in der Reihenfolge unten: nur die Prognose bekommt
+      # Punkte, damit ihr Wert auch allein sichtbar ist.
+      markers:
+        size: [0, 0, 0, 0, 4, 4]
+        strokeWidth: 2
+        strokeColors: '#171d29'
+      # Die Prognose-Serien stehen nicht in der Legende: ApexCharts kann eine
+      # Serie ohne Werte dort nicht ausblenden. Der Tooltip benennt sie.
       legend:
         show: true
         position: bottom
         fontSize: 11px
         labels:
           colors: '#8794a5'
+        # 0 fuer die beiden Prognose-Serien, sonst bliebe ihr Farbpunkt stehen.
         markers:
-          size: 5
+          size: [5, 5, 5, 5, 0, 0]
           strokeWidth: 0
       tooltip:
         theme: dark
@@ -149,10 +182,15 @@ cards:
         x:
           formatter: |
             EVAL:function(val) {
-              const d = new Date(val);
-              const n = new Date();
-              const s = d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-              return (d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear()) ? s + ' · läuft' : s;
+              return new Date(val).toLocaleDateString('de-DE', { month: 'long' });
+            }
+        # Ersetzt den Formatter der Karte, der fehlende Werte als "null kWh"
+        # ausgibt.
+        y:
+          formatter: |
+            EVAL:function(v) {
+              if (v === null || v === undefined || isNaN(v)) return '–';
+              return v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' kWh';
             }
       xaxis:
         labels:
@@ -165,123 +203,357 @@ cards:
           show: false
         axisTicks:
           show: false
-    # align_to rundet das Maximum auf das naechste Vielfache von 150 kWh,
-    # sonst endet die Achse beim hoechsten Monatswert (z. B. 539).
+    # Gleiche Skala fuer alle Jahre (0-600 kWh), damit sich Jahre beim
+    # Umschalten vergleichen lassen. "~600" ist eine weiche Grenze: Liegt ein
+    # Monat darueber, waechst die Achse auf das naechste Vielfache von 150.
     yaxis:
       - min: 0
+        max: '~600'
         decimals: 0
         align_to: 150
         apex_config:
           tickAmount: 4
     series:
-      - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
+      - entity: input_number.energie_monatsbilanz_jahr
         name: Netzbezug
         type: column
         color: '#7fb3d5'
         unit: kWh
         float_precision: 1
-        show: &legende
+        show:
           legend_value: false
-        data_generator: &monat |
-          const n = 13;
+        data_generator: |
+          const ID = 'sensor.hmip_esi_stromzahler_energiezahler_ch2';
           const tz = hass.config.time_zone;
-          const first = moment.tz(tz).startOf('month').subtract(n - 1, 'months');
-          const res = await hass.callWS({
-            type: 'recorder/statistics_during_period',
-            start_time: first.toISOString(),
-            statistic_ids: [entity.entity_id],
-            period: 'month',
-            types: ['change'],
-          });
-          const proMonat = {};
-          (res[entity.entity_id] || []).forEach((r) => {
-            proMonat[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
-          });
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          const z = await lade(anfang, anfang.clone().add(1, 'year'));
           const out = [];
-          for (let i = 0; i < n; i++) {
-            const m = first.clone().add(i, 'months');
-            const v = proMonat[m.format('YYYY-MM')];
-            out.push([m.valueOf(), v == null ? null : Math.round(v * 10) / 10]);
+          for (let m = 0; m < 12; m++) {
+            const v = z[anfang.clone().add(m, 'months').format('YYYY-MM')];
+            out.push([x(m), v == null ? null : rund(v)]);
           }
           return out;
-      - entity: sensor.pv_anlage_taglicher_solarertrag
+      - entity: input_number.energie_monatsbilanz_jahr
         name: Solarertrag
         type: column
         color: '#e6c15a'
         unit: kWh
         float_precision: 1
-        show: *legende
-        data_generator: *monat
-      - entity: sensor.hmip_esi_stromzahler_energiezahler_ch2
-        name: Trend Netzbezug
-        type: line
-        curve: smooth
-        color: '#7fb3d5'
-        stroke_width: 2
-        stroke_dash: 5
-        extend_to: false
-        unit: kWh
-        float_precision: 1
-        show: *legende
-        data_generator: &trend |
-          const METHODE = 'mittel3'; // 'mittel3' | 'mittel12' | 'linear'
-          const n = 13;
-          const fenster = { mittel3: 3, mittel12: 12, linear: 1 }[METHODE];
+        show:
+          legend_value: false
+        data_generator: |
+          const ID = 'sensor.pv_anlage_taglicher_solarertrag';
           const tz = hass.config.time_zone;
-          const first = moment.tz(tz).startOf('month').subtract(n - 1, 'months');
-          const res = await hass.callWS({
-            type: 'recorder/statistics_during_period',
-            start_time: first.clone().subtract(fenster - 1, 'months').toISOString(),
-            statistic_ids: [entity.entity_id],
-            period: 'month',
-            types: ['change'],
-          });
-          const proMonat = {};
-          (res[entity.entity_id] || []).forEach((r) => {
-            proMonat[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
-          });
-          const wert = (m) => {
-            const v = proMonat[m.format('YYYY-MM')];
-            return v == null ? null : v;
-          };
-          const monat = (i) => first.clone().add(i, 'months');
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
           const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          const z = await lade(anfang, anfang.clone().add(1, 'year'));
           const out = [];
-          if (METHODE === 'linear') {
-            const p = [];
-            for (let i = 0; i < n - 1; i++) {
-              const v = wert(monat(i));
-              if (v !== null) p.push([i, v]);
-            }
-            if (p.length < 2) return [];
-            const k = p.length;
-            const sx = p.reduce((s, q) => s + q[0], 0);
-            const sy = p.reduce((s, q) => s + q[1], 0);
-            const sxx = p.reduce((s, q) => s + q[0] * q[0], 0);
-            const sxy = p.reduce((s, q) => s + q[0] * q[1], 0);
-            const b = (k * sxy - sx * sy) / (k * sxx - sx * sx);
-            const a = (sy - b * sx) / k;
-            for (let i = 0; i < n; i++) out.push([monat(i).valueOf(), i < p[0][0] ? null : Math.max(0, rund(a + b * i))]);
-            return out;
-          }
-          // Immer n Punkte (laufender Monat = null): der gemeinsame Tooltip
-          // zeigt nur dann alle Serien, wenn jede Serie dieselben x-Werte hat.
-          for (let i = 0; i < n; i++) {
-            const w = [];
-            for (let j = 0; j < fenster; j++) w.push(wert(monat(i).subtract(j, 'months')));
-            const ok = i < n - 1 && !w.includes(null);
-            out.push([monat(i).valueOf(), ok ? rund(w.reduce((s, v) => s + v, 0) / fenster) : null]);
+          for (let m = 0; m < 12; m++) {
+            const v = z[anfang.clone().add(m, 'months').format('YYYY-MM')];
+            out.push([x(m), v == null ? null : rund(v)]);
           }
           return out;
-      - entity: sensor.pv_anlage_taglicher_solarertrag
-        name: Trend Solar
+      - entity: input_number.energie_monatsbilanz_jahr
+        name: Trend Netzbezug
         type: line
+        color: '#7fb3d5'
         curve: smooth
-        color: '#e6c15a'
         stroke_width: 2
         stroke_dash: 5
         extend_to: false
         unit: kWh
         float_precision: 1
-        show: *legende
-        data_generator: *trend
+        show:
+          legend_value: false
+        data_generator: |
+          const ID = 'sensor.hmip_esi_stromzahler_energiezahler_ch2';
+          const tz = hass.config.time_zone;
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          const z = await lade(anfang.clone().subtract(2, 'months'), anfang.clone().add(1, 'year'));
+          const lauf = jetzt.clone().startOf('month');
+          // Nur abgeschlossene Monate zaehlen; der laufende ist unvollstaendig.
+          const wert = (m) => {
+            const v = z[m.format('YYYY-MM')];
+            return v == null || !m.isBefore(lauf) ? null : v;
+          };
+          const out = [];
+          for (let m = 0; m < 12; m++) {
+            const mo = anfang.clone().add(m, 'months');
+            const w = [2, 1, 0].map((j) => wert(mo.clone().subtract(j, 'months')));
+            out.push([x(m), w.includes(null) ? null : rund((w[0] + w[1] + w[2]) / 3)]);
+          }
+          return out;
+      - entity: input_number.energie_monatsbilanz_jahr
+        name: Trend Solar
+        type: line
+        color: '#e6c15a'
+        curve: smooth
+        stroke_width: 2
+        stroke_dash: 5
+        extend_to: false
+        unit: kWh
+        float_precision: 1
+        show:
+          legend_value: false
+        data_generator: |
+          const ID = 'sensor.pv_anlage_taglicher_solarertrag';
+          const tz = hass.config.time_zone;
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          const z = await lade(anfang.clone().subtract(2, 'months'), anfang.clone().add(1, 'year'));
+          const lauf = jetzt.clone().startOf('month');
+          // Nur abgeschlossene Monate zaehlen; der laufende ist unvollstaendig.
+          const wert = (m) => {
+            const v = z[m.format('YYYY-MM')];
+            return v == null || !m.isBefore(lauf) ? null : v;
+          };
+          const out = [];
+          for (let m = 0; m < 12; m++) {
+            const mo = anfang.clone().add(m, 'months');
+            const w = [2, 1, 0].map((j) => wert(mo.clone().subtract(j, 'months')));
+            out.push([x(m), w.includes(null) ? null : rund((w[0] + w[1] + w[2]) / 3)]);
+          }
+          return out;
+      - entity: input_number.energie_monatsbilanz_jahr
+        name: Prognose Netzbezug
+        type: line
+        color: '#7fb3d5'
+        curve: smooth
+        stroke_width: 2
+        stroke_dash: 2
+        extend_to: false
+        unit: kWh
+        float_precision: 1
+        show:
+          legend_value: false
+          in_legend: false
+        data_generator: |
+          const ID = 'sensor.hmip_esi_stromzahler_energiezahler_ch2';
+          const SCHWELLE = 0.10; // hoechstens 10 % mittlere Abweichung im Rueckblick
+          const tz = hass.config.time_zone;
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          // Immer 12 Punkte, sonst zeigt der gemeinsame Tooltip nicht alle Serien.
+          const out = [];
+          for (let m = 0; m < 12; m++) out.push([x(m), null]);
+          if (jahr !== jetzt.year()) return out;
+          const lauf = jetzt.clone().startOf('month');
+          const z = await lade(lauf.clone().subtract(16, 'months'), lauf);
+          const wert = (k) => {
+            const v = z[lauf.clone().subtract(k, 'months').format('YYYY-MM')];
+            return v == null ? null : v;
+          };
+          // Rueckblick: dieselbe Prognose fuer die letzten 12 Monate nachrechnen.
+          const fehler = [];
+          for (let k = 1; k <= 12; k++) {
+            const w = [k + 3, k + 2, k + 1, k].map(wert);
+            if (w.includes(null)) break;
+            const ist = (w[1] + w[2] + w[3]) / 3;
+            const prog = (w[1] + w[2] + (w[0] + w[1] + w[2]) / 3) / 3;
+            fehler.push(Math.abs(prog - ist) / ist);
+          }
+          const mittel = fehler.reduce((s, f) => s + f, 0) / fehler.length;
+          if (fehler.length < 6 || !(mittel <= SCHWELLE)) return out;
+          const a = [3, 2, 1].map(wert);
+          const i = lauf.month();
+          out[i][1] = rund((a[1] + a[2] + (a[0] + a[1] + a[2]) / 3) / 3);
+          if (i > 0) out[i - 1][1] = rund((a[0] + a[1] + a[2]) / 3);
+          return out;
+      - entity: input_number.energie_monatsbilanz_jahr
+        name: Prognose Solar
+        type: line
+        color: '#e6c15a'
+        curve: smooth
+        stroke_width: 2
+        stroke_dash: 2
+        extend_to: false
+        unit: kWh
+        float_precision: 1
+        show:
+          legend_value: false
+          in_legend: false
+        data_generator: |
+          const ID = 'sensor.pv_anlage_taglicher_solarertrag';
+          const SCHWELLE = 0.10; // hoechstens 10 % mittlere Abweichung im Rueckblick
+          const tz = hass.config.time_zone;
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const rund = (v) => Math.round(v * 10) / 10;
+          const lade = async (von, bis) => {
+            const res = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: von.toISOString(),
+              end_time: bis.toISOString(),
+              statistic_ids: [ID],
+              period: 'month',
+              types: ['change'],
+            });
+            const o = {};
+            (res[ID] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          // Immer 12 Punkte, sonst zeigt der gemeinsame Tooltip nicht alle Serien.
+          const out = [];
+          for (let m = 0; m < 12; m++) out.push([x(m), null]);
+          if (jahr !== jetzt.year()) return out;
+          const lauf = jetzt.clone().startOf('month');
+          const z = await lade(lauf.clone().subtract(16, 'months'), lauf);
+          const wert = (k) => {
+            const v = z[lauf.clone().subtract(k, 'months').format('YYYY-MM')];
+            return v == null ? null : v;
+          };
+          // Rueckblick: dieselbe Prognose fuer die letzten 12 Monate nachrechnen.
+          const fehler = [];
+          for (let k = 1; k <= 12; k++) {
+            const w = [k + 3, k + 2, k + 1, k].map(wert);
+            if (w.includes(null)) break;
+            const ist = (w[1] + w[2] + w[3]) / 3;
+            const prog = (w[1] + w[2] + (w[0] + w[1] + w[2]) / 3) / 3;
+            fehler.push(Math.abs(prog - ist) / ist);
+          }
+          const mittel = fehler.reduce((s, f) => s + f, 0) / fehler.length;
+          if (fehler.length < 6 || !(mittel <= SCHWELLE)) return out;
+          const a = [3, 2, 1].map(wert);
+          const i = lauf.month();
+          out[i][1] = rund((a[1] + a[2] + (a[0] + a[1] + a[2]) / 3) / 3);
+          if (i > 0) out[i - 1][1] = rund((a[0] + a[1] + a[2]) / 3);
+          return out;
+      # Unsichtbar: laedt das Diagramm nach Mitternacht neu.
+      - entity: sensor.date
+        name: Datum
+        show:
+          in_chart: false
+          in_legend: false
+        data_generator: return [];
+  - type: custom:auto-entities
+    card_param: cards
+    card:
+      type: horizontal-stack
+      card_mod:
+        style: |
+          #root { gap: 6px !important; }
+    filter:
+      template: |
+        {% set ERSTES_JAHR = 2024 %}
+        {% set jetzt = now().year %}
+        {% set wahl = states('input_number.energie_monatsbilanz_jahr') | int(0) %}
+        {% set aktiv = wahl if ERSTES_JAHR <= wahl <= jetzt else jetzt %}
+        [{% for j in range(ERSTES_JAHR, jetzt + 1) %}
+          {% set an = j == aktiv %}
+          {'type': 'custom:button-card',
+           'name': '{{ j }}',
+           'show_icon': False,
+           'tap_action': {'action': 'perform-action',
+                          'perform_action': 'input_number.set_value',
+                          'target': {'entity_id': 'input_number.energie_monatsbilanz_jahr'},
+                          'data': {'value': {{ 0 if j == jetzt else j }}}},
+           'styles': {'card': [{'border-radius': '999px'}, {'padding': '7px 4px'},
+                               {'box-shadow': 'none'},
+                               {'background': '{{ 'rgba(166, 212, 158, 0.14)' if an else 'rgba(255, 255, 255, 0.03)' }}'},
+                               {'border': '1px solid {{ 'rgba(166, 212, 158, 0.4)' if an else 'rgba(255, 255, 255, 0.1)' }}'}],
+                      'name': [{'font-size': '12.5px'}, {'font-weight': 600},
+                               {'font-variant-numeric': 'tabular-nums'},
+                               {'color': '{{ '#f2f5f8' if an else '#8794a5' }}'}]}},
+        {% endfor %}]
