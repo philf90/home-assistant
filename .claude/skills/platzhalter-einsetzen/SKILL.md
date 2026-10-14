@@ -1,6 +1,6 @@
 ---
 name: platzhalter-einsetzen
-description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, Kennzeichen, unique_id) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
+description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, Kennzeichen, unique_id, Seriennummern/MAC/FIN/IEEE in Entity-IDs) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
 ---
 
 # Platzhalter einsetzen
@@ -26,7 +26,7 @@ Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
 
 1. **Platzhalter in der Zieldatei finden.** Kopfkommentar
    `HINWEIS PLATZHALTER` lesen und die Datei durchsuchen:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>' <datei>`
+   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|_mac_|fin_(passat|touran)|ieee_adresse' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
