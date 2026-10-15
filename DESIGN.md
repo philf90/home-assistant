@@ -186,7 +186,12 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
 hinter dem Inhalt (Template `owlet_wetter_fx` in
 `wetter-animation-button-card-templates.yaml`, Entwurf und Rechnung in
-`wetter-animiert-vorschlaege.html`). Dafür gilt zusätzlich:
+`wetter-animiert-vorschlaege.html`). Die Hausgeräte-Karten haben sie nur,
+solange ein Programm läuft, pausiert (eingefroren) oder gerade fertig ist
+(Template `owlet_geraete_fx` in `hausgeraete-animation-button-card-templates.yaml`,
+Entwurf in `hausgeraete-vorschlaege.html`): Wasser in Blau, Luft in Weiß mit
+Deckkraft, „Fertig“ in Türkis; die Wasserwelle der Waschmaschine bleibt im
+unteren Innenabstand und liegt damit nie hinter Text. Dafür gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
