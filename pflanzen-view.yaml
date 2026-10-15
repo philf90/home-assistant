@@ -14,7 +14,10 @@
 #                alle Pflanzen dieselbe Wetterstation nutzen
 #   je Pflanze   Template owlet_pflanze: Foto, Art, Status-Pille, Kacheln
 #                Bodenfeuchte und Bodentemperatur mit Sollband, Akku und
-#                Sensorname; aufklappbar: Bodenfeuchte 7 Tage (Tagesmittel)
+#                Sensorname; aufklappbar: Bodenfeuchte 7 Tage (Tagesmittel);
+#                Knopf "Abgeerntet" -> statt der Karte eine schmale Zeile mit
+#                "Wieder bepflanzt". Die Kopfkarte zaehlt abgeerntete Pflanzen
+#                nicht mit. Die Plant-Integration misst weiter (nur Anzeige).
 #
 # Farben: Abweichung vom Sollbereich amber (Hinweis), im Sollbereich gruen,
 # keine Daten grau. Rot nur beim Akku unter 15 % (wie person-presence-…).
@@ -29,7 +32,9 @@
 # Voraussetzung: custom:button-card (v7) + custom:decluttering-card
 #                + custom:expander-card (0.1.5) + custom:apexcharts-card
 #                + card-mod (alle via HACS), Integration "Home Assistant
-#                Plant" (Olen/homeassistant-plant, HACS), Templates aus
+#                Plant" (Olen/homeassistant-plant, HACS), je Pflanze ein
+#                Helfer input_boolean.<pflanze>_abgeerntet (Schalter, ohne
+#                Anfangswert, damit er Neustarts uebersteht), Templates aus
 #                decluttering-templates.yaml und
 #                pflanzen-decluttering-templates.yaml.
 type: sections
@@ -56,8 +61,9 @@ sections:
           summary: |
             [[[
               const zahl=id=>{const s=states[id];const v=s?parseFloat(s.state):NaN;return Number.isFinite(v)?v:NaN;};
+              const aktiv=variables.pflanzen.filter(p=>{const s=states[`input_boolean.${p}_abgeerntet`];return !(s&&s.state==='on');});
               let tr=0, na=0;
-              variables.pflanzen.forEach(p=>{
+              aktiv.forEach(p=>{
                 const f=zahl(`sensor.${p}_bodenfeuchtigkeit`);
                 if(f<zahl(`number.${p}_min_bodenfeuchtigkeit`)) tr++;
                 else if(f>zahl(`number.${p}_max_bodenfeuchtigkeit`)) na++;
@@ -75,10 +81,11 @@ sections:
               const t=zahl('sensor.wetterstation_pro_temperatur');
               const h=zahl('sensor.wetterstation_pro_luftfeuchtigkeit');
               const l=zahl('sensor.wetterstation_pro_beleuchtungsstarke');
-              const ueber=variables.pflanzen.filter(p=>h>zahl(`number.${p}_max_luftfeuchtigkeit`)).length;
+              const aktiv=variables.pflanzen.filter(p=>{const s=states[`input_boolean.${p}_abgeerntet`];return !(s&&s.state==='on');});
+              const ueber=aktiv.filter(p=>h>zahl(`number.${p}_max_luftfeuchtigkeit`)).length;
               const hCol=ueber?'#e6b566':'#a6d49e';
               const chip=(icon,wert,col)=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:11px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);color:#f2f5f8;font-size:12.5px;font-weight:650;white-space:nowrap;"><ha-icon icon="${icon}" style="--mdc-icon-size:15px;width:15px;height:15px;display:flex;color:${col};"></ha-icon>${wert}</span>`;
-              const hinweis=ueber?`<div style="font-size:11.5px;color:#e6b566;margin-top:6px;">Luftfeuchte über Soll bei ${ueber} von ${variables.pflanzen.length} Pflanzen</div>`:'';
+              const hinweis=ueber?`<div style="font-size:11.5px;color:#e6b566;margin-top:6px;">Luftfeuchte über Soll bei ${ueber} von ${aktiv.length} Pflanzen</div>`:'';
               return `<div style="display:flex;flex-wrap:wrap;gap:6px;">${chip('mdi:thermometer',de(t,1)+' °C','#7fb3d5')}${chip('mdi:water-percent',de(h,0)+' %',hCol)}${chip('mdi:white-balance-sunny',de(l,0)+' lx','#e6c15a')}</div>${hinweis}<div style="font-size:11px;color:#8794a5;margin-top:6px;">Klima am Standort · Wetterstation, gilt für alle Pflanzen</div>`;
             ]]]
         styles:
