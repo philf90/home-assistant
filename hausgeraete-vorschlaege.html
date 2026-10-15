@@ -108,6 +108,7 @@
   .finding { padding: 16px 18px; border-radius: 16px; background: var(--inner); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .finding b { font-size: 14.5px; color: var(--title); }
   .finding p { font-size: 14px; color: var(--label); }
+  .finding ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--label); display: flex; flex-direction: column; gap: 4px; }
   .finding .src { font-size: 12.5px; color: var(--muted); }
 
   /* ---------------- Massnahmen ---------------- */
@@ -372,7 +373,7 @@
       </div>
       <div class="step">
         <b>Automatischer Neustart über die Shelly-Steckdose<span class="tag">angelegt</span></b>
-        <p>Macht dasselbe wie dein Handgriff, aber nur, wenn die Maschine sicher aus ist. Die Messwerte geben die Grenze vor: ausgeschaltet misst die Shelly konstant 0,0 W, in der Startverzögerung pendelt sie alle paar Sekunden zwischen 0 und 1,6 W (gemessen am 10.10. ab 20:10). „30 Minuten unter 0,5 W“ trifft also nur die ausgeschaltete Maschine, ein programmierter Start geht nicht verloren.</p>
+        <p>Macht dasselbe wie dein Handgriff, aber nur, wenn die Maschine sicher aus ist. Die Messwerte geben die Grenze vor: ausgeschaltet misst die Shelly konstant 0,0 W. In der Startverzögerung und im Zustand „Fertig“ springt sie etwa jede Minute für einige Sekunden auf 1,0–1,6 W (gemessen am 10.10. ab 20:09 und am 11.10. 08:01–08:11). „30 Minuten unter 0,5 W“ trifft also nur die ausgeschaltete Maschine, ein programmierter Start geht nicht verloren.</p>
         <ul>
           <li>„Aus“ prüft der Hilfssensor <code>binary_sensor.waschmaschine_ausgeschaltet</code> (Schwellwert-Helfer: Shelly-Leistung unter 0,5 W), der seit 30 min an sein muss. Ohne Vorlagen-Bedingungen, nur mit Zustands-Bedingungen.</li>
           <li>Ausschalten, 60 s warten, wieder einschalten. Startet Home Assistant genau in diesen 60 s neu, bleibt die Steckdose aus; dagegen hilft „Automatisch einschalten nach 60 s“ in den Shelly-Einstellungen.</li>
@@ -428,7 +429,7 @@ conditions:
         state: unavailable
         for: { minutes: 15 }
   <span class="c"># Schwellwert-Helfer: Shelly-Leistung unter 0,5 W. 30 min schliessen die</span>
-  <span class="c"># Startverzoegerung aus, dort pendelt die Leistung zwischen 0 und 1,6 W.</span>
+  <span class="c"># Startverzoegerung und "Fertig" aus, dort pendelt die Leistung zwischen 0 und 1,6 W.</span>
   - condition: state
     entity_id: binary_sensor.waschmaschine_ausgeschaltet
     state: "on"
@@ -459,6 +460,17 @@ actions:
   <span class="c"># Sperre: hoechstens ein Versuch pro 6 Stunden</span>
   - delay: { hours: 6 }</pre>
     <p class="note">Dazu angelegt: Schwellwert-Helfer „Waschmaschine ausgeschaltet“ (<code>binary_sensor.waschmaschine_ausgeschaltet</code>, Quelle Shelly-Leistung, untere Grenze 0,5 W, Hysterese 0). Optional in der Shelly-Oberfläche „Automatisch einschalten nach 60 s“ setzen, als Absicherung gegen einen Neustart von Home Assistant während der Pause.</p>
+
+    <div class="finding">
+      <b>Kurzfassung: getrennt und Start programmiert</b>
+      <p>So am 15.10. beobachtet: Die Maschine war seit 05:35 von Home Connect getrennt. Um 20:35 wurde sie eingeschaltet, ab 20:40 lief die Startverzögerung. Seitdem springt die Shelly-Leistung etwa jede Minute auf 1,0–1,4 W, der Hilfssensor kommt nie auf 30 Minuten am Stück, und die Automation wartet. Das ist gewollt: Ein Neustart hätte den programmierten Start gelöscht.</p>
+      <ul>
+        <li>Die Maschine wäscht zur eingestellten Zeit auch ohne Cloud-Verbindung, wie am 06.10.</li>
+        <li>In Home Assistant bleibt die Karte so lange auf „Offline“: kein Fortschritt, keine Restzeit, keine Ansage „Waschmaschine fertig“. Die hängt an einem Ereignis von Home Connect.</li>
+        <li>Nach dem Programm pendelt die Leistung im Zustand „Fertig“ weiter. Erst wenn die Maschine ausgeschaltet ist und 30 Minuten konstant 0,0 W misst, startet die Automation sie über die Steckdose neu und meldet das Ergebnis.</li>
+        <li>Faustregel: Maschine nach dem Ausräumen ausschalten. Etwa eine halbe Stunde später ist sie wieder verbunden.</li>
+      </ul>
+    </div>
   </section>
 
   <!-- ================= Animationen ================= -->
