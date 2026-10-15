@@ -199,7 +199,8 @@ Dazu:
   Festplatte von Home Assistant OS unter Proxmox vergrößern
 
 Die HTML-Dateien (`home-kacheln-vorschlaege.html`,
-`autos-karten-v2-vorschlaege.html`, `grafana/proxmox-mockups.html`) sind
+`autos-karten-v2-vorschlaege.html`, `wetter-animiert-vorschlaege.html`,
+`grafana/proxmox-mockups.html`) sind
 Design-Entwürfe und werden direkt im Browser geöffnet.
 
 ## Prüfungen
