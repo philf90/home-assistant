@@ -15,8 +15,8 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 
 | Bereich | Dateien |
 |---|---|
-| Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml` |
-| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
+| Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml`, `pflanzen-view.yaml` |
+| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
 | Navigation & Kopf | `navbar-card.yaml`, `top-navigation-button-card.yaml`, `welcome-banner-button-card.yaml` |
 | Energie | `energie-autarkie-…`, `energie-diagramme-…`, `energie-flow-…`, `energie-flow-leiste-…`, `energie-pv-…`, `energie-verbrauch-uebersicht-…`, `energie-monatsbilanz-card.yaml`, `gas-wasser-button-card.yaml` |
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
@@ -24,7 +24,7 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…` (animiert über `owlet_geraete_fx`, Entwurf und Home-Connect-Analyse in `hausgeraete-vorschlaege.html`), `staubsauger-button-card.yaml` |
 | Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-unas-pro-button-card.yaml`, `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
 | Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3), `template-autos-passat.yaml` |
-| Garten & Pflanzen | `garten-…`, `pflanzen-status-button-card.yaml`, `pflanzen-flower-card.yaml` |
+| Garten & Pflanzen | `garten-…`, `pflanzen-view.yaml` (ohne flower-card; ältere Fassung: `pflanzen-flower-card.yaml` + `pflanzen-status-button-card.yaml`) |
 | Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |
 | Sonstiges | `kameras-button-card.yaml`, `muellabfuhr-trash-card.yaml` (v1, v2) |
 | Grafana | [`grafana/`](grafana/) – Energie-, Proxmox-VE- und Proxmox-Backup-Server-Dashboard |
@@ -111,7 +111,8 @@ Die Pfade sind relativ zum Konfigurationsordner von Home Assistant.
 
 **Templates:** einmalig im Raw-Konfigurationseditor des Dashboards auf
 oberster Ebene (neben `views:`) einfügen – `decluttering_templates:` aus
-`decluttering-templates.yaml`, `button_card_templates:` aus den
+`decluttering-templates.yaml` und `pflanzen-decluttering-templates.yaml`,
+`button_card_templates:` aus den
 Flugradar- und Fußball-Templates. Existiert der Block schon, nur die Einträge
 darunter ergänzen.
 
@@ -143,7 +144,7 @@ verfügbar“. Betroffene Dateien tragen oben den Kommentar
 | `*_seriennr`, `*_seriennr_1`, `*_seriennr_2` | Seriennummer des Geräts in der Entity-ID (Homematic IP, Owlet); `_1`/`_2` trennen zwei Geräte desselben Modells | Einstellungen → Geräte & Dienste → Integration → Gerät → Entitäten | `homematic-…`, `temperaturen-…` (2), `garten-…`, `owlet-smart-sock-…` |
 | `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | `lichter-*` (4), `fenster-lichter-uebersicht-…`, `garten-…` |
 | `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-button-card-v2.yaml`, `autos-button-card-v3.yaml`, `autos-karten-v2-vorschlaege.html` |
-| `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-flower-card.yaml` |
+| `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-flower-card.yaml`, `pflanzen-view.yaml` |
 
 Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
 `visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-card.yaml`,

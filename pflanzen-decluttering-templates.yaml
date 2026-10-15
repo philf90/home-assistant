@@ -1,0 +1,204 @@
+# ============================================================================
+# Decluttering-Template owlet_pflanze fuer pflanzen-view.yaml
+# ----------------------------------------------------------------------------
+# EINMAL einfuegen: Raw-Konfigurationseditor des Dashboards -> den Eintrag
+#   unter "decluttering_templates:" ergaenzen (neben top_navigation und
+#   floating_navbar aus decluttering-templates.yaml).
+#
+# Eine Pflanzenkarte: expander-card mit button-card als Kopf und einer
+# apexcharts-card (Bodenfeuchte, 7 Tage, Tagesmittel) zum Aufklappen.
+#
+# Variablen:
+#   pflanze  Objekt-ID der Pflanze (plant.<pflanze>); daraus werden
+#            sensor.<pflanze>_bodenfeuchtigkeit, _bodentemperatur und die
+#            number.<pflanze>_min_/max_…-Grenzwerte gebildet
+#   akku     Akku-Sensor des Bodensensors
+#   sensor   Anzeigename des Bodensensors (Fusszeile)
+#   hinweis  optional, z. B. "geteilt mit Gurken"
+#
+# Hinweise zu den Karten:
+#   - button-card setzt bei ha-icon margin:auto und zentriert custom_fields;
+#     daher margin:0 und text-align:left.
+#   - expander-card 0.1.5 rendert den Pfeil als button.header > ha-icon.primaryico.
+#   - apexcharts-card 2.2.3 rendert den Titel als #header__title.
+#
+# Voraussetzung: custom:decluttering-card, custom:button-card (v7),
+#                custom:expander-card (0.1.5), custom:apexcharts-card, card-mod.
+# ============================================================================
+decluttering_templates:
+  owlet_pflanze:
+    default:
+      - hinweis: ''
+    card:
+      type: custom:expander-card
+      expanded: false
+      clear: false
+      clear-children: true
+      padding: 0px
+      title-card-button-overlay: true
+      overlay-margin: 1.1em
+      title-card:
+        type: custom:button-card
+        entity: plant.[[pflanze]]
+        variables:
+          p: '[[pflanze]]'
+          akku: '[[akku]]'
+          sensor: '[[sensor]]'
+          hinweis: '[[hinweis]]'
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        custom_fields:
+          kopf: |
+            [[[
+              const A=entity?entity.attributes:{};
+              const zahl=id=>{const s=states[id];const v=s?parseFloat(s.state):NaN;return Number.isFinite(v)?v:NaN;};
+              const p=variables.p;
+              const f=zahl(`sensor.${p}_bodenfeuchtigkeit`), fMin=zahl(`number.${p}_min_bodenfeuchtigkeit`), fMax=zahl(`number.${p}_max_bodenfeuchtigkeit`);
+              const t=zahl(`sensor.${p}_bodentemperatur`), tMin=zahl(`number.${p}_min_bodentemperatur`), tMax=zahl(`number.${p}_max_bodentemperatur`);
+              let col='#a6d49e', txt='Alles gut';
+              if(f<fMin){col='#e6b566';txt='Gießen';}
+              else if(f>fMax){col='#e6b566';txt='Zu nass';}
+              else if(t<tMin){col='#e6b566';txt='Boden kalt';}
+              else if(t>tMax){col='#e6b566';txt='Boden warm';}
+              const pille=`<span style="display:inline-flex;align-items:center;color:${col};background:${col}1f;border:1px solid ${col}3d;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:9px;white-space:nowrap;">${txt}</span>`;
+              const bild=A.entity_picture?`<img src="${A.entity_picture}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex:0 0 auto;">`:'';
+              return `<div style="display:flex;align-items:center;gap:12px;min-width:0;">${bild}
+                <div style="min-width:0;">
+                  <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${A.friendly_name||p}</span>${pille}</div>
+                  <div style="font-size:12px;font-style:italic;color:#8794a5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${A.species||''}</div>
+                </div></div>`;
+            ]]]
+          werte: |
+            [[[
+              const zahl=id=>{const s=states[id];const v=s?parseFloat(s.state):NaN;return Number.isFinite(v)?v:NaN;};
+              const de=(v,d)=>Number.isFinite(v)?v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d}):'–';
+              const p=variables.p;
+              const kachel=(o)=>{
+                const v=zahl(o.wert), mn=zahl(o.min), mx=zahl(o.max);
+                let col='#8794a5', txt='keine Daten';
+                if(Number.isFinite(v)){
+                  if(v<mn){col=o.aus;txt=o.tief;}
+                  else if(v>mx){col=o.aus;txt=o.hoch;}
+                  else {col='#a6d49e';txt='im Sollbereich';}
+                }
+                const pos=x=>Math.max(0,Math.min(100,(x-o.von)/(o.bis-o.von)*100));
+                const band=(Number.isFinite(mn)&&Number.isFinite(mx))?`<i style="position:absolute;top:0;bottom:0;left:${pos(mn)}%;width:${pos(mx)-pos(mn)}%;background:rgba(166,212,158,0.24);border-radius:3px;"></i>`:'';
+                const mark=Number.isFinite(v)?`<i style="position:absolute;top:-3px;left:${pos(v)}%;width:4px;height:12px;margin-left:-2px;border-radius:2px;background:${col};box-shadow:0 0 0 2px #171d29;"></i>`:'';
+                return `<div style="background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:13px;padding:10px 12px;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#8794a5;"><ha-icon icon="${o.icon}" style="--mdc-icon-size:15px;width:15px;height:15px;display:flex;margin:0;color:${col};"></ha-icon>${o.titel}</div>
+                  <div style="font-size:20px;font-weight:750;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;margin-top:4px;">${de(v,1)}<span style="font-size:0.6em;color:#8794a5;font-weight:600;margin-left:2px;">${o.einheit}</span></div>
+                  <div style="position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);margin:8px 0 7px;">${band}${mark}</div>
+                  <div style="font-size:11px;font-weight:600;color:${col===o.aus?col:'#8794a5'};">${txt}</div>
+                  <div style="font-size:11px;color:#8794a5;">Soll ${de(mn,0)}–${de(mx,0)} ${o.einheit}</div>
+                </div>`;
+              };
+              return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">`
+                + kachel({titel:'Bodenfeuchte',icon:'mdi:water',wert:`sensor.${p}_bodenfeuchtigkeit`,min:`number.${p}_min_bodenfeuchtigkeit`,max:`number.${p}_max_bodenfeuchtigkeit`,von:0,bis:100,einheit:'%',aus:'#e6b566',tief:'zu trocken',hoch:'zu nass'})
+                + kachel({titel:'Bodentemperatur',icon:'mdi:thermometer-low',wert:`sensor.${p}_bodentemperatur`,min:`number.${p}_min_bodentemperatur`,max:`number.${p}_max_bodentemperatur`,von:0,bis:40,einheit:'°C',aus:'#e6b566',tief:'zu kalt',hoch:'zu warm'})
+                + `</div>`;
+            ]]]
+          fuss: |
+            [[[
+              const s=states[variables.akku];
+              const a=s?parseFloat(s.state):NaN;
+              let col='#8794a5';
+              if(Number.isFinite(a)) col=a>=30?'#a6d49e':(a>=15?'#e6b566':'#f0736a');
+              const icon=!Number.isFinite(a)?'mdi:battery-unknown':(a>=30?'mdi:battery-high':(a>=15?'mdi:battery-medium':'mdi:battery-alert'));
+              const akku=`<span style="display:inline-flex;align-items:center;gap:3px;color:${col};"><ha-icon icon="${icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${Number.isFinite(a)?Math.round(a)+' %':'–'}</span>`;
+              const zusatz=variables.hinweis?` · ${variables.hinweis}`:'';
+              return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8794a5;">${akku}<span>· Sensor ${variables.sensor}${zusatz}</span></div>`;
+            ]]]
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 14px 16px
+          grid:
+            - grid-template-areas: '"kopf" "werte" "fuss"'
+            - grid-template-columns: 1fr
+            - row-gap: 12px
+          custom_fields:
+            kopf:
+              - justify-self: stretch
+              - padding-right: 34px
+              - text-align: left
+            werte:
+              - justify-self: stretch
+              - text-align: left
+            fuss:
+              - justify-self: start
+      cards:
+        - type: custom:apexcharts-card
+          graph_span: 7d
+          header:
+            show: true
+            title: Bodenfeuchte · 7 Tage (Tagesmittel)
+            show_states: false
+          apex_config:
+            chart:
+              background: transparent
+              foreColor: '#8794a5'
+              height: 130
+              toolbar:
+                show: false
+            dataLabels:
+              enabled: false
+            grid:
+              borderColor: rgba(255,255,255,0.06)
+              strokeDashArray: 3
+            legend:
+              show: false
+            stroke:
+              curve: smooth
+              width: 2
+            tooltip:
+              enabled: false
+          yaxis:
+            - min: 0
+              max: 100
+              decimals: 0
+              apex_config:
+                tickAmount: 2
+          series:
+            - entity: sensor.[[pflanze]]_bodenfeuchtigkeit
+              name: Bodenfeuchte
+              color: '#a6d49e'
+              type: area
+              opacity: 0.18
+              unit: '%'
+              statistics:
+                type: mean
+                period: day
+            - entity: number.[[pflanze]]_min_bodenfeuchtigkeit
+              name: Min
+              color: '#6e7988'
+              stroke_width: 1
+            - entity: number.[[pflanze]]_max_bodenfeuchtigkeit
+              name: Max
+              color: '#6e7988'
+              stroke_width: 1
+          card_mod:
+            style: |
+              ha-card {
+                background: rgba(255,255,255,0.02) !important;
+                border: 1px solid rgba(255,255,255,0.06) !important;
+                border-radius: 16px !important;
+                box-shadow: none !important;
+                margin: 0 12px 12px !important;
+              }
+              /* apexcharts-card 2.2.3 rendert den Titel als #header__title, nicht als .card-header */
+              #header { padding: 10px 12px 0 !important; }
+              #header__title { font-size: 13px !important; font-weight: 600 !important; color: #b4c0cf !important; }
+      card_mod:
+        style: |
+          ha-card {
+            border-radius: 22px !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+            box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          }
+          ha-card button.header, ha-card .primaryico { color: #6e7988 !important; }

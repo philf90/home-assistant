@@ -10,7 +10,8 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
 3. Jeder "type: custom:..."-Wert steht in ci/known_cards.txt. Faengt Tippfehler
    im Kartennamen, die Lovelace nur als "Custom element doesn't exist" meldet.
 4. Entity-IDs unter "entity:" und "triggers_update:" sehen wie "domain.objekt"
-   aus (klein geschrieben, keine Leerzeichen).
+   aus (klein geschrieben, keine Leerzeichen). Werte mit Templates oder
+   Decluttering-Variablen ("[[name]]") werden uebersprungen.
 
 Aufruf: python ci/check_yaml.py [datei ...]
 Ohne Argumente werden alle *.yaml im Repo-Wurzelverzeichnis geprueft.
@@ -44,8 +45,9 @@ HA_TAGS = (
 ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
 
 # Werte, die statt einer festen Entity ein Template liefern -- die kann nur die
-# laufende Instanz aufloesen, deshalb werden sie uebersprungen.
-TEMPLATE_MARKERS = ("[[[", "{{", "{%")
+# laufende Instanz aufloesen, deshalb werden sie uebersprungen. "[[" deckt
+# button-card-JS ("[[[ ... ]]]") und Decluttering-Variablen ("[[name]]") ab.
+TEMPLATE_MARKERS = ("[[", "{{", "{%")
 
 
 class Placeholder:
