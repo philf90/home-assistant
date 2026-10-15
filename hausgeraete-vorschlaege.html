@@ -371,11 +371,13 @@
         <p>Mit Modell WG44B2070 und diesen Zeitpunkten: getrennt 06.10. 02:23 bis 10.10. 13:56, 12.10. 12:55 (7 s), 15.10. 05:35 bis heute; WLAN laut Router durchgehend verbunden; Trockner und Geschirrspüler am selben Konto stabil. Wenn das Muster bleibt, ist das ein Gewährleistungsfall für das Funkmodul.</p>
       </div>
       <div class="step">
-        <b>Automatischer Neustart über die Shelly-Steckdose<span class="tag">Überbrückung</span></b>
+        <b>Automatischer Neustart über die Shelly-Steckdose<span class="tag">angelegt</span></b>
         <p>Macht dasselbe wie dein Handgriff, aber nur, wenn die Maschine sicher aus ist. Die Messwerte geben die Grenze vor: ausgeschaltet misst die Shelly konstant 0,0 W, in der Startverzögerung pendelt sie alle paar Sekunden zwischen 0 und 1,6 W (gemessen am 10.10. ab 20:10). „30 Minuten unter 0,5 W“ trifft also nur die ausgeschaltete Maschine, ein programmierter Start geht nicht verloren.</p>
         <ul>
-          <li>Das Wiedereinschalten übernimmt die Shelly selbst (Einstellung „Automatisch einschalten nach 60 s“). So bleibt die Maschine nicht aus, falls Home Assistant während der Pause neu startet.</li>
-          <li>Höchstens ein Versuch pro 6 Stunden, mit Benachrichtigung. Hilft der Neustart nicht, siehst du das in der Nachricht.</li>
+          <li>„Aus“ prüft der Hilfssensor <code>binary_sensor.waschmaschine_ausgeschaltet</code> (Schwellwert-Helfer: Shelly-Leistung unter 0,5 W), der seit 30 min an sein muss. Ohne Vorlagen-Bedingungen, nur mit Zustands-Bedingungen.</li>
+          <li>Ausschalten, 60 s warten, wieder einschalten. Startet Home Assistant genau in diesen 60 s neu, bleibt die Steckdose aus; dagegen hilft „Automatisch einschalten nach 60 s“ in den Shelly-Einstellungen.</li>
+          <li>Höchstens ein Versuch pro 6 Stunden (die Automation wartet danach 6 h, Modus „single“), mit Nachricht ans iPhone. Hilft der Neustart nicht, steht das in der Nachricht.</li>
+          <li>Drei Auslöser: 15 min getrennt („off“), 15 min nicht verfügbar, oder 30 min ausgeschaltet. Der dritte holt den Neustart nach, wenn die Trennung während eines Programms begann.</li>
           <li>Der Trockner hat ebenfalls eine Shelly; dieselbe Automation kann ihn mit abdecken, sobald dort ein Ausfall auftritt.</li>
         </ul>
       </div>
@@ -394,54 +396,69 @@
     </div>
 
     <div class="code-head">
-      <p class="note">Automation zu Maßnahme 3. Entity-IDs aus der Instanz (ohne Seriennummer); <code>notify.mobile_app_iphone</code> ist ein Platzhalter.</p>
+      <p class="note">Automation „Waschmaschine: Home Connect neu verbinden“, so in der Instanz angelegt. <code>notify.mobile_app_iphone</code> ist der Platzhalter aus dem README.</p>
       <button class="btn" type="button" id="copy-auto">YAML kopieren</button>
     </div>
 <pre id="auto-yaml">alias: "Waschmaschine: Home Connect neu verbinden"
-description: &gt;-
-  Startet die Waschmaschine ueber die Shelly neu, wenn Home Connect sie seit
-  15 min als getrennt meldet und sie nachweislich aus ist. Wiedereinschalten
-  macht die Shelly selbst (Auto-on nach 60 s).
 mode: single
+max_exceeded: silent
 triggers:
-  <span class="c"># alle 10 min pruefen; so wird ein spaeterer Versuch nicht verpasst</span>
-  - trigger: time_pattern
-    minutes: "/10"
+  - trigger: state
+    entity_id: binary_sensor.waschmaschine_konnektivitat
+    to: "off"
+    for: { minutes: 15 }
+  - trigger: state
+    entity_id: binary_sensor.waschmaschine_konnektivitat
+    to: unavailable
+    for: { minutes: 15 }
+  <span class="c"># holt den Neustart nach, wenn die Trennung waehrend eines Programms begann</span>
+  - trigger: state
+    entity_id: binary_sensor.waschmaschine_ausgeschaltet
+    to: "on"
+    for: { minutes: 30 }
 conditions:
-  <span class="c"># seit 15 min nicht verbunden ("off" oder "unavailable")</span>
-  - condition: template
-    value_template: &gt;-
-      {% set k = 'binary_sensor.waschmaschine_konnektivitat' %}
-      {{ not is_state(k, 'on') and
-         now() - states[k].last_changed &gt; timedelta(minutes=15) }}
-  <span class="c"># Maschine aus: seit 30 min unveraendert unter 0,5 W</span>
-  <span class="c"># (in der Startverzoegerung pendelt der Wert alle paar Sekunden 0 - 1,6 W)</span>
-  - condition: template
-    value_template: &gt;-
-      {% set p = 'sensor.shelly_plugs_gen3_waschmaschine_switch_0_power' %}
-      {{ states(p) | float(99) &lt; 0.5 and
-         now() - states[p].last_changed &gt; timedelta(minutes=30) }}
+  - condition: or
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.waschmaschine_konnektivitat
+        state: "off"
+        for: { minutes: 15 }
+      - condition: state
+        entity_id: binary_sensor.waschmaschine_konnektivitat
+        state: unavailable
+        for: { minutes: 15 }
+  <span class="c"># Schwellwert-Helfer: Shelly-Leistung unter 0,5 W. 30 min schliessen die</span>
+  <span class="c"># Startverzoegerung aus, dort pendelt die Leistung zwischen 0 und 1,6 W.</span>
+  - condition: state
+    entity_id: binary_sensor.waschmaschine_ausgeschaltet
+    state: "on"
+    for: { minutes: 30 }
   - condition: state
     entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
     state: "on"
-  <span class="c"># hoechstens ein Versuch pro 6 Stunden</span>
-  - condition: template
-    value_template: &gt;-
-      {{ this.attributes.last_triggered is none or
-         now() - this.attributes.last_triggered &gt; timedelta(hours=6) }}
 actions:
   - action: switch.turn_off
     target:
       entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
-  - wait_template: "{{ is_state('binary_sensor.waschmaschine_konnektivitat', 'on') }}"
-    timeout: "00:10:00"
+  - delay: { seconds: 60 }
+  - action: switch.turn_on
+    target:
+      entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
+  - wait_for_trigger:
+      - trigger: state
+        entity_id: binary_sensor.waschmaschine_konnektivitat
+        to: "on"
+    timeout: { minutes: 10 }
+    continue_on_timeout: true
   - action: notify.mobile_app_iphone
     data:
       title: Waschmaschine
       message: &gt;-
-        {{ 'Home Connect wieder verbunden.' if wait.completed
-           else 'Neustart ausgefuehrt, Home Connect noch getrennt.' }}</pre>
-    <p class="note">Vorher in der Shelly-Oberfläche (oder App) beim Ausgang einstellen: <b style="color: var(--label)">Auto-on nach 60 s</b> und <b style="color: var(--label)">nach Stromausfall: ein</b>. Wird beides nicht gesetzt, braucht die Automation ein eigenes <code>switch.turn_on</code> nach einem <code>delay</code> von 60 s. Die Bedingungen habe ich in der Instanz ausgewertet (gültig; um 20:36 korrekt „nein“, weil die Maschine 4,6 W zog). Angelegt und als Ganzes getestet ist die Automation noch nicht.</p>
+        {{ 'Home Connect nach Neustart wieder verbunden.' if wait.trigger
+           else 'Neustart ausgeführt, Home Connect nach 10 min noch getrennt.' }}
+  <span class="c"># Sperre: hoechstens ein Versuch pro 6 Stunden</span>
+  - delay: { hours: 6 }</pre>
+    <p class="note">Dazu angelegt: Schwellwert-Helfer „Waschmaschine ausgeschaltet“ (<code>binary_sensor.waschmaschine_ausgeschaltet</code>, Quelle Shelly-Leistung, untere Grenze 0,5 W, Hysterese 0). Optional in der Shelly-Oberfläche „Automatisch einschalten nach 60 s“ setzen, als Absicherung gegen einen Neustart von Home Assistant während der Pause.</p>
   </section>
 
   <!-- ================= Animationen ================= -->
@@ -557,7 +574,7 @@ actions:
         <p>Alle aus <code>design/palette.yaml</code>: Wasser Blau <code>#7fb3d5</code>, Luft Weiß mit Deckkraft, „Fertig“ Türkis <code>#7fd0d5</code> (Akzent Hausgeräte), Stufen 0,12 / 0,24 / 0,5. Keine neue Farbe nötig.</p>
       </div>
     </div>
-    <p class="note">Sobald du dich für eine Variante entschieden hast, baue ich sie in <code>waschmaschine-</code>, <code>trockner-</code> und <code>geschirrspueler-button-card.yaml</code> ein und lege die Automation an.</p>
+    <p class="note"><b style="color: var(--label)">Umgesetzt am 15.10.2026:</b> Variante B steht im Template <code>owlet_geraete_fx</code> (<code>hausgeraete-animation-button-card-templates.yaml</code>) und in <code>waschmaschine-</code>, <code>trockner-</code> und <code>geschirrspueler-button-card.yaml</code>. Abweichung von der Vorschau: Im Ruhezustand zeigt die Kachel weiter das Gerätesymbol, Bullauge und Sprüharm erscheinen nur beim Laufen und Pausieren.</p>
   </section>
 
   <section aria-labelledby="h-quellen">
