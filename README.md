@@ -16,7 +16,7 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Bereich | Dateien |
 |---|---|
 | Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml` |
-| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml` |
+| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
 | Navigation & Kopf | `navbar-card.yaml`, `top-navigation-button-card.yaml`, `welcome-banner-button-card.yaml` |
 | Energie | `energie-autarkie-…`, `energie-diagramme-…`, `energie-flow-…`, `energie-flow-leiste-…`, `energie-pv-…`, `energie-verbrauch-uebersicht-…`, `energie-monatsbilanz-card.yaml`, `gas-wasser-button-card.yaml` |
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
@@ -199,7 +199,8 @@ Dazu:
   Festplatte von Home Assistant OS unter Proxmox vergrößern
 
 Die HTML-Dateien (`home-kacheln-vorschlaege.html`,
-`autos-karten-v2-vorschlaege.html`, `grafana/proxmox-mockups.html`) sind
+`autos-karten-v2-vorschlaege.html`, `wetter-animiert-vorschlaege.html`,
+`grafana/proxmox-mockups.html`) sind
 Design-Entwürfe und werden direkt im Browser geöffnet.
 
 ## Prüfungen

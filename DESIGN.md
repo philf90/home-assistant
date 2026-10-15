@@ -181,6 +181,28 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 - **Wetterwarnungen:** offizielle DWD-Stufenfarben (`#7c8ba1`, `#f2c500`,
   `#fb9a12`, `#e6480e`, `#c0392b`) und `#4ade80` für „aktiv“. Nicht anpassen.
 
+## Animierte Hintergründe
+
+Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
+hinter dem Inhalt (Template `owlet_wetter_fx` in
+`wetter-animation-button-card-templates.yaml`, Entwurf und Rechnung in
+`wetter-animiert-vorschlaege.html`). Dafür gilt zusätzlich:
+
+- Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
+  Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
+  Rot, Sterne, Schnee und Blitz in Weiß mit Deckkraft.
+- Kleine Schrift auf animiertem Grund steht in `#b4c0cf` statt `#8794a5`.
+- Kleine Schrift muss im schlechtesten Fall (alle Flächen einer Szene
+  übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
+  der Schrift gedämpft: im Banner hinter der Datumszeile auf 45 %, in den
+  Kacheln der Wetter-Karte über einen Schutzgrund `#171d29` mit 0,62
+  Deckkraft (Animation dort zu 38 % sichtbar).
+- Text links im Banner bleibt ohne Animation; die Ebene beginnt erst rechts
+  neben dem gemessenen Text.
+- Blitze höchstens 3 pro Sekunde (WCAG 2.3.1); verwendet wird ein Doppelblitz
+  alle 8 s.
+- „Bewegung reduzieren“ am Gerät zeigt ein Standbild derselben Szene.
+
 ## Eine neue Farbe aufnehmen
 
 1. Prüfen, ob eine vorhandene Farbe die Rolle schon abdeckt. Die Meldung von
