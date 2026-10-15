@@ -1,5 +1,6 @@
 # HINWEIS PLATZHALTER: MAC-Adresse und Seriennummern in den Entity-IDs
-#   (shellyplus1_mac, elv_sh_wsm_seriennr_1, elv_sh_wsm_seriennr_2)
+#   (shellyplus1_mac, elv_sh_wsm_seriennr_1, elv_sh_wsm_seriennr_2),
+#   notify.mobile_app_iphone (Automation im Kommentar)
 # Anonymisiert -- vor dem Einfuegen durch die eigenen Werte ersetzen.
 # Tabelle und Vorgehen: README.md, Abschnitt "Platzhalter ersetzen".
 #
@@ -23,8 +24,9 @@
 #   Bewaesserung        Laufzeit, Laufzeit nach Regen und Regen-Schwelle mit
 #   einstellen          -/+ (Grenzen kommen aus den Helfern, am Rand wird das
 #                       Symbol grau); Knopf "Standard" (60 min / 30 min /
-#                       1,0 mm) nur, wenn ein Wert abweicht; Hinweis, mit
-#                       welcher Laufzeit der naechste Start laeuft
+#                       1,0 mm) nur, wenn ein Wert abweicht; Schalter
+#                       "Meldung am Ende"; Hinweis, mit welcher Laufzeit der
+#                       naechste Start laeuft
 #
 # button-card v7 ignoriert triggers_update: Neu gezeichnet wird, wenn sich
 # eine Entity aendert, die ein Template liest. Die Timer-Zeilen lesen deshalb
@@ -45,6 +47,7 @@
 #       input_number.bewasserung_laufzeit             10-90 min, Schritt 5
 #       input_number.bewasserung_laufzeit_nach_regen  10-90 min, Schritt 5
 #       input_number.bewasserung_regen_schwelle       0,5-10 mm, Schritt 0,5
+#       input_boolean.bewasserung_meldung  Schalter der Meldung am Ende
 #   - Skript script.bewasserung_einstellungen_setzen: Felder laufzeit,
 #     laufzeit_nach_regen, regen_schwelle -> je input_number.set_value
 #   - Automationen (UI):
@@ -55,7 +58,11 @@
 #           der Zone zu
 #       "Bewaesserung: Pumpe aus ohne laufende Zone"  Timer beendet oder
 #           abgebrochen, Pumpe 1 min an, HA-Start (1 min Wartezeit) -> laeuft
-#           kein Timer: Pumpe aus, offene Ventile zu
+#           kein Timer: Pumpe aus, offene Ventile zu. Lief die Pumpe und ist
+#           der Schalter an: Meldung an notify.mobile_app_iphone mit Grund
+#           (Laufzeit abgelaufen / von Hand beendet / Regen / Pumpe ohne Zone /
+#           Neustart), Uhrzeit, Pumpenlaufzeit und Tagesmengen der Zonen;
+#           Tippen oeffnet /dashboard-home/garten
 #       "Bewaesserung: Abbruch bei Regen"  Regensensor meldet Naesse, ein
 #           Ventil offen -> alle Ventile zu
 type: vertical-stack
@@ -863,6 +870,81 @@ cards:
                   - width: 18px
                   - color: *bw_plus_color
         styles: *bw_set_row
+      # Schalter fuer die Meldung am Ende (Automation "Pumpe aus ohne laufende
+      # Zone"). Pille wie die Flugradar-Schalter, Akzent Limette (Garten).
+      - type: custom:button-card
+        entity: input_boolean.bewasserung_meldung
+        name: Meldung am Ende
+        icon: |
+          [[[ return (entity && entity.state === 'on') ? 'mdi:bell-ring-outline' : 'mdi:bell-off-outline'; ]]]
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        custom_fields:
+          sub: Push ans iPhone, wenn alles aus ist
+          sw: |
+            [[[
+              const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
+              return `<span style="position:relative;display:block;box-sizing:border-box;width:42px;height:24px;border-radius:12px;background:${an?'rgba(189, 210, 127, 0.5)':'rgba(255,255,255,0.1)'};border:1px solid ${an?'rgba(189, 210, 127, 0.5)':'rgba(255,255,255,0.08)'};"><span style="position:absolute;top:2px;left:${an?20:2}px;width:18px;height:18px;border-radius:50%;background:${an?'#f2f5f8':'#8794a5'};transition:left 0.15s ease;"></span></span>`;
+            ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'rgba(255,255,255,0.028)'
+            - border: 1px solid rgba(255,255,255,0.06)
+          grid:
+            - grid-template-columns: min-content minmax(0, 1fr) auto
+            - grid-template-areas: '"i n sw" "i sub sw"'
+            - grid-template-rows: min-content min-content
+            - column-gap: 4px
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 9px
+            - align-self: center
+            - background: |
+                [[[ return (entity && entity.state === 'on') ? 'rgba(189, 210, 127, 0.16)' : 'rgba(255,255,255,0.05)'; ]]]
+            - border: |
+                [[[ return (entity && entity.state === 'on') ? '1px solid rgba(189, 210, 127, 0.24)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - color: |
+                [[[ return (entity && entity.state === 'on') ? '#bdd27f' : '#8794a5'; ]]]
+          name:
+            - justify-self: stretch
+            - align-self: end
+            - min-width: 0
+            - text-align: left
+            - font-size: 14.5px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: '#f2f5f8'
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            sub:
+              - justify-self: stretch
+              - align-self: start
+              - min-width: 0
+              - text-align: left
+              - font-size: 12.5px
+              - line-height: 1.25
+              - color: '#8794a5'
+              - margin-top: 2px
+              - white-space: normal
+            sw:
+              - align-self: center
+              - justify-self: end
+              - margin-left: 8px
       - type: custom:button-card
         show_icon: false
         show_name: false
