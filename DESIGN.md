@@ -191,7 +191,16 @@ solange ein Programm läuft, pausiert (eingefroren) oder gerade fertig ist
 (Template `owlet_geraete_fx` in `hausgeraete-animation-button-card-templates.yaml`,
 Entwurf in `hausgeraete-vorschlaege.html`): Wasser in Blau, Luft in Weiß mit
 Deckkraft, „Fertig“ in Türkis; die Wasserwelle der Waschmaschine bleibt im
-unteren Innenabstand und liegt damit nie hinter Text. Dafür gilt zusätzlich:
+unteren Innenabstand und liegt damit nie hinter Text. Die Thermostat-Kacheln
+der Heizung (Template `owlet_heizung_fx` in
+`heizung-animation-button-card-templates.yaml`, genutzt von
+`thermostate-button-card-v3.yaml`) bewegen sich nur in der Lücke unten im
+Bogen (50 × 32 px), also nie hinter Text: Wärmewellen in Amber, solange der
+Raum heizt, in drei Stufen nach Ventilöffnung; bei offenem Fenster ein
+Luftzug in Wolkengrau, der dreimal durchläuft und dann steht. „Fenster offen“
+steht als Zustand in Blau (6,54:1 auf der Kachel). Eine Ebene hinter der
+ganzen Karte gibt es dort bewusst nicht: 8 Kacheln mit je drei Textzeilen
+würden überladen. Dafür gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
