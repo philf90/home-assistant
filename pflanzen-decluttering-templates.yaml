@@ -24,7 +24,7 @@
 #            sensor.<pflanze>_bodenfeuchtigkeit, _bodentemperatur und die
 #            number.<pflanze>_min_/max_…-Grenzwerte gebildet
 #   akku     Akku-Sensor des Bodensensors
-#   sensor   Anzeigename des Bodensensors (Fusszeile, Popup-Titel)
+#   sensor   Anzeigename des Bodensensors (Fusszeile)
 #   hinweis  optional, z. B. "geteilt mit Gurken"
 #
 # Hinweise zu den Karten:
@@ -35,9 +35,16 @@
 #     daher margin:0 und text-align:left.
 #   - Das Foto kommt ueber show_entity_picture (fest gebunden), nicht als
 #     <img> im HTML, das bei jeder Aktualisierung neu entstuende.
+#   - Popup: button-card wertet [[[ ]]] auch in fire-dom-event-Daten aus;
+#     der Titel nimmt daher den Anzeigenamen der Pflanze. popup_styles setzt
+#     die Owlet-Popupflaeche #222b3c (browser_mod 3.3, documentation/styles.md).
+#   - Popup-Diagramm: statistics.align: start legt jeden Tagesmittelwert auf
+#     00:00 seines Tages; mit dem Standard "middle" (12:00) begann die Flaeche
+#     eingerueckt. chart.offsetX greift auf iOS nicht, deshalb rueckt ein
+#     negativer Rand an #graph die y-Beschriftung unter den Titel.
 #
 # Voraussetzung: custom:decluttering-card, custom:button-card (v7),
-#                custom:apexcharts-card, browser_mod (Popup),
+#                custom:apexcharts-card, browser_mod (Popup), card-mod,
 #                je Pflanze ein Helfer input_boolean.<pflanze>_abgeerntet.
 # ============================================================================
 decluttering_templates:
@@ -64,13 +71,23 @@ decluttering_templates:
         browser_mod:
           service: browser_mod.popup
           data:
-            title: '[[sensor]] · Bodenfeuchte'
+            title: "[[[ return (entity && entity.attributes.friendly_name ? entity.attributes.friendly_name : variables.p) + ' · Bodenfeuchte'; ]]]"
+            # Owlet: Popups bekommen die erhoehte Flaeche #222b3c (DESIGN.md)
+            popup_styles:
+              - style: all
+                styles: |
+                  ha-dialog {
+                    --ha-dialog-surface-background: #222b3c;
+                    --ha-card-background: transparent;
+                    --primary-text-color: #f2f5f8;
+                    --ha-dialog-border-radius: 22px !important;
+                  }
             content:
               type: custom:apexcharts-card
               graph_span: 7d
               header:
                 show: true
-                title: Bodenfeuchte · 7 Tage (Tagesmittel)
+                title: 7 Tage · Tagesmittel
                 show_states: false
               apex_config:
                 chart:
@@ -107,6 +124,9 @@ decluttering_templates:
                   statistics:
                     type: mean
                     period: day
+                    # Standard "middle" setzt jeden Tagesmittelwert auf 12:00; der erste Punkt liegt dann
+                    # Stunden nach Fensterbeginn und die Flaeche beginnt eingerueckt. "start" = 00:00 des Tages.
+                    align: start
                 - entity: number.[[pflanze]]_min_bodenfeuchtigkeit
                   name: Min
                   color: '#6e7988'
@@ -115,6 +135,15 @@ decluttering_templates:
                   name: Max
                   color: '#6e7988'
                   stroke_width: 1
+              card_mod:
+                style: |
+                  ha-card { background: transparent !important; border: none !important; box-shadow: none !important; }
+                  /* apexcharts-card 2.2.3 rendert den Titel als #header__title */
+                  #header { padding: 4px 4px 0 !important; }
+                  #header__title { font-size: 13px !important; font-weight: 600 !important; color: #b4c0cf !important; }
+                  /* ApexCharts laesst links ~23 px frei, bevor die y-Beschriftung beginnt. chart.offsetX wirkt
+                     auf iOS nicht (SVG-transform); negativer Rand am HTML-Container rueckt "100" unter den Titel. */
+                  #graph { margin-left: -23px !important; }
       custom_fields:
         kopf: |
           [[[
