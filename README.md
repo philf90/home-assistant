@@ -16,10 +16,10 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Bereich | Dateien |
 |---|---|
 | Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml`, `pflanzen-view.yaml` |
-| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
+| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `heizung-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
 | Navigation & Kopf | `navbar-card.yaml`, `top-navigation-button-card.yaml`, `welcome-banner-button-card.yaml` |
 | Energie | `energie-autarkie-…`, `energie-diagramme-…`, `energie-flow-…`, `energie-flow-leiste-…`, `energie-pv-…`, `energie-verbrauch-uebersicht-…`, `energie-monatsbilanz-card.yaml`, `gas-wasser-button-card.yaml` |
-| Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
+| Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2, v3; v3 animiert über `owlet_heizung_fx` mit Zustand „Fenster offen“), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
 | Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…` (animiert über `owlet_geraete_fx`, Entwurf und Home-Connect-Analyse in `hausgeraete-vorschlaege.html`), `staubsauger-button-card.yaml` |
 | Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-unas-pro-button-card.yaml`, `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
@@ -113,7 +113,7 @@ Die Pfade sind relativ zum Konfigurationsordner von Home Assistant.
 oberster Ebene (neben `views:`) einfügen – `decluttering_templates:` aus
 `decluttering-templates.yaml` und `pflanzen-decluttering-templates.yaml`,
 `button_card_templates:` aus den
-Flugradar- und Fußball-Templates. Existiert der Block schon, nur die Einträge
+Flugradar-, Fußball-, Wetter-, Hausgeräte- und Heizungs-Templates. Existiert der Block schon, nur die Einträge
 darunter ergänzen.
 
 **Template-Sensoren:** `template-autos-passat.yaml` gehört in die
