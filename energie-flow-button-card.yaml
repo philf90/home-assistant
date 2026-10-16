@@ -8,6 +8,12 @@
 # Verbraucher haengen auf einem flachen Bogen darunter. Entwurf, Messwerte
 # und Begruendung: energiefluss-vorschlaege.html.
 #
+# AUTARKIE: Der Kopf zeigt die Autarkie jetzt, die Tageszeile die Autarkie
+# heute als Ring links neben dem Herkunftsbalken (beides 1 - Netz / Haus,
+# wie die Monatsbilanz). Unter dem Balken steht die Einspeisung heute
+# (sensor.solar_uberschuss_daily), getrennt, weil sie nicht zum
+# Hausverbrauch gehoert.
+#
 # ANIMATION: Lichtstriche (stroke-dasharray) statt SMIL-Punkten. Breite und
 # Tempo wachsen logarithmisch mit der Leistung, gerastert in 6 Stufen
 # (n = log10(1 + P/10) / log10(301), Obergrenze 3000 W). Die Phase haengt an
@@ -55,7 +61,7 @@ card_mod:
       gap: 8px !important;
     }
 cards:
-  # ---- Kopf: Zustandskachel, Autarkie jetzt/heute, Badge ----
+  # ---- Kopf: Zustandskachel, Autarkie jetzt, Badge ----
   - type: custom:button-card
     icon: mdi:transmission-tower
     name: Energiefluss
@@ -82,11 +88,9 @@ cards:
       [[[
         const g=(id)=>{ const s=states[id]; return s?parseFloat(s.state):NaN; };
         const netz=g('sensor.smart_meter_netzbezug'), haus=g('sensor.pv_anlage_hausbedarf');
-        const use=g('sensor.pv_anlage_taglicher_hausverbrauch'), grid=g('sensor.pv_anlage_tagliche_netznutzung');
         const imp=(!isNaN(netz)&&netz>15)?netz:0;
         const jetzt=(!isNaN(haus)&&haus>0) ? Math.round(Math.max(0,Math.min(1,1-imp/haus))*100)+' %' : '–';
-        const heute=(!isNaN(use)&&use>0&&!isNaN(grid)) ? Math.round(Math.max(0,Math.min(1,1-grid/use))*100)+' %' : '–';
-        return `Autarkie ${jetzt} · heute ${heute}`;
+        return `Autarkie jetzt ${jetzt}`;
       ]]]
     custom_fields:
       badge: |
@@ -385,7 +389,7 @@ cards:
         tap_action: { action: more-info }
         style: { top: 45.3%, left: 50%, width: 24%, height: 25%, transform: 'translate(-50%, -50%)', border-radius: 999px, cursor: pointer, opacity: 0, z-index: 2 }
 
-  # ---- Tageszeile: Herkunft des Stroms heute ----
+  # ---- Tageszeile: Autarkie heute, Herkunft des Stroms, Einspeisung ----
   - type: custom:button-card
     entity: sensor.pv_anlage_taglicher_hausverbrauch
     show_icon: false
@@ -397,14 +401,16 @@ cards:
       - sensor.pv_anlage_tagliche_netznutzung
       - sensor.pv_anlage_tagliche_pv_hausabgabe
       - sensor.pv_anlage_tagliche_akku_hausabgabe
+      - sensor.solar_uberschuss_daily
     custom_fields:
       heute: |
         [[[
           const g=(id)=>{ const s=states[id]; return s?parseFloat(s.state):NaN; };
-          const use=g('sensor.pv_anlage_taglicher_hausverbrauch');
+          const use=g('sensor.pv_anlage_taglicher_hausverbrauch'), grid=g('sensor.pv_anlage_tagliche_netznutzung');
+          const ex=g('sensor.solar_uberschuss_daily');
           const kwh=(x)=>isNaN(x)?'–':x.toFixed(2).replace('.',',')+' kWh';
           const all=[
-            [g('sensor.pv_anlage_tagliche_netznutzung'),     '#f0736a', 'Netz'],
+            [grid,                                                 '#f0736a', 'Netz'],
             [g('sensor.pv_anlage_tagliche_pv_hausabgabe'),   '#e6c15a', 'PV'],
             [g('sensor.pv_anlage_tagliche_akku_hausabgabe'), '#7fb3d5', 'Akku']
           ];
@@ -414,12 +420,29 @@ cards:
           const tot=segs.reduce((a,s)=>a+(s[0]||0),0)||1;
           const bar=!ok ? '' : segs.map(s=>`<i style="display:block;height:100%;width:${(s[0]/tot*100).toFixed(1)}%;background:${s[1]};"></i>`).join('');
           const leg=segs.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:7px;height:7px;border-radius:50%;background:${s[1]};display:inline-block;"></i>${s[2]} ${kwh(s[0])}</span>`).join('');
-          return `<div style="display:flex;flex-direction:column;gap:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
-              <span style="font-size:12px;color:#8794a5;">Heute · Herkunft des Stroms</span>
-              <b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;">${kwh(use)}</b></div>
-            <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;gap:2px;background:rgba(255,255,255,0.06);">${bar}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#b4c0cf;font-variant-numeric:tabular-nums;">${leg}</div>
+          // Autarkie heute = Anteil von PV und Akku am Hausverbrauch (gleiche Formel wie die Monatsbilanz)
+          const aut=(use>0&&!isNaN(grid)) ? Math.max(0,Math.min(1,1-grid/use)) : NaN;
+          const C=2*Math.PI*28.5, len=isNaN(aut)?0:aut*C;
+          const ring=`<div style="position:relative;width:64px;height:64px;flex:none;">
+            <svg viewBox="0 0 64 64" width="64" height="64" style="display:block;transform:rotate(-90deg);">
+              <circle cx="32" cy="32" r="28.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="7"/>
+              ${len>0.5?`<circle cx="32" cy="32" r="28.5" fill="none" stroke="#89d2b0" stroke-width="7" stroke-linecap="round" stroke-dasharray="${len.toFixed(1)} ${C.toFixed(1)}"/>`:''}
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
+              <b style="font-size:17px;font-weight:750;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;">${isNaN(aut)?'–':Math.round(aut*100)+'%'}</b>
+              <span style="font-size:10px;color:#8794a5;margin-top:3px;">autark</span></div></div>`;
+          return `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:14px;align-items:center;">${ring}
+              <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+                  <span style="font-size:12px;color:#8794a5;">Heute · Herkunft des Stroms</span>
+                  <b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;">${kwh(use)}</b></div>
+                <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;gap:2px;background:rgba(255,255,255,0.06);">${bar}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:#b4c0cf;font-variant-numeric:tabular-nums;">${leg}</div>
+              </div></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;font-size:12px;color:#b4c0cf;font-variant-numeric:tabular-nums;">
+              <span style="display:inline-flex;align-items:center;gap:6px;"><ha-icon icon="mdi:transmission-tower-export" style="--mdc-icon-size:15px;color:#89d2b0;"></ha-icon>Eingespeist heute</span>
+              <b style="color:#89d2b0;font-weight:700;">${kwh(ex)}</b></div>
           </div>`;
         ]]]
     styles:
