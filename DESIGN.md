@@ -209,7 +209,15 @@ sich mit leichter Welle bis zum Tankstand, die Füllung in der Stufe „Rand“
 (0,24), damit das Symbol darauf 3:1 hält; knappe oder fällige Werte und ein
 offenes Schloss zeigen zwei Ringe, die dreimal laufen und dann als Schein
 stehen bleiben; unter 4 °C funkeln Eiskristalle in Weiß mit Deckkraft am
-Bildrand. Dafür gilt zusätzlich:
+Bildrand. Das Energiefluss-Diagramm (`energie-flow-button-card.yaml`, Entwurf
+und Messwerte in `energiefluss-vorschlaege.html`) bewegt nur die Leitungen:
+Lichtstriche in der Farbe der Quelle bzw. des Verbrauchers auf einer Spur in
+der Stufe „Fläche“ (0,12), Breite und Tempo logarithmisch nach Leistung in
+sechs Stufen. Weil die Karte bei jedem Sensor-Update neu zeichnet (gemessen
+etwa alle 2 s), hängt die Phase an der Uhrzeit (negativer
+`animation-delay`); sonst begänne der Fluss jedes Mal von vorn. Nur die
+Quelle mit dem größten Anteil sendet einen Puls-Ring aus. Inaktive Leitungen
+sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
