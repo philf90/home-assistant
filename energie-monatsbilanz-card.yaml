@@ -26,16 +26,14 @@
 #   so ohne Zutun seinen Chip. ERSTES_JAHR in der Vorlage anpassen. Die
 #   Auswahl gilt fuer alle Geraete, die das Dashboard zeigen.
 #
-# Kennzahlen ueber dem Diagramm: Netzbezug des laufenden Jahres
-# (sensor.stromverbrauch_yearly) und Monats (sensor.stromverbrauch_monthly)
-# sowie die Erzeugung des Balkonkraftwerks im laufenden Monat
-# (sensor.stromerzeugung_balkonkraft_monthly, Einspeisung am Shelly-Stecker).
-# Das sind die Utility-Meter der Instanz; sie aktualisieren live und folgen
-# bewusst nicht der Jahresauswahl. Sie koennen um wenige kWh von der Summe der
-# Saeulen abweichen: Die Saeulen kommen aus der Statistik der Zaehler, die
-# Utility-Meter zaehlen erst ab ihrer Einrichtung und setzen bei Ausfaellen
-# aus. Die Balkonkraftwerk-Kachel misst die Abgabe ins Hausnetz (inkl. Akku),
-# die Solar-Saeule den Ertrag der Module.
+# Kennzahlen ueber dem Diagramm: Netzbezug, Solarertrag und Autarkie des
+# gewaehlten Jahres. Sie rechnen aus derselben Statistik wie die Saeulen und
+# folgen der Jahresauswahl (Template energie_mb_kachel, Daten ueber
+# energie_mb_daten aus energie-button-card-templates.yaml). Fruehere Fassungen
+# zeigten hier die Utility-Meter des laufenden Jahres und Monats; die folgten
+# der Jahresauswahl nicht, und die Balkonkraftwerk-Kachel mass die Abgabe am
+# Shelly-Stecker statt des Solarertrags der Saeulen (Oktober 2026: 62,5 gegen
+# 67,6 kWh).
 #
 # Warum die Serien den Helfer als entity haben: apexcharts-card laedt nur dann
 # neu, wenn sich eine Entitaet einer Serie aendert, und nur ohne
@@ -58,9 +56,21 @@
 # SCHWELLE (10 %) danebenlag. Weiter als einen Monat sagt die Karte nichts
 # voraus: Im Rueckblick lag der Fehler ab zwei Monaten bei 15 % und mehr.
 #
+# Autarkie je Monat: eigene Serie "Autarkie in %" als Zeile von Schildern
+# oben im Diagramm, je Schild ueber den Saeulen seines Monats. Autarkie =
+# 1 - Netznutzung / Hausverbrauch (sensor.pv_anlage_tagliche_netznutzung,
+# sensor.pv_anlage_taglicher_hausverbrauch), wie Tageszeile und Kachel. Die
+# Serie liegt auf einer unsichtbaren Achse "band" (0..1) bei 0,97; der
+# Prozentwert steckt in den Nachkommastellen (0,97 + Prozent / 1e6), daraus
+# lesen Datenlabel und Tooltip ihn. Ein Streifen unter dem Diagramm liess sich
+# den Monaten nicht sicher zuordnen. In den Schildern steht nur die Zahl: Mit
+# "%" ueberlappten sie bei 380 px Kartenbreite, und ApexCharts blendete jedes
+# zweite aus. Mit mehr als einer Achse braucht jede Serie ein yaxis_id.
+#
 # Voraussetzung: custom:button-card + card-mod + custom:apexcharts-card
 # (ab v2.0, data_generator laeuft dort als async-Funktion; getestet v2.2.3)
-# + custom:auto-entities (getestet v1.16.1).
+# + custom:auto-entities (getestet v1.16.1) + Templates aus
+# energie-button-card-templates.yaml (energie_mb_daten, energie_mb_kachel).
 type: vertical-stack
 card_mod:
   style: |
@@ -128,104 +138,27 @@ cards:
         - font-size: 12.5px
         - color: '#8794a5'
         - margin-top: 1px
-  # Kennzahlen: Netzbezug des laufenden Jahres und Monats, Erzeugung des
-  # Balkonkraftwerks im laufenden Monat. Live aus den Utility-Metern, daher
-  # unabhaengig von der Jahresauswahl.
+  # Kennzahlen des gewaehlten Jahres aus der Langzeitstatistik.
   - type: horizontal-stack
-    card_mod:
-      style: |
-        #root { gap: 8px !important; }
     cards:
       - type: custom:button-card
-        entity: sensor.stromverbrauch_yearly
+        template: energie_mb_kachel
         variables:
-          accent: '#7fb3d5'
-          was: Netzbezug
-          zeitraum: jahr
-          stellen: 0
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        name: &kachel_wert |
-          [[[
-            const v = parseFloat(entity ? entity.state : NaN);
-            if (isNaN(v)) return '–';
-            const d = variables.stellen;
-            const t = v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
-            return `${t}<span style="font-size:0.6em;color:#8794a5;font-weight:600;margin-left:3px;">kWh</span>`;
-          ]]]
-        label: &kachel_text |
-          [[[
-            const n = new Date();
-            const M = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
-              'August', 'September', 'Oktober', 'November', 'Dezember'];
-            const z = variables.zeitraum === 'jahr' ? n.getFullYear() : M[n.getMonth()];
-            return variables.was + '<br>' + z;
-          ]]]
-        tap_action: &kachel_tap
-          action: more-info
-        styles: &kachel_styles
-          card:
-            - border-radius: 14px
-            - padding: 10px 11px
-            - height: 100%
-            - box-shadow: none
-            - background: "[[[ return variables.accent + '1f'; ]]]"
-            - border: "[[[ return '1px solid ' + variables.accent + '3d'; ]]]"
-          grid:
-            - grid-template-areas: '"l" "n"'
-            - grid-template-columns: 1fr
-            - grid-template-rows: 1fr min-content
-          label:
-            - justify-self: start
-            - align-self: start
-            - text-align: left
-            - font-size: 11.5px
-            - line-height: 1.3
-            - color: '#8794a5'
-            - white-space: normal
-            - hyphens: manual
-            - max-width: 100%
-          name:
-            - justify-self: start
-            - font-size: 18px
-            - font-weight: 700
-            - letter-spacing: -0.02em
-            - color: '#f2f5f8'
-            - margin-top: 2px
-            - font-variant-numeric: tabular-nums
+          was: netz
+          titel: Netzbezug
+          accent: '#f0736a'
       - type: custom:button-card
-        entity: sensor.stromverbrauch_monthly
+        template: energie_mb_kachel
         variables:
-          accent: '#7fb3d5'
-          was: Netzbezug
-          zeitraum: monat
-          stellen: 1
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        name: *kachel_wert
-        label: *kachel_text
-        tap_action: *kachel_tap
-        styles: *kachel_styles
-      - type: custom:button-card
-        entity: sensor.stromerzeugung_balkonkraft_monthly
-        variables:
+          was: solar
+          titel: Solarertrag
           accent: '#e6c15a'
-          # \u00ad = weiches Trennzeichen: bricht auf schmalen Kacheln um
-          was: "Balkon\u00adkraftwerk"
-          zeitraum: monat
-          stellen: 1
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        name: *kachel_wert
-        label: *kachel_text
-        tap_action: *kachel_tap
-        styles: *kachel_styles
+      - type: custom:button-card
+        template: energie_mb_kachel
+        variables:
+          was: autarkie
+          titel: Autarkie
+          accent: '#89d2b0'
   - type: custom:apexcharts-card
     # Januar bis Dezember des laufenden Jahres: Das Fenster beginnt einen
     # halben Monat frueher (Januar-Saeule ganz sichtbar) und endet um den
@@ -263,15 +196,36 @@ cards:
           columnWidth: 62%
           borderRadius: 4
           borderRadiusApplication: end
+      # Nur die Serie "Autarkie in %" (show.datalabels); Wert siehe Kopf.
       dataLabels:
-        enabled: false
+        enabled: true
+        formatter: |
+          EVAL:function(v) {
+            // Prozentwert aus den Nachkommastellen, siehe data_generator der Serie 'Autarkie in %'
+            if (v === null || v === undefined || isNaN(v)) return '';
+            return String(Math.round((v - 0.97) * 1e6));
+          }
+        style:
+          fontSize: 10px
+          fontWeight: 700
+          colors: ['#89d2b0']
+        background:
+          enabled: true
+          foreColor: '#89d2b0'
+          borderRadius: 5
+          padding: 3
+          opacity: 0.16
+          borderWidth: 1
+          borderColor: '#89d2b0'
+        dropShadow:
+          enabled: false
       grid:
         borderColor: rgba(255,255,255,0.06)
         strokeDashArray: 3
       # Groesse je Serie in der Reihenfolge unten: nur die Prognose bekommt
       # Punkte, damit ihr Wert auch allein sichtbar ist.
       markers:
-        size: [0, 0, 0, 0, 4, 4]
+        size: [0, 0, 0, 0, 4, 4, 0]
         strokeWidth: 2
         strokeColors: '#171d29'
       # Die Prognose-Serien stehen nicht in der Legende: ApexCharts kann eine
@@ -296,11 +250,14 @@ cards:
               return new Date(val).toLocaleDateString('de-DE', { month: 'long' });
             }
         # Ersetzt den Formatter der Karte, der fehlende Werte als "null kWh"
-        # ausgibt.
+        # ausgibt. Die Autarkie-Serie zeigt ihren Prozentwert.
         y:
           formatter: |
-            EVAL:function(v) {
+            EVAL:function(v, o) {
               if (v === null || v === undefined || isNaN(v)) return '–';
+              if (o && o.w && o.w.config.series[o.seriesIndex] && o.w.config.series[o.seriesIndex].name === 'Autarkie in %') {
+                return Math.round((v - 0.97) * 1e6) + ' %';
+              }
               return v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' kWh';
             }
       xaxis:
@@ -317,18 +274,25 @@ cards:
     # Gleiche Skala fuer alle Jahre (0-600 kWh), damit sich Jahre beim
     # Umschalten vergleichen lassen. "~600" ist eine weiche Grenze: Liegt ein
     # Monat darueber, waechst die Achse auf das naechste Vielfache von 150.
+    # "band" traegt nur die Autarkie-Schilder und bleibt unsichtbar.
     yaxis:
-      - min: 0
+      - id: kwh
+        min: 0
         max: '~600'
         decimals: 0
         align_to: 150
         apex_config:
           tickAmount: 4
+      - id: band
+        show: false
+        min: 0
+        max: 1
     series:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Netzbezug
         type: column
-        color: '#7fb3d5'
+        color: '#f0736a'
+        yaxis_id: kwh
         unit: kWh
         float_precision: 1
         show:
@@ -368,6 +332,7 @@ cards:
         name: Solarertrag
         type: column
         color: '#e6c15a'
+        yaxis_id: kwh
         unit: kWh
         float_precision: 1
         show:
@@ -406,7 +371,8 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Trend Netzbezug
         type: line
-        color: '#7fb3d5'
+        color: '#f0736a'
+        yaxis_id: kwh
         curve: smooth
         stroke_width: 2
         stroke_dash: 5
@@ -457,6 +423,7 @@ cards:
         name: Trend Solar
         type: line
         color: '#e6c15a'
+        yaxis_id: kwh
         curve: smooth
         stroke_width: 2
         stroke_dash: 5
@@ -506,7 +473,8 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Prognose Netzbezug
         type: line
-        color: '#7fb3d5'
+        color: '#f0736a'
+        yaxis_id: kwh
         curve: smooth
         stroke_width: 2
         stroke_dash: 2
@@ -571,6 +539,7 @@ cards:
         name: Prognose Solar
         type: line
         color: '#e6c15a'
+        yaxis_id: kwh
         curve: smooth
         stroke_width: 2
         stroke_dash: 2
@@ -630,6 +599,54 @@ cards:
           const i = lauf.month();
           out[i][1] = rund((a[1] + a[2] + (a[0] + a[1] + a[2]) / 3) / 3);
           if (i > 0) out[i - 1][1] = rund((a[0] + a[1] + a[2]) / 3);
+          return out;
+      - entity: input_number.energie_monatsbilanz_jahr
+        name: Autarkie in %
+        type: line
+        color: '#89d2b0'
+        yaxis_id: band
+        stroke_width: 0
+        extend_to: false
+        show:
+          datalabels: true
+          legend_value: false
+        data_generator: |
+          const IDS = ['sensor.pv_anlage_taglicher_hausverbrauch', 'sensor.pv_anlage_tagliche_netznutzung'];
+          const tz = hass.config.time_zone;
+          const jetzt = moment.tz(tz);
+          const wahl = parseInt(entity.state, 10);
+          const jahr = wahl >= 2000 ? wahl : jetzt.year();
+          const anfang = moment.tz([jahr, 0, 1], tz);
+          const x = (m) => moment.tz([jetzt.year(), m, 1], tz).valueOf();
+          const res = await hass.callWS({
+            type: 'recorder/statistics_during_period',
+            start_time: anfang.toISOString(),
+            end_time: anfang.clone().add(1, 'year').toISOString(),
+            statistic_ids: IDS,
+            period: 'month',
+            types: ['change'],
+          });
+          const monat = (id) => {
+            const o = {};
+            (res[id] || []).forEach((r) => {
+              o[moment.tz(r.start, tz).format('YYYY-MM')] = r.change;
+            });
+            return o;
+          };
+          const haus = monat(IDS[0]);
+          const netz = monat(IDS[1]);
+          // Autarkie = 1 - Netznutzung / Hausverbrauch (Anker-System, wie Tageszeile und Kachel).
+          // Die Zeile steht oben im Diagramm: Achse 'band' (0..1), Lage 0,97. Der Prozentwert
+          // steckt in den Nachkommastellen (0,97 + Prozent / 1e6); Label und Tooltip lesen ihn
+          // dort heraus. Die Lage verschiebt sich dadurch um hoechstens 0,01 %.
+          const out = [];
+          for (let m = 0; m < 12; m++) {
+            const k = anfang.clone().add(m, 'months').format('YYYY-MM');
+            const h = haus[k];
+            const n = netz[k];
+            const a = (h == null || n == null || h <= 0) ? null : Math.round(Math.max(0, Math.min(1, 1 - n / h)) * 100);
+            out.push([x(m), a === null ? null : 0.97 + a / 1e6]);
+          }
           return out;
       # Unsichtbar: laedt das Diagramm nach Mitternacht neu.
       - entity: sensor.date
