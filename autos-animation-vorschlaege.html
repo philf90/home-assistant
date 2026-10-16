@@ -1,0 +1,688 @@
+<title>Auto-View: Animationen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Aufbau: Kopf mit Eckdaten aus der Instanz, vorhandene Animationsmuster,
+     Live-Vorschau (Regler links, Passat-Karte rechts), Vorschlaege mit
+     Begruendung, verworfene Ideen, Lesbarkeit, Umsetzung, Quellen.
+     Wie die Wetter- und Hausgeraete-Vorschau bewusst nur ein dunkles Thema:
+     die Karte lebt im Owlet-Dashboard, Farben nur aus design/palette.yaml. */
+  :root {
+    color-scheme: dark;
+    --ground: #10151d;
+    --hull-top: #1b2231;
+    --hull-bottom: #171d29;
+    --raised: #222b3c;
+    --off: #3a4453;
+
+    --text: #f2f5f8;
+    --title: #e7ecf3;
+    --label: #b4c0cf;
+    --muted: #8794a5;
+    --deco: #6e7988;
+
+    --green: #a6d49e;
+    --amber: #e6b566;
+    --coral: #e7936e;
+    --red: #f0736a;
+    --blue: #7fb3d5;
+    --teal: #7fd0d5;
+    --violet: #b399d4;
+    --cloud: #cdd6e0;
+
+    --line: rgba(255, 255, 255, 0.06);
+    --line-soft: rgba(255, 255, 255, 0.05);
+    --inner: rgba(255, 255, 255, 0.028);
+    --shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7);
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding-block: 48px 88px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 56px; }
+
+  /* ---------------- Typografie ---------------- */
+  .eyebrow { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  h1 { margin: 8px 0 0; font-size: clamp(30px, 5vw, 40px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; color: var(--title); text-wrap: balance; }
+  h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--title); text-wrap: balance; }
+  h3 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  p { margin: 0; }
+  .lead { color: var(--label); max-width: 68ch; font-size: 16px; }
+  .note { color: var(--muted); font-size: 13px; max-width: 72ch; }
+  code { font-family: var(--mono); font-size: 0.86em; color: var(--label); overflow-wrap: anywhere; }
+  a { color: var(--blue); text-underline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+  section { display: flex; flex-direction: column; gap: 20px; }
+  .section-head { display: flex; flex-direction: column; gap: 6px; }
+
+  /* ---------------- Kopf ---------------- */
+  header.masthead { display: flex; flex-direction: column; gap: 16px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; padding-top: 6px; }
+  @media (min-width: 760px) { .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .fact { display: flex; flex-direction: column; min-width: 0; }
+  .fact b { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .fact span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .fact.warn b { color: var(--amber); }
+  .fact.ok b { color: var(--green); }
+
+  /* ---------------- Bestand ---------------- */
+  .grid2 { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 820px) { .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .box { padding: 16px 18px; border-radius: 16px; background: var(--inner); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .box b { font-size: 14.5px; color: var(--title); }
+  .box p, .box li { font-size: 14px; color: var(--label); }
+  .box ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .box .src { font-size: 12.5px; color: var(--muted); }
+  .rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--label); font-size: 14.5px; max-width: 76ch; }
+
+  /* ---------------- Vorschau ---------------- */
+  .preview { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+  .cardcol { width: 100%; max-width: 520px; justify-self: center; display: flex; flex-direction: column; gap: 10px; }
+  @media (min-width: 900px) {
+    .preview { grid-template-columns: minmax(0, 360px) minmax(0, 1fr); align-items: start; }
+    .cardcol { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+  }
+  .panel { display: flex; flex-direction: column; gap: 20px; padding: 18px; border-radius: 18px; background: var(--hull-top); border: 1px solid var(--line); }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .field label, .field .lbl { font-size: 13.5px; font-weight: 600; color: var(--title); }
+  .field output { font-size: 13px; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .field small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  input[type="range"] { width: 100%; accent-color: var(--blue); }
+  select { font: inherit; font-size: 13.5px; color: var(--text); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; color: var(--label); }
+  .check input { margin-top: 4px; accent-color: var(--blue); }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--label); background: var(--inner); border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { color: var(--text); background: rgba(127, 179, 213, 0.16); border-color: rgba(127, 179, 213, 0.5); }
+  .hint { font-size: 12.5px; color: var(--muted); }
+
+  /* ---- Owlet-Karte (Nachbau von autos-button-card-v3.yaml, Passat) ---- */
+  .ocard { background: linear-gradient(180deg, #1b2231 0%, #171d29 55%); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 22px; box-shadow: var(--shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 11px; }
+  .ohead { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0 14px; align-items: center; padding: 2px; }
+  .ohead .it { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; background: rgba(166, 212, 158, 0.12); border: 1px solid rgba(166, 212, 158, 0.24); }
+  .ohead b { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); display: block; line-height: 1.25; }
+  .ohead span { font-size: 11.5px; color: var(--muted); }
+  svg.i { width: 22px; height: 22px; display: block; fill: currentColor; }
+
+  .frame { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.02); aspect-ratio: 16 / 8; max-width: 100%; }
+  .frame .car { position: absolute; inset: 12% 8% 10%; width: 84%; height: 78%; }
+  .frame .ph { position: absolute; right: 12px; bottom: 9px; font-size: 10.5px; color: var(--muted); }
+  .frost { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.8s ease; box-shadow: inset 0 0 22px rgba(255, 255, 255, 0.12); }
+  .frost.on { opacity: 1; }
+  .frost i { position: absolute; width: var(--s); height: var(--s); left: var(--x); top: var(--y); opacity: 0.24; }
+  .frost i svg { width: 100%; height: 100%; fill: rgba(255, 255, 255, 0.5); display: block; }
+  .frost.on i { animation: au-funkel 2.8s ease-in-out 3 both; animation-delay: var(--p); }
+  @keyframes au-funkel { 0%, 100% { opacity: 0.24; transform: scale(0.9) rotate(0deg); } 50% { opacity: 1; transform: scale(1.1) rotate(30deg); } }
+  .pill { position: absolute; left: 10px; top: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; background: #222b3c; border: 1px solid rgba(127, 179, 213, 0.24); font-size: 11.5px; font-weight: 600; color: #7fb3d5; }
+  .pill svg { width: 14px; height: 14px; fill: currentColor; }
+  [hidden] { display: none !important; }
+
+  .bar { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 0 11px; align-items: center; padding: 10px 14px; border-radius: 13px; background: var(--inner); border: 1px solid var(--line); }
+  .bar .ib { position: relative; width: 20px; height: 20px; color: var(--c); }
+  .bar .ib svg { width: 20px; height: 20px; fill: currentColor; display: block; }
+  .bar b { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--c); }
+  .bar span { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .chip { border-radius: 13px; padding: 10px 6px; background: var(--inner); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--green); min-width: 0; }
+  .chip span { font-size: 11px; text-align: center; line-height: 1.2; }
+
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile { border-radius: 16px; padding: 11px 13px; background: var(--inner); border: 1px solid var(--line); display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 0 13px; align-items: center; min-width: 0; }
+  .tile .tv { min-width: 0; display: flex; flex-direction: column; }
+  .tile .tv b { font-size: 20px; font-weight: 750; letter-spacing: -0.02em; color: var(--text); line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .tile .tv b small { font-size: 0.5em; color: var(--muted); font-weight: 600; margin-left: 3px; }
+  .tile .tv span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .tile .tv span em { font-style: normal; font-weight: 600; color: var(--acc); }
+
+  /* Icon-Kachel mit Zustandsfarbe --acc (Grund 0,16, Rand 0,24) */
+  .itile { position: relative; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--acc); background: var(--acc16); border: 1px solid var(--acc24); transition: background-color 0.6s, border-color 0.6s, color 0.6s, box-shadow 0.6s; }
+  .itile > svg.i { position: relative; z-index: 1; }
+
+  /* Fuellstand: Fluessigkeit von unten, Hoehe aus --lvl (0-100) */
+  .liquid { position: absolute; inset: 0; border-radius: 11px; overflow: hidden; pointer-events: none; }
+  .liquid .fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--lvl) * 1%); background: var(--acc24); transition: height 1.2s cubic-bezier(.3,.7,.3,1), background-color 0.6s; }
+  .liquid .wave { position: absolute; left: 0; width: 84px; height: 5px; bottom: calc(var(--lvl) * 1% - 1px); transition: bottom 1.2s cubic-bezier(.3,.7,.3,1); animation: au-welle 6s linear infinite; }
+  .liquid .wave path { fill: var(--acc24); transition: fill 0.6s; }
+  .itile.leer .liquid { display: none; }
+  .itile.ruhig .wave { animation: none; }
+  @keyframes au-welle { from { transform: translateX(0); } to { transform: translateX(-42px); } }
+  .itile.unplausibel { border-style: dashed; }
+
+  /* Hinweis-Puls: zwei Ringe wie bei der Bewaesserung im Garten, 3 Durchlaeufe, danach ruhender Schein */
+  .itile.hinweis { box-shadow: 0 0 0 3px var(--acc2e); }
+  .itile.hinweis::before, .itile.hinweis::after, .bar .ib.hinweis::before, .bar .ib.hinweis::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; border: 1px solid var(--acc80); opacity: 0; pointer-events: none; animation: au-ring 2.6s ease-out 3; }
+  .itile.hinweis::after, .bar .ib.hinweis::after { animation-delay: 1.3s; }
+  .bar .ib.hinweis { --acc80: rgba(230, 181, 102, 0.5); border-radius: 6px; }
+  @keyframes au-ring { from { transform: scale(1); opacity: 0.9; } to { transform: scale(1.55); opacity: 0; } }
+
+  .act { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 0 10px; align-items: center; padding: 10px 12px; border-radius: 13px; background: var(--inner); border: 1px solid var(--line); color: var(--muted); font: inherit; text-align: left; cursor: pointer; width: 100%; }
+  .act:hover { border-color: rgba(127, 179, 213, 0.5); }
+  .act svg { width: 20px; height: 20px; fill: currentColor; display: block; }
+  .act b { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; }
+  .act span { font-size: 11px; white-space: nowrap; }
+  .act.laeuft .ia { animation: au-dreh 1.2s linear infinite; color: var(--blue); }
+  .act.fertig .ia { color: var(--green); }
+  @keyframes au-dreh { to { transform: rotate(360deg); } }
+  .omit { font-size: 11px; color: var(--muted); text-align: center; padding: 2px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+
+  /* "Bewegung reduzieren": Standbild derselben Szene */
+  .ocard.rm *, .ocard.rm *::before, .ocard.rm *::after { animation: none !important; transition: none !important; }
+  .ocard.rm .frost.on i { opacity: 0.8; }
+  @media (prefers-reduced-motion: reduce) {
+    .ocard *, .ocard *::before, .ocard *::after { animation: none !important; transition: none !important; }
+    .frost.on i { opacity: 0.8; }
+  }
+
+  .status { font-size: 13px; color: var(--label); padding: 12px 14px; border-radius: 14px; background: var(--inner); border: 1px solid var(--line); }
+  .status b { color: var(--title); }
+
+  /* ---------------- Vorschlaege ---------------- */
+  .props { display: flex; flex-direction: column; gap: 12px; }
+  .prop { padding: 18px; border-radius: 16px; background: var(--inner); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .prop-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .prop-head b { font-size: 16px; color: var(--title); letter-spacing: -0.01em; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; border: 1px solid; }
+  .tag.rec { color: var(--green); background: rgba(166, 212, 158, 0.12); border-color: rgba(166, 212, 158, 0.24); }
+  .tag.opt { color: var(--blue); background: rgba(127, 179, 213, 0.12); border-color: rgba(127, 179, 213, 0.24); }
+  .tag.no { color: var(--muted); background: rgba(255, 255, 255, 0.04); border-color: var(--line); }
+  dl.kv { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 16px; }
+  @media (min-width: 700px) { dl.kv { grid-template-columns: 130px minmax(0, 1fr); } }
+  dl.kv dt { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+  dl.kv dd { margin: 0 0 6px; font-size: 14px; color: var(--label); min-width: 0; }
+  dl.kv dd b { color: var(--title); font-weight: 600; }
+
+  .table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--line); background: var(--inner); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 13.5px; }
+  th, td { padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  td { color: var(--label); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+  td .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+  tr:last-child td { border-bottom: 0; }
+  .ok-t { color: var(--green); }
+  .bad-t { color: var(--red); }
+
+  pre { margin: 0; padding: 14px 16px; border-radius: 14px; background: #10151d; border: 1px solid var(--line); overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--label); }
+  pre .c { color: var(--muted); }
+  ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: var(--label); font-size: 14.5px; max-width: 80ch; }
+  ol.steps b { color: var(--title); }
+  .src-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--label); }
+</style>
+
+<main class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Auto-View · Passat-Karte (autos-button-card-v3.yaml)</p>
+    <h1>Wo Bewegung auf der Auto-Karte etwas sagt</h1>
+    <p class="lead">Ich habe die vorhandenen Animationen im Repo und zehn Tage Verlauf der Fahrzeugdaten in deiner Instanz ausgewertet. Ergebnis: Drei Animationen sind sinnvoll und mit den gelieferten Werten machbar, zwei sind optional, sieben Ideen scheitern an den Daten oder am Platz. Der Tankstand braucht vorher eine Plausibilitätsprüfung.</p>
+    <div class="facts">
+      <div class="fact warn"><b>9×</b><span>sprang der Tankstand in 10 Tagen auf 100 % und fiel nach 12–30 min auf den Vorwert zurück</span></div>
+      <div class="fact warn"><b>42×</b><span>stand die Türverriegelung in 10 Tagen kurz auf „unknown“, dazu 7× „unavailable“</span></div>
+      <div class="fact"><b>29 min</b><span>zwischen Messzeitpunkt im Auto und Eingang in HA (Stichprobe Reichweite, 16.10.)</span></div>
+      <div class="fact ok"><b>1</b><span>Stelle würde sich heute bewegen: die Tankwelle. Kein Wert liegt in einem Hinweisbereich.</span></div>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-bestand">
+    <div class="section-head">
+      <p class="eyebrow">Ausgangslage</p>
+      <h2 id="h-bestand">Was die anderen Views schon bewegen</h2>
+    </div>
+    <div class="grid2">
+      <div class="box">
+        <b>Wetter</b>
+        <p>Szene hinter der ganzen Karte (Wolken, Regen, Sterne), läuft dauerhaft. Kachel-Text in <code>#b4c0cf</code>, Schutzgrund hinter kleiner Schrift.</p>
+        <span class="src">wetter-animation-button-card-templates.yaml · owlet_wetter_fx</span>
+      </div>
+      <div class="box">
+        <b>Hausgeräte</b>
+        <p>Bewegung nur, solange ein Programm läuft; Pause friert ein, „Fertig“ glänzt zweimal. Die Icon-Kachel wird zum Bullauge.</p>
+        <span class="src">hausgeraete-animation-button-card-templates.yaml · owlet_geraete_fx</span>
+      </div>
+      <div class="box">
+        <b>Garten</b>
+        <p>Zwei Wasserringe um die Icon-Kachel, solange ein Ventil offen ist; Pumpe mit Glow; Timer-Balken läuft per CSS leer.</p>
+        <span class="src">garten-button-card.yaml · &amp;bw_extra</span>
+      </div>
+      <div class="box">
+        <b>Heizung</b>
+        <p>Bewegung nur in der Lücke unter dem Bogen, nie hinter Text. Luftzug bei offenem Fenster läuft dreimal und steht dann.</p>
+        <span class="src">heizung-animation-button-card-templates.yaml · owlet_heizung_fx</span>
+      </div>
+    </div>
+    <p class="note">Daraus übernehme ich für das Auto diese Regeln:</p>
+    <ul class="rules">
+      <li>Bewegung nur, wenn sie eine Information trägt: Füllstand, Handlungsbedarf, laufender Abruf.</li>
+      <li>Hinweise laufen dreimal und bleiben dann als ruhender Schein stehen (wie der Luftzug der Heizung).</li>
+      <li>Nichts bewegt sich hinter Text. Animiert werden Icon-Kacheln, die Ringe außen herum und das Fahrzeugbild.</li>
+      <li>Nur Palettenfarben mit den Deckkraft-Stufen aus DESIGN.md; „Bewegung reduzieren“ zeigt ein Standbild.</li>
+      <li>Für denselben Zustand bleibt der HTML-Text gleich, damit button-card die Animation nicht bei jedem Neuzeichnen neu startet.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-vorschau">
+    <div class="section-head">
+      <p class="eyebrow">Live-Vorschau</p>
+      <h2 id="h-vorschau">Alle Vorschläge an der Passat-Karte</h2>
+      <p class="note">Startwerte sind die Werte deiner Instanz vom 16.10.2026. Kennzeichen als Platzhalter, das Fahrzeugbild ist durch eine Silhouette ersetzt. Die Blöcke „Letzte Fahrt“ und „Langzeit“ bleiben unverändert und sind hier ausgeblendet.</p>
+    </div>
+    <div class="preview">
+      <form class="panel" id="ctl" aria-label="Zustände der Vorschau">
+        <div class="field">
+          <div class="field-row"><label for="f-tank">Tankstand</label><output id="o-tank" for="f-tank"></output></div>
+          <input type="range" id="f-tank" min="0" max="100" step="1" value="34">
+          <small>Reichweite folgt dem heutigen Verhältnis 270 km bei 34 %. Farbe nach Reichweite: unter 150 km Koralle, unter 75 km Rot (Schwellen sind mein Vorschlag).</small>
+        </div>
+        <label class="check"><input type="checkbox" id="f-glitch"> <span>Artefakt simulieren: Tank meldet 100 %, Reichweite bleibt stehen</span></label>
+        <div class="field">
+          <span class="lbl" id="l-welle">Oberfläche</span>
+          <div class="seg" role="group" aria-labelledby="l-welle">
+            <button type="button" id="f-welle-an" aria-pressed="true">Leichte Welle</button>
+            <button type="button" id="f-welle-aus" aria-pressed="false">Ruhig</button>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="f-adblue">AdBlue-Reichweite</label><output id="o-adblue" for="f-adblue"></output></div>
+          <input type="range" id="f-adblue" min="0" max="5000" step="500" value="3500">
+          <small>Die Integration liefert nur km, in 500er-Schritten (beobachtet: 4.000 und 3.500). Hinweis ab 2.400 km, kritisch ab 1.000 km.</small>
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="f-insp">Inspektion fällig in</label><output id="o-insp" for="f-insp"></output></div>
+          <input type="range" id="f-insp" min="0" max="700" step="1" value="658">
+          <small>Hinweis ab 30 Tagen. Gilt gleich für den Ölwechsel (heute ebenfalls 658 Tage).</small>
+        </div>
+        <div class="field">
+          <label for="f-lock">Türverriegelung</label>
+          <select id="f-lock">
+            <option value="off" selected>off – verriegelt</option>
+            <option value="on">on – nicht verriegelt</option>
+            <option value="unknown">unknown – Zwischenstand der API</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-row"><label for="f-temp">Außentemperatur</label><output id="o-temp" for="f-temp"></output></div>
+          <input type="range" id="f-temp" min="-10" max="20" step="1" value="12">
+          <small>VW zeigt die Glätte-Schneeflocke unter etwa +4 °C.</small>
+        </div>
+        <label class="check"><input type="checkbox" id="f-rm"> <span>„Bewegung reduzieren“ simulieren</span></label>
+        <p class="hint">„Daten aktualisieren“ in der Karte ist anklickbar.</p>
+      </form>
+
+      <div class="cardcol">
+        <div class="ocard" id="card">
+          <div class="ohead">
+            <div class="it" style="color:#a6d49e"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCarEstate"/></svg></div>
+            <div><b>AB - CD 123</b><span>Passat Variant · Diesel</span></div>
+          </div>
+
+          <div class="frame">
+            <svg class="car" viewBox="0 0 320 120" aria-hidden="true">
+              <path d="M18 88 L22 70 Q26 60 44 57 L92 52 L128 30 Q136 25 150 25 L258 25 Q270 25 278 33 L298 56 Q306 60 306 72 L306 88 Z" fill="rgba(205,214,224,0.12)" stroke="rgba(205,214,224,0.5)" stroke-width="1.5" stroke-linejoin="round"/>
+              <path d="M104 52 L134 34 Q140 31 150 31 L196 31 L196 52 Z M204 52 L204 31 L256 31 Q264 31 270 37 L284 52 Z" fill="rgba(127,179,213,0.16)" stroke="rgba(205,214,224,0.24)" stroke-width="1"/>
+              <circle cx="82" cy="88" r="18" fill="#171d29" stroke="rgba(205,214,224,0.5)" stroke-width="1.5"/>
+              <circle cx="82" cy="88" r="8" fill="rgba(205,214,224,0.24)"/>
+              <circle cx="252" cy="88" r="18" fill="#171d29" stroke="rgba(205,214,224,0.5)" stroke-width="1.5"/>
+              <circle cx="252" cy="88" r="8" fill="rgba(205,214,224,0.24)"/>
+            </svg>
+            <div class="frost" id="frost" aria-hidden="true"></div>
+            <span class="pill" id="pill" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiSnowflake"/></svg><span id="pill-t"></span></span>
+            <span class="ph">Platzhalter für das Fahrzeugbild</span>
+          </div>
+
+          <div class="bar" id="bar">
+            <span class="ib" id="bar-ib"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="bar-ic" data-i="mdiLock"/></svg></span>
+            <b id="bar-t">Fahrzeug abgeschlossen</b>
+            <span>seit 10:41</span>
+          </div>
+
+          <div class="chips">
+            <div class="chip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCarWindshieldOutline"/></svg><span>Fenster zu</span></div>
+            <div class="chip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCarDoorLock"/></svg><span>Türen zu</span></div>
+            <div class="chip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCarBack"/></svg><span>Heck zu</span></div>
+            <div class="chip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCarLiftedPickup"/></svg><span>Haube zu</span></div>
+          </div>
+          <div class="omit">4 weitere Status-Chips unverändert</div>
+
+          <div class="tiles">
+            <div class="tile" id="t-km" style="--acc:#a6d49e;--acc16:#a6d49e29;--acc24:#a6d49e3d">
+              <div class="itile"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiCounter"/></svg></div>
+              <div class="tv"><b>54.411<small>km</small></b><span>Kilometerstand</span></div>
+            </div>
+            <div class="tile" id="t-tank">
+              <div class="itile" id="tank-it">
+                <div class="liquid"><i class="fill"></i><svg class="wave" viewBox="0 0 84 5" preserveAspectRatio="none" aria-hidden="true"><path d="M0 2.5 Q10.5 0 21 2.5 T42 2.5 T63 2.5 T84 2.5 V5 H0 Z"/></svg></div>
+                <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiGasStation"/></svg>
+              </div>
+              <div class="tv"><b id="tank-v"></b><span id="tank-n"></span></div>
+            </div>
+            <div class="tile" id="t-insp">
+              <div class="itile" id="insp-it"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiWrenchClock"/></svg></div>
+              <div class="tv"><b>27.900<small>km</small></b><span id="insp-n"></span></div>
+            </div>
+            <div class="tile" id="t-oel" style="--acc:#b399d4;--acc16:#b399d429;--acc24:#b399d43d">
+              <div class="itile"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiOil"/></svg></div>
+              <div class="tv"><b>27.900<small>km</small></b><span>Ölwechsel: 04.08.2028</span></div>
+            </div>
+            <div class="tile" id="t-adblue">
+              <div class="itile" id="adblue-it"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiFuel"/></svg></div>
+              <div class="tv"><b id="adblue-v"></b><span id="adblue-n"></span></div>
+            </div>
+            <div class="tile" id="t-olst" style="--acc:#8794a5;--acc16:#8794a529;--acc24:#8794a53d">
+              <div class="itile"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path data-i="mdiOilLevel"/></svg></div>
+              <div class="tv"><b>62<small>%</small></b><span>Ölstand</span></div>
+            </div>
+          </div>
+          <div class="omit">Letzte Fahrt und Langzeit unverändert</div>
+
+          <button type="button" class="act" id="act">
+            <svg class="ia" viewBox="0 0 24 24" aria-hidden="true"><path id="act-ic" data-i="mdiCloudSync"/></svg>
+            <b id="act-t">Daten aktualisieren</b>
+            <span id="act-s"></span>
+          </button>
+        </div>
+        <p class="status" id="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-vorschlaege">
+    <div class="section-head">
+      <p class="eyebrow">Vorschläge</p>
+      <h2 id="h-vorschlaege">Was sich bewegt, wann und warum</h2>
+    </div>
+    <div class="props">
+
+      <article class="prop">
+        <div class="prop-head"><b>1 · Tankstand als Flüssigkeit in der Icon-Kachel</b><span class="tag rec">Empfohlen</span></div>
+        <dl class="kv">
+          <dt>Bewegung</dt><dd>Die Kachel füllt sich von unten bis zum Tankstand, die Oberfläche wellt sich leicht (6 s pro Durchlauf, 2,5 px hoch). Ändert sich der Wert, steigt oder sinkt die Füllung in 1,2 s.</dd>
+          <dt>Auslöser</dt><dd><code>sensor.…_tankstand</code> (%) für die Höhe, <code>sensor.…_reichweite</code> (km) für die Farbe: Amber wie heute, unter 150 km Koralle mit Text „bald tanken“, unter 75 km Rot mit „Reserve“ und Hinweis-Puls (Vorschlag 2).</dd>
+          <dt>Warum</dt><dd>Der Tank ist der einzige Füllstand, den die Integration als Prozent liefert und der sich zuverlässig bewegt: von 85 % am 07.10. auf 34 % am 16.10. AdBlue kommt nur als km, der Ölstand springt (siehe unten).</dd>
+          <dt>Vorbedingung</dt><dd><b>Plausibilitätsprüfung.</b> In 10 Tagen meldete der Sensor 9× für 12–30 min 100 %, jedes Mal ohne dass die Reichweite stieg. Beim echten Tanken am 05.10. stiegen beide in derselben Stunde (48 → 100 %, 380 → 820 km). Regel: <b>100 % gilt nur, wenn die Reichweite mindestens 700 km beträgt</b>, sonst bleibt die Kachel leer mit gestricheltem Rand und „Tank: –“. Bei den Artefakten lag die Reichweite bei höchstens 640 km, nach dem echten Tanken bei 820 und 950 km. Die Grenze beruht auf einem einzigen Tankvorgang im Verlauf; nach weiteren Tankvorgängen nachprüfen.</dd>
+          <dt>Offen</dt><dd>Dauerhafte Welle oder ruhige Oberfläche, die sich nur beim Wertwechsel bewegt. Beides ist in der Vorschau umschaltbar. Die Welle ist die einzige Bewegung, die ohne Handlungsbedarf läuft.</dd>
+        </dl>
+      </article>
+
+      <article class="prop">
+        <div class="prop-head"><b>2 · Hinweis-Puls für knappe oder fällige Werte</b><span class="tag rec">Empfohlen</span></div>
+        <dl class="kv">
+          <dt>Bewegung</dt><dd>Zwei Ringe laufen aus der Icon-Kachel nach außen, wie beim offenen Bewässerungsventil im Garten. Dreimal, danach bleibt ein ruhender Schein (0,18). Die Kachel färbt sich zur Stufe, der Name nennt die Stufe als Text.</dd>
+          <dt>Auslöser</dt><dd>Tank unter 150 km Reichweite · AdBlue ab 2.400 km Amber, ab 1.000 km Rot · Inspektion und Ölwechsel ab 30 Tagen oder 1.000 km (<code>…_inspektion_in</code>, <code>…_olwechsel_in</code> in Tagen, <code>…_nachste_inspektion</code>, <code>…_nachster_olwechsel</code> in km).</dd>
+          <dt>Warum</dt><dd>Die Karte zeigt heute Zahlen ohne Bewertung. Der Puls sagt „hier musst du etwas tun“ und schweigt sonst. Mit den heutigen Werten (270 km, 3.500 km AdBlue, 658 Tage) pulsiert nichts.</dd>
+          <dt>Schwellen</dt><dd>2.400 km für AdBlue ist die erste VW-Warnstufe laut einer Händlerseite, nicht aus der Betriebsanleitung belegt. Die übrigen Werte sind mein Vorschlag und als Variablen einstellbar.</dd>
+          <dt>Platz</dt><dd>Die Ringe wachsen auf das 1,55-Fache (42 → 65 px), also 11,5 px pro Seite. Der Abstand zum Text beträgt 13 px, die Ringe erreichen keine Schrift.</dd>
+        </dl>
+      </article>
+
+      <article class="prop">
+        <div class="prop-head"><b>3 · Schloss offen</b><span class="tag rec">Empfohlen</span></div>
+        <dl class="kv">
+          <dt>Bewegung</dt><dd>In der Sicherheitsleiste derselbe Doppelring um das Schloss-Symbol, dreimal, in Amber. Verriegelt bleibt alles ruhig.</dd>
+          <dt>Auslöser</dt><dd>Nur der Zustand <code>on</code> der Verriegelungsmelder. <code>unknown</code> und <code>unavailable</code> lösen nichts aus.</dd>
+          <dt>Warum</dt><dd>Von 117 Zustandswechseln der Türverriegelung in 10 Tagen waren 17 „nicht verriegelt“, 42 „unknown“ und 7 „unavailable“. Eine Animation auf jeden Wechsel liefe gut fünfmal am Tag ohne Anlass.</dd>
+          <dt>Nebenbefund</dt><dd>Die Leiste zeigt bei „unknown“ heute für jeweils 3–20 min „Schlossstatus unbekannt“. Das ist ein Zwischenstand der API, kein echter Zustand. Ob die Leiste dann den letzten bekannten Zustand halten soll, ist eine eigene Entscheidung außerhalb der Animation.</dd>
+        </dl>
+      </article>
+
+      <article class="prop">
+        <div class="prop-head"><b>4 · Rückmeldung bei „Daten aktualisieren“</b><span class="tag opt">Optional</span></div>
+        <dl class="kv">
+          <dt>Bewegung</dt><dd>Das Wolken-Symbol dreht sich, der Text lautet „Abruf läuft …“. Danach kurz ein grüner Haken.</dd>
+          <dt>Auslöser</dt><dd>Der Zeitstempel von <code>button.…_daten_aktualisieren</code> ist neuer als <code>sensor.…_letzte_aktualisierung</code> und höchstens 3 min alt. <code>sensor.time</code> beendet die Drehung spätestens nach 3 min (gleicher Kniff wie beim Bewässerungs-Timer).</dd>
+          <dt>Grenze</dt><dd>Die Integration fragt ohnehin alle 10 min ab (<code>number.vw_group_connect_abfrageintervall</code> = 10). Ob ein Tastendruck sofort einen Abruf auslöst, habe ich nicht geprüft; die Drehung endet mit dem nächsten Abruf, nicht zwingend mit neuen Fahrzeugdaten. Der Knopf wurde zuletzt am 06.09. gedrückt.</dd>
+        </dl>
+      </article>
+
+      <article class="prop">
+        <div class="prop-head"><b>5 · Glätte-Hinweis am Fahrzeugbild</b><span class="tag opt">Optional</span></div>
+        <dl class="kv">
+          <dt>Bewegung</dt><dd>Ein heller Rand und einzelne Eiskristalle funkeln dreimal am Bildrand, oben links steht „Glättegefahr · 3 °C“ als Pille.</dd>
+          <dt>Auslöser</dt><dd><code>sensor.…_aussentemperatur</code> unter 4 °C. VW schaltet die Schneeflocke unter etwa +4 °C ein und erst über +6 °C wieder aus; diese Hysterese braucht einen Speicher, den die Karte nicht hat, deshalb hier nur die 4-°C-Grenze.</dd>
+          <dt>Grenze</dt><dd>Der Wert kommt vom Auto und ist so alt wie der letzte Datensatz. Heute 12 °C. Laut einem Drittanbieter-Artikel liest der Fühler im Stand durch Motorwärme zu hoch. Als Hinweis vor der Fahrt nützlich, als Messwert nicht verlässlich.</dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-verworfen">
+    <div class="section-head">
+      <p class="eyebrow">Verworfen</p>
+      <h2 id="h-verworfen">Ideen, die an den Daten scheitern</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Idee</th><th>Grund</th></tr></thead>
+        <tbody>
+          <tr><td>Fahrt-Animation (Straße zieht unter dem Auto durch)</td><td>Keine Entität für „fährt“: vag_connect liefert keinen Bewegungssensor, <code>device_tracker.…_position</code> steht auf <code>unknown</code>.</td></tr>
+          <tr><td>Tankvorgang live (Zapfpistole, steigender Pegel)</td><td>Die Daten kommen verzögert (29 min in der Stichprobe) und höchstens alle 10 min. Die Animation liefe, wenn du längst weitergefahren bist. Der Anstieg der Füllung beim nächsten Wert (Vorschlag 1) deckt das ab.</td></tr>
+          <tr><td>Ölstand als Füllung</td><td>Der Wert wechselte in 10 Tagen dreimal zwischen 62 und 75 % (07.10. 75, 08.10. 62, 14.10. 75, 16.10. 62), ohne erkennbares Nachfüllen. Eine Füllung würde Schwankungen zeigen, die vermutlich keine sind. Die Kachel bleibt statisch.</td></tr>
+          <tr><td>AdBlue als Füllstand</td><td>Kein Prozentwert, nur Reichweite in 500-km-Schritten. Eine Füllhöhe müsste ich aus einer angenommenen Tankgröße errechnen.</td></tr>
+          <tr><td>Batterie oder Laden</td><td>Diesel. <code>sensor.…_zusatzbatterie_ladestand</code> und die 12-V-Batterie sind <code>unavailable</code>.</td></tr>
+          <tr><td>Szene hinter der ganzen Karte (wie Wetter)</td><td>Die Karte hat Kopf, Bild, Leiste, 8 Chips, 6 Kacheln und 8 Fahrtwerte. Eine Ebene dahinter läge unter rund 45 Textzeilen; bei der Heizung wurde das aus demselben Grund verworfen.</td></tr>
+          <tr><td>Animationen für den Touran</td><td>Alle Werte des Touran stehen derzeit auf <code>unavailable</code>. Das Template kann trotzdem beide Fahrzeuge bedienen; beim Touran bliebe es still.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-kontrast">
+    <div class="section-head">
+      <p class="eyebrow">Lesbarkeit</p>
+      <h2 id="h-kontrast">Symbol auf der Füllung</h2>
+      <p class="note">Das Tank-Symbol (22 px, mittig, 10–32 px von unten) liegt auf der Füllung, sobald sie über 24 % steht. Gerechnet ist der schlechtere Kartengrund <code>#1b2231</code> mit Kachelgrund 0,028 Weiß, Icon-Kachel 0,16 und Füllung 0,24 der Akzentfarbe. Für Symbole gilt WCAG 1.4.11 mit 3:1.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Farbe</th><th>auf Icon-Kachel</th><th>auf Füllung 0,24</th><th>auf Füllung 0,5</th><th>Einsatz</th></tr></thead>
+        <tbody>
+          <tr><td><span class="sw" style="background:#e6b566"></span>Amber</td><td class="num">5,59 : 1</td><td class="num ok-t">3,50 : 1</td><td class="num bad-t">2,17 : 1</td><td>normaler Tankstand</td></tr>
+          <tr><td><span class="sw" style="background:#e7936e"></span>Koralle</td><td class="num">4,66 : 1</td><td class="num ok-t">3,13 : 1</td><td class="num bad-t">2,04 : 1</td><td>unter 150 km, Füllung dann etwa 19 %, unter dem Symbol</td></tr>
+          <tr><td><span class="sw" style="background:#f0736a"></span>Rot</td><td class="num">4,09 : 1</td><td class="num bad-t">2,89 : 1</td><td class="num bad-t">1,97 : 1</td><td>unter 75 km, Füllung dann etwa 9 %, unter dem Symbol</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Folgerung: Die Füllung bekommt die Stufe „Rand“ (0,24), nicht „Leuchten“ (0,5). Rot unterschreitet 3:1 zwar auf der Füllung, erscheint aber nur bei so wenig Kraftstoff, dass die Füllung unter dem Symbol bleibt (Reichweite pro Prozent heute 7,9 km). Kleine Schrift liegt nirgends auf Bewegung, die Kachelbeschriftung in <code>#8794a5</code> bleibt bei 4,77:1.</p>
+  </section>
+
+  <section aria-labelledby="h-umsetzung">
+    <div class="section-head">
+      <p class="eyebrow">Umsetzung</p>
+      <h2 id="h-umsetzung">So käme es in die Karte</h2>
+    </div>
+    <ol class="steps">
+      <li><b>Neues Template <code>owlet_auto_fx</code></b> in <code>autos-animation-button-card-templates.yaml</code>, aufgebaut wie <code>owlet_geraete_fx</code>: Bibliothek einmal pro Seite in <code>window.__owletAu</code> mit <code>VERSION</code>, dazu <code>extra_styles</code> mit den Klassen <code>.au-*</code> und einem Block für <code>prefers-reduced-motion</code>.</li>
+      <li><b>Tank-, AdBlue-, Inspektions- und Ölwechsel-Kachel</b> bekommen das Template, <code>show_icon: false</code> und ein Feld <code>tile</code> statt <code>i</code> im Grid. Die übrigen Kacheln und Chips bleiben, wie sie sind.</li>
+      <li><b>Füllhöhe als CSS-Variable</b> auf <code>styles.card</code> (<code>--au-lvl</code>), nicht im HTML von <code>tile</code>. So bleibt das Element beim Wertwechsel bestehen und die Höhe gleitet; dasselbe Vorgehen nutzt <code>owlet_wetter_fx</code> für Windrichtung und Neigung (dort mit button-card v7.0.1 getestet, in deiner Instanz installiert).</li>
+      <li><b>Sicherheitsleiste</b>: Ringe über <code>extra_styles</code> am <code>#img-cell</code>, eingeschaltet über eine CSS-Variable wie <code>--bw-ring</code> im Garten.</li>
+      <li><b>Prüfen</b>: <code>ci/check_palette.py</code> und die übrigen Checks aus <code>ci/README.md</code>. Neue <code>custom:</code>-Kartentypen entstehen nicht.</li>
+    </ol>
+    <pre><span class="c">// Auszug aus der Bibliothek: Tankzustand mit Plausibilitaetspruefung
+// (Schwellen als Variablen der Karte, Werte hier die Vorgaben)</span>
+const tank = (pct, km, v) =&gt; {
+  if (pct === null) return { z: 'leer' };
+  <span class="c">// Artefakt: 100 % ohne passende Reichweite (9x in 10 Tagen beobachtet)</span>
+  if (pct &gt;= 100 &amp;&amp; (km === null || km &lt; v.tank_voll_ab_km)) return { z: 'unplausibel' };
+  if (km !== null &amp;&amp; km &lt; v.tank_rot_km)     return { z: 'reserve',  acc: '#f0736a', txt: 'Reserve',     puls: true, lvl: pct };
+  if (km !== null &amp;&amp; km &lt; v.tank_koralle_km) return { z: 'knapp',    acc: '#e7936e', txt: 'bald tanken', puls: true, lvl: pct };
+  return { z: 'ok', acc: '#e6b566', lvl: pct };
+};
+<span class="c">// Template-Vorgaben: tank_voll_ab_km 700, tank_koralle_km 150, tank_rot_km 75</span></pre>
+    <p class="note">Entity-IDs im Repo mit den Platzhaltern <code>fin_passat</code> und <code>fin_touran</code>; die eigene Fassung entsteht wie gewohnt über den Skill „platzhalter-einsetzen“ in <code>lokal/</code>.</p>
+  </section>
+
+  <section aria-labelledby="h-quellen">
+    <div class="section-head">
+      <p class="eyebrow">Grundlagen</p>
+      <h2 id="h-quellen">Woher die Zahlen stammen</h2>
+    </div>
+    <ul class="src-list">
+      <li>Home-Assistant-Verlauf 06.10.–16.10.2026 (Tankstand, Reichweite, Ölstand, AdBlue-Reichweite, Türverriegelung, Feststellbremse, Verbindungsstatus) und Langzeitstatistik des Tankstands ab 18.08.2026, abgefragt am 16.10.2026.</li>
+      <li>Repo: <code>autos-button-card-v3.yaml</code> (live in der Auto-View), <code>wetter-animation-button-card-templates.yaml</code>, <code>hausgeraete-animation-button-card-templates.yaml</code>, <code>heizung-animation-button-card-templates.yaml</code>, <code>garten-button-card.yaml</code>, <code>DESIGN.md</code>.</li>
+      <li>Glätte-Schneeflocke unter +4 °C, aus über +6 °C: <a href="https://www.volkswagen.co.uk/en/owners-and-services/my-car/warning-light/electric-outside-temperature-colder-than--4c--39f.html" target="_blank" rel="noopener">Volkswagen UK, Warnleuchte Außentemperatur</a>.</li>
+      <li>Fühler liest im Stand zu hoch: <a href="https://www.wheelsjoint.com/why-vw-tiguan-has-snowflake-symbol-next-to-outside-temperature/" target="_blank" rel="noopener">WheelsJoint</a> (Drittanbieter).</li>
+      <li>Erste AdBlue-Warnung bei etwa 2.400 km: <a href="https://www.coxmotorparts.co.uk/generic-exclude-reg-or-vin-category-seat-shop/genuine-vw-adblue-10-litres-and-dispensing-hose-kit/" target="_blank" rel="noopener">Cox Motor Parts</a> (Händlerseite, keine VW-Dokumentation).</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const ICONS = {"mdiCarEstate":"M3,6H16L19,10H21C22.11,10 23,10.89 23,12V15H21A3,3 0 0,1 18,18A3,3 0 0,1 15,15H9A3,3 0 0,1 6,18A3,3 0 0,1 3,15H1V8C1,6.89 1.89,6 3,6M2.5,7.5V10H10.5V7.5H2.5M12,7.5V10H17.14L15.25,7.5H12M6,13.5A1.5,1.5 0 0,0 4.5,15A1.5,1.5 0 0,0 6,16.5A1.5,1.5 0 0,0 7.5,15A1.5,1.5 0 0,0 6,13.5M18,13.5A1.5,1.5 0 0,0 16.5,15A1.5,1.5 0 0,0 18,16.5A1.5,1.5 0 0,0 19.5,15A1.5,1.5 0 0,0 18,13.5Z","mdiLock":"M12,17A2,2 0 0,0 14,15C14,13.89 13.1,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z","mdiLockOpenVariant":"M18 1C15.24 1 13 3.24 13 6V8H4C2.9 8 2 8.89 2 10V20C2 21.11 2.9 22 4 22H16C17.11 22 18 21.11 18 20V10C18 8.9 17.11 8 16 8H15V6C15 4.34 16.34 3 18 3C19.66 3 21 4.34 21 6V8H23V6C23 3.24 20.76 1 18 1M10 13C11.1 13 12 13.89 12 15C12 16.11 11.11 17 10 17C8.9 17 8 16.11 8 15C8 13.9 8.9 13 10 13Z","mdiLockQuestion":"M12,1A5,5 0 0,0 7,6V8H6A2,2 0 0,0 4,10V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V10A2,2 0 0,0 18,8H17V6A5,5 0 0,0 12,1M12,2.9C13.71,2.9 15.1,4.29 15.1,6V8H8.9V6C8.9,4.29 10.29,2.9 12,2.9M12.19,10.5C13.13,10.5 13.88,10.71 14.42,11.12C14.96,11.54 15.23,12.1 15.23,12.8C15.23,13.24 15.08,13.63 14.79,14C14.5,14.36 14.12,14.64 13.66,14.85C13.4,15 13.23,15.15 13.14,15.32C13.05,15.5 13,15.72 13,16H11C11,15.5 11.1,15.16 11.29,14.92C11.5,14.68 11.84,14.4 12.36,14.08C12.62,13.94 12.83,13.76 13,13.54C13.14,13.33 13.22,13.08 13.22,12.8C13.22,12.5 13.13,12.28 12.95,12.11C12.77,11.93 12.5,11.85 12.19,11.85C11.92,11.85 11.7,11.92 11.5,12.06C11.34,12.2 11.24,12.41 11.24,12.69H9.27C9.22,12 9.5,11.4 10.05,11.04C10.59,10.68 11.3,10.5 12.19,10.5M11,17H13V19H11V17Z","mdiGasStation":"M18,10A1,1 0 0,1 17,9A1,1 0 0,1 18,8A1,1 0 0,1 19,9A1,1 0 0,1 18,10M12,10H6V5H12M19.77,7.23L19.78,7.22L16.06,3.5L15,4.56L17.11,6.67C16.17,7 15.5,7.93 15.5,9A2.5,2.5 0 0,0 18,11.5C18.36,11.5 18.69,11.42 19,11.29V18.5A1,1 0 0,1 18,19.5A1,1 0 0,1 17,18.5V14C17,12.89 16.1,12 15,12H14V5C14,3.89 13.1,3 12,3H6C4.89,3 4,3.89 4,5V21H14V13.5H15.5V18.5A2.5,2.5 0 0,0 18,21A2.5,2.5 0 0,0 20.5,18.5V9C20.5,8.31 20.22,7.68 19.77,7.23Z","mdiFuel":"M3,2H6C6.28,2 6.53,2.11 6.71,2.29L8.79,4.38L9.59,3.59C10,3.2 10.5,3 11,3H17C17.5,3 18,3.2 18.41,3.59L19.41,4.59C19.8,5 20,5.5 20,6V19A2,2 0 0,1 18,21H8A2,2 0 0,1 6,19V13L6,12V8C6,7.5 6.2,7 6.59,6.59L7.38,5.79L5.59,4H3V2M11,5V7H17V5H11M11.41,11L9.41,9H8V10.41L10,12.41V15.59L8,17.59V19H9.41L11.41,17H14.59L16.59,19H18V17.59L16,15.59V12.41L18,10.41V9H16.59L14.59,11H11.41M12,13H14V15H12V13Z","mdiWrenchClock":"M10 6.2C10 4.3 8.8 2.6 7 2V5.7H4V2C2.2 2.6 1 4.3 1 6.2C1 8.1 2.2 9.8 4 10.4V21.4C4 21.8 4.2 22 4.5 22H6.5C6.8 22 7 21.8 7 21.5V10.5C8.8 9.9 10 8.2 10 6.2M16 8C16 8 15.9 8 16 8C12.1 8.1 9 11.2 9 15C9 18.9 12.1 22 16 22S23 18.9 23 15 19.9 8 16 8M16 20C13.2 20 11 17.8 11 15S13.2 10 16 10 21 12.2 21 15 18.8 20 16 20M15 11V16L18.6 18.2L19.4 17L16.5 15.3V11H15Z","mdiOil":"M22,12.5C22,12.5 24,14.67 24,16A2,2 0 0,1 22,18A2,2 0 0,1 20,16C20,14.67 22,12.5 22,12.5M6,6H10A1,1 0 0,1 11,7A1,1 0 0,1 10,8H9V10H11C11.74,10 12.39,10.4 12.73,11L19.24,7.24L22.5,9.13C23,9.4 23.14,10 22.87,10.5C22.59,10.97 22,11.14 21.5,10.86L19.4,9.65L15.75,15.97C15.41,16.58 14.75,17 14,17H5A2,2 0 0,1 3,15V12A2,2 0 0,1 5,10H7V8H6A1,1 0 0,1 5,7A1,1 0 0,1 6,6M5,12V15H14L16.06,11.43L12.6,13.43L11.69,12H5M0.38,9.21L2.09,7.5C2.5,7.11 3.11,7.11 3.5,7.5C3.89,7.89 3.89,8.5 3.5,8.91L1.79,10.62C1.4,11 0.77,11 0.38,10.62C0,10.23 0,9.6 0.38,9.21Z","mdiOilLevel":"M8 18C6.67 18 5.79 18.79 5.29 19.29S4.67 20 4 20 3.21 19.79 2.71 19.29C2.35 18.93 1.79 18.42 1 18.16V20.41C1.09 20.5 1.18 20.59 1.29 20.71C1.79 21.21 2.67 22 4 22S6.21 21.21 6.71 20.71 7.33 20 8 20 8.79 20.21 9.29 20.71C9.73 21.14 10.44 21.8 11.5 21.96C11.66 22 11.83 22 12 22C13.33 22 14.21 21.21 14.71 20.71S15.33 20 16 20 16.79 20.21 17.29 20.71 18.67 22 20 22 22.21 21.21 22.71 20.71C22.82 20.59 22.91 20.5 23 20.41V18.16C22.21 18.42 21.65 18.93 21.29 19.29C20.79 19.79 20.67 20 20 20S19.21 19.79 18.71 19.29 17.33 18 16 18 13.79 18.79 13.29 19.29 12.67 20 12 20C11.78 20 11.63 19.97 11.5 19.92C11.22 19.82 11.05 19.63 10.71 19.29C10.21 18.79 9.33 18 8 18M22 10.5C22 10.5 24 12.67 24 14C24 15.1 23.1 16 22 16S20 15.1 20 14C20 12.67 22 10.5 22 10.5M22.5 7.13L19.24 5.24L12.73 9C12.39 8.4 11.74 8 11 8H9V6H10C10.55 6 11 5.55 11 5S10.55 4 10 4H6C5.45 4 5 4.45 5 5S5.45 6 6 6H7V8H5C3.9 8 3 8.9 3 10V13C3 14.1 3.9 15 5 15H14C14.75 15 15.41 14.58 15.75 13.97L19.4 7.65L21.5 8.86C22 9.14 22.59 8.97 22.87 8.5C23.14 8 23 7.4 22.5 7.13M14 13H5V10H11.69L12.6 11.43L16.06 9.43L14 13M3.5 6.92L1.79 8.62A1 1 0 0 1 .38 7.21L2.09 5.5A1 1 0 0 1 3.5 5.5C3.89 5.89 3.89 6.5 3.5 6.92Z","mdiCounter":"M4,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M4,6V18H11V6H4M20,18V6H18.76C19,6.54 18.95,7.07 18.95,7.13C18.88,7.8 18.41,8.5 18.24,8.75L15.91,11.3L19.23,11.28L19.24,12.5L14.04,12.47L14,11.47C14,11.47 17.05,8.24 17.2,7.95C17.34,7.67 17.91,6 16.5,6C15.27,6.05 15.41,7.3 15.41,7.3L13.87,7.31C13.87,7.31 13.88,6.65 14.25,6H13V18H15.58L15.57,17.14L16.54,17.13C16.54,17.13 17.45,16.97 17.46,16.08C17.5,15.08 16.65,15.08 16.5,15.08C16.37,15.08 15.43,15.13 15.43,15.95H13.91C13.91,15.95 13.95,13.89 16.5,13.89C19.1,13.89 18.96,15.91 18.96,15.91C18.96,15.91 19,17.16 17.85,17.63L18.37,18H20M8.92,16H7.42V10.2L5.62,10.76V9.53L8.76,8.41H8.92V16Z","mdiCloudSync":"M13 17.5C13 18.39 13.18 19.23 13.5 20H6.5C5 20 3.69 19.5 2.61 18.43C1.54 17.38 1 16.09 1 14.58C1 13.28 1.39 12.12 2.17 11.1S4 9.43 5.25 9.15C5.67 7.62 6.5 6.38 7.75 5.43S10.42 4 12 4C13.95 4 15.6 4.68 16.96 6.04C18.32 7.4 19 9.05 19 11C19.04 11 19.07 11 19.1 11C15.7 11.23 13 14.05 13 17.5M19 13.5V12L16.75 14.25L19 16.5V15C20.38 15 21.5 16.12 21.5 17.5C21.5 17.9 21.41 18.28 21.24 18.62L22.33 19.71C22.75 19.08 23 18.32 23 17.5C23 15.29 21.21 13.5 19 13.5M19 20C17.62 20 16.5 18.88 16.5 17.5C16.5 17.1 16.59 16.72 16.76 16.38L15.67 15.29C15.25 15.92 15 16.68 15 17.5C15 19.71 16.79 21.5 19 21.5V23L21.25 20.75L19 18.5V20Z","mdiCloudCheckVariant":"M10.35 17L16 11.35L14.55 9.9L10.33 14.13L8.23 12.03L6.8 13.45M6.5 20Q4.22 20 2.61 18.43 1 16.85 1 14.58 1 12.63 2.17 11.1 3.35 9.57 5.25 9.15 5.88 6.85 7.75 5.43 9.63 4 12 4 14.93 4 16.96 6.04 19 8.07 19 11 20.73 11.2 21.86 12.5 23 13.78 23 15.5 23 17.38 21.69 18.69 20.38 20 18.5 20Z","mdiSnowflake":"M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.5,8.82L6.5,7.69L5.92,5.36L4,5.88L4.47,7.65L2.7,8.12L3.22,10.05L5.55,9.43L7.55,10.56V13.45L5.55,14.58L3.22,13.96L2.7,15.89L4.47,16.36L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.7,20.59L13,18.88V16.62L15.5,15.17L17.5,16.3L18.12,18.63L20,18.12L19.53,16.35L21.3,15.88L20.79,13.95M9.5,10.56L12,9.11L14.5,10.56V13.44L12,14.89L9.5,13.44V10.56Z","mdiCarWindshieldOutline":"M22.63 15.5L20.21 5.85A1 1 0 0 0 19.14 5.1C17.8 5.24 14.14 5.5 12 5.5S6.2 5.24 4.86 5.1A1 1 0 0 0 3.79 5.85L1.37 15.5A1.5 1.5 0 0 0 2.55 17.36A61.5 61.5 0 0 0 12 18A61.5 61.5 0 0 0 21.45 17.36A1.5 1.5 0 0 0 22.63 15.5M12 16A63.33 63.33 0 0 1 3.44 15.5L5.5 7.18C7 7.32 10.16 7.5 12 7.5S17 7.32 18.5 7.18L20.56 15.5A63.33 63.33 0 0 1 12 16Z","mdiCarDoorLock":"M7.8 17V15.5C7.8 14.1 6.4 13 5 13S2.2 14.1 2.2 15.5V17C1.6 17 1 17.6 1 18.2V21.7C1 22.4 1.6 23 2.2 23H7.7C8.4 23 9 22.4 9 21.8V18.3C9 17.6 8.4 17 7.8 17M6.5 17H3.5V15.5C3.5 14.7 4.2 14.2 5 14.2S6.5 14.7 6.5 15.5V17M21 3H11L3 11V11.44C3.61 11.17 4.29 11 5 11C7.6 11 9.8 13.06 9.8 15.5V15.75C10.53 16.36 11 17.28 11 18.3V21H22V4C22 3.45 21.55 3 21 3M19 16H16V14H19V16M20 11H5.83L11.83 5H20V11Z","mdiCarBack":"M6,11L7,7H17L18,11M18.92,6C18.71,5.4 18.14,5 17.5,5H6.5C5.86,5 5.29,5.4 5.08,6L3,12V20A1,1 0 0,0 4,21H5A1,1 0 0,0 6,20V18H18V20A1,1 0 0,0 19,21H20A1,1 0 0,0 21,20V12L18.92,6M7,16H5V14H7V16M19,16H17V14H19V16M14,16H10V14H14V16Z","mdiCarLiftedPickup":"M18 14L18.79 14.1L18.77 14.33L19.24 14.5L19.39 14.34C19.89 14.6 20.32 15 20.6 15.5L20.43 15.67L20.63 16.12L20.86 16.1C20.95 16.39 21 16.69 21 17L20.9 17.78L20.66 17.77L20.47 18.24L20.66 18.39C20.39 18.9 20 19.32 19.5 19.6L19.33 19.42L18.87 19.62L18.89 19.86C18.61 19.95 18.31 20 18 20L17.21 19.9L17.22 19.65L16.76 19.47L16.6 19.66C16.1 19.39 15.67 19 15.39 18.5L15.57 18.32L15.37 17.86L15.13 17.88C15.05 17.6 15 17.31 15 17L15.11 16.2L15.34 16.21L15.53 15.75L15.35 15.6C15.62 15.09 16 14.68 16.5 14.39L16.67 14.56L17.13 14.36L17.11 14.14C17.39 14.05 17.69 14 18 14M18 15.5C17.17 15.5 16.5 16.17 16.5 17C16.5 17.83 17.17 18.5 18 18.5C18.83 18.5 19.5 17.83 19.5 17C19.5 16.17 18.83 15.5 18 15.5M6 14L6.79 14.1L6.77 14.33L7.24 14.5L7.39 14.34C7.89 14.6 8.32 15 8.6 15.5L8.43 15.67L8.63 16.12L8.86 16.1C8.95 16.39 9 16.69 9 17L8.9 17.78L8.65 17.77L8.47 18.24L8.66 18.39C8.39 18.9 8 19.32 7.5 19.6L7.33 19.42L6.87 19.62L6.89 19.86C6.61 19.95 6.31 20 6 20L5.21 19.9L5.22 19.65L4.76 19.47L4.6 19.66C4.1 19.39 3.67 19 3.39 18.5L3.57 18.32L3.37 17.86L3.13 17.88C3.05 17.6 3 17.31 3 17L3.11 16.2L3.34 16.21L3.53 15.75L3.35 15.6C3.62 15.09 4 14.68 4.5 14.39L4.67 14.56L5.13 14.36L5.11 14.14C5.39 14.05 5.69 14 6 14M6 15.5C5.17 15.5 4.5 16.17 4.5 17C4.5 17.83 5.17 18.5 6 18.5C6.83 18.5 7.5 17.83 7.5 17C7.5 16.17 6.83 15.5 6 15.5M16 6L19 10H21C22.11 10 23 10.89 23 12V15H21C21 13.34 19.66 12 18 12C16.34 12 15 13.34 15 15H9C9 13.34 7.66 12 6 12C4.34 12 3 13.34 3 15H1V10H10.5V6L16 6M12 7.5V10H17.46L15.5 7.5H12Z","mdiCarBrakeParking":"M12,3C7,3 3,7 3,12C3,17 7,21 12,21C17,21 21,17 21,12C21,7 17,3 12,3M12,19C8.1,19 5,15.9 5,12C5,8.1 8.1,5 12,5C15.9,5 19,8.1 19,12C19,15.9 15.9,19 12,19M20.5,20.5C22.7,18.3 24,15.3 24,12C24,8.7 22.7,5.7 20.5,3.5L19.4,4.6C21.3,6.5 22.5,9.1 22.5,12C22.5,14.9 21.3,17.5 19.4,19.4L20.5,20.5M4.6,19.4C2.7,17.5 1.5,14.9 1.5,12C1.5,9.1 2.7,6.5 4.6,4.6L3.5,3.5C1.3,5.7 0,8.7 0,12C0,15.3 1.3,18.3 3.5,20.5L4.6,19.4M9.5,7V17H11.5V13H13.5A2,2 0 0,0 15.5,11V9A2,2 0 0,0 13.5,7H9.5M11.5,9H13.5V11H11.5V9Z","mdiCarParkingLights":"M7.3,9.2C8.1,9.6 9,10.5 9,12C9,13.5 8.1,14.4 7.3,14.8C6.9,13.4 6.9,10.6 7.3,9.2M6.5,7C4.5,7 4.5,17 6.5,17C8.5,17 11,15.1 11,12C11,8.9 8.5,7 6.5,7M16.7,9.2C17,10.6 17,13.4 16.7,14.8C15.9,14.4 15,13.5 15,12C15,10.5 15.9,9.6 16.7,9.2M17.5,7C15.5,7 13,8.9 13,12C13,15.1 15.5,17 17.5,17C19.5,17 19.5,7 17.5,7M4.9,6.2L2.5,4.6L1.4,6.3L4,8C4.2,7.3 4.5,6.6 4.9,6.2M20,8L22.6,6.3L21.5,4.6L19.1,6.2C19.4,6.6 19.8,7.2 20,8M4,16L1.4,17.7L2.5,19.4L4.9,17.8C4.6,17.4 4.2,16.8 4,16M20.5,11C20.5,11.3 20.5,11.7 20.5,12C20.5,12.3 20.5,12.6 20.5,13H24V11H20.5M19.1,17.8L21.5,19.4L22.6,17.7L20,16C19.8,16.7 19.5,17.4 19.1,17.8M3.5,12C3.5,11.7 3.5,11.4 3.5,11H0V13H3.5C3.5,12.7 3.5,12.3 3.5,12Z","mdiMapMarkerPath":"M18,15A3,3 0 0,1 21,18A3,3 0 0,1 18,21C16.69,21 15.58,20.17 15.17,19H14V17H15.17C15.58,15.83 16.69,15 18,15M18,17A1,1 0 0,0 17,18A1,1 0 0,0 18,19A1,1 0 0,0 19,18A1,1 0 0,0 18,17M18,8A1.43,1.43 0 0,0 19.43,6.57C19.43,5.78 18.79,5.14 18,5.14C17.21,5.14 16.57,5.78 16.57,6.57A1.43,1.43 0 0,0 18,8M18,2.57A4,4 0 0,1 22,6.57C22,9.56 18,14 18,14C18,14 14,9.56 14,6.57A4,4 0 0,1 18,2.57M8.83,17H10V19H8.83C8.42,20.17 7.31,21 6,21A3,3 0 0,1 3,18C3,16.69 3.83,15.58 5,15.17V14H7V15.17C7.85,15.47 8.53,16.15 8.83,17M6,17A1,1 0 0,0 5,18A1,1 0 0,0 6,19A1,1 0 0,0 7,18A1,1 0 0,0 6,17M6,3A3,3 0 0,1 9,6C9,7.31 8.17,8.42 7,8.83V10H5V8.83C3.83,8.42 3,7.31 3,6A3,3 0 0,1 6,3M6,5A1,1 0 0,0 5,6A1,1 0 0,0 6,7A1,1 0 0,0 7,6A1,1 0 0,0 6,5M11,19V17H13V19H11M7,13H5V11H7V13Z","mdiRefresh":"M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"};
+  document.querySelectorAll('path[data-i]').forEach((p) => p.setAttribute('d', ICONS[p.dataset.i] || ''));
+  const setIcon = (el, name) => { el.dataset.i = name; el.setAttribute('d', ICONS[name]); };
+
+  const $ = (id) => document.getElementById(id);
+  const de = (n) => n.toLocaleString('de-DE');
+  const KM_PRO_PROZENT = 270 / 34;
+  const FARBE = { amber: '#e6b566', koralle: '#e7936e', rot: '#f0736a', tuerkis: '#7fd0d5', blau: '#7fb3d5', grau: '#8794a5' };
+
+  const setAcc = (el, hex) => {
+    el.style.setProperty('--acc', hex);
+    el.style.setProperty('--acc16', hex + '29');
+    el.style.setProperty('--acc24', hex + '3d');
+    el.style.setProperty('--acc2e', hex + '2e');
+    el.style.setProperty('--acc80', hex + '80');
+  };
+  // Hinweis-Puls neu starten, wenn der Zustand neu eintritt (wie ein Neuzeichnen in HA)
+  const setHinweis = (el, an, key) => {
+    if (el.dataset.k === key) return;
+    el.dataset.k = key;
+    el.classList.remove('hinweis');
+    if (an) { void el.offsetWidth; el.classList.add('hinweis'); }
+  };
+
+  const s = { tank: 34, glitch: false, welle: true, adblue: 3500, insp: 658, lock: 'off', temp: 12, rm: false };
+
+  const render = () => {
+    const card = $('card');
+    card.classList.toggle('rm', s.rm);
+
+    // ---------- Tank ----------
+    const km = Math.round(s.tank * KM_PRO_PROZENT / 10) * 10;
+    const pct = s.glitch ? 100 : s.tank;
+    const it = $('tank-it'), tile = $('t-tank');
+    $('o-tank').textContent = s.glitch ? '100 % (Artefakt), ' + de(km) + ' km' : s.tank + ' %, ' + de(km) + ' km';
+    let z = 'ok', acc = FARBE.amber, txt = '';
+    if (pct >= 100 && km < 700) z = 'unplausibel';
+    else if (km < 75) { z = 'reserve'; acc = FARBE.rot; txt = 'Reserve'; }
+    else if (km < 150) { z = 'knapp'; acc = FARBE.koralle; txt = 'bald tanken'; }
+    setAcc(tile, z === 'unplausibel' ? FARBE.grau : acc);
+    tile.style.setProperty('--lvl', z === 'unplausibel' ? 0 : pct);
+    it.classList.toggle('unplausibel', z === 'unplausibel');
+    it.classList.toggle('leer', z === 'unplausibel' || pct <= 0);
+    it.classList.toggle('ruhig', !s.welle);
+    setHinweis(it, z === 'knapp' || z === 'reserve', z);
+    $('tank-v').innerHTML = de(km) + '<small>km</small>';
+    $('tank-n').innerHTML = z === 'unplausibel' ? 'Tank: –' : 'Tank: ' + pct + ' %' + (txt ? ' · <em>' + txt + '</em>' : '');
+
+    // ---------- AdBlue ----------
+    const ab = s.adblue, abIt = $('adblue-it'), abT = $('t-adblue');
+    $('o-adblue').textContent = de(ab) + ' km';
+    let abZ = 'ok', abAcc = FARBE.tuerkis, abTxt = '';
+    if (ab <= 1000) { abZ = 'krit'; abAcc = FARBE.rot; abTxt = 'dringend nachfüllen'; }
+    else if (ab <= 2400) { abZ = 'hinweis'; abAcc = FARBE.amber; abTxt = 'nachfüllen'; }
+    setAcc(abT, abAcc);
+    setHinweis(abIt, abZ !== 'ok', abZ);
+    $('adblue-v').innerHTML = de(ab) + '<small>km</small>';
+    $('adblue-n').innerHTML = 'AdBlue' + (abTxt ? ' · <em>' + abTxt + '</em>' : '');
+
+    // ---------- Inspektion ----------
+    const ins = s.insp, inIt = $('insp-it'), inT = $('t-insp');
+    $('o-insp').textContent = ins + (ins === 1 ? ' Tag' : ' Tagen');
+    const inZ = ins <= 30 ? 'faellig' : 'ok';
+    setAcc(inT, inZ === 'ok' ? FARBE.blau : FARBE.amber);
+    setHinweis(inIt, inZ !== 'ok', inZ);
+    const d = new Date(2026, 9, 16 + ins);
+    const p = (v) => String(v).padStart(2, '0');
+    $('insp-n').innerHTML = inZ === 'ok'
+      ? 'Inspektion: ' + p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear()
+      : 'Inspektion: <em>in ' + ins + (ins === 1 ? ' Tag' : ' Tagen') + '</em>';
+
+    // ---------- Schloss ----------
+    const bar = $('bar'), ib = $('bar-ib');
+    const LOCK = {
+      off: { c: '#a6d49e', t: 'Fahrzeug abgeschlossen', i: 'mdiLock' },
+      on: { c: '#e6b566', t: 'Türen nicht verriegelt', i: 'mdiLockOpenVariant' },
+      unknown: { c: '#8794a5', t: 'Schlossstatus unbekannt', i: 'mdiLockQuestion' }
+    }[s.lock];
+    bar.style.setProperty('--c', LOCK.c);
+    $('bar-t').textContent = LOCK.t;
+    setIcon($('bar-ic'), LOCK.i);
+    setHinweis(ib, s.lock === 'on', s.lock);
+
+    // ---------- Glätte ----------
+    $('o-temp').textContent = s.temp + ' °C';
+    const kalt = s.temp < 4;
+    const frost = $('frost');
+    if (kalt && !frost.classList.contains('on')) {
+      frost.innerHTML = '';
+      [[4, 8, 12, 0], [88, 6, 10, 0.4], [10, 70, 9, 0.8], [92, 62, 13, 0.2], [48, 5, 8, 1.1], [70, 78, 9, 0.6]].forEach(([x, y, sz, ph]) => {
+        const i = document.createElement('i');
+        i.style.cssText = '--x:' + x + '%;--y:' + y + '%;--s:' + sz + 'px;--p:' + ph + 's';
+        i.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + ICONS.mdiSnowflake + '"/></svg>';
+        frost.appendChild(i);
+      });
+      void frost.offsetWidth;
+    }
+    frost.classList.toggle('on', kalt);
+    $('pill').hidden = !kalt;
+    $('pill-t').textContent = 'Glättegefahr · ' + s.temp + ' °C';
+
+    // ---------- Status-Zeile ----------
+    const moves = [];
+    if (s.welle && !(z === 'unplausibel') && pct > 0) moves.push('Tankwelle');
+    if (z === 'knapp' || z === 'reserve') moves.push('Puls am Tank');
+    if (abZ !== 'ok') moves.push('Puls an AdBlue');
+    if (inZ !== 'ok') moves.push('Puls an der Inspektion');
+    if (s.lock === 'on') moves.push('Puls am Schloss');
+    if (kalt) moves.push('Eiskristalle');
+    $('status').innerHTML = s.rm
+      ? '<b>Bewegung reduziert:</b> Standbild derselben Zustände, nichts bewegt sich.'
+      : '<b>In Bewegung:</b> ' + (moves.length ? moves.join(', ') : 'nichts') + (z === 'unplausibel' ? '. Tankwert verworfen: 100 % bei ' + de(km) + ' km Reichweite.' : '.');
+  };
+
+  // ---------- Regler ----------
+  $('f-tank').addEventListener('input', (e) => { s.tank = +e.target.value; render(); });
+  $('f-glitch').addEventListener('change', (e) => { s.glitch = e.target.checked; render(); });
+  $('f-adblue').addEventListener('input', (e) => { s.adblue = +e.target.value; render(); });
+  $('f-insp').addEventListener('input', (e) => { s.insp = +e.target.value; render(); });
+  $('f-lock').addEventListener('change', (e) => { s.lock = e.target.value; render(); });
+  $('f-temp').addEventListener('input', (e) => { s.temp = +e.target.value; render(); });
+  $('f-rm').addEventListener('change', (e) => { s.rm = e.target.checked; render(); });
+  const welle = (an) => { s.welle = an; $('f-welle-an').setAttribute('aria-pressed', String(an)); $('f-welle-aus').setAttribute('aria-pressed', String(!an)); render(); };
+  $('f-welle-an').addEventListener('click', () => welle(true));
+  $('f-welle-aus').addEventListener('click', () => welle(false));
+  $('ctl').addEventListener('submit', (e) => e.preventDefault());
+
+  // ---------- Daten aktualisieren (Vorschau: Abruf dauert 5 s) ----------
+  let timer = null;
+  const act = $('act');
+  act.addEventListener('click', () => {
+    if (act.classList.contains('laeuft')) return;
+    clearTimeout(timer);
+    act.classList.remove('fertig');
+    act.classList.add('laeuft');
+    setIcon($('act-ic'), 'mdiCloudSync');
+    $('act-t').textContent = 'Abruf läuft …';
+    $('act-s').textContent = 'höchstens 3 min';
+    timer = setTimeout(() => {
+      act.classList.remove('laeuft');
+      act.classList.add('fertig');
+      setIcon($('act-ic'), 'mdiCloudCheckVariant');
+      $('act-t').textContent = 'Daten aktualisiert';
+      $('act-s').textContent = 'gerade eben';
+      timer = setTimeout(() => {
+        act.classList.remove('fertig');
+        setIcon($('act-ic'), 'mdiCloudSync');
+        $('act-t').textContent = 'Daten aktualisieren';
+        $('act-s').textContent = '';
+      }, 2500);
+    }, 5000);
+  });
+
+  render();
+})();
+</script>

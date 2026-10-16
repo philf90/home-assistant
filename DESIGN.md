@@ -200,7 +200,16 @@ Raum heizt, in drei Stufen nach Ventilöffnung; bei offenem Fenster ein
 Luftzug in Wolkengrau, der dreimal durchläuft und dann steht. „Fenster offen“
 steht als Zustand in Blau (6,54:1 auf der Kachel). Eine Ebene hinter der
 ganzen Karte gibt es dort bewusst nicht: 8 Kacheln mit je drei Textzeilen
-würden überladen. Dafür gilt zusätzlich:
+würden überladen. Die Auto-Karte (Template `owlet_auto_fx` in
+`autos-animation-button-card-templates.yaml`, genutzt von
+`autos-button-card-v4.yaml`, Entwurf und Datenlage in
+`autos-animation-vorschlaege.html`) bewegt aus demselben Grund nur
+Icon-Kacheln, Ringe außen herum und das Fahrzeugbild: Die Tank-Kachel füllt
+sich mit leichter Welle bis zum Tankstand, die Füllung in der Stufe „Rand“
+(0,24), damit das Symbol darauf 3:1 hält; knappe oder fällige Werte und ein
+offenes Schloss zeigen zwei Ringe, die dreimal laufen und dann als Schein
+stehen bleiben; unter 4 °C funkeln Eiskristalle in Weiß mit Deckkraft am
+Bildrand. Dafür gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
