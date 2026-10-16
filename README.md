@@ -16,14 +16,14 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 | Bereich | Dateien |
 |---|---|
 | Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml`, `pflanzen-view.yaml` |
-| Templates | `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `heizung-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
+| Templates | `autos-animation-button-card-templates.yaml`, `decluttering-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `heizung-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
 | Navigation & Kopf | `navbar-card.yaml`, `top-navigation-button-card.yaml`, `welcome-banner-button-card.yaml` |
 | Energie | `energie-autarkie-…`, `energie-diagramme-…`, `energie-flow-…`, `energie-flow-leiste-…`, `energie-pv-…`, `energie-verbrauch-uebersicht-…`, `energie-monatsbilanz-card.yaml`, `gas-wasser-button-card.yaml` |
 | Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2, v3; v3 animiert über `owlet_heizung_fx` mit Zustand „Fenster offen“), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
 | Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
 | Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…` (animiert über `owlet_geraete_fx`, Entwurf und Home-Connect-Analyse in `hausgeraete-vorschlaege.html`), `staubsauger-button-card.yaml` |
 | Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-unas-pro-button-card.yaml`, `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
-| Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3), `template-autos-passat.yaml` |
+| Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3, v4; v4 animiert über `owlet_auto_fx`, Entwurf und Datenlage in `autos-animation-vorschlaege.html`), `template-autos-passat.yaml` |
 | Garten & Pflanzen | `garten-…`, `pflanzen-view.yaml` (ohne flower-card; ältere Fassung: `pflanzen-flower-card.yaml` + `pflanzen-status-button-card.yaml`) |
 | Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |
 | Sonstiges | `kameras-button-card.yaml`, `muellabfuhr-trash-card.yaml` (v1, v2) |
@@ -143,7 +143,7 @@ verfügbar“. Betroffene Dateien tragen oben den Kommentar
 | `seriennr_geschirrspueler`, `seriennr_waschmaschine`, `seriennr_trockner` | Seriennummer des Home-Connect-Geräts am Anfang der Entity-ID (`sensor.seriennr_…_bsh_common_…`) | Einstellungen → Geräte & Dienste → Home-Connect-Integration → Gerät → Entitäten | `geschirrspueler-…`, `waschmaschine-…`, `trockner-…` |
 | `*_seriennr`, `*_seriennr_1`, `*_seriennr_2` | Seriennummer des Geräts in der Entity-ID (Homematic IP, Owlet); `_1`/`_2` trennen zwei Geräte desselben Modells | Einstellungen → Geräte & Dienste → Integration → Gerät → Entitäten | `homematic-…`, `temperaturen-…` (2), `garten-…`, `owlet-smart-sock-…` |
 | `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | `lichter-*` (4), `fenster-lichter-uebersicht-…`, `garten-…` |
-| `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-button-card-v2.yaml`, `autos-button-card-v3.yaml`, `autos-karten-v2-vorschlaege.html` |
+| `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-button-card-v2.yaml`, `autos-button-card-v3.yaml`, `autos-button-card-v4.yaml`, `autos-karten-v2-vorschlaege.html` |
 | `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-flower-card.yaml`, `pflanzen-view.yaml` |
 | `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `temperaturen-…` (2), `lichter-*` (4), `fenster-lichter-uebersicht-…` |
 
@@ -201,7 +201,7 @@ Dazu:
   Festplatte von Home Assistant OS unter Proxmox vergrößern
 
 Die HTML-Dateien (`home-kacheln-vorschlaege.html`,
-`autos-karten-v2-vorschlaege.html`, `wetter-animiert-vorschlaege.html`,
+`autos-karten-v2-vorschlaege.html`, `autos-animation-vorschlaege.html`, `wetter-animiert-vorschlaege.html`,
 `grafana/proxmox-mockups.html`) sind
 Design-Entwürfe und werden direkt im Browser geöffnet.
 
