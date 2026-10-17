@@ -39,6 +39,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 ARTEN = ("lovelace", "ressource", "grafana", "python", "doku", "entwurf", "meta")
 
+# Themenbereiche unter dashboard/. Ein neuer Bereich wird hier eingetragen,
+# sonst meldet ci/check_struktur.py den Ordner.
+BEREICHE = (
+    "allgemein",
+    "energie",
+    "klima",
+    "licht",
+    "hausgeraete",
+    "netzwerk",
+    "fahrzeuge",
+    "garten",
+    "personen",
+    "flugradar",
+    "fussball",
+    "sonstiges",
+)
+
 # Ordner, deren Inhalt Repo-Konfiguration ist, keine Karte.
 META_ORDNER = (".claude", ".github", "ci", "design")
 META_DATEIEN = ("LICENSE", "pyproject.toml")
