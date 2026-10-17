@@ -12,6 +12,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 
 | Skript | Prueft |
 |---|---|
+| `dateien.py` | Gemeinsame Dateiliste aller Pruefungen (aus `git ls-files`, in allen Ordnern). Ohne Argument: jede Datei hat genau eine Art (`lovelace`, `ressource`, `grafana`, `python`, `doku`, `entwurf`, `meta`), sonst Fehler. Mit Art als Argument: gibt deren Dateien aus. |
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus (Werte mit Templates oder Decluttering-Variablen `[[name]]` werden uebersprungen). |
 | `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten). Regeln: `DESIGN.md`. |
@@ -21,9 +22,21 @@ Dazu im Workflow:
 
 - `yamllint` mit der bewusst lockeren `.yamllint.yml` (Formatierung weitgehend
   aus, damit die Ausgabe signalstark bleibt)
-- `ruff check` auf den Python-Skripten, konfiguriert in `pyproject.toml`
+- `ruff check` und `compileall` auf `grafana/` und `ci/`, konfiguriert in `pyproject.toml`
 - Abgleich, dass `grafana/*.json` zu `grafana/proxmox_dashboards.py` passt
-- `gitleaks` als Secret-Scan, konfiguriert in `.gitleaks.toml`
+- `gitleaks` als Secret-Scan, konfiguriert in `.gitleaks.toml`; das Image ist
+  auf eine Version gepinnt, damit eine neue Regel die CI nicht ohne Aenderung
+  im Repo rot faerbt
+
+## Welche Dateien geprueft werden
+
+Kein Skript durchsucht selbst ein Verzeichnis. Alle holen ihre Dateien aus
+`ci/dateien.py`, das jede Datei aus `git ls-files` genau einer Art zuordnet.
+So kann eine Karte nach dem Verschieben in einen Unterordner nicht still aus
+der Pruefung fallen: Sie behaelt ihre Art, und eine Datei ohne Art laesst
+`python ci/dateien.py` fehlschlagen. Neue, noch nicht mit `git add`
+hinzugefuegte Dateien zaehlen mit, `lokal/` bleibt ueber `.gitignore` draussen.
+Findet eine Pruefung gar keine Datei, schlaegt sie fehl, statt Erfolg zu melden.
 
 ## Warum doppelte Schluessel eigenen Aufwand wert sind
 
@@ -38,12 +51,14 @@ einen eigenen Loader mit.
 ```bash
 pip install pyyaml yamllint ruff
 
+python ci/dateien.py
 node ci/check-js-templates.js
 python ci/check_yaml.py
 python ci/check_palette.py
 python ci/check_grafana.py
 yamllint --strict -c .yamllint.yml .
 ruff check grafana/ ci/
+python -m compileall -q grafana/ ci/
 ```
 
 Jedes Skript nimmt optional einzelne Dateien als Argument:

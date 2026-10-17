@@ -212,6 +212,7 @@ Der Workflow `Validate` läuft bei jedem Push und Pull Request und prüft:
 - JavaScript in `[[[ … ]]]`-Templates der button-card auf Syntaxfehler
 - YAML-Struktur: Parsing, doppelte Schlüssel, bekannte Kartentypen, Format der Entity-IDs
 - `yamllint`, `ruff` und Python-Übersetzung
+- dass jede Datei einer Art zugeordnet ist (`ci/dateien.py`), damit keine Datei still aus den Prüfungen fällt
 - Grafana-JSON sowie den Abgleich mit `proxmox_dashboards.py`
 - Secrets mit `gitleaks`
 

@@ -19,7 +19,8 @@ Geprueft wird, was den Import in eine fremde Grafana-Instanz brechen wuerde:
    je nach Grafana-Theme anders aus; erlaubt sind nur "text" und "transparent".
 
 Aufruf: python ci/check_grafana.py [datei ...]
-Ohne Argumente werden alle grafana/*.json geprueft.
+Ohne Argumente werden alle Dashboards geprueft (Art "grafana" aus
+ci/dateien.py, also grafana/**/*.json).
 """
 
 from __future__ import annotations
@@ -31,9 +32,7 @@ from collections import Counter
 from pathlib import Path
 
 from check_palette import FARBE_HEX, FARBE_RGB, lade_palette, zu_hex
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-GRAFANA_DIR = REPO_ROOT / "grafana"
+from dateien import dateien
 
 REQUIRED_KEYS = ("uid", "title", "schemaVersion", "panels")
 VARIABLE_RE = re.compile(r"^\$\{?(\w+)\}?$")
@@ -179,7 +178,7 @@ def main(argv: list[str]) -> int:
     if argv:
         paths = [Path(a) for a in argv]
     else:
-        paths = sorted(GRAFANA_DIR.glob("*.json"))
+        paths = dateien("grafana")
 
     if not paths:
         print("Keine Grafana-Dashboards gefunden.")

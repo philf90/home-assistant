@@ -12,7 +12,7 @@ Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 
 | Bereich | Geprüft | Anmerkung |
 |---|---|---|
-| Karten und Views (`*.yaml`, `*.js` im Wurzelverzeichnis) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
+| Karten und Views (`*.yaml`, `*.js` außerhalb von `ci/` und `design/`) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
 | Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
 | Entwurfsseiten (`*-vorschlaege.html`) | nein | Mockups, keine Karten |
 | Dashboards in der Instanz | nein | werden in der HA-Oberfläche bearbeitet; die CI sieht sie nicht |

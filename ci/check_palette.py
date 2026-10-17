@@ -16,7 +16,8 @@ Nicht geprueft werden Farben, die erst zur Laufzeit entstehen
 Grafana-Dashboards (eigene Farbnamen, siehe DESIGN.md).
 
 Aufruf: python ci/check_palette.py [datei ...]
-Ohne Argumente werden alle *.yaml und *.js im Repo-Wurzelverzeichnis geprueft.
+Ohne Argumente werden alle Lovelace-YAMLs und eigenen JS-Module geprueft
+(Arten "lovelace" und "ressource" aus ci/dateien.py, in allen Unterordnern).
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from dateien import dateien as repo_dateien
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PALETTE_FILE = REPO_ROOT / "design" / "palette.yaml"
@@ -167,7 +169,10 @@ def main(argv: list[str]) -> int:
     if argv:
         dateien = [Path(a).resolve() for a in argv if a.endswith((".yaml", ".js"))]
     else:
-        dateien = sorted(REPO_ROOT.glob("*.yaml")) + sorted(REPO_ROOT.glob("*.js"))
+        dateien = repo_dateien("lovelace", "ressource")
+        if not dateien:
+            print("Keine Kartendateien gefunden.")
+            return 1
 
     for pfad in dateien:
         fehler.extend(pruefe_datei(pfad, farben, vorschlag, nur_deckkraft))
