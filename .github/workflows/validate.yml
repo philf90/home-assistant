@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # Die Dateiliste kommt aus ci/dateien.py (nur Standardbibliothek);
+      # python3 ist auf ubuntu-latest vorhanden.
       - name: JS-Templates auf Syntaxfehler pruefen
         run: node ci/check-js-templates.js
 
@@ -36,6 +38,10 @@ jobs:
           python-version: "3.12"
       - name: Werkzeuge installieren
         run: pip install --quiet pyyaml yamllint
+      # Jede Datei braucht eine Art, sonst faellt sie still aus allen
+      # Pruefungen (z. B. nach dem Verschieben in einen neuen Ordner).
+      - name: Jede Datei einer Art zuordnen
+        run: python ci/dateien.py
       - name: Struktur pruefen (Parsing, doppelte Schluessel, Kartentypen)
         run: python ci/check_yaml.py
       - name: Farben gegen die Owlet-Palette pruefen
@@ -75,9 +81,9 @@ jobs:
       - name: ruff installieren
         run: pip install --quiet ruff
       - name: Linten
-        run: ruff check grafana/
+        run: ruff check grafana/ ci/
       - name: Uebersetzen
-        run: python -m compileall -q grafana/
+        run: python -m compileall -q grafana/ ci/
 
   secrets:
     name: Secret-Scan
@@ -90,6 +96,6 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD:/repo" -w /repo \
-            zricethezav/gitleaks:latest \
+            zricethezav/gitleaks:v8.30.1 \
             detect --source . --config .gitleaks.toml \
             --redact --verbose --no-banner

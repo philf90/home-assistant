@@ -14,7 +14,8 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
    Decluttering-Variablen ("[[name]]") werden uebersprungen.
 
 Aufruf: python ci/check_yaml.py [datei ...]
-Ohne Argumente werden alle *.yaml im Repo-Wurzelverzeichnis geprueft.
+Ohne Argumente werden alle Lovelace-YAMLs geprueft (Art "lovelace" aus
+ci/dateien.py, in allen Unterordnern).
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ import sys
 from pathlib import Path
 
 import yaml
+from dateien import dateien
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
 KNOWN_CARDS_FILE = Path(__file__).resolve().parent / "known_cards.txt"
 
 # Tags, die Home Assistant selbst aufloest. Fuer die reine Strukturpruefung
@@ -189,9 +190,7 @@ def main(argv: list[str]) -> int:
     else:
         # Nur die Kartendateien -- Konfiguration wie .pre-commit-config.yaml
         # ist kein Lovelace-Snippet und wird von yamllint abgedeckt.
-        paths = sorted(
-            p for p in REPO_ROOT.glob("*.yaml") if not p.name.startswith(".")
-        )
+        paths = dateien("lovelace")
 
     if not paths:
         print("Keine YAML-Dateien gefunden.")

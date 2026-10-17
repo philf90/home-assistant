@@ -13,11 +13,13 @@
  * "states[...]".
  *
  * Aufruf: node ci/check-js-templates.js [datei ...]
- * Ohne Argumente werden alle *.yaml im Repo-Wurzelverzeichnis geprueft.
+ * Ohne Argumente werden alle Lovelace-YAMLs geprueft (Art "lovelace" aus
+ * ci/dateien.py, in allen Unterordnern). Dafuer braucht es python3 im PATH.
  */
 
 'use strict';
 
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -88,17 +90,30 @@ function checkFile(file) {
   return { count: templates.length, problems };
 }
 
+// Dateiliste aus ci/dateien.py, damit alle Pruefungen dieselben Dateien sehen.
+// Konfiguration wie .pre-commit-config.yaml gehoert nicht zur Art "lovelace".
+function lovelaceFiles() {
+  const script = path.join(__dirname, 'dateien.py');
+  let out = null;
+  for (const python of ['python3', 'python']) {
+    try {
+      out = execFileSync(python, [script, 'lovelace'], { encoding: 'utf8' });
+      break;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
+  if (out === null) {
+    throw new Error('python3 nicht gefunden -- ci/dateien.py liefert die Dateiliste');
+  }
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((f) => path.join(REPO_ROOT, f));
+}
+
 function main(argv) {
-  const files =
-    argv.length > 0
-      ? argv
-      : fs
-          .readdirSync(REPO_ROOT)
-          // Nur die Kartendateien -- Konfiguration wie .pre-commit-config.yaml
-          // enthaelt keine button-card-Templates.
-          .filter((f) => f.endsWith('.yaml') && !f.startsWith('.'))
-          .sort()
-          .map((f) => path.join(REPO_ROOT, f));
+  const files = argv.length > 0 ? argv : lovelaceFiles();
 
   if (files.length === 0) {
     console.log('Keine YAML-Dateien gefunden.');
