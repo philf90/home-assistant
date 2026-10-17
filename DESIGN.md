@@ -255,8 +255,14 @@ Quelle mit dem größten Anteil sendet einen Puls-Ring aus. Inaktive Leitungen
 sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
-  Wolkengrau, Regen in Blau, Sonne in Sonnengelb, Nacht in Indigo, Unwetter in
-  Rot, Sterne, Schnee und Blitz in Weiß mit Deckkraft.
+  Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in
+  Sonnengelb, Nacht in Indigo, Unwetter in Rot, Sterne, Schnee und Blitz in
+  Weiß mit Deckkraft.
+- Die Kachel „Bedingung“ der Wetter-Karte zeigt die Farbe ihrer Szene, damit
+  Kachel und Hintergrund übereinstimmen. Ausnahmen: Gewitter in Amber (Warnung)
+  sowie Schnee, Schneeregen und Hagel in Türkis. Weiß mit Deckkraft trägt als
+  Kachelfarbe nicht, und Eis `#cfe3f2` wäre neben Wolkengrau kaum zu
+  unterscheiden (ΔE 5,9).
 - Kleine Schrift auf animiertem Grund steht in `#b4c0cf` statt `#8794a5`.
 - Kleine Schrift muss im schlechtesten Fall (alle Flächen einer Szene
   übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
