@@ -14,7 +14,7 @@ Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 |---|---|---|
 | Karten und Views (`*.yaml`, `*.js` außerhalb von `ci/` und `design/`) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
 | Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
-| Entwurfsseiten (`*-vorschlaege.html`) | nein | Mockups, keine Karten |
+| Entwurfsseiten (`entwuerfe/*.html`) | nein | Mockups, keine Karten |
 | Dashboards in der Instanz | nein | werden in der HA-Oberfläche bearbeitet; die CI sieht sie nicht |
 
 Nicht prüfbar sind Farben, die erst zur Laufzeit entstehen
@@ -117,7 +117,7 @@ immer auch als Text dazu.
 ### Temperaturstufen
 
 Raumtemperaturen bekommen Statusfarben nach einem grünen Bereich je Raum, keinen
-Farbverlauf (`temperaturen-button-card-v2.yaml`, Variablen `t_min`/`t_max`):
+Farbverlauf (`temperaturen-karte-v2.yaml`, Variablen `t_min`/`t_max`):
 
 | Stufe | Farbe | Darstellung |
 |---|---|---|
@@ -220,32 +220,32 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
 hinter dem Inhalt (Template `owlet_wetter_fx` in
-`wetter-animation-button-card-templates.yaml`, Entwurf und Rechnung in
-`wetter-animiert-vorschlaege.html`). Die Hausgeräte-Karten haben sie nur,
+`wetter-templates.yaml`, Entwurf und Rechnung in
+`wetter-animiert.html`). Die Hausgeräte-Karten haben sie nur,
 solange ein Programm läuft, pausiert (eingefroren) oder gerade fertig ist
-(Template `owlet_geraete_fx` in `hausgeraete-animation-button-card-templates.yaml`,
-Entwurf in `hausgeraete-vorschlaege.html`): Wasser in Blau, Luft in Weiß mit
+(Template `owlet_geraete_fx` in `hausgeraete-templates.yaml`,
+Entwurf in `hausgeraete.html`): Wasser in Blau, Luft in Weiß mit
 Deckkraft, „Fertig“ in Türkis; die Wasserwelle der Waschmaschine bleibt im
 unteren Innenabstand und liegt damit nie hinter Text. Die Thermostat-Kacheln
 der Heizung (Template `owlet_heizung_fx` in
-`heizung-animation-button-card-templates.yaml`, genutzt von
-`thermostate-button-card-v3.yaml`) bewegen sich nur in der Lücke unten im
+`heizung-templates.yaml`, genutzt von
+`thermostate-karte-v3.yaml`) bewegen sich nur in der Lücke unten im
 Bogen (50 × 32 px), also nie hinter Text: Wärmewellen in Amber, solange der
 Raum heizt, in drei Stufen nach Ventilöffnung; bei offenem Fenster ein
 Luftzug in Wolkengrau, der dreimal durchläuft und dann steht. „Fenster offen“
 steht als Zustand in Blau (6,54:1 auf der Kachel). Eine Ebene hinter der
 ganzen Karte gibt es dort bewusst nicht: 8 Kacheln mit je drei Textzeilen
 würden überladen. Die Auto-Karte (Template `owlet_auto_fx` in
-`autos-animation-button-card-templates.yaml`, genutzt von
-`autos-button-card-v4.yaml`, Entwurf und Datenlage in
-`autos-animation-vorschlaege.html`) bewegt aus demselben Grund nur
+`autos-templates.yaml`, genutzt von
+`autos-karte-v4.yaml`, Entwurf und Datenlage in
+`autos-animation.html`) bewegt aus demselben Grund nur
 Icon-Kacheln, Ringe außen herum und das Fahrzeugbild: Die Tank-Kachel füllt
 sich mit leichter Welle bis zum Tankstand, die Füllung in der Stufe „Rand“
 (0,24), damit das Symbol darauf 3:1 hält; knappe oder fällige Werte und ein
 offenes Schloss zeigen zwei Ringe, die dreimal laufen und dann als Schein
 stehen bleiben; unter 4 °C funkeln Eiskristalle in Weiß mit Deckkraft am
-Bildrand. Das Energiefluss-Diagramm (`energie-flow-button-card.yaml`, Entwurf
-und Messwerte in `energiefluss-vorschlaege.html`) bewegt nur die Leitungen:
+Bildrand. Das Energiefluss-Diagramm (`energie-flow-karte.yaml`, Entwurf
+und Messwerte in `energiefluss.html`) bewegt nur die Leitungen:
 Lichtstriche in der Farbe der Quelle bzw. des Verbrauchers auf einer Spur in
 der Stufe „Fläche“ (0,12), Breite und Tempo logarithmisch nach Leistung in
 sechs Stufen. Weil die Karte bei jedem Sensor-Update neu zeichnet (gemessen

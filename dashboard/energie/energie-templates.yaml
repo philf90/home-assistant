@@ -1,0 +1,399 @@
+# HINWEIS PLATZHALTER: sensor.pv_anlage_*
+# Anonymisiert -- vor dem Einfuegen durch die eigenen Werte ersetzen.
+# Tabelle und Vorgehen: README.md, Abschnitt "Platzhalter ersetzen".
+#
+# ============================================================================
+# Energie – button-card-Templates fuer die Energie-View
+# ----------------------------------------------------------------------------
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> die Eintraege unter
+#   "button_card_templates:" auf oberster Ebene ergaenzen (neben "views:";
+#   vorhandene Templates bleiben stehen).
+#
+# Aufbau:
+#   energie_kopf               Kopfzeile im Owlet-Stil: Icon-Kachel, Name,
+#                              Unterzeile, optional custom_fields.badge rechts
+#   energie_verbraucher_zeile  Verbraucher: Leistung jetzt (variables.power_entity),
+#                              kWh heute (entity), Anteil am Hausverbrauch
+#                              (variables.total_entity) als Zahl und Balken
+#   energie_kachel_klein       Kachel mit Icon oben, Wert, Name (3er-Raster)
+#   energie_zaehler_zeile      Zeile Icon | Name | Wert fuer Zaehlerstaende
+#   energie_mb_daten           Monatswerte des gewaehlten Jahres aus der
+#                              Langzeitstatistik als variables.daten
+#   energie_mb_kachel          Kennzahl der Monatsbilanz: Netzbezug, Solarertrag
+#                              oder Autarkie des gewaehlten Jahres
+#
+# energie_mb_daten fragt recorder/statistics_during_period (period: month,
+# types: change) einmal je Jahr ab und puffert das Ergebnis in
+# window.__owletMonatsbilanz (laufendes Jahr 15 min). button-card zeichnet eine
+# Karte nur neu, wenn sich eine beobachtete Entitaet aendert (shouldUpdate,
+# button-card v7.0.1); die Antwort kommt aber erst nach dem ersten Zeichnen.
+# Wartende Karten melden sich deshalb an und werden nach dem Laden ueber
+# requestUpdate('_config') neu gezeichnet. Ohne das standen die Kacheln bis
+# zur naechsten Aenderung von sensor.smart_meter_netzbezug auf "…".
+#
+# Energie-View (sections, max_columns: 2), Stand nach der Neuordnung:
+#   links:  Navigation, energie-flow-karte.yaml,
+#           energie-verbraucher-karte.yaml
+#   rechts: energie-monatsbilanz-karte.yaml, energie-solarbank-pv-karte.yaml,
+#           energie-zaehler-karte.yaml, Navbar
+# Jeder Messwert steht dort an genau einer Stelle. Autarkie: jetzt im Kopf des
+# Energieflusses, heute als Ring in dessen Tageszeile, Jahr und Monat in der
+# Monatsbilanz -- ueberall 1 - Netznutzung / Hausverbrauch (Anlagen-Sensoren).
+#
+# Voraussetzung: custom:button-card (getestet v7.0.1) + card-mod (HACS).
+# ============================================================================
+button_card_templates:
+  energie_kopf:
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: none
+    styles:
+      icon:
+      - width: 23px
+      - height: 23px
+      - color: '#a6d49e'
+      name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 17px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: '#f2f5f8'
+      label:
+      - justify-self: start
+      - align-self: start
+      - font-size: 12.5px
+      - color: '#8794a5'
+      - margin-top: 1px
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 6px
+      custom_fields:
+        badge:
+        - justify-self: end
+        - align-self: center
+      grid:
+      - grid-template-areas: '"i n badge" "i l badge"'
+      - grid-template-columns: min-content 1fr min-content
+      - grid-template-rows: min-content min-content
+      img_cell:
+      - width: 44px
+      - height: 44px
+      - border-radius: 13px
+      - margin-right: 14px
+      - align-self: center
+      - background: rgba(166, 212, 158, 0.12)
+      - border: 1px solid rgba(166, 212, 158, 0.24)
+  energie_verbraucher_zeile:
+    label: |
+      [[[
+        const e=(typeof entity!=='undefined')?entity:null;
+        const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+        const tot=parseFloat(states[variables.total_entity]?.state)||0;
+        if(isNaN(v)) return '–';
+        const share= tot>0 ? Math.round(v/tot*100) : 0;
+        return `${v.toFixed(2).replace('.',',')}<span style="color:#8794a5;font-weight:600;font-size:0.72em;margin-left:5px;">kWh · ${share} %</span>`;
+      ]]]
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    triggers_update: all
+    tap_action:
+      action: more-info
+    variables:
+      accent: '#7fb3d5'
+      power_entity: ''
+      total_entity: sensor.pv_anlage_taglicher_hausverbrauch
+    custom_fields:
+      bar: |
+        [[[
+          const e=(typeof entity!=='undefined')?entity:null;
+          const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):0;
+          const tot=parseFloat(states[variables.total_entity]?.state)||0;
+          const share= tot>0 ? Math.min(100, v/tot*100) : 0;
+          const a=variables.accent||'#7fb3d5';
+          return `<div style="height:8px;border-radius:6px;background:rgba(255,255,255,0.05);overflow:hidden;">
+            <div style="height:100%;width:${share}%;border-radius:6px;background:${a};"></div></div>`;
+        ]]]
+      watt: |
+        [[[
+          const s=states[variables.power_entity]; const w=s?parseFloat(s.state):NaN; const a=variables.accent||'#7fb3d5';
+          if(isNaN(w)||w<=1) return `<span style="display:inline-flex;align-items:center;gap:6px;color:#8794a5;"><i style="width:7px;height:7px;border-radius:50%;background:#6e7988;display:inline-block;"></i>aus</span>`;
+          const t= w>=1000 ? (w/1000).toFixed(1).replace('.',',')+' kW' : Math.round(w)+' W';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${a};"><i style="width:7px;height:7px;border-radius:50%;background:${a};box-shadow:0 0 0 3px ${a}2e;display:inline-block;"></i>${t}</span>`;
+        ]]]
+    styles:
+      icon:
+      - width: 18px
+      - height: 18px
+      - color: "[[[ return variables.accent||'#7fb3d5'; ]]]"
+      name:
+      - justify-self: start
+      - align-self: center
+      - font-size: 13.5px
+      - font-weight: 600
+      - color: '#e7ecf3'
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
+      - max-width: 100%
+      label:
+      - justify-self: end
+      - align-self: center
+      - font-size: 13.5px
+      - font-weight: 700
+      - letter-spacing: -0.01em
+      - color: '#f2f5f8'
+      - font-variant-numeric: tabular-nums
+      - white-space: nowrap
+      card:
+      - border-radius: 16px
+      - padding: 11px 14px
+      - box-shadow: none
+      - background: rgba(255,255,255,0.028)
+      - border: 1px solid rgba(255,255,255,0.06)
+      custom_fields:
+        bar:
+        - align-self: center
+        - justify-self: stretch
+        watt:
+        - justify-self: start
+        - align-self: center
+        - font-size: 12px
+        - font-weight: 600
+        - font-variant-numeric: tabular-nums
+        - white-space: nowrap
+        - margin-right: 12px
+      grid:
+      - grid-template-areas: '"i n n l" "i watt bar bar"'
+      - grid-template-columns: min-content auto 1fr auto
+      - grid-template-rows: min-content min-content
+      - grid-row-gap: 7px
+      img_cell:
+      - width: 34px
+      - height: 34px
+      - border-radius: 10px
+      - margin-right: 12px
+      - align-self: center
+      - background: "[[[ return (variables.accent||'#7fb3d5')+'29'; ]]]"
+  energie_kachel_klein:
+    label: |
+      [[[
+        const e=(typeof entity!=='undefined')?entity:null;
+        const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+        const d=(variables.decimals===undefined?0:variables.decimals);
+        const n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+        return `${n}<span style="font-size:0.6em;color:#8794a5;font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+      ]]]
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: more-info
+    variables:
+      accent: '#7fb3d5'
+      decimals: 0
+      unit: ''
+    styles:
+      icon:
+      - width: 20px
+      - height: 20px
+      - color: "[[[ return variables.accent||'#7fb3d5'; ]]]"
+      name:
+      - justify-self: start
+      - font-size: 12px
+      - color: '#8794a5'
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
+      - max-width: 100%
+      label:
+      - justify-self: start
+      - font-size: 18px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: '#f2f5f8'
+      - white-space: nowrap
+      - font-variant-numeric: tabular-nums
+      card:
+      - border-radius: 16px
+      - padding: 11px 12px
+      - box-shadow: none
+      - background: "[[[ return (variables.accent||'#7fb3d5')+'1f'; ]]]"
+      - border: "[[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]"
+      grid:
+      - grid-template-areas: '"i" "l" "n"'
+      - grid-template-columns: 1fr
+      - grid-template-rows: min-content min-content min-content
+      - grid-row-gap: 6px
+      img_cell:
+      - width: 36px
+      - height: 36px
+      - border-radius: 11px
+      - justify-self: start
+      - background: "[[[ return (variables.accent||'#7fb3d5')+'29'; ]]]"
+      - border: "[[[ return '1px solid '+(variables.accent||'#7fb3d5')+'3d'; ]]]"
+  energie_zaehler_zeile:
+    label: |
+      [[[
+        const e=(typeof entity!=='undefined')?entity:null;
+        const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+        const d=(variables.decimals===undefined?2:variables.decimals);
+        const n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+        return `${n}<span style="color:#8794a5;font-weight:600;font-size:0.72em;margin-left:4px;">${variables.unit||''}</span>`;
+      ]]]
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: more-info
+    variables:
+      accent: '#7fb3d5'
+      decimals: 2
+      unit: ''
+    styles:
+      icon:
+      - width: 17px
+      - height: 17px
+      - color: "[[[ return variables.accent||'#7fb3d5'; ]]]"
+      name:
+      - justify-self: start
+      - align-self: center
+      - font-size: 13.5px
+      - font-weight: 600
+      - color: '#e7ecf3'
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
+      - max-width: 100%
+      label:
+      - justify-self: end
+      - align-self: center
+      - font-size: 15px
+      - font-weight: 700
+      - color: '#f2f5f8'
+      - font-variant-numeric: tabular-nums
+      - white-space: nowrap
+      - padding-left: 10px
+      card:
+      - border-radius: 14px
+      - padding: 9px 12px
+      - box-shadow: none
+      - background: rgba(255,255,255,0.028)
+      - border: 1px solid rgba(255,255,255,0.06)
+      grid:
+      - grid-template-areas: '"i n l"'
+      - grid-template-columns: min-content minmax(0,1fr) auto
+      img_cell:
+      - width: 30px
+      - height: 30px
+      - border-radius: 9px
+      - margin-right: 12px
+      - align-self: center
+      - background: "[[[ return (variables.accent||'#7fb3d5')+'29'; ]]]"
+  energie_mb_daten:
+    triggers_update:
+    - input_number.energie_monatsbilanz_jahr
+    - sensor.smart_meter_netzbezug
+    variables:
+      daten: |
+        [[[
+          // Monatswerte (change) aus der Langzeitstatistik. Je Jahr einmal geladen,
+          // fuer das laufende Jahr 15 min gepuffert. Karten, die noch auf Daten warten,
+          // melden sich an und werden nach dem Laden sofort neu gezeichnet: button-card
+          // zeichnet sonst erst beim naechsten Wechsel einer beobachteten Entitaet.
+          const IDS={netz:'sensor.hmip_esi_stromzahler_energiezahler_ch2', solar:'sensor.pv_anlage_taglicher_solarertrag',
+            haus:'sensor.pv_anlage_taglicher_hausverbrauch', anker:'sensor.pv_anlage_tagliche_netznutzung'};
+          const jetzt=new Date();
+          const w=parseInt((states['input_number.energie_monatsbilanz_jahr']||{}).state||'0',10);
+          const jahr=w>=2000?w:jetzt.getFullYear();
+          const C=window.__owletMonatsbilanz=window.__owletMonatsbilanz||{};
+          const c=C[jahr];
+          if(!(c&&c.daten)){ C.warten=C.warten||new Set(); C.warten.add(this); }
+          const wecken=()=>{ const ws=C.warten; C.warten=new Set(); if(ws) ws.forEach((el)=>{ try{ el.requestUpdate('_config'); }catch(e){} }); };
+          const frisch=!!(c&&c.daten&&(jahr<jetzt.getFullYear()||Date.now()-c.zeit<900000));
+          const wartet=!!(c&&c.fehler&&Date.now()-c.zeit<60000);
+          if(!frisch&&!(c&&c.laedt)&&!wartet&&typeof hass!=='undefined'&&hass&&hass.callWS){
+            C[jahr]=Object.assign({},c||{},{laedt:true});
+            hass.callWS({type:'recorder/statistics_during_period',start_time:new Date(jahr,0,1).toISOString(),
+              end_time:new Date(jahr+1,0,1).toISOString(),statistic_ids:Object.values(IDS),period:'month',types:['change']})
+              .then((res)=>{ const d={}; Object.keys(IDS).forEach((k)=>{ const m=new Array(12).fill(null);
+                  (res[IDS[k]]||[]).forEach((r)=>{ const t=new Date(r.start); if(t.getFullYear()===jahr&&r.change!==null&&r.change!==undefined) m[t.getMonth()]=r.change; });
+                  d[k]=m; });
+                C[jahr]={daten:d,zeit:Date.now(),laedt:false,fehler:false}; wecken(); })
+              .catch(()=>{ C[jahr]=Object.assign({},C[jahr]||{},{laedt:false,fehler:true,zeit:Date.now()}); wecken(); });
+          }
+          return {jahr:jahr, d:(C[jahr]&&C[jahr].daten)?C[jahr].daten:null};
+        ]]]
+  energie_mb_kachel:
+    template: energie_mb_daten
+    entity: input_number.energie_monatsbilanz_jahr
+    name: |
+      [[[
+        const d=variables.daten.d, was=variables.was;
+        const u=(t)=>`<span style="font-size:0.6em;color:#8794a5;font-weight:600;margin-left:3px;">${t}</span>`;
+        if(!d) return '…';
+        if(was==='autarkie'){
+          let h=0, n=0, k=0;
+          for(let m=0;m<12;m++){ if(d.haus[m]!==null&&d.anker[m]!==null&&d.haus[m]>0){ h+=d.haus[m]; n+=d.anker[m]; k++; } }
+          if(!k) return '–'+u('keine Daten');
+          // Autarkie = 1 - Netznutzung / Hausverbrauch (Anker-System, wie die Tageszeile)
+          return (Math.max(0,Math.min(1,1-n/h))*100).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+u('%');
+        }
+        const a=(was==='solar'?d.solar:d.netz).filter((x)=>x!==null);
+        if(!a.length) return '–'+u('kWh');
+        return Math.round(a.reduce((s,x)=>s+x,0)).toLocaleString('de-DE')+u('kWh');
+      ]]]
+    label: |
+      [[[
+        return variables.titel + '<br>' + variables.daten.jahr;
+      ]]]
+    show_icon: false
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: none
+    variables:
+      accent: '#f0736a'
+      titel: Netzbezug
+      was: netz
+    styles:
+      name:
+      - justify-self: start
+      - font-size: 18px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: '#f2f5f8'
+      - margin-top: 2px
+      - font-variant-numeric: tabular-nums
+      label:
+      - justify-self: start
+      - align-self: start
+      - text-align: left
+      - font-size: 11.5px
+      - line-height: 1.3
+      - color: '#8794a5'
+      - white-space: normal
+      - hyphens: manual
+      - max-width: 100%
+      card:
+      - border-radius: 14px
+      - padding: 10px 11px
+      - height: 100%
+      - box-shadow: none
+      - background: "[[[ return variables.accent + '1f'; ]]]"
+      - border: "[[[ return '1px solid ' + variables.accent + '3d'; ]]]"
+      grid:
+      - grid-template-areas: '"l" "n"'
+      - grid-template-columns: 1fr
+      - grid-template-rows: 1fr min-content

@@ -1,0 +1,221 @@
+# ============================================================================
+# Hausgeraete-Animation – button-card-Template fuer die Geraetekarten
+# ----------------------------------------------------------------------------
+# Genutzt von waschmaschine-, trockner- und geschirrspueler-karte.yaml
+# (Hausgeraete-View). Entwurf, Kontrastrechnung und Entscheidung (Variante B):
+# hausgeraete.html.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> den Eintrag "owlet_geraete_fx"
+#   unter "button_card_templates:" auf oberster Ebene ergaenzen (neben
+#   "views:"; den Block gibt es schon, wenn die Wetter- oder
+#   Fussball-Templates drin sind).
+#
+# Was das Template liefert:
+#   variables.hg   Bibliothek, einmal pro Seite in window.__owletHg.
+#                  VERSION bei jeder Aenderung erhoehen, sonst behaelt eine
+#                  offene Seite nach einem Dashboard-Update das alte Objekt.
+#   custom_fields.fx    Szene hinter dem Inhalt, nur bei Laeuft/Pausiert und
+#                       einmal als Glanz bei Fertig.
+#   custom_fields.tile  Icon-Kachel: beim Laufen Bullauge (Waschmaschine,
+#                       Trockner) bzw. Spruehram (Geschirrspueler), sonst das
+#                       Geraetesymbol, bei Offline mdi:wifi-off.
+#   extra_styles   Keyframes und Klassen ".hg-*".
+#
+# Die Karte setzt dazu:
+#   variables.fx_art       waschmaschine | trockner | geschirrspueler
+#   variables.fx_icon      Geraetesymbol fuer den Ruhezustand
+#   variables.phase_entity nur Waschmaschine: ..._processphase. Home Connect
+#                          meldet die Phase lueckenhaft (in 10 Tagen vier
+#                          Werte, oft nur einer pro Programm); genutzt wird
+#                          sie deshalb nur fuer "Schleudern".
+#   variables.op_state     wie bisher; "Offline", wenn die Entitaet
+#                          unavailable ist
+#   show_icon: false und die Grid-Flaeche "tile" statt "i"
+#
+# Wie bei der Wetter-Animation liefert die Bibliothek fuer denselben Zustand
+# immer denselben HTML-Text (feste Pseudo-Zufallswerte). Aendert sich nur der
+# Fortschritt, bleiben fx und tile unveraendert und die Animation laeuft
+# weiter.
+#
+# Lesbarkeit (WCAG AA, 4,5:1 fuer kleine Schrift): Auf der Szene stehen Status
+# und Restzeit in #b4c0cf statt #8794a5 (variables.hg.text). Schlechtester Fall
+# unter Text ist ein Blasenrand Blau 0,24: #b4c0cf 5,35:1, Programmname
+# #a6d49e 5,89:1. Die Wasserwelle liegt nur im unteren Kartenrand (8 px,
+# innerhalb des Innenabstands) und damit nie hinter Text.
+#
+# Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
+# ein Standbild derselben Szene.
+#
+# Voraussetzung: custom:button-card (HACS, getestet wird mit v7.0.1).
+# ============================================================================
+button_card_templates:
+  owlet_geraete_fx:
+    variables:
+      fx_art: waschmaschine
+      fx_icon: mdi:washing-machine
+      phase_entity: ''
+      hg: |
+        [[[
+          const VERSION = 1, alt = window.__owletHg;
+          if (alt && alt.version === VERSION) return alt;
+
+          // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text
+          const rnd = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+          const f1 = (n) => n.toFixed(1);
+
+          // ---------- Zustand aus op_state ----------
+          const zustand = (s) => {
+            s = String(s || '');
+            if (s === 'Offline') return 'offline';
+            if (s.includes('Finished')) return 'finished';
+            if (s.includes('Error')) return 'error';
+            if (s.includes('Pause')) return 'pause';
+            if (s.includes('Run')) return 'run';
+            return 'idle';
+          };
+          const FARBE = { run: '#a6d49e', pause: '#e6b566', finished: '#7fd0d5', error: '#f0736a', offline: '#e6b566', idle: '#6e7988' };
+          const akzent = (z) => FARBE[z] || FARBE.idle;
+          // Szene sichtbar -> kleine Schrift hellgrau (DESIGN.md, animierte Hintergruende)
+          const animiert = (z) => z === 'run' || z === 'pause' || z === 'finished';
+          const text = (z) => (animiert(z) ? '#b4c0cf' : '#8794a5');
+
+          // ---------- Szenen ----------
+          const blasen = () => {
+            let h = '<i class="hg-welle"></i>';
+            for (let i = 0; i < 9; i++) {
+              const s = 4 + Math.round(rnd(i, 1) * 7);
+              h += `<i class="hg-blase" style="--x:${f1(6 + i * 10.5 + rnd(i, 2) * 4)}%;--s:${s}px;--d:${f1(5 + rnd(i, 3) * 4)}s;--p:${rnd(i, 4).toFixed(2)};--h:-${110 + Math.round(rnd(i, 5) * 60)}px"></i>`;
+            }
+            return h;
+          };
+          const luft = () => {
+            let h = '';
+            for (let i = 0; i < 6; i++) {
+              h += `<div class="hg-zug" style="--y:${f1(14 + i * 14 + rnd(i, 6) * 6)}%;--w:${90 + Math.round(rnd(i, 7) * 80)}px;--d:${f1(3.4 + rnd(i, 8) * 2.4)}s;--p:${rnd(i, 9).toFixed(2)}"><i class="hg-luft"></i></div>`;
+            }
+            return h;
+          };
+          const tropfen = () => {
+            let h = '';
+            for (let i = 0; i < 12; i++) {
+              const dx = (rnd(i, 10) > 0.5 ? 1 : -1) * (14 + Math.round(rnd(i, 11) * 22));
+              h += `<i class="hg-tropfen" style="--x:${f1(8 + i * 7.5)}%;--dx:${dx}px;--d:${f1(1.8 + rnd(i, 12) * 1.2)}s;--p:${rnd(i, 13).toFixed(2)}"></i>`;
+            }
+            return h;
+          };
+          const szene = (art, z) => {
+            if (z === 'finished') return '<div class="hg"><i class="hg-glanz"></i></div>';
+            if (z !== 'run' && z !== 'pause') return '';
+            const inner = art === 'trockner' ? luft() : art === 'geschirrspueler' ? tropfen() : blasen();
+            return `<div class="hg${z === 'pause' ? ' hg-halt' : ''}">${inner}</div>`;
+          };
+
+          // ---------- Icon-Kachel ----------
+          const kachel = (art, z, phase, icon) => {
+            const acc = akzent(z);
+            if (z === 'run' || z === 'pause') {
+              const halt = z === 'pause' ? ' hg-halt' : '';
+              if (art === 'geschirrspueler') {
+                return `<div class="hg-spray${halt}" style="--acc:${acc}"><i class="hg-wanne"></i><i class="hg-arm"></i><i class="hg-strahl"></i><i class="hg-strahl"></i><i class="hg-strahl"></i></div>`;
+              }
+              // Phase nur beim Laufen auswerten: im Leerlauf bleibt der letzte Wert stehen
+              const schleudern = art === 'waschmaschine' && z === 'run' && String(phase || '').includes('Spin');
+              const wasser = art === 'waschmaschine' ? '<i class="hg-wasser"></i>' : '';
+              return `<div class="hg-trommel ${art}${schleudern ? ' schleudern' : ''}${halt}" style="--acc:${acc}">${wasser}<span class="hg-ladung"><i></i><i></i><i></i></span></div>`;
+            }
+            const ic = z === 'offline' ? 'mdi:wifi-off' : icon;
+            return `<ha-icon icon="${ic}" style="--mdc-icon-size:28px;width:28px;height:28px;color:${acc}"></ha-icon>`;
+          };
+
+          const lib = { version: VERSION, zustand, akzent, text, szene, kachel };
+          window.__owletHg = lib;
+          return lib;
+        ]]]
+    styles:
+      card:
+        - isolation: isolate
+      custom_fields:
+        fx:
+          - position: absolute
+          - inset: 0
+          - z-index: 0
+          - pointer-events: none
+        tile:
+          - width: 52px
+          - height: 52px
+          - border-radius: 15px
+          - margin-right: 14px
+          - align-self: center
+          - display: grid
+          - place-items: center
+          - background: '[[[ return variables.hg.akzent(variables.hg.zustand(variables.op_state)) + "29"; ]]]'
+          - border: '[[[ return "1px solid " + variables.hg.akzent(variables.hg.zustand(variables.op_state)) + "3d"; ]]]'
+    custom_fields:
+      fx: '[[[ return variables.hg.szene(variables.fx_art, variables.hg.zustand(variables.op_state)); ]]]'
+      tile: |
+        [[[
+          const ph = variables.phase_entity ? states[variables.phase_entity] : null;
+          return variables.hg.kachel(variables.fx_art, variables.hg.zustand(variables.op_state), ph ? ph.state : '', variables.fx_icon);
+        ]]]
+    extra_styles: |
+      #name, #tile, #status, #program, #progress, #time, #hint { position: relative; z-index: 1; }
+      .hg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      .hg * { will-change: transform; }
+      .hg-halt, .hg-halt *, .hg.hg-halt * { animation-play-state: paused !important; }
+
+      /* Waschmaschine: Blasen und Wasserwelle im unteren Rand */
+      .hg-welle { position: absolute; left: -10%; right: -10%; bottom: -22px; height: 30px; border-radius: 45%; background: rgba(127, 179, 213, 0.12); animation: hg-schwapp 4.5s ease-in-out infinite alternate; }
+      @keyframes hg-schwapp { from { transform: translateX(-4%) scaleY(0.8); } to { transform: translateX(4%) scaleY(1.15); } }
+      .hg-blase { position: absolute; bottom: -12px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid rgba(127, 179, 213, 0.24); animation: hg-steig var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes hg-steig { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(var(--h)); opacity: 0; } }
+
+      /* Trockner: Luftstroeme */
+      .hg-zug { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: hg-zug var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes hg-zug { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
+      .hg-luft { position: absolute; right: 100%; top: 0; width: var(--w); height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)); }
+
+      /* Geschirrspueler: Tropfen im Bogen (5 px; mit 3 px wirkten sie auf dem Handy wie Staub) */
+      .hg-tropfen { position: absolute; bottom: 0; left: var(--x); width: 5px; height: 5px; border-radius: 50%; background: rgba(127, 179, 213, 0.24); animation: hg-bogen var(--d) ease-in-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes hg-bogen { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(var(--dx), -70px); } 100% { transform: translate(calc(var(--dx) * 2), 0); opacity: 0; } }
+
+      /* Fertig: zweimal Glanz, dann Ruhe */
+      .hg-glanz { position: absolute; inset: 0; background: linear-gradient(105deg, rgba(127, 208, 213, 0) 30%, rgba(127, 208, 213, 0.18) 50%, rgba(127, 208, 213, 0) 70%); background-size: 250% 100%; background-position: -20% 0; animation: hg-glanz 2.4s ease-in-out 2 both; }
+      @keyframes hg-glanz { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+
+      /* Icon-Kachel: Bullauge */
+      .hg-trommel { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--acc); position: relative; overflow: hidden; box-sizing: border-box; }
+      .hg-wasser { position: absolute; left: -50%; top: 58%; width: 200%; height: 200%; border-radius: 42%; background: rgba(127, 179, 213, 0.5); animation: hg-dreh 5s linear infinite; }
+      .hg-ladung { position: absolute; inset: 0; animation: hg-waelz 1.6s ease-in-out infinite alternate; }
+      .hg-ladung i { position: absolute; width: 8px; height: 6px; border-radius: 3px; background: var(--acc); opacity: 0.9; }
+      .hg-ladung i:nth-child(1) { left: 4px; top: 11px; }
+      .hg-ladung i:nth-child(2) { left: 13px; top: 16px; width: 7px; }
+      .hg-ladung i:nth-child(3) { left: 10px; top: 4px; width: 6px; height: 5px; }
+      .hg-trommel.schleudern .hg-ladung { animation: hg-dreh 0.35s linear infinite; }
+      .hg-trommel.schleudern .hg-wasser { top: 85%; }
+      .hg-trommel.trockner .hg-ladung { animation: hg-dreh 2.8s linear infinite; }
+      @keyframes hg-dreh { to { transform: rotate(360deg); } }
+      @keyframes hg-waelz { from { transform: rotate(-150deg); } to { transform: rotate(150deg); } }
+
+      /* Icon-Kachel: Spruehram */
+      .hg-spray { width: 30px; height: 30px; position: relative; }
+      .hg-wanne { position: absolute; inset: 0; border: 2px solid var(--acc); border-radius: 6px; box-sizing: border-box; }
+      .hg-arm { position: absolute; left: 6px; right: 6px; bottom: 7px; height: 2px; border-radius: 2px; background: var(--acc); animation: hg-dreh 1.4s linear infinite; }
+      .hg-strahl { position: absolute; bottom: 9px; width: 2px; height: 2px; border-radius: 50%; background: #7fb3d5; opacity: 0; animation: hg-strahl 0.9s ease-out infinite; }
+      .hg-strahl:nth-of-type(3) { left: 9px; }
+      .hg-strahl:nth-of-type(4) { left: 14px; animation-delay: 0.3s; }
+      .hg-strahl:nth-of-type(5) { left: 19px; animation-delay: 0.6s; }
+      @keyframes hg-strahl { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-16px); opacity: 0; } }
+
+      /* Fortschrittsbalken beim Laufen: wandernde Streifen */
+      .hg-lauf { background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0) 0 12px, rgba(255, 255, 255, 0.18) 12px 24px); background-size: 24px 100%; animation: hg-streifen 1.2s linear infinite; }
+      @keyframes hg-streifen { from { background-position: 0 0; } to { background-position: 24px 0; } }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hg *, .hg-trommel *, .hg-spray *, .hg-lauf { animation: none !important; }
+        .hg-blase { transform: translateY(calc(var(--h) * var(--p))); }
+        .hg-zug { transform: translateX(calc((100% + var(--w)) * var(--p))); }
+        .hg-tropfen { transform: translate(var(--dx), -40px); }
+        .hg-glanz { opacity: 0; }
+        .hg-strahl { opacity: 0.8; transform: translateY(-6px); }
+      }

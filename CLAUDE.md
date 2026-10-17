@@ -21,6 +21,15 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
   begruenden, erst dann verwenden. Beim Bauen oder Umfaerben von Karten gilt
   der Skill `.claude/skills/owlet-design`.
 
+## Ablage
+
+- Dateien fuer Home Assistant liegen unter `dashboard/<bereich>/`, abgeloeste
+  Fassungen in `archiv/`, HTML-Entwuerfe in `entwuerfe/`, Notizen in `doku/`.
+- Namen: `<thema>[-<variante>]-<art>[-vN].yaml`, Art `karte`, `view`,
+  `templates` oder `konfig`. Regeln und Ablauf: `ci/README.md`, Abschnitt
+  "Repo-Struktur". Verschieben und Umbenennen nur mit `git mv`, Verweise im
+  selben Commit anpassen.
+
 ## Pruefungen
 
 Vor einem Push die Checks aus `ci/README.md` lokal ausfuehren. Neue

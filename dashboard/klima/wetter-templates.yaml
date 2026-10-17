@@ -1,0 +1,283 @@
+# ============================================================================
+# Wetter-Animation – button-card-Template fuer animierte Kartenhintergruende
+# ----------------------------------------------------------------------------
+# Genutzt von wetter-karte.yaml (Wetter- und Wind-Karte der Wetter-View)
+# und welcome-banner-karte.yaml (Begruessungs-Banner der Home-View).
+# Entwurf und Entscheidungen: wetter-animiert.html.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> den Eintrag "owlet_wetter_fx"
+#   unter "button_card_templates:" auf oberster Ebene ergaenzen (neben
+#   "views:"; den Block gibt es schon, wenn die Fussball-Templates drin sind).
+#
+# Aufbau:
+#   variables.wx   Szenen-Bibliothek, einmal pro Seite in window.__owletWx.
+#                  VERSION bei jeder Aenderung erhoehen, sonst behaelt eine
+#                  offene Seite nach einem Dashboard-Update das alte Objekt.
+#   extra_styles   Keyframes und Klassen der Ebene ".wx".
+#
+# Die Karte legt ein eigenes Feld "fx" hinter ihr Inhaltsfeld:
+#   styles.custom_fields.fx: position absolute, inset 0, z-index 0,
+#                            pointer-events none
+#   styles.custom_fields.body: position relative, z-index 1
+# Getestet mit button-card v7.0.1: Aendert sich nur der Inhalt (z. B. die
+# Temperatur), bleibt das fx-Element dasselbe und die Animation laeuft weiter.
+# Deshalb liefert die Bibliothek fuer denselben Zustand immer denselben Text
+# (feste Formel statt Zufallszahlen). Windrichtung und Neigung kommen als
+# CSS-Variablen (--wx-dir, --wx-tilt, --wx-rain) aus styles.card und starten
+# die Animation ebenfalls nicht neu.
+#
+# Lesbarkeit (WCAG AA, 4,5:1 fuer kleine Schrift), Rechnung in der Vorschau:
+#   - Banner: Animation nur rechts neben dem Text, hinter der Datumszeile auf
+#     45 % gedaempft, Datum in #b4c0cf (Variante C).
+#   - Wetter-View: Kachel-Beschriftungen in #b4c0cf, Kacheln mit Schutzgrund
+#     #171d29 in 0,62 Deckkraft (Animation in den Kacheln zu 38 % sichtbar).
+#
+# Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
+# ein Standbild derselben Szene.
+#
+# Voraussetzung: custom:button-card (HACS, getestet mit v7.0.1).
+# ============================================================================
+button_card_templates:
+  owlet_wetter_fx:
+    variables:
+      wx: |
+        [[[
+          const VERSION = 1, alt = window.__owletWx;
+          if (alt && alt.version === VERSION) return alt;
+
+          // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text
+          const rnd = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+          const f2 = (n) => n.toFixed(2);
+
+          // ---------- Bausteine ----------
+          const cloud = (y, w, d, p, o, dark) => `<div class="wx-drift" style="--y:${y}%;--w:${w}px;--d:${d}s;--p:${p}"><div class="wx-cloud${dark ? ' dark' : ''}" style="--o:${o}"></div></div>`;
+          // [y %, Breite px, Dauer s, Phase, Deckkraft]
+          const SETS = {
+            light: [[12, 120, 95, 0.15, 0.12], [44, 90, 120, 0.62, 0.12]],
+            full: [[6, 150, 90, 0.1, 0.16], [32, 110, 120, 0.55, 0.12], [58, 130, 105, 0.85, 0.12]],
+            rain: [[2, 170, 80, 0.2, 0.24], [24, 130, 100, 0.68, 0.24]],
+            // Banner (~90 px hoch): kleinere Wolken
+            b_light: [[8, 64, 60, 0.2, 0.12], [46, 48, 75, 0.65, 0.12]],
+            b_full: [[4, 80, 55, 0.1, 0.16], [36, 58, 70, 0.55, 0.12], [60, 68, 65, 0.85, 0.12]],
+            b_rain: [[2, 92, 50, 0.2, 0.24], [32, 72, 62, 0.68, 0.24]]
+          };
+          const sky = (set, speed, dark) => '<div class="wx-sky">' + SETS[set].map(([y, w, d, p, o]) => cloud(y, w, (d / speed).toFixed(1), p, o, dark)).join('') + '</div>';
+          const sun = (soft) => `<div class="wx-rays${soft ? ' soft' : ''}"></div><div class="wx-sun${soft ? ' soft' : ''}"></div>`;
+          const night = (n) => {
+            let h = '<div class="wx-night"></div>';
+            for (let i = 0; i < n; i++) {
+              const x = (4 + rnd(i, 11) * 92).toFixed(1), y = (4 + rnd(i, 12) * 62).toFixed(1);
+              const s = rnd(i, 13) > 0.7 ? 3 : 2, d = (2.4 + rnd(i, 14) * 2.6).toFixed(1);
+              h += `<i class="wx-star" style="left:${x}%;top:${y}%;--s:${s}px;--d:${d}s;--p:${f2(rnd(i, 15))}"></i>`;
+            }
+            return h;
+          };
+          const drops = (n, base, len) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const x = ((i + rnd(i, 1) * 0.8) / n * 100).toFixed(1);
+              const d = (base * (0.85 + 0.3 * rnd(i, 2))).toFixed(2);
+              h += `<i class="wx-drop" style="--x:${x}%;--d:${d}s;--p:${f2(rnd(i, 3))};--len:${len}px;--a:${i % 3 === 0 ? 0.5 : 0.24}"></i>`;
+            }
+            return h;
+          };
+          const flakes = (n, base, size, hail) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const x = ((i + rnd(i, 21) * 0.8) / n * 100).toFixed(1);
+              const d = (base * (0.8 + 0.4 * rnd(i, 22))).toFixed(2);
+              const sw = (2 + rnd(i, 24) * 2).toFixed(1);
+              h += `<i class="wx-flake${hail ? ' hail' : ''}" style="--x:${x}%;--d:${d}s;--p:${f2(rnd(i, 23))};--s:${size}px;--sw:${sw}s"></i>`;
+            }
+            return h;
+          };
+          const fall = (inner) => `<div class="wx-fall">${inner}</div>`;
+          const fog = () => [[8, 30, 26, 0.1], [34, 34, 34, 0.5], [62, 30, 22, 0.8], [82, 26, 30, 0.3]]
+            .map(([y, hh, d, p]) => `<div class="wx-fog" style="--y:${y}%;--h:${hh}%;--d:${d}s;--p:${p}"></div>`).join('');
+          const flash = '<div class="wx-flash"></div>';
+          const alertGlow = '<div class="wx-alert"></div>';
+
+          // Wind: [Anzahl, Grunddauer s, Laenge px] je Beaufort-Stufe 1..9+
+          const WIND = [null, [2, 10, 50], [3, 7.5, 64], [5, 5.5, 80], [7, 4.2, 96], [9, 3.2, 112], [11, 2.5, 128], [13, 1.9, 144], [15, 1.5, 160], [18, 1.15, 180]];
+          const streaks = (stage, cls) => {
+            if (stage < 1) return '';
+            const [n, base, len] = WIND[Math.min(stage, 9)];
+            const every = stage >= 6 ? 2 : stage >= 3 ? 3 : 0;
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const y = (20 + (i + rnd(i, 4) * 0.9) / n * 60).toFixed(1);
+              const d = (base * (0.8 + 0.4 * rnd(i, 5))).toFixed(2);
+              const w = Math.round(len * (0.7 + 0.6 * rnd(i, 7)));
+              const a = every && i % every === 0 ? 0.5 : 0.24;
+              const wv = (1.6 + rnd(i, 8) * 1.8).toFixed(2);
+              h += `<div class="wx-drift" style="--y:${y}%;--w:${w}px;--d:${d}s;--p:${f2(rnd(i, 6))}"><i class="wx-streak${cls ? ' ' + cls : ''}${stage >= 6 ? ' gust' : ''}" style="--a:${a};--wv:${wv}s"></i></div>`;
+            }
+            return `<div class="wx-flow">${h}</div>`;
+          };
+
+          // ---------- Beaufort (WMO-Grenzen in m/s) ----------
+          const BFT_MS = [0, 0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
+          const bft = (kmh) => {
+            const v = parseFloat(kmh);
+            if (isNaN(v)) return 0;
+            const ms = v / 3.6; let s = 0;
+            for (let i = 1; i < BFT_MS.length; i++) if (ms >= BFT_MS[i]) s = i;
+            return s;
+          };
+
+          // ---------- Windrichtung (Herkunft) -> Bewegung auf der Karte ----------
+          // rechts = Osten, unten = Sueden; Spiegeln fuer links/rechts, Neigung max. 12 Grad.
+          const DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+          const richtung = (dirKey, stage) => {
+            const idx = DIRS.indexOf(String(dirKey || '').toUpperCase());
+            if (idx < 0) return { dir: 1, tilt: 0, rain: -6 };
+            const b = idx * 22.5 * Math.PI / 180;
+            const dx = -Math.sin(b), dy = Math.cos(b);
+            const dir = dx < -0.05 ? -1 : 1;
+            let t = (dir === 1 ? Math.atan2(dy, dx) : Math.atan2(-dy, -dx)) * 180 / Math.PI;
+            t = Math.max(-12, Math.min(12, t));
+            const rain = Math.max(-24, Math.min(24, -dx * Math.min(stage, 8) * 3));
+            return { dir, tilt: Math.round(t), rain: Math.round(rain) };
+          };
+
+          // Regen der eigenen Station hat Vorrang vor der DWD-Bedingung
+          const WET = ['rainy', 'pouring', 'lightning-rainy', 'snowy', 'snowy-rainy', 'hail', 'exceptional'];
+          const effCond = (cond, raining) => {
+            if (!raining || WET.includes(cond)) return cond;
+            return cond === 'lightning' ? 'lightning-rainy' : 'rainy';
+          };
+
+          // ---------- Szenen ----------
+          // Wetter-Karte der Wetter-View
+          const wetter = (cond, stage) => {
+            const sp = 1 + Math.min(stage, 9) * 0.3;
+            let h;
+            switch (cond) {
+              case 'sunny': h = sun(false); break;
+              case 'clear-night': h = night(16); break;
+              case 'partlycloudy': h = sun(true) + sky('light', sp); break;
+              case 'cloudy': h = sky('full', sp); break;
+              case 'fog': h = fog(); break;
+              case 'rainy': h = sky('rain', sp, true) + fall(drops(18, 1.1, 14)); break;
+              case 'pouring': h = sky('rain', sp, true) + fall(drops(28, 0.7, 20)); break;
+              case 'lightning': h = sky('rain', sp, true) + flash; break;
+              case 'lightning-rainy': h = sky('rain', sp, true) + fall(drops(18, 1.0, 14)) + flash; break;
+              case 'snowy': h = sky('light', sp) + fall(flakes(20, 9, 4, false)); break;
+              case 'snowy-rainy': h = sky('rain', sp, true) + fall(drops(10, 1.1, 12) + flakes(12, 8, 4, false)); break;
+              case 'hail': h = sky('rain', sp, true) + fall(flakes(20, 1.6, 3, true)); break;
+              case 'windy': h = streaks(Math.max(stage, 5), 'cloud'); break;
+              case 'windy-variant': h = sky('light', 1 + Math.max(stage, 5) * 0.3) + streaks(Math.max(stage, 5), 'cloud'); break;
+              case 'exceptional': h = alertGlow + sky('rain', sp, true) + fall(drops(26, 0.7, 20)) + flash; break;
+              default: h = '';
+            }
+            return `<div class="wx">${h}</div>`;
+          };
+
+          // Wind-Karte der Wetter-View
+          const wind = (stage) => `<div class="wx">${streaks(stage, '')}</div>`;
+
+          // Begruessungs-Banner: Nachtregel wie beim Banner-Icon, dazu
+          // "Teils bewoelkt" bei Nacht als Mondschein
+          const bannerScene = (cond, sunDown) => {
+            if (sunDown && cond === 'sunny') return 'clear-night';
+            if (sunDown && cond === 'partlycloudy') return 'partlycloudy-night';
+            return cond;
+          };
+          // start: x-Position in px, ab der die Animation einsetzen darf
+          // (rechts neben dem Begruessungstext); zone: Daempfung hinter dem Datum
+          const banner = (scene, start, zone) => {
+            const sp = 1.6;
+            let h;
+            switch (scene) {
+              case 'sunny': h = sun(false); break;
+              case 'clear-night': h = night(10); break;
+              case 'partlycloudy': h = sun(true) + sky('b_light', sp); break;
+              case 'partlycloudy-night': h = '<div class="wx-night"></div>' + sky('b_light', sp); break;
+              case 'cloudy': h = sky('b_full', sp); break;
+              case 'fog': h = fog(); break;
+              case 'rainy': h = sky('b_rain', sp, true) + fall(drops(12, 0.55, 10)); break;
+              case 'pouring': h = sky('b_rain', sp, true) + fall(drops(18, 0.4, 14)); break;
+              case 'lightning': h = sky('b_rain', sp, true) + flash; break;
+              case 'lightning-rainy': h = sky('b_rain', sp, true) + fall(drops(12, 0.5, 10)) + flash; break;
+              case 'snowy': h = sky('b_light', sp) + fall(flakes(14, 3.2, 3, false)); break;
+              case 'snowy-rainy': h = sky('b_rain', sp, true) + fall(drops(7, 0.55, 9) + flakes(8, 3, 3, false)); break;
+              case 'hail': h = sky('b_rain', sp, true) + fall(flakes(14, 0.8, 2.5, true)); break;
+              case 'windy': h = streaks(5, 'cloud'); break;
+              case 'windy-variant': h = sky('b_light', sp) + streaks(5, 'cloud'); break;
+              case 'exceptional': h = alertGlow + sky('b_rain', sp, true) + fall(drops(16, 0.4, 14)) + flash; break;
+              default: h = '';
+            }
+            return `<div class="wx banner" style="--bn-s:${Math.round(start)}px;--zone:${zone}">${h}</div>`;
+          };
+
+          // Textbreite fuer den Startpunkt der Banner-Animation
+          const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
+          let ctx = null;
+          const measure = (text, font) => {
+            try {
+              if (!ctx) ctx = document.createElement('canvas').getContext('2d');
+              ctx.font = font + ' ' + FONT;
+              return ctx.measureText(String(text || '')).width;
+            } catch (e) { return 0; }
+          };
+
+          const lib = { version: VERSION, bft, richtung, effCond, wetter, wind, bannerScene, banner, measure };
+          window.__owletWx = lib;
+          return lib;
+        ]]]
+    extra_styles: |
+      .wx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      .wx * { will-change: transform; }
+      .wx-sky { position: absolute; inset: 0 -20%; transform: scaleX(var(--wx-dir, 1)); }
+      .wx-flow { position: absolute; inset: -30% -20%; transform: rotate(var(--wx-tilt, 0deg)) scaleX(var(--wx-dir, 1)); transition: transform 1.2s ease; }
+      .wx-fall { position: absolute; inset: -20% -25%; transform: rotate(var(--wx-rain, -6deg)); transition: transform 1.2s ease; }
+      .wx-drift { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wx-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wx-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
+      .wx-cloud { position: absolute; right: 100%; top: 0; width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: #cdd6e0; opacity: var(--o); }
+      .wx-cloud::before, .wx-cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+      .wx-cloud::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }
+      .wx-cloud::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }
+      .wx-cloud.dark { background: #6e7988; }
+      .wx-sun { position: absolute; right: -16%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(230, 193, 90, 0.24) 0%, rgba(230, 193, 90, 0.12) 36%, rgba(230, 193, 90, 0) 68%); transform: translateY(var(--ty, -48%)); animation: wx-sun 8s ease-in-out infinite alternate; }
+      @keyframes wx-sun { from { transform: translateY(var(--ty, -48%)) scale(1); opacity: 0.8; } to { transform: translateY(var(--ty, -48%)) scale(1.08); opacity: 1; } }
+      .wx-rays { position: absolute; right: -30%; top: 0; width: 80%; aspect-ratio: 1; border-radius: 50%; background: repeating-conic-gradient(rgba(230, 193, 90, 0.12) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); transform: translateY(var(--ty, -50%)); animation: wx-rays 120s linear infinite; }
+      @keyframes wx-rays { from { transform: translateY(var(--ty, -50%)) rotate(0deg); } to { transform: translateY(var(--ty, -50%)) rotate(360deg); } }
+      .wx-sun.soft, .wx-rays.soft { opacity: 0.7; }
+      .wx-night { position: absolute; right: -20%; top: 0; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(142, 162, 230, 0.18) 0%, rgba(142, 162, 230, 0) 65%); transform: translateY(-50%); }
+      .wx-star { position: absolute; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wx-twinkle var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wx-twinkle { from { opacity: 0.25; } to { opacity: 1; } }
+      .wx-drop, .wx-flake { position: absolute; top: 0; height: 100%; left: var(--x); animation: wx-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wx-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+      .wx-drop { width: 1.5px; opacity: var(--a); }
+      .wx-drop::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), #7fb3d5); }
+      .wx-flake { width: var(--s); }
+      .wx-flake::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wx-sway var(--sw) ease-in-out infinite alternate; }
+      .wx-flake.hail::after { border-radius: 1px; background: rgba(205, 214, 224, 0.5); animation: none; }
+      @keyframes wx-sway { from { transform: translateX(-6px); } to { transform: translateX(6px); } }
+      .wx-fog { position: absolute; left: -30%; width: 160%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), rgba(205, 214, 224, 0.12) 50%, rgba(205, 214, 224, 0)); -webkit-mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); animation: wx-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wx-haze { from { transform: translateX(-10%); } to { transform: translateX(10%); } }
+      .wx-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 70% 0%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wx-flash 8s linear infinite; animation-delay: -5s; }
+      @keyframes wx-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }
+      .wx-alert { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 70% at 50% 120%, rgba(240, 115, 106, 0.18), rgba(240, 115, 106, 0) 70%); animation: wx-glow 3.5s ease-in-out infinite alternate; }
+      @keyframes wx-glow { from { opacity: 0.5; } to { opacity: 1; } }
+      .wx-streak { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 208, 213, 0), #7fd0d5 70%, rgba(127, 208, 213, 0)); opacity: var(--a); animation: wx-wave var(--wv) ease-in-out infinite alternate; }
+      .wx-streak.cloud { background: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 70%, rgba(205, 214, 224, 0)); }
+      .wx-streak.gust { height: 2px; }
+      @keyframes wx-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
+      .wx.banner {
+        --bn-a: max(38%, min(var(--bn-s, 0px), 100% - 133px));
+        -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+        -webkit-mask-composite: source-in;
+        mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+        mask-composite: intersect;
+      }
+      .wx.banner .wx-sun { width: 40%; right: -8%; --ty: -40%; }
+      .wx.banner .wx-rays { width: 62%; right: -20%; --ty: -50%; }
+      .wx.banner .wx-night { width: 50%; right: -12%; }
+      @media (prefers-reduced-motion: reduce) {
+        .wx *, .wx *::before, .wx *::after { animation: none !important; transition: none !important; }
+        .wx-drift { transform: translateX(calc((100% + var(--w)) * var(--p))); }
+        .wx-drop, .wx-flake { transform: translateY(calc(-100% * (1 - var(--p)))); }
+        .wx-flash { opacity: 0; }
+      }

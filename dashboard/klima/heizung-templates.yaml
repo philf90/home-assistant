@@ -1,0 +1,239 @@
+# ============================================================================
+# Heizungs-Animation – button-card-Template fuer die Thermostat-Kacheln
+# ----------------------------------------------------------------------------
+# Genutzt von thermostate-karte-v3.yaml (Heizung-View). Umgesetzt ist
+# die empfohlene Kombination aus dem Entwurf (nicht im Repo): Waermewellen,
+# Luftzug, Plan-Sollwert gestrichelt, flackernde Flamme im Kopf-Badge.
+# Verworfen wurden u. a. eine Szene hinter der ganzen Karte, ein Lauflicht im
+# Bogen und eine Ist-Marke (heizende Raeume hatten oft Ist >= Soll).
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> den Eintrag "owlet_heizung_fx"
+#   unter "button_card_templates:" auf oberster Ebene ergaenzen (neben
+#   "views:"; den Block gibt es schon, wenn die Wetter-, Hausgeraete- oder
+#   Fussball-Templates drin sind).
+#
+# Was das Template liefert:
+#   variables.hz       Bibliothek, einmal pro Seite in window.__owletHz.
+#                      VERSION bei jeder Aenderung erhoehen, sonst behaelt eine
+#                      offene Seite nach einem Dashboard-Update das alte Objekt.
+#   custom_fields.dial Radialer Regler wie in v2 (Bogen = Soll, Ist gross in
+#                      der Mitte), dazu der Zustand "Fenster offen" und beim
+#                      Heizen die Ventiloeffnung in der Statuszeile.
+#   custom_fields.fx   Animation in der Luecke unten im Bogen. Liegt im selben
+#                      Grid-Bereich wie "dial" und damit nie hinter Text.
+#   extra_styles       Keyframes und Klassen ".hz-*".
+#
+# Die Karte setzt dazu:
+#   variables.valve_entity     Ventil-Oeffnungsgrad der Heizgruppe in %
+#   variables.window_entities  Fensterkontakte des Raums (Liste, darf leer sein)
+# triggers_update ist nicht noetig: button-card v7 kennt die Option nicht mehr
+# und ueberwacht jede Entitaet, die ein Template ueber states[...] liest. Die
+# Bibliothek liest deshalb alle Fensterkontakte, nicht nur bis zum ersten
+# offenen.
+#   den Grid-Bereich "dial" (wie v2: grid-template-areas '"n" "dial"')
+#
+# Zustaende, in dieser Reihenfolge:
+#   Aus           state off                          grau, keine Animation
+#   Fenster offen ein Kontakt "on"                   Blau, Luftzug in Wolkengrau,
+#                                                    3 Durchgaenge, dann Standbild;
+#                                                    gestrichelter Bogen bis zum
+#                                                    Sollwert laut Wochenplan
+#   Heizt         hvac_action heating                Amber, Waermewellen in 3 Stufen
+#   Kuehlt        hvac_action cooling / state cool   Blau (wie v2)
+#   Bereit        hvac_action idle                   Gruen
+# Die Homematic-IP-Heizgruppen senken bei offenem Fenster auf 12 °C ab und
+# melden dann "idle"; v2 zeigte das als gruenes "Bereit". Beobachtet am
+# 16.10.2026: Sollwert 2 s nach dem Oeffnen auf 12 °C, nach dem Schliessen
+# zurueck auf den Wert des Wochenplans.
+#
+# Stufen der Waermewellen (Ventil-Oeffnungsgrad):
+#   1  bis 9 %   1 Welle, 6,0 s, Deckkraft 0,24 (auch bei heating mit 0 %)
+#   2  10–29 %   2 Wellen, 4,5 s, Deckkraft 0,24
+#   3  ab 30 %   3 Wellen, 3,2 s, Deckkraft 0,5
+# Stufen statt stufenloser Kopplung: fx bekommt nur an diesen Grenzen neuen
+# HTML-Text, dazwischen laeuft die Animation weiter (getestet mit button-card
+# v7.0.1 wie bei owlet_wetter_fx und owlet_geraete_fx). Die genaue Zahl steht
+# in der Statuszeile ("Heizt · 15 %").
+#
+# Wochenplan: Attribut schedule_data der Homematic-IP-Local-Integration
+# (Wochentag -> base_temperature und periods). Ausgewertet nur bei preset_mode
+# week_program_*, mit der Uhrzeit des Browsers. Die Plan-Zeile aktualisiert
+# sich mit der Kachel, also bei jeder Zustandsaenderung der Entitaeten.
+#
+# Lesbarkeit (WCAG AA, 4,5:1 fuer kleine Schrift): Die Animation bleibt in der
+# Bogenluecke (x 34–84, y 86–118 im 118er-Regler). Der Soll-Text endet bei
+# etwa y 85; #8794a5 haelt auf der Kachel 4,78:1, ueber Amber 0,24 waeren es
+# nur 2,84:1. Blau #7fb3d5 fuer "Fenster offen" erreicht 6,54:1.
+#
+# Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
+# ein Standbild derselben Szene.
+#
+# Voraussetzung: custom:button-card (HACS, getestet mit v7.0.1).
+# ============================================================================
+button_card_templates:
+  owlet_heizung_fx:
+    variables:
+      valve_entity: ''
+      window_entities: []
+      hz: |
+        [[[
+          const VERSION = 1, alt = window.__owletHz;
+          if (alt && alt.version === VERSION) return alt;
+
+          const num = (x) => (x !== undefined && x !== null && x !== '' && !isNaN(x)) ? Number(x) : null;
+          const de = (n, d) => (n === null || isNaN(n)) ? '–' : Number(n).toFixed(d).replace('.', ',');
+          // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text
+          const rnd = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+
+          // ---------- Zustand ----------
+          const zustand = (e, offen) => {
+            const st = e ? e.state : 'off';
+            const act = e && e.attributes ? e.attributes.hvac_action : undefined;
+            if (st === 'off') return 'aus';
+            if (offen) return 'fenster';
+            if (act === 'heating') return 'heizt';
+            if (act === 'cooling' || st === 'cool') return 'kuehlt';
+            if (act === 'idle') return 'bereit';
+            return 'sonst';
+          };
+          const FARBE = { heizt: '#e6b566', kuehlt: '#7fb3d5', fenster: '#7fb3d5', bereit: '#a6d49e', aus: '#8794a5', sonst: '#8794a5' };
+          const stufe = (z, v) => {
+            if (z !== 'heizt') return 0;
+            if (v !== null && v >= 30) return 3;
+            if (v !== null && v >= 10) return 2;
+            return 1;
+          };
+
+          // ---------- Wochenplan ----------
+          const TAGE = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+          const minuten = (s) => { const t = String(s || '').split(':'); return Number(t[0]) * 60 + Number(t[1] || 0); };
+          const planSoll = (A, jetzt) => {
+            if (!A || !String(A.preset_mode || '').startsWith('week_program') || !A.schedule_data) return null;
+            const tag = A.schedule_data[TAGE[jetzt.getDay()]];
+            if (!tag) return null;
+            const t = jetzt.getHours() * 60 + jetzt.getMinutes();
+            const p = (tag.periods || []).find((x) => minuten(x.starttime) <= t && t < minuten(x.endtime));
+            return num(p ? p.temperature : tag.base_temperature);
+          };
+
+          // ---------- Regler ----------
+          const R = 48, C = 2 * Math.PI * R, TRACK = C * 0.75;
+          const dial = (e, offen, ventil, jetzt) => {
+            const A = e && e.attributes ? e.attributes : {};
+            const cur = num(A.current_temperature), tgt = num(A.temperature);
+            const minT = num(A.min_temp) !== null ? Number(A.min_temp) : 5;
+            const maxT = num(A.max_temp) !== null ? Number(A.max_temp) : 30;
+            const anteil = (t) => Math.max(0, Math.min(1, (t - minT) / ((maxT - minT) || 1)));
+            const z = zustand(e, offen);
+            const col = FARBE[z];
+            const txt = z === 'heizt' ? 'Heizt' + (ventil !== null ? ' · ' + Math.round(ventil) + ' %' : '')
+              : z === 'fenster' ? 'Fenster offen'
+              : z === 'kuehlt' ? 'Kühlt'
+              : z === 'bereit' ? 'Bereit'
+              : z === 'aus' ? 'Aus'
+              : (e ? e.state : '');
+            const arcCol = z === 'aus' ? '#3a4453' : col;
+            const val = tgt !== null ? TRACK * anteil(tgt) : 0;
+
+            // Fenster offen: gestrichelter Bogen bis zum Sollwert laut Wochenplan
+            const plan = z === 'fenster' ? planSoll(A, jetzt) : null;
+            const zeigePlan = plan !== null && tgt !== null && plan > tgt;
+            let geist = '';
+            if (zeigePlan) {
+              const th = anteil(plan) * 1.5 * Math.PI;
+              const x = (59 + R * Math.cos(th)).toFixed(2), y = (59 + R * Math.sin(th)).toFixed(2);
+              geist = `<path d="M ${59 + R} 59 A ${R} ${R} 0 ${th > Math.PI ? 1 : 0} 1 ${x} ${y}" fill="none" stroke="rgba(127,179,213,0.5)" stroke-width="2" stroke-dasharray="3 4" stroke-linecap="round"/>`;
+            }
+
+            let curBig = '–', curDec = '°';
+            if (cur !== null) { const s = de(cur, 1).split(','); curBig = s[0]; curDec = s[1] !== undefined ? ',' + s[1] + '°' : '°'; }
+
+            return `
+              <div style="display:flex;flex-direction:column;align-items:center;gap:7px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                <div style="position:relative;width:118px;height:118px;">
+                  <svg viewBox="0 0 118 118" style="width:118px;height:118px;">
+                    <g transform="rotate(135 59 59)">
+                      <circle cx="59" cy="59" r="${R}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8" stroke-linecap="round" stroke-dasharray="${TRACK.toFixed(1)} ${C.toFixed(1)}"/>
+                      ${geist}
+                      ${tgt !== null ? `<circle cx="59" cy="59" r="${R}" fill="none" stroke="${arcCol}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${val.toFixed(1)} ${C.toFixed(1)}"/>` : ''}
+                    </g>
+                  </svg>
+                  <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
+                    <div style="color:#f2f5f8;font-weight:750;letter-spacing:-0.02em;">
+                      <span style="font-size:26px;font-variant-numeric:tabular-nums;">${curBig}</span><span style="font-size:14px;">${curDec}</span>
+                    </div>
+                    <div style="font-size:11px;color:#8794a5;margin-top:3px;font-variant-numeric:tabular-nums;">${tgt !== null ? 'Soll ' + de(tgt, 1) + '°' : '—'}</div>
+                    ${zeigePlan ? `<div style="font-size:11px;color:#8794a5;margin-top:2px;font-variant-numeric:tabular-nums;">Plan ${de(plan, 1)}°</div>` : ''}
+                  </div>
+                </div>
+                <div style="font-size:11.5px;font-weight:600;color:${col};">${txt}</div>
+              </div>`;
+          };
+
+          // ---------- Animation in der Bogenluecke ----------
+          const WELLE = { 1: { n: 1, d: 6.0, o: 0.24 }, 2: { n: 2, d: 4.5, o: 0.24 }, 3: { n: 3, d: 3.2, o: 0.5 } };
+          const wellen = (st) => {
+            const w = WELLE[st];
+            const xs = w.n === 1 ? [21] : w.n === 2 ? [14, 28] : [8, 21, 34];
+            return xs.map((x, i) => `<i class="hz-welle" style="left:${x}px;--d:${w.d}s;--p:${(i / w.n + rnd(i, st) * 0.15).toFixed(2)}"><svg width="8" height="22" viewBox="0 0 8 22"><path d="M4 21c-3-3 3-5 0-8s3-5 0-8-1-3 0-4" fill="none" stroke="rgba(230,181,102,${w.o})" stroke-width="1.6" stroke-linecap="round"/></svg></i>`).join('');
+          };
+          const luftzug = () => [[6, 0, 30], [14, 0.35, 6], [22, 0.7, 20]]
+            .map(([y, p, rest]) => `<i class="hz-zug" style="top:${y}px;--p:${p}s;--rest:${rest}px"></i>`).join('');
+          const fx = (e, offen, ventil) => {
+            const z = zustand(e, offen);
+            const st = stufe(z, ventil);
+            const inner = z === 'heizt' ? wellen(st) : z === 'fenster' ? luftzug() : '';
+            return inner ? `<div class="hz"><div class="hz-slot">${inner}</div></div>` : '';
+          };
+
+          // Eingaben aus states[] holen; die Bibliothek selbst liest states nie,
+          // weil sie einmal pro Seite entsteht und sonst alte Werte saehe.
+          const eingaben = (st, fenster, ventil) => ({
+            // filter statt some: jeder Kontakt wird gelesen und damit von
+            // button-card ueberwacht, auch wenn ein frueherer schon offen ist
+            offen: (fenster || []).filter((id) => st[id] && st[id].state === 'on').length > 0,
+            ventil: ventil && st[ventil] ? num(st[ventil].state) : null,
+          });
+
+          const lib = { version: VERSION, zustand, stufe, planSoll, dial, fx, eingaben };
+          window.__owletHz = lib;
+          return lib;
+        ]]]
+    styles:
+      card:
+        - isolation: isolate
+    custom_fields:
+      dial: |
+        [[[
+          const x = variables.hz.eingaben(states, variables.window_entities, variables.valve_entity);
+          return variables.hz.dial(entity, x.offen, x.ventil, new Date());
+        ]]]
+      fx: |
+        [[[
+          const x = variables.hz.eingaben(states, variables.window_entities, variables.valve_entity);
+          return variables.hz.fx(entity, x.offen, x.ventil);
+        ]]]
+    extra_styles: |
+      #dial { position: relative; z-index: 1; }
+      #fx { grid-area: dial !important; align-self: start !important; justify-self: center !important; width: 118px; height: 118px; margin-top: 4px; position: relative; z-index: 0; pointer-events: none; overflow: visible !important; }
+      .hz { position: absolute; inset: 0; pointer-events: none; }
+      /* Luecke unten im 270-Grad-Bogen: Bogenenden bei x 25/93, y 93; alles
+         oberhalb von y 86 wird abgeschnitten, dort steht der Soll-Text. */
+      .hz-slot { position: absolute; left: 34px; width: 50px; top: 86px; height: 32px; overflow: hidden; }
+      .hz-slot i { position: absolute; display: block; will-change: transform; }
+
+      /* Heizt: Waermewellen steigen auf */
+      .hz-welle { bottom: -14px; width: 8px; height: 22px; animation: hz-steig var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .hz-welle svg { display: block; }
+      @keyframes hz-steig { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-26px); opacity: 0; } }
+
+      /* Fenster offen: Luftzug, drei Durchgaenge, dann Standbild */
+      .hz-zug { left: 0; width: 26px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(205, 214, 224, 0), rgba(205, 214, 224, 0.5), rgba(205, 214, 224, 0)); animation: hz-zug 2.4s ease-in-out 3 both; animation-delay: var(--p); }
+      @keyframes hz-zug { from { transform: translateX(-28px); } to { transform: translateX(var(--rest)); } }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hz-welle, .hz-zug { animation: none !important; }
+        .hz-welle { transform: translateY(calc(-13px * var(--p) - 6px)); opacity: 1; }
+        .hz-zug { transform: translateX(var(--rest)); }
+      }
