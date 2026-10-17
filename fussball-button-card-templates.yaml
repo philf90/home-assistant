@@ -127,6 +127,12 @@
 #     der Messung ("Spielfeld"). Auf dem Feld steht die Startelf (die
 #     Position Eingewechselter ist ungemessen), darunter die Wechsel dieses
 #     Vereins in zeitlicher Folge und die uebrige Bank.
+#   - Gemessen 17.10.2026 an Elversberg-Augsburg (ger.1, live): Feld bei beiden
+#     Vereinen (4-2-3-1, 3-4-2-1); commentary 112 Eintraege, davon 90 ohne
+#     passendes Ereignis, in der 1. Liga gibt es also eigenen Kommentar
+#     (englisch). athlete liefert lastName, fullName, displayName, shortName,
+#     kein firstName; der Kurzname auf dem Feld ist deshalb lastName.
+#     keyEvents enthalten "Start Delay"/"End Delay" (Unterbrechung/Fortsetzung).
 #   - Text im Popup steht links: button-card zentriert Custom Fields, die
 #     Huelle setzt deshalb text-align: left.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
@@ -151,7 +157,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 9, alt = window.__fussball;
+          const VERSION = 10, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -396,7 +402,10 @@ button_card_templates:
             [/half ?time/i, 'phase', 'Halbzeit'],
             [/2nd half|second half/i, 'phase', 'Wiederanpfiff'],
             [/full ?time|end regular|end of (the )?(match|game)/i, 'phase', 'Abpfiff'],
-            [/\bvar\b/i, 'phase', 'Videobeweis']
+            [/\bvar\b/i, 'phase', 'Videobeweis'],
+            // gemessen 17.10.2026 in der 1. Liga: je 7 "Start Delay" und "End Delay"
+            [/start delay/i, 'phase', 'Unterbrechung'],
+            [/end delay/i, 'phase', 'Fortsetzung']
           ];
           // Sortierschluessel aus "45'+2'" bzw. Sekunden
           const minSort = (dv, sek) => {
@@ -467,7 +476,7 @@ button_card_templates:
               const s = seite(r.team, r.homeAway);
               if (!s) return;
               teams[s] = { formation: r.formation || '', spieler: (r.roster || []).map(p => ({
-                nr: p.jersey ?? '', name: p.athlete?.displayName || p.athlete?.shortName || '', pos: p.position ?? null,
+                nr: p.jersey ?? '', name: p.athlete?.displayName || p.athlete?.shortName || '', nach: p.athlete?.lastName || '', pos: p.position ?? null,
                 start: !!p.starter, ein: !!p.subbedIn, aus: !!p.subbedOut, platz: p.formationPlace ?? null
               })) };
             });
@@ -496,7 +505,7 @@ button_card_templates:
               // Namensfelder fuer den Kurznamen auf dem Feld: Felder von athlete, drei Beispiele
               // und alle Spieler, deren displayName nicht aus genau zwei Woertern besteht
               athletFelder: [...new Set(spieler.flatMap(p => Object.keys(p.athlete || {})))],
-              namenBeispiel: spieler.slice(0, 3).concat(spieler.filter(p => String(p.athlete?.displayName || '').trim().split(/\s+/).length !== 2).slice(0, 8))
+              namenBeispiel: [...new Set(spieler.slice(0, 3).concat(spieler.filter(p => String(p.athlete?.displayName || '').trim().split(/\s+/).length !== 2).slice(0, 8)))]
                 .map(p => Object.fromEntries(['displayName', 'shortName', 'fullName', 'firstName', 'lastName'].filter(k => p.athlete && p.athlete[k] != null).map(k => [k, p.athlete[k]]))),
               eingewechselt: spieler.filter(p => p.subbedIn).length, ausgewechselt: spieler.filter(p => p.subbedOut).length
             };
@@ -535,7 +544,9 @@ button_card_templates:
             const soll = /^\d+(-\d+)+$/.test(T.formation || '') ? [1, ...T.formation.split('-').map(Number)] : null;
             return { ist, soll, ok: !!soll && start.length > 0 && start.every(p => gruppe(p.pos)) && ist.join() === soll.join() };
           };
-          const nachname = n => { const w = String(n || '').trim().split(/\s+/); return w.length > 1 ? w.slice(1).join(' ') : w[0]; };
+          // Kurzname auf dem Feld: lastName von ESPN (gemessen 17.10.2026, z. B. "Le Joncour",
+          // "Pinckert" bei "Lukas Finn Pinckert"); fehlt es, alles nach dem ersten Wort
+          const nachname = p => { if (p.nach) return p.nach; const w = String(p.name || '').trim().split(/\s+/); return w.length > 1 ? w.slice(1).join(' ') : w[0]; };
 
           // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
           const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
@@ -693,7 +704,7 @@ button_card_templates:
                     const mk = markenVon(p).filter(x => x.typ !== 'ein').map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;padding:0 4px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:linear-gradient(${c}1f,${c}1f),#10151d;border:1px solid ${c}3d;">${ic.replace(/width="11" height="11"/, 'width="9" height="9"')}${fb.esc(x.text)}</span>`; }).join('');
                     return `<div style="position:absolute;left:${50 + (i - (k - 1) / 2) * abst}%;top:${y}%;width:${k > 1 ? abst : 30}%;transform:translate(-50%,-15px);display:flex;flex-direction:column;align-items:center;gap:2px;">
                       <span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;color:#f2f5f8;background:${unser ? '#e30613' : '#3a4453'};border:1.5px solid rgba(255,255,255,0.24);box-sizing:border-box;">${fb.esc(p.nr)}</span>
-                      <span style="font-size:10.5px;font-weight:700;color:#f2f5f8;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${fb.esc(nachname(p.name))}</span>
+                      <span style="font-size:10.5px;font-weight:700;color:#f2f5f8;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${fb.esc(nachname(p))}</span>
                       ${mk ? `<span style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;">${mk}</span>` : ''}</div>`;
                   }).join('');
                 }).join('');
