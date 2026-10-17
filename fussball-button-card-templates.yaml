@@ -102,10 +102,21 @@
 #     Diakritika). Tor und Karte gelten dem zuerst genannten Teilnehmer, den
 #     auch der Ereignistext nennt. Gruppiert wird nach position (Kuerzel oder
 #     Name); ist auch nur ein Spieler der Startelf nicht zuzuordnen, steht die
-#     Startelf ungegliedert da, sortiert nach formationPlace. Inhalt von
-#     position und formationPlace ist noch ungemessen; die Messung zeigt dazu
-#     Beispiele, alle Kuerzel und wie viele Ereignis-Namen in der Aufstellung
-#     gefunden werden.
+#     Startelf ungegliedert da, sortiert nach formationPlace. In der Gruppe
+#     stehen die Spieler von hinten nach vorn (Tiefe: Tor, Abwehr, CM/LM/RM/DM,
+#     AM*/CF*, F) und je Reihe von links nach rechts wie auf dem Feld (Kuerzel
+#     mit L am Anfang ganz links, -L halblinks, ohne Seite Mitte, -R, R ganz
+#     rechts). Mit den gemessenen Kuerzeln ergeben die Tiefen genau die Reihen
+#     der Formation (FCK 3-4-2-1, Bochum 4-2-3-1).
+#   - Gemessen 17.10.2026 an Kaiserslautern-Bochum (beendet): alle 22
+#     Startspieler zugeordnet, Kuerzel G, CD, CD-L, CD-R, LB, RB, CM-L, CM-R,
+#     LM, RM, AM, AM-L, AM-R, CF-L, CF-R, F; jersey als Text; 24 von 24
+#     Ereignis-Namen in der Aufstellung, 9 von 9 Wechseln mit Richtung (der
+#     Ereignistext nennt den Eingewechselten). formationPlace folgt nicht den
+#     Reihen (3-4-2-1: RM 2, LM 3, Abwehr 4-6) und taugt deshalb nicht zum
+#     Sortieren nach Seite.
+#   - Text im Popup steht links: button-card zentriert Custom Fields, die
+#     Huelle setzt deshalb text-align: left.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
 #     ohne Aktion pointer-events: none und verwirft am Handy den click nach
 #     touchend; Tippziele setzen pointer-events: auto und loesen ueber
@@ -128,7 +139,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 6, alt = window.__fussball;
+          const VERSION = 7, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -481,6 +492,16 @@ button_card_templates:
             ['Abwehr', /^(d|cb|cd|lb|rb|lwb|rwb|sw)(-[lrc])?$|defen|back/i], ['Angriff', /^(f|fw|cf|st|lw|rw|ss)(-[lrc])?$|forward|striker|wing/i]];
           const posTexte = pos => !pos ? [] : typeof pos === 'string' ? [pos] : [pos.abbreviation, pos.displayName, pos.name].filter(Boolean).map(String);
           const gruppe = pos => { const t = posTexte(pos); const g = GRUPPE.find(([, re]) => t.some(x => re.test(x))); return g ? g[0] : null; };
+          // Tiefe auf dem Feld: 0 Tor, 1 Abwehr, 2 CM/LM/RM/DM, 3 AM*/CF*, 4 Spitze (F, ST)
+          const tiefe = pos => {
+            const a = String(posTexte(pos)[0] || '').toUpperCase(), g = gruppe(pos);
+            return g === 'Tor' ? 0 : g === 'Abwehr' ? 1 : /^(AM|CF)/.test(a) ? 3 : /^(F|FW|ST)$/.test(a) ? 4 : g === 'Angriff' ? 4 : 2;
+          };
+          // Seite auf dem Feld aus dem Kuerzel: 0 ganz links (LB, LM) bis 4 ganz rechts (RB, RM)
+          const quer = pos => {
+            const a = String(posTexte(pos)[0] || '').toUpperCase();
+            return /-L$/.test(a) ? 1 : /-R$/.test(a) ? 3 : /^L/.test(a) ? 0 : /^R/.test(a) ? 4 : 2;
+          };
 
           // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
           const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
@@ -498,7 +519,7 @@ button_card_templates:
           const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
 
           fb.spielPopup = FAV => {
-            const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
+            const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
             const kopf = t => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:10px;align-items:center;"><div style="font-size:12.5px;font-weight:600;color:#8794a5;min-width:0;">${t}</div>${fb.zuKnopf()}</div>`;
             const s = fb.sel;
             if (!s) return huelle(kopf('Spiel') + fb.hinweis('Spielstand der Vereinskarte oder ein Spiel im Spieltag antippen.'));
@@ -622,7 +643,7 @@ button_card_templates:
               const nummer = p => { const n = Number(p.nr); return isFinite(n) && p.nr !== '' ? n : 999; };
               const gruppiert = start.length && start.every(p => gruppe(p.pos));
               const startHtml = gruppiert
-                ? ['Tor', 'Abwehr', 'Mittelfeld', 'Angriff'].map(g => { const l = start.filter(p => gruppe(p.pos) === g).sort((a, b) => platz(a) - platz(b)); return l.length ? titel(g) + l.map(zeileSp).join('') : ''; }).join('')
+                ? ['Tor', 'Abwehr', 'Mittelfeld', 'Angriff'].map(g => { const l = start.filter(p => gruppe(p.pos) === g).sort((a, b) => tiefe(a.pos) - tiefe(b.pos) || quer(a.pos) - quer(b.pos) || platz(a) - platz(b)); return l.length ? titel(g) + l.map(zeileSp).join('') : ''; }).join('')
                 : titel('Startelf') + start.slice().sort((a, b) => platz(a) - platz(b)).map(zeileSp).join('');
               // Bank: Eingewechselte zuerst (nach Minute), dann nach Rueckennummer
               const einSort = p => { const x = markenVon(p).find(k => k.typ === 'ein'); return x ? x.sort : null; };
