@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strukturpruefung der Lovelace-YAML-Dateien im Repo-Wurzelverzeichnis.
+"""Strukturpruefung der Lovelace-YAML-Dateien (Art "lovelace" aus ci/dateien.py).
 
 Geprueft wird, was im Dashboard sonst still fehlschlaegt:
 

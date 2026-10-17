@@ -13,8 +13,8 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 | Skript | Prueft |
 |---|---|
 | `dateien.py` | Gemeinsame Dateiliste aller Pruefungen (aus `git ls-files`, in allen Ordnern). Ohne Argument: jede Datei hat genau eine Art (`lovelace`, `ressource`, `grafana`, `python`, `doku`, `entwurf`, `meta`), sonst Fehler. Mit Art als Argument: gibt deren Dateien aus. |
-| `check_verweise.py` | Jeder genannte Repo-Dateiname existiert: `!include`-Ziele relativ zur einbindenden Datei, Pfade mit `/` relativ zum Repo oder zur Datei, blanke Dateinamen irgendwo im Repo. Erfasst werden Namen mit bekannter Endung und Bindestrich oder Unterstrich (wie alle Repo-Dateien), Punktdateien und `README.md`/`DESIGN.md`/`CLAUDE.md`/`SKILL.md`. Bewusste Ausnahmen stehen in `AUSNAHMEN` im Skript. |
-| `check_struktur.py` | Ablage und Dateinamen nach der Repo-Struktur (siehe unten). Laeuft vorerst nur als Bericht; mit `--streng` schlaegt sie bei Verstoessen fehl. |
+| `check_verweise.py` | Jeder genannte Repo-Dateiname existiert: `!include`-Ziele relativ zur einbindenden Datei, Pfade mit `/` relativ zum Repo oder zur Datei, blanke Dateinamen irgendwo im Repo. Erfasst werden Namen mit bekannter Endung und Bindestrich oder Unterstrich (wie alle Repo-Dateien), Punktdateien und `README.md`/`DESIGN.md`/`CLAUDE.md`/`SKILL.md`. Bewusste Ausnahmen stehen in `AUSNAHMEN` im Skript, ausgenommene Dateien (die Liste alter Namen in `doku/umbenennung-2026-10.md`) in `AUSGENOMMENE_DATEIEN`. |
+| `check_struktur.py` | Ablage und Dateinamen nach der Repo-Struktur (siehe unten). Mit `--streng` (CI, pre-commit) schlaegt sie bei Verstoessen fehl, ohne nur Bericht. |
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus (Werte mit Templates oder Decluttering-Variablen `[[name]]` werden uebersprungen). |
 | `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten). Regeln: `DESIGN.md`. |
@@ -42,7 +42,7 @@ Findet eine Pruefung gar keine Datei, schlaegt sie fehl, statt Erfolg zu melden.
 
 ## Repo-Struktur
 
-Ziel ist eine Gliederung nach Themenbereichen. `check_struktur.py` prueft:
+Das Repo ist nach Themenbereichen gegliedert. `check_struktur.py --streng` prueft:
 
 - Im Wurzelverzeichnis nur `README.md`, `DESIGN.md`, `CLAUDE.md`,
   `CONTRIBUTING.md`, `LICENSE`, `pyproject.toml` und Punktdateien.
@@ -57,9 +57,13 @@ Ziel ist eine Gliederung nach Themenbereichen. `check_struktur.py` prueft:
 - Je Ordner hoechstens eine aktive Version einer Karte.
 - `doku/` enthaelt nur Markdown.
 
-Solange die Dateien noch im Wurzelverzeichnis liegen, meldet die Pruefung das
-als Warnung und bleibt gruen. Nach dem Umzug laeuft sie in der CI mit
-`--streng`.
+Ohne `--streng` meldet das Skript Verstoesse nur als Warnung; CI und
+pre-commit laufen mit `--streng`.
+
+Neue Datei: Bereich waehlen (passt keiner, `sonstiges/`), Namen nach dem
+Schema bilden, beim Umbenennen oder Verschieben `git mv` verwenden und alle
+Verweise im selben Commit anpassen -- `check_verweise.py` meldet vergessene.
+Ein neuer Bereich wird in `BEREICHE` in `ci/dateien.py` eingetragen.
 
 ## Warum doppelte Schluessel eigenen Aufwand wert sind
 
@@ -76,7 +80,7 @@ pip install pyyaml yamllint ruff
 
 python ci/dateien.py
 python ci/check_verweise.py
-python ci/check_struktur.py
+python ci/check_struktur.py --streng
 node ci/check-js-templates.js
 python ci/check_yaml.py
 python ci/check_palette.py
@@ -89,8 +93,8 @@ python -m compileall -q grafana/ ci/
 Jedes Skript nimmt optional einzelne Dateien als Argument:
 
 ```bash
-node ci/check-js-templates.js wetter-button-card.yaml
-python ci/check_yaml.py wetter-button-card.yaml
+node ci/check-js-templates.js dashboard/klima/wetter-karte.yaml
+python ci/check_yaml.py dashboard/klima/wetter-karte.yaml
 ```
 
 Mit [pre-commit](https://pre-commit.com/) laufen dieselben Pruefungen

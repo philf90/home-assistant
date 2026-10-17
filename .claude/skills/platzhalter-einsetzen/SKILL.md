@@ -38,7 +38,7 @@ Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
      pruefen, dass jede Ziel-ID existiert und nicht `unavailable` ist.
    - Ohne MCP oder bei mehreren Kandidaten: den Nutzer nach dem Praefix
      fragen (z. B. "Wie heisst dein Geraet in der Mobile-App-Integration?").
-   - `unique_id` in `template-autos-passat.yaml`: die bisherige `unique_id`
+   - `unique_id` in `autos-passat-konfig.yaml`: die bisherige `unique_id`
      aus der eigenen Konfiguration erfragen. Eine neue `unique_id` legt in HA
      eine neue Entity an.
    - Kennzeichen sind reiner Anzeigetext: den Nutzer fragen oder leer lassen.

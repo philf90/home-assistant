@@ -1,0 +1,86 @@
+# UniFi-Netzplan – Owlet-Karte (Prototyp)
+#
+# Zeichnet die Topologie des UniFi-Netzes als Baum: Internetleitungen →
+# Gateway → Switches → Access Points → Clients. Die Struktur kommt live aus
+# der UniFi-Network-Integration, neue oder ausgefallene Geräte erscheinen ohne
+# Pflege dieser Datei.
+#
+# Was automatisch kommt und was konfiguriert werden muss:
+#   automatisch   Gerät → Uplink-Gerät (Sensor "Uplink-MAC"), Funk-Mesh
+#                 (Uplink zeigt auf einen AP), WLAN-Client → AP (ap_mac),
+#                 Zustand, Client-Zähler je Gerät
+#   wan:          Internetleitungen. Die Integration liefert keine WAN-Topologie.
+#                 IP-Adressen und Erreichbarkeit je Leitung kommen optional aus
+#                 der HACS-Integration "UniFi WAN" (holdestmade/Unifi-WAN).
+#   wired_entity: Switch und Port der Kabel-Clients. Die Integration gibt
+#                 beides nicht weiter; den Sensor legt das Paket
+#                 unifi-kabel-clients-konfig.yaml an (Abfrage der Controller-API).
+#                 Ohne ihn landen Kabel-Clients im Sammelknoten "Kabel-Clients".
+#   pins:         Kabel-Clients fest einem Gerät zuordnen (geht vor
+#                 wired_entity).
+#   inactive:     Geräte, die bewusst getrennt sind (grau statt Störung).
+#   labels:       Anzeigenamen, z. B. für Geräte mit Sonderrolle.
+#   hide:         Geräte, die nie erscheinen sollen. Geräte, die der Controller
+#                 nicht mehr meldet (z. B. ausgemusterte Switches), blendet die
+#                 Karte selbst aus.
+#
+# Klick auf ein Gerät oder einen Client öffnet den Mehr-Info-Dialog. Klick auf
+# die WLAN- bzw. Kabel-Zahl eines Geräts klappt dessen Clients auf, Klick auf
+# eine Internetleitung deren Details.
+#
+# ┌────────────── ENTITÄTEN PRÜFEN ───────────────────────────────────────────┐
+# │ Die device_tracker unter wan, pins, inactive und labels sind an die        │
+# │ eigene Instanz gebunden. Für die Zähler an Switches den standardmäßig      │
+# │ deaktivierten Sensor "Clients" des Switches aktivieren, für den Status     │
+# │ der Leitungen die WAN-Latenz-Sensoren des Gateways. Die Sensoren unter     │
+# │ ip_entity, ip6_entity und internet_entity legt "UniFi WAN" an; ihre IDs    │
+# │ enthalten Host und Site der eigenen Konsole.                               │
+# └───────────────────────────────────────────────────────────────────────────┘
+#
+# Voraussetzung: unifi-netzplan-card.js als Dashboard-Ressource
+#   1. Datei nach /config/www/unifi-netzplan-card.js kopieren
+#   2. Einstellungen → Dashboards → Ressourcen → URL /local/unifi-netzplan-card.js,
+#      Typ "JavaScript-Modul"
+# Keine HACS-Karte nötig; ha-card und ha-icon stellt Home Assistant bereit.
+type: custom:unifi-netzplan-card
+title: Netzplan
+wan:
+  # Reihenfolge = Anzeige. primary markiert die Leitung, über die der Verkehr
+  # per Regel läuft; die andere erscheint gestrichelt als Backup.
+  # detail erscheint beim Aufklappen, z. B. mit dem Tarif der Leitung.
+  - name: Deutsche Glasfaser
+    detail: WAN2 · Glasfaser DG1000 · per Regel aktiv
+    primary: true
+    # Latenz der Leitung als Status (Punkt + ms). Die Integration legt je WAN
+    # drei Latenz-Sensoren an (Microsoft, Google, Cloudflare), alle standard-
+    # mäßig deaktiviert. UniFi nennt den ersten Anschluss "WAN", nicht "WAN1".
+    # Die Latenz zeigt, dass die Leitung erreichbar ist, nicht, ob sie gerade
+    # den Verkehr trägt.
+    entity: sensor.dream_machine_special_edition_cloudflare_wan2_latency
+    # Erreichbarkeit der Leitung; wenn gesetzt, bestimmt sie den Status und
+    # entity liefert nur noch den Messwert. Nur die nummerierten Sensoren
+    # (wan1_, wan2_) verwenden: die ohne Nummer folgen der Ausfall-
+    # Hauptleitung, nicht der Leitung, die per Regel den Verkehr trägt.
+    internet_entity: binary_sensor.unifi_wan_192_168_1_1_default_unifi_wan2_internet
+    # Adresse an der Leitung. Bei Deutsche Glasfaser ist die IPv4 eine
+    # CGNAT-Adresse (100.64.0.0/10), die Karte markiert sie.
+    ip_entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_ipv4
+    ip6_entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan2_ipv6
+  - name: Telekom VDSL
+    detail: WAN1 · VDSL175 · Backup
+    entity: sensor.dream_machine_special_edition_cloudflare_wan_latency
+    internet_entity: binary_sensor.unifi_wan_192_168_1_1_default_unifi_wan1_internet
+    ip_entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_ipv4
+    ip6_entity: sensor.unifi_wan_192_168_1_1_default_unifi_wan1_ipv6
+    # Modem; erscheint hier statt unter den Kabel-Clients
+    device: device_tracker.draytek_vigor_167
+# Sensor aus unifi-kabel-clients-konfig.yaml
+wired_entity: sensor.unifi_kabel_clients
+inactive:
+  - device_tracker.usw_lite_8_poe_garage
+# pins nur noch für Kabel-Clients, die wired_entity nicht zuordnet, z. B.:
+# pins:
+#   device_tracker.<client>: device_tracker.<switch>
+labels:
+  device_tracker.fritz_box_7590ax: FRITZ!Box (DECT-Telefonie)
+  device_tracker.draytek_vigor_167: DrayTek Vigor 167

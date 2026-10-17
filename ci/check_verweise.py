@@ -2,7 +2,7 @@
 """Prueft, dass jeder im Repo genannte Dateiname auch existiert.
 
 Karten, Views, Doku und Entwuerfe verweisen aufeinander -- im Kommentarkopf
-("Template aus wetter-animation-button-card-templates.yaml"), in Markdown-Links
+("Template aus wetter-templates.yaml"), in Markdown-Links
 und per "!include". Wird eine Datei umbenannt oder verschoben, zeigen diese
 Verweise ins Leere, und nichts meldet es: Home Assistant nicht, weil Kommentare
 nicht ausgewertet werden, und GitHub nicht, weil ein toter Link nur beim
@@ -50,6 +50,11 @@ INCLUDE = re.compile(r"^[^#]*!include(?:_dir_\w+)?\s+([^\s#]+)")
 URL = re.compile(r"[a-z][a-z0-9+.-]*://\S+")
 
 GROSS_DATEIEN = {"README.md", "DESIGN.md", "CLAUDE.md", "SKILL.md"}
+
+# Dateien, die absichtlich alte Namen auflisten, und deshalb nicht geprueft werden.
+AUSGENOMMENE_DATEIEN = {
+    "doku/umbenennung-2026-10.md": "Liste alter Dateinamen nach dem Umzug",
+}
 
 # Bewusst genannte Dateien, die es im Repo nicht (mehr) gibt.
 AUSNAHMEN = {
@@ -119,7 +124,13 @@ def main(argv: list[str]) -> int:
             PurePosixPath(Path(a).resolve().relative_to(REPO_ROOT).as_posix()) for a in argv
         ]
     else:
-        zu_pruefen = [p for p in alle if art(p) != "grafana" and p.name != "LICENSE"]
+        zu_pruefen = [
+            p
+            for p in alle
+            if art(p) != "grafana"
+            and p.name != "LICENSE"
+            and p.as_posix() not in AUSGENOMMENE_DATEIEN
+        ]
 
     if not zu_pruefen:
         print("Keine Dateien gefunden.")

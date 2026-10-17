@@ -17,9 +17,8 @@ Die Regeln stehen kurz hier und ausfuehrlich in ci/README.md:
    Fassungen gehoeren nach archiv/.
 
 Aufruf: python ci/check_struktur.py [--streng]
-Ohne --streng werden Verstoesse nur als WARNUNG gemeldet und die Pruefung
-bleibt gruen. Das gilt, bis die Dateien in die neue Struktur umgezogen sind;
-danach laeuft sie in der CI mit --streng.
+CI und pre-commit laufen mit --streng. Ohne --streng werden Verstoesse nur
+als WARNUNG gemeldet und die Pruefung bleibt gruen.
 """
 
 from __future__ import annotations

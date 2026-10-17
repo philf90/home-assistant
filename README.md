@@ -3,7 +3,7 @@
 Lovelace-Karten, komplette Dashboard-Views und Grafana-Dashboards für meine
 Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 **Owlet-Stil**, abgeleitet von der Owlet-Smart-Sock-Karte
-(`owlet-smart-sock-button-card.yaml`).
+(`owlet-smart-sock-karte.yaml`).
 
 > **Hinweis:** Die Dateien sind auf eine konkrete Instanz zugeschnitten.
 > Entity-IDs, Gerätenamen, Routen und Pfade müssen vor dem Einsatz an die
@@ -13,24 +13,34 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 
 ## Inhalt
 
-| Bereich | Dateien |
-|---|---|
-| Komplette Views | `flugradar-view.yaml`, `fussball-view.yaml`, `gesundheit-view.yaml`, `netzwerk-view.yaml`, `pflanzen-view.yaml` |
-| Templates | `autos-animation-button-card-templates.yaml`, `decluttering-templates.yaml`, `energie-button-card-templates.yaml`, `flugradar-button-card-templates.yaml`, `fussball-button-card-templates.yaml`, `hausgeraete-animation-button-card-templates.yaml`, `heizung-animation-button-card-templates.yaml`, `pflanzen-decluttering-templates.yaml`, `wetter-animation-button-card-templates.yaml` |
-| Navigation & Kopf | `navbar-card.yaml`, `top-navigation-button-card.yaml`, `welcome-banner-button-card.yaml` |
-| Energie | Energie-View: `energie-flow-…` (animiertes Flussdiagramm mit Autarkie jetzt und heute, Entwurf und Messwerte in `energiefluss-vorschlaege.html`), `energie-verbraucher-…`, `energie-monatsbilanz-card.yaml` (mit Autarkie je Monat und Jahr), `energie-solarbank-pv-…`, `energie-zaehler-…`, dazu `energie-button-card-templates.yaml`; Aufbau im Kopf der Template-Datei. Ältere Karten: `energie-autarkie-…`, `energie-diagramme-…`, `energie-flow-leiste-…`, `energie-pv-…`, `energie-verbrauch-uebersicht-…`, `gas-wasser-button-card.yaml` |
-| Klima & Wetter | `temperaturen-…` (v1, v2), `thermostate-…` (v1, v2, v3; v3 animiert über `owlet_heizung_fx` mit Zustand „Fenster offen“), `wetter-…`, `meteoalarm-…`, `pollenflug-button-card.yaml` |
-| Licht, Fenster, Türen | `lichter-glow-card.yaml`, `lichter-mushroom-card.yaml`, `lichter-raum-card.yaml`, `lichter-slider-button-card.yaml`, `fenster-…`, `fenster-lichter-…`, `fenster-lichter-uebersicht-…`, `haustuer-lock-…`, `haustuer-ereignis-button-card.yaml` |
-| Haushaltsgeräte | `waschmaschine-…`, `trockner-…`, `geschirrspueler-…` (animiert über `owlet_geraete_fx`, Entwurf und Home-Connect-Analyse in `hausgeraete-vorschlaege.html`), `staubsauger-button-card.yaml` |
-| Netzwerk & System | `unifi-netzwerk-status-…`, `unifi-leitungen-…`, `unifi-udm-system-…` (v1, v2), `unifi-unas-pro-button-card.yaml`, `unifi-verlauf-expander-card.yaml`, `unifi-netzplan-card.yaml` (+ `unifi-netzplan-card.js`, `unifi-kabel-clients.yaml`), `homematic-…`, `system-button-card.yaml`, `wlan-expander-card.yaml` |
-| Fahrzeuge | `autos-button-card.yaml` (v1, v2, v3, v4; v4 animiert über `owlet_auto_fx`, Entwurf und Datenlage in `autos-animation-vorschlaege.html`), `template-autos-passat.yaml` |
-| Garten & Pflanzen | `garten-…`, `pflanzen-view.yaml` (ohne flower-card; ältere Fassung: `pflanzen-flower-card.yaml` + `pflanzen-status-button-card.yaml`) |
-| Personen | `person-presence-…`, `owlet-smart-sock-button-card.yaml` |
-| Sonstiges | `kameras-button-card.yaml`, `muellabfuhr-trash-card.yaml` (v1, v2) |
-| Grafana | [`grafana/`](grafana/) – Energie-, Proxmox-VE- und Proxmox-Backup-Server-Dashboard |
+Alles, was in Home Assistant landet, liegt unter `dashboard/<bereich>/`. In
+jedem Bereich stehen die aktuellen Dateien direkt im Ordner, abgelöste
+Fassungen in `archiv/` und HTML-Entwürfe in `entwuerfe/`. Die Dateiart steht
+im Namen: `-karte`, `-view`, `-templates` (für den Raw-Konfigurationseditor),
+`-konfig` (für die `configuration.yaml`).
 
-Gibt es eine Karte in mehreren Varianten (`-v2`, `-v3`), bleibt die ältere Datei
-unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Unterschied.
+| Bereich | Aktuelle Dateien | `archiv/` | `entwuerfe/` |
+|---|---|---|---|
+| [`allgemein/`](dashboard/allgemein/) | `navbar-karte.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml`, `navigation-templates.yaml` | – | `home-kacheln.html` |
+| [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml` (animiertes Flussdiagramm mit Autarkie jetzt und heute), `energie-verbraucher-karte.yaml`, `energie-monatsbilanz-karte.yaml` (Autarkie je Monat und Jahr), `energie-solarbank-pv-karte.yaml`, `energie-zaehler-karte.yaml`, `energie-templates.yaml` (Aufbau im Dateikopf) | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` (Entwurf und Messwerte) |
+| [`klima/`](dashboard/klima/) | `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml` (animiert über `owlet_heizung_fx`, Zustand „Fenster offen“), `heizung-templates.yaml`, `wetter-karte.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `wetter-templates.yaml` | `temperaturen-karte.yaml`, `thermostate-karte.yaml`, `thermostate-karte-v2.yaml` | `wetter-animiert.html` |
+| [`licht/`](dashboard/licht/) | Varianten `lichter-raum-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-slider-karte.yaml`; `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `fenster-lichter-uebersicht-karte.yaml`, `haustuer-lock-karte.yaml`, `haustuer-ereignis-karte.yaml` | – | – |
+| [`hausgeraete/`](dashboard/hausgeraete/) | `waschmaschine-karte.yaml`, `trockner-karte.yaml`, `geschirrspueler-karte.yaml` (animiert über `owlet_geraete_fx`), `staubsauger-karte.yaml`, `hausgeraete-templates.yaml` | – | `hausgeraete.html` (Entwurf und Home-Connect-Analyse) |
+| [`netzwerk/`](dashboard/netzwerk/) | `netzwerk-view.yaml` (bindet sechs Karten aus demselben Ordner ein), `unifi-netzwerk-status-karte.yaml`, `unifi-leitungen-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `unifi-netzplan-karte.yaml` mit `unifi-netzplan-card.js` und `unifi-kabel-clients-konfig.yaml`, `homematic-karte.yaml`, `system-karte.yaml`, `wlan-karte.yaml` | `unifi-udm-system-karte.yaml` | – |
+| [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml` (animiert über `owlet_auto_fx`), `autos-templates.yaml`, `autos-passat-konfig.yaml` | `autos-karte.yaml`, `autos-karte-v2.yaml`, `autos-karte-v3.yaml` | `autos-animation.html` (Entwurf und Datenlage), `autos-karten-v2.html` |
+| [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-view.yaml` (ohne flower-card), `pflanzen-templates.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
+| [`personen/`](dashboard/personen/) | `person-presence-karte.yaml`, `owlet-smart-sock-karte.yaml`, `gesundheit-view.yaml` | – | – |
+| [`flugradar/`](dashboard/flugradar/) | `flugradar-view.yaml`, `flugradar-templates.yaml` | – | – |
+| [`fussball/`](dashboard/fussball/) | `fussball-view.yaml`, `fussball-templates.yaml` | – | – |
+| [`sonstiges/`](dashboard/sonstiges/) | `kameras-karte.yaml`, `muellabfuhr-karte-v2.yaml` | `muellabfuhr-karte.yaml` | – |
+| [`grafana/`](grafana/) | Energie-, Proxmox-VE- und Proxmox-Backup-Server-Dashboard | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
+| [`doku/`](doku/) | Notizen, siehe [Notizen](#notizen) | – | – |
+
+Varianten (`lichter-raum-…`, `lichter-glow-…`) sind gleichwertige
+Alternativen. Versionen (`-v2`, `-v3`) lösen ihre Vorgängerin ab; die
+Vorgängerin liegt dann in `archiv/` und bekommt nur noch Änderungen, die alle
+Dateien betreffen (Palette, Anonymisierung). Der Kommentarkopf der neueren
+Datei erklärt den Unterschied.
 
 ## Owlet-Stil
 
@@ -86,7 +96,7 @@ unverändert erhalten. Der Kommentarkopf der neueren Datei erklärt den Untersch
   (Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
   Passwort); die Karte braucht davon nichts.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
-  `unifi-kabel-clients.yaml`. Es fragt alle 5 Minuten die Controller-API ab
+  `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
   an, was die offizielle Integration nicht liefert. Einbinden unter
   `homeassistant: packages:` in der `configuration.yaml`; URL und lokaler
@@ -100,27 +110,30 @@ Kommentarkopf unter **Voraussetzung**.
 **Einzelne Karte:** Dashboard bearbeiten → Karte hinzufügen → *Manuell* →
 Inhalt der YAML-Datei einfügen.
 
-**Komplette View:** in einem YAML-Dashboard per `!include` einbinden, z. B.
+**Komplette View:** in einem YAML-Dashboard per `!include` einbinden. Die
+View zusammen mit den Karten, die sie einbindet, in einen Ordner im
+Konfigurationsordner kopieren, z. B. `dashboard/netzwerk/`:
 
 ```yaml
 views:
-  - !include netzwerk-view.yaml
+  - !include dashboard/netzwerk/netzwerk-view.yaml
 ```
 
-Die Pfade sind relativ zum Konfigurationsordner von Home Assistant.
+Der Pfad ist relativ zur Datei, die das `!include` enthält; die Includes in
+der View selbst zeigen auf Dateien im selben Ordner.
 
 **Templates:** einmalig im Raw-Konfigurationseditor des Dashboards auf
 oberster Ebene (neben `views:`) einfügen – `decluttering_templates:` aus
-`decluttering-templates.yaml` und `pflanzen-decluttering-templates.yaml`,
+`navigation-templates.yaml` und `pflanzen-templates.yaml`,
 `button_card_templates:` aus den
 Flugradar-, Fußball-, Wetter-, Hausgeräte- und Heizungs-Templates. Existiert der Block schon, nur die Einträge
 darunter ergänzen.
 
-**Template-Sensoren:** `template-autos-passat.yaml` gehört in die
+**Template-Sensoren:** `autos-passat-konfig.yaml` gehört in die
 `configuration.yaml`:
 
 ```yaml
-template: !include template-autos-passat.yaml
+template: !include dashboard/fahrzeuge/autos-passat-konfig.yaml
 ```
 
 ## Platzhalter ersetzen
@@ -133,28 +146,28 @@ verfügbar“. Betroffene Dateien tragen oben den Kommentar
 
 | Platzhalter | Steht für | Echte ID finden | Dateien |
 |---|---|---|---|
-| `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-…`, `karten-basemap-carto.md` |
-| `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-…` |
-| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml`, `garten-…` (Automationen im Kommentar) |
+| `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-karte.yaml`, `karten-basemap-carto.md` |
+| `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-karte.yaml` |
+| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml`, `garten-karte.yaml` (Automationen im Kommentar), `hausgeraete.html` |
 | `<breite>`, `<laenge>` | Koordinaten von Zuhause | Entwicklerwerkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` (Scrape-Ressource im Kommentar) |
-| `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-*-button-card.yaml` (7), `energie-button-card-templates.yaml`, `energie-monatsbilanz-card.yaml`, `grafana/` (dort ohne `sensor.`) |
-| `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-button-card*.yaml` |
-| `passat_fenster_kombiniert`, `passat_tueren_kombiniert` | `unique_id` der Template-Sensoren | bisherige `unique_id` übernehmen, sonst legt HA neue Entities an | `template-autos-passat.yaml` |
-| `seriennr_geschirrspueler`, `seriennr_waschmaschine`, `seriennr_trockner` | Seriennummer des Home-Connect-Geräts am Anfang der Entity-ID (`sensor.seriennr_…_bsh_common_…`) | Einstellungen → Geräte & Dienste → Home-Connect-Integration → Gerät → Entitäten | `geschirrspueler-…`, `waschmaschine-…`, `trockner-…` |
-| `*_seriennr`, `*_seriennr_1`, `*_seriennr_2` | Seriennummer des Geräts in der Entity-ID (Homematic IP, Owlet); `_1`/`_2` trennen zwei Geräte desselben Modells | Einstellungen → Geräte & Dienste → Integration → Gerät → Entitäten | `homematic-…`, `temperaturen-…` (2), `garten-…`, `owlet-smart-sock-…` |
-| `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | `lichter-*` (4), `fenster-lichter-uebersicht-…`, `garten-…` |
-| `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-button-card-v2.yaml`, `autos-button-card-v3.yaml`, `autos-button-card-v4.yaml`, `autos-karten-v2-vorschlaege.html` |
-| `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-flower-card.yaml`, `pflanzen-view.yaml` |
-| `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `temperaturen-…` (2), `lichter-*` (4), `fenster-lichter-uebersicht-…` |
+| `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie/`: `energie-flow-karte.yaml`, `energie-verbraucher-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-templates.yaml`, `energiefluss.html`, in `archiv/` vier weitere; `grafana/` (dort ohne `sensor.`) |
+| `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `fahrzeuge/`: alle Auto-Karten, `autos-passat-konfig.yaml`, die Entwürfe |
+| `passat_fenster_kombiniert`, `passat_tueren_kombiniert` | `unique_id` der Template-Sensoren | bisherige `unique_id` übernehmen, sonst legt HA neue Entities an | `autos-passat-konfig.yaml` |
+| `seriennr_geschirrspueler`, `seriennr_waschmaschine`, `seriennr_trockner` | Seriennummer des Home-Connect-Geräts am Anfang der Entity-ID (`sensor.seriennr_…_bsh_common_…`) | Einstellungen → Geräte & Dienste → Home-Connect-Integration → Gerät → Entitäten | `geschirrspueler-karte.yaml`, `waschmaschine-karte.yaml`, `trockner-karte.yaml` |
+| `*_seriennr`, `*_seriennr_1`, `*_seriennr_2` | Seriennummer des Geräts in der Entity-ID (Homematic IP, Owlet); `_1`/`_2` trennen zwei Geräte desselben Modells | Einstellungen → Geräte & Dienste → Integration → Gerät → Entitäten | `homematic-karte.yaml`, `temperaturen-karte-v2.yaml` (und v1 in `archiv/`), `garten-karte.yaml`, `owlet-smart-sock-karte.yaml` |
+| `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | die vier `lichter-*-karte.yaml`, `fenster-lichter-uebersicht-karte.yaml`, `garten-karte.yaml` |
+| `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte-v4.yaml`, `autos-karten-v2.html` |
+| `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-flower-karte.yaml`, `pflanzen-view.yaml` |
+| `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `temperaturen-karte-v2.yaml` (und v1 in `archiv/`), die vier `lichter-*-karte.yaml`, `fenster-lichter-uebersicht-karte.yaml` |
 
 Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
-`visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-card.yaml`,
-`decluttering-templates.yaml`, `kameras-button-card.yaml`). Am einfachsten
+`visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-karte.yaml`,
+`navigation-templates.yaml`, `kameras-karte.yaml`). Am einfachsten
 im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
-Ebenso die Entitäten in `unifi-netzplan-card.yaml`: die `device_tracker` der
+Ebenso die Entitäten in `unifi-netzplan-karte.yaml`: die `device_tracker` der
 eigenen UniFi-Geräte und die Sensoren von UniFi WAN, deren IDs Host und Site
 der Konsole enthalten (`…_192_168_1_1_default_…`).
-In `unifi-unas-pro-button-card.yaml` hängen die IDs am Gerätenamen des UNAS
+In `unifi-unas-pro-karte.yaml` hängen die IDs am Gerätenamen des UNAS
 (`sensor.unas_pro_…`) und des Zwischensteckers für die Leistung
 (`sensor.shelly_plugs_unas_pro_…`, optional). Der Hot-Spare-Schacht steht
 als Variable `spare` in der Karte, weil die Integration ihn nicht meldet.
@@ -193,17 +206,17 @@ Dazu:
 
 ## Notizen
 
-- [`karten-basemap-carto.md`](karten-basemap-carto.md) – „API KEY REQUIRED“
+- [`umbenennung-2026-10.md`](doku/umbenennung-2026-10.md) – alte Dateinamen
+  und ihr neuer Ort nach dem Umzug in die Bereichsordner
+- [`karten-basemap-carto.md`](doku/karten-basemap-carto.md) – „API KEY REQUIRED“
   auf allen Karten im Frontend
-- [`proxmox-haos-secure-boot-warnung.md`](proxmox-haos-secure-boot-warnung.md) –
+- [`proxmox-haos-secure-boot-warnung.md`](doku/proxmox-haos-secure-boot-warnung.md) –
   Proxmox-Warnung `ms-cert=2023k` beim Start der HA-VM
-- [`proxmox-haos-speicher-erweitern.md`](proxmox-haos-speicher-erweitern.md) –
+- [`proxmox-haos-speicher-erweitern.md`](doku/proxmox-haos-speicher-erweitern.md) –
   Festplatte von Home Assistant OS unter Proxmox vergrößern
 
-Die HTML-Dateien (`home-kacheln-vorschlaege.html`,
-`autos-karten-v2-vorschlaege.html`, `autos-animation-vorschlaege.html`, `wetter-animiert-vorschlaege.html`,
-`grafana/proxmox-mockups.html`) sind
-Design-Entwürfe und werden direkt im Browser geöffnet.
+Die HTML-Dateien in den Ordnern `entwuerfe/` sind Design-Entwürfe und werden
+direkt im Browser geöffnet.
 
 ## Prüfungen
 
@@ -214,7 +227,7 @@ Der Workflow `Validate` läuft bei jedem Push und Pull Request und prüft:
 - `yamllint`, `ruff` und Python-Übersetzung
 - dass jede Datei einer Art zugeordnet ist (`ci/dateien.py`), damit keine Datei still aus den Prüfungen fällt
 - dass jeder genannte Dateiname und jedes `!include`-Ziel existiert (`ci/check_verweise.py`)
-- Ablage und Dateinamen nach der geplanten Ordnerstruktur, vorerst nur als Bericht (`ci/check_struktur.py`)
+- Ablage und Dateinamen nach der Ordnerstruktur (`ci/check_struktur.py`)
 - Grafana-JSON sowie den Abgleich mit `proxmox_dashboards.py`
 - Secrets mit `gitleaks`
 

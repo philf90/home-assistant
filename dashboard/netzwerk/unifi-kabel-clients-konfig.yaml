@@ -1,0 +1,73 @@
+# UniFi-Kabel-Clients – Switch und Port je Kabel-Client (Paket für configuration.yaml)
+#
+# Die UniFi-Integration von Home Assistant gibt nicht weiter, an welchem
+# Switch und Port ein Kabel-Client hängt. Der Controller kennt beides
+# (Felder sw_mac und sw_port im Endpunkt stat/sta). Dieses Paket fragt ihn
+# alle 5 Minuten ab und legt eine kleine Zuordnung als Attribut ab:
+#
+#   sensor.unifi_kabel_clients
+#     state:      Anzahl zugeordneter Kabel-Clients
+#     attributes: ports: { "<client-mac>": ["<switch-mac>", <port>], ... }
+#
+# Die Netzplan-Karte liest das Attribut über `wired_entity`.
+#
+# Voraussetzung
+#   - lokaler API-Schlüssel der UniFi-Konsole (Einstellungen → Control Plane
+#     → Integrationen → API-Schlüssel). Derselbe wie für "UniFi WAN" geht.
+#   - in secrets.yaml:
+#       unifi_stat_sta_url: https://<IP-der-Konsole>/proxy/network/api/s/default/stat/sta
+#       unifi_api_key: <API-Schlüssel>
+#     ("default" ist die Site; bei anderer Site deren interner Name.)
+#   - in configuration.yaml:
+#       homeassistant:
+#         packages:
+#           unifi_kabel_clients: !include unifi-kabel-clients-konfig.yaml
+#   Danach Home Assistant neu starten (rest_command und Pakete laden nur beim
+#   Start).
+#
+# verify_ssl: false, weil die Konsole ein selbst signiertes Zertifikat nutzt.
+# Antwortet die Konsole nicht, bleibt die letzte Zuordnung stehen.
+
+rest_command:
+  unifi_stat_sta:
+    url: !secret unifi_stat_sta_url
+    method: get
+    headers:
+      X-API-Key: !secret unifi_api_key
+      Accept: application/json
+    verify_ssl: false
+    timeout: 20
+
+template:
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/5"
+    actions:
+      - action: rest_command.unifi_stat_sta
+        response_variable: sta
+        continue_on_error: true
+    sensor:
+      - name: UniFi Kabel-Clients
+        unique_id: unifi_kabel_clients
+        icon: mdi:ethernet
+        state: >-
+          {%- if sta is not defined or sta.status != 200 or sta.content.data is not defined -%}
+            {{ this.attributes.get('ports', {}) | count }}
+          {%- else -%}
+            {{ sta.content.data | selectattr('is_wired', 'defined') | selectattr('is_wired')
+               | selectattr('sw_mac', 'defined') | list | count }}
+          {%- endif -%}
+        attributes:
+          ports: >-
+            {%- if sta is not defined or sta.status != 200 or sta.content.data is not defined -%}
+              {{ this.attributes.get('ports', {}) }}
+            {%- else -%}
+              {%- set ns = namespace(m={}) -%}
+              {%- for c in sta.content.data
+                    if c.is_wired | default(false) and c.sw_mac is defined -%}
+                {%- set ns.m = dict(ns.m, **{c.mac | lower: [c.sw_mac | lower, c.sw_port | default(none)]}) -%}
+              {%- endfor -%}
+              {{ ns.m }}
+            {%- endif -%}

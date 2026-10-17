@@ -1,0 +1,341 @@
+# HINWEIS PLATZHALTER: notify.mobile_app_iphone (Automationen),
+# <breite>/<laenge> (Koordinaten von zone.home in der Scrape-Ressource)
+# Anonymisiert -- vor dem Einfuegen durch die eigenen Werte ersetzen.
+# Tabelle und Vorgehen: README.md, Abschnitt "Platzhalter ersetzen".
+#
+# Flugradar – komplette Ansicht (View) im Owlet-Stil
+#
+# Flugbewegungen rund um zone.home auf einer Karte; jedes Flugzeug antippbar
+# mit Route, Typ, Kennzeichen, Hoehe und Foto. Entwurf und Varianten:
+# Artefakt "Flugradar-View"; gewaehlt sind
+#   Layout C  Handy zuerst, Details als Popup
+#   K1        Kartenausschnitt mit Spuren (Leaflet, dunkle OSM-Kacheln,
+#             Ringe 10/25/50 km)
+#   D1        Popup mit Foto, Route, Zeiten und Kennzahlen (Bubble Card #flug)
+#   E2        Liste "Jetzt ueber uns", nach Entfernung
+# Erweiterungen (Artefakt "Flugradar-Erweiterungen"):
+#   P2  Puenktlichkeit und Ankunft im Popup (Abweichung vom Flugplan, Landung,
+#       Ortszeit am Ziel, Restflugzeit, Reststrecke, Terminal), Chip in der Liste
+#   P3  Ziellinie: Grosskreis vom gewaehlten Flug zum Zielflughafen
+#   P5  Verkehr ueber den Tag (24 h / 7 Tage) aus der Historie des Sensors
+#   P6  Tageszaehler, P7 naechster Ueberflug heute
+#   P8  Meldungen aufs iPhone mit Schaltern
+#   P10 Flug verfolgen (Eingabe, Liste, Meldung bei Start/Landung/Gate)
+#
+# Daten: HACS-Integration Flightradar24 (AlexandrErohin/
+# home-assistant-flightradar24, v2.3.0), Sensor
+# sensor.flightradar24_current_in_area. Logik und Darstellung stehen in
+# flugradar-templates.yaml; die View verweist nur auf die
+# Templates.
+#
+# Aufbau (sections, max_columns 2):
+#   Sektion 1: Top-Navigation, Karte (K1), Verkehr (P5), Popup #flug (D1)
+#   Sektion 2: Liste (E2), Heute (P6/P7), Flug verfolgen (P10),
+#              Meldungen (P8), Floating-Navbar
+#   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
+#
+# Passt zur Route /dashboard-home/fluege (Eintrag "Flüge" im "More"-Menue von
+# navbar-karte.yaml / navigation-templates.yaml, hinter "Fußball").
+#
+# ---------------------------------------------------------------------------
+# ERFORDERLICH (UI, kein configuration.yaml):
+#   - Integration Flightradar24 (HACS) mit Radius 50000 (Meter) um zone.home,
+#     Scan-Intervall 20 s. Optional FR24-Login (Abo) unter "Konfigurieren":
+#     dann auch Squawk.
+#   - button_card_templates aus flugradar-templates.yaml im
+#     Raw-Konfigurationseditor des Dashboards
+#   - Helfer (Einstellungen > Geraete & Dienste > Helfer):
+#       counter.flug_heute, counter.flug_nachts, counter.flug_nah,
+#       counter.flug_tief                (Zaehler, Minimum 0, wiederherstellen)
+#       input_text.flug_bestwert         (max. 255, JSON des naechsten Ueberflugs)
+#       input_text.flug_gemeldet         (max. 255, bereits gezaehlte/gemeldete
+#                                         Fluege, Praefix u/t/s/n + Flug-ID)
+#       input_text.flug_notfall_gemeldet (min. 0, max. 255, gemeldete ICAO-
+#                                         Adressen, solange im ADS-B-Sensor)
+#       input_text.flug_seltene_typen    (max. 255, seltene ICAO-Typcodes,
+#                                         Leerzeichen-getrennt; Karte + Meldung),
+#                                         Wert: A388 B741 B742 B743 B744 B748 BLCF
+#                                         A124 A225 A3ST A337 C5M C17 A400
+#       input_boolean.flug_meldung_tief, _sonderflug, _selten, _notfall,
+#       _verfolgt                        (Schalter der Meldungen)
+#       input_select.flug_verkehr_zeitraum  (Optionen "24 h", "7 Tage")
+#   - Automationen (UI), Beschreibung jeweils in der Automation:
+#       "Fluege: Ein- und Austritt zaehlen"  Events flightradar24_entry/_exit:
+#           counter.flug_heute, _nachts (22-6 Uhr), _nah (closest_distance
+#           unter 3 km), Meldung seltener Typen (input_text.flug_seltene_typen)
+#       "Fluege: laufend auswerten"  jede Aktualisierung des Sensors: naechster
+#           Ueberflug (input_text.flug_bestwert), counter.flug_tief (in der Luft
+#           unter 1.500 m), Meldungen tief und nah / Sonderflug
+#       "Fluege: ADS-B abfragen"  jede Minute homeassistant.update_entity fuer
+#           sensor.adsb_notfall (automatisches Intervall des Eintrags ist aus)
+#       "Fluege: Notfall melden (ADS-B)"  jede Aenderung von sensor.adsb_notfall:
+#           Squawk 7500/7600/7700 sofort, ADS-B-Notfallkennung ohne passenden
+#           Squawk erst, wenn die ICAO-Adresse auch in der vorigen Abfrage
+#           stand (einzelne Ausreisser mit Squawk 1000 gaben Fehlalarme);
+#           input_text.flug_notfall_gemeldet verhindert Wiederholungen ->
+#           kritische Meldung; Route, Airline, Foto ueber die ICAO-Adresse
+#           aus der FR24-Integration. Der Schalter steuert nur das Senden.
+#       "Fluege: Tageswechsel"  00:00 Zaehler und Bestwert zuruecksetzen
+#       "Fluege: verfolgten Flug melden"  Events flightradar24_tracked_took_off,
+#           _landed, _arrived_gate
+#     Meldungen an notify.mobile_app_iphone, mit Foto
+#     (aircraft_photo_medium). Tippen oeffnet
+#     /dashboard-home/fluege?flug=<ID>-<Callsign> mit offenem Popup: ist der
+#     Flug noch im Bereich, ist er gewaehlt (Ring, Karte zentriert), sonst zeigt
+#     das Popup "nicht mehr im Bereich" mit Link auf Flightradar24.
+#   - Integration Scrape, Eintrag "ADS-B Notfall (adsb.lol)" (UI):
+#       Ressource https://api.adsb.lol/v2/point/<breite>/<laenge>/27 (27 nm um
+#       zone.home, Koordinaten mit 4 Nachkommastellen), Sensor sensor.adsb_notfall, Selektor "body" (lxml packt
+#       JSON-Text direkt in <body>), Wert-Template:
+#       {% set ac = (value | from_json).ac | default([]) %}
+#       {% set ns = namespace(l=[]) %}
+#       {% for a in ac %}
+#         {% set sq = a.squawk | default('') | string %}
+#         {% set em = a.emergency | default('none') | string %}
+#         {% if sq in ['7500', '7600', '7700'] or
+#               em in ['general', 'minfuel', 'nordo', 'unlawful', 'downed'] %}
+#           {% set ns.l = ns.l + [[a.hex | default('') | upper,
+#               a.flight | default('') | trim, sq, em, a.alt_baro | default(''),
+#               ((a.dst | default(0) | float(0)) * 1.852) | round(1)] | join('|')] %}
+#         {% endif %}
+#       {% endfor %}
+#       {{ (ns.l | join(';'))[:250] if ns.l else 'keine' }}
+#       Polling des Eintrags deaktiviert (Systemoptionen), Abfrage per Automation.
+#   Grenzen: Nach einem Neustart feuert die Integration fuer bereits anwesende
+#   Fluege kein Eintritts-Event (api/flight.py, is_first_run); diese zaehlen
+#   nicht. Den Squawk liefert die FR24-Integration (v2.3.0) trotz Silver-Login
+#   nicht (in der FR24-App ist er sichtbar); Notfaelle kommen deshalb aus
+#   ADS-B (adsb.lol, frei, ohne Schluessel).
+#
+# Hinweis Diagramm (P5): apexcharts-card laedt den Verlauf ueber
+# history/period MIT Attributen (graphEntry.ts _fetchRecent); bei diesem
+# Sensor bis 16 KB je Zustand. Der data_generator fragt deshalb selbst
+# history/history_during_period mit no_attributes und
+# significant_changes_only ab (nur Aenderungen der Anzahl, gemessen ca.
+# 100 je Stunde) und bildet zeitgewichtete Mittelwerte je 15 min bzw. 1 h.
+# update_interval begrenzt das Nachladen (sonst bei jeder Aenderung).
+#
+# Hinweis Recorder: Das Attribut "flights" mit Spuren waechst um etwa 3 KB je
+# Flug (gemessen 11.10.2026: 5 Fluege = 15,7 KB). Ab etwa 6 Fluegen liegt es
+# ueber 16 KB; HA speichert die Attribute dieses Sensors dann nicht in der
+# Historie (Warnung im Log). Die Karte braucht nur den aktuellen Zustand.
+#
+# Log: "HTTP Error 429" der Integration ist laut deren README erwartet
+# (FR24 drosselt automatisierte Abrufe); gemessen 4 Meldungen in 8 Minuten.
+#
+# Voraussetzung: custom:button-card + custom:bubble-card + custom:decluttering-card
+#                + card-mod + custom:apexcharts-card (alle via HACS).
+title: Flüge
+path: fluege
+icon: mdi:airplane
+type: sections
+max_columns: 2
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation
+
+  # ======================= Karte (Variante K1) =======================
+  - type: vertical-stack
+    card_mod: &huelle
+      style: |
+        #root {
+          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          padding: 16px 18px !important;
+          gap: 8px !important;
+        }
+    cards:
+    - type: custom:button-card
+      template: flug_karte_kopf
+    - type: custom:button-card
+      template: flug_karte
+
+  # ======================= Verkehr (P5) =======================
+  # Zwei Huellen statt einer: Umschalten ueber input_select.flug_verkehr_zeitraum
+  # wie der Liga-Umschalter der Fussball-View (visibility auf Sektionsebene).
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.flug_verkehr_zeitraum
+      state_not: 7 Tage
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_verkehr_kopf
+    - type: custom:apexcharts-card
+      graph_span: 24h
+      update_interval: 5min
+      header:
+        show: false
+      apex_config:
+        chart: &verkehr_chart
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#8794a5'
+          height: 180
+          toolbar:
+            show: false
+          zoom:
+            enabled: false
+        dataLabels: &verkehr_labels
+          enabled: false
+        fill: &verkehr_fill
+          type: gradient
+          gradient:
+            shadeIntensity: 0
+            opacityFrom: 0.35
+            opacityTo: 0.02
+        grid: &verkehr_grid
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend: &verkehr_legend
+          show: false
+        stroke: &verkehr_stroke
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+          x:
+            format: dd.MM. HH:mm
+        xaxis:
+          labels:
+            datetimeUTC: false
+      card_mod: &verkehr_mod
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+      series: &verkehr_series
+      - entity: sensor.flightradar24_current_in_area
+        name: Ø Flüge
+        type: area
+        color: '#7fb3d5'
+        float_precision: 1
+        show:
+          legend_value: false
+        data_generator: |
+          // Verlauf ohne Attribute laden (siehe Kopf der View) und zeitgewichtet
+          // mitteln: je 15 min (24 h) bzw. je Stunde (7 Tage).
+          const B = (end - start) > 2 * 864e5 ? 36e5 : 9e5;
+          const t0 = Math.floor(new Date(start).getTime() / B) * B, t1 = Math.min(new Date(end).getTime(), Date.now());
+          const h = await hass.callWS({ type: 'history/history_during_period', start_time: new Date(t0).toISOString(), end_time: new Date(t1).toISOString(), entity_ids: [entity.entity_id], minimal_response: true, no_attributes: true, significant_changes_only: true });
+          const pts = (h[entity.entity_id] || []).map(p => [p.lu * 1000, parseFloat(p.s)]);
+          const out = [];
+          let k = 0, v = NaN;
+          for (let b = t0; b < t1; b += B) {
+            const e = Math.min(b + B, t1);
+            while (k < pts.length && pts[k][0] <= b) { v = pts[k][1]; k++; }
+            let t = b, summe = 0, dauer = 0;
+            for (;;) {
+              const n = k < pts.length && pts[k][0] < e ? pts[k][0] : e;
+              if (!isNaN(v)) { summe += v * (n - t); dauer += n - t; }
+              t = n;
+              if (t >= e) break;
+              v = pts[k][1]; k++;
+            }
+            // Luecken (vor der Einrichtung, "unavailable") bleiben leer
+            out.push([b + (e - b) / 2, dauer > (e - b) / 2 ? Math.round(summe / dauer * 10) / 10 : null]);
+          }
+          return out;
+      yaxis: &verkehr_yaxis
+      - min: 0
+        decimals: 0
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 4
+
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.flug_verkehr_zeitraum
+      state: 7 Tage
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_verkehr_kopf
+    - type: custom:apexcharts-card
+      graph_span: 7d
+      update_interval: 15min
+      header:
+        show: false
+      card_mod: *verkehr_mod
+      series: *verkehr_series
+      yaxis: *verkehr_yaxis
+      apex_config:
+        chart: *verkehr_chart
+        dataLabels: *verkehr_labels
+        fill: *verkehr_fill
+        grid: *verkehr_grid
+        legend: *verkehr_legend
+        stroke: *verkehr_stroke
+        tooltip:
+          theme: dark
+          x:
+            format: dd.MM. HH:mm
+        xaxis:
+          labels:
+            datetimeUTC: false
+            format: dd.MM.
+
+  # ======================= Details (Variante D1) =======================
+  # Unsichtbar, bis Karte oder Liste den Hash #flug setzt.
+  - type: custom:bubble-card
+    card_type: pop-up
+    hash: '#flug'
+    # Kopf mit Flugnummer und Schliessen-Knopf rendert flug_detail selbst
+    show_header: false
+    popup_mode: fit-content
+    with_bottom_offset: true
+    bg_color: '#171d29'
+    bg_opacity: '100'
+    cards:
+    - type: custom:button-card
+      template: flug_detail
+
+- type: grid
+  cards:
+  # ======================= Liste (Variante E2) =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_liste_kopf
+    - type: custom:button-card
+      template: flug_liste
+
+  # ======================= Heute (P6, P7) =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_heute_kopf
+    - type: custom:button-card
+      template: flug_heute
+
+  # ======================= Flug verfolgen (P10) =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_verfolgen_kopf
+    - type: custom:button-card
+      template: flug_verfolgen
+
+  # ======================= Meldungen (P8) =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: flug_meldungen_kopf
+    - type: custom:button-card
+      template: flug_meldungen
+
+  - type: custom:decluttering-card
+    template: floating_navbar
