@@ -24,7 +24,12 @@
 #
 # RINGE: Akku = Ladestand, Solar = Anteil an PV_PEAK (1828 W, hoechster
 # gemessener Wert, Juni 2026), Haus = Quellenmix (PV/Akku/Netz), Verbraucher
-# = Anteil am Hausverbrauch.
+# = Anteil am Hausverbrauch. Bezugsgroesse dafuer ist der groessere Wert aus
+# Hausbedarf und Summe der gemessenen Verbraucher: Die Anlage meldet nur etwa
+# alle 5 min (gemessen 17.10.2026), die Shelly-Stecker alle 5-7 s. Ohne das
+# zeigte ein PC, der gerade von 200 auf 900 W springt, bis zu 5 min mehr als
+# das ganze Haus (Ring voll, Anteile zusammen > 100 %). Die Zahl im Haus-Knoten bleibt
+# der Anlagenwert, passend zur Autarkie.
 #
 # VERBRAUCHER: nur > 0 W, absteigend. Der nicht zugeordnete Rest
 # (Haus minus Summe, auf 0 begrenzt) erscheint ab 15 W als "Sonstige".
@@ -264,7 +269,10 @@ cards:
               ].map(o=>Object.assign(o,{w:g(o.id)}))
                .filter(o=>!isNaN(o.w)&&o.w>0)
                .sort((a,b)=>b.w-a.w);
-              let rest=Math.max(0,H-list.reduce((a,o)=>a+o.w,0)), folded=0;
+              const sum=list.reduce((a,o)=>a+o.w,0);
+              // Bezug der Anteile: Haus meldet seltener als die Stecker, daher nie unter der Summe
+              const B=H>0?Math.max(H,sum):0;
+              let rest=Math.max(0,H-sum), folded=0;
               if(list.length+(rest>=TH?1:0)>MAXN){
                 // pin:true ab TH immer sichtbar, die uebrigen Plaetze an die groessten
                 const pin=list.filter(o=>o.pin&&o.w>=TH);
@@ -355,11 +363,11 @@ cards:
                 nodes+=o.neutral
                   ? `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="rgba(255,255,255,0.028)" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>`
                   : disc(p.x,p.y,r,o.c,true);
-                nodes+=arc(p.x,p.y,r,H?o.w/H:0,o.c,2.5);
+                nodes+=arc(p.x,p.y,r,B?o.w/B:0,o.c,2.5);
                 nodes+=ico(I[o.ic],p.x,p.y-7,o.neutral?C.lab:o.c,.78)+T(p.x,p.y+10,fmt(o.w),11);
                 const lx=lab[i].x.toFixed(1);
                 nodes+=T(lx,p.y+r+14,o.n,10,o.neutral?C.lab:o.c,600);
-                nodes+=T(lx,p.y+r+27,(H?pct(Math.min(1,o.w/H)):'–')+(o.neutral&&folded?' · +'+folded:''),10,C.mut,600);
+                nodes+=T(lx,p.y+r+27,(B?pct(Math.min(1,o.w/B)):'–')+(o.neutral&&folded?' · +'+folded:''),10,C.mut,600);
               });
 
               return `<div style="width:100%;"><svg viewBox="0 0 360 340" style="width:100%;height:auto;display:block;">${tracks}${nodes}</svg></div>`;
