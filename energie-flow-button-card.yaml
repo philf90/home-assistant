@@ -30,9 +30,12 @@
 # (Haus minus Summe, auf 0 begrenzt) erscheint ab 15 W als "Sonstige".
 # Hoechstens 6 Knoten: sonst bleiben die 5 groessten stehen, der Rest wandert
 # in "Sonstige" (Anzahl als "+n"). Grund: bei 7 Knoten ueberlappen die Namen.
+# Ausnahme pin:true (PC): ab 15 W (TH, PC laeuft) behaelt er immer einen der
+# 5 Plaetze, auch wenn andere Geraete mehr ziehen; darunter (Standby) zaehlt
+# er wie alle anderen.
 #
-# FARBEN nach DESIGN.md: Hausgeraete #e6b566, Server/Pool #7fd0d5, PoE und
-# Schreibtisch #b399d4 (Geraete), TV #7fb3d5, Garten #bdd27f, Heizung
+# FARBEN nach DESIGN.md: Hausgeraete #e6b566, Server/Pool #7fd0d5, PoE,
+# Schreibtisch und PC #b399d4 (Geraete), TV #7fb3d5, Garten #bdd27f, Heizung
 # #79b8c9, Sonstige neutral. Netzbezug rot, Einspeisung/Autark Mint, PV
 # Sonnengelb, Akku-Entladung blau, -Ladung gruen. Akku am SOC-Minimum ohne
 # Leistung: Amber + "Reserve", rot nur darunter. Solar nachts: Mond in Indigo.
@@ -165,6 +168,7 @@ cards:
           - sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power
           - sensor.shelly_plus_1pm_heizung_switch_0_power
           - sensor.shelly_plugs_schreibtisch_switch_0_power
+          - sensor.buro_shelly_plug_m_gen3_pc_leistung
         card_mod:
           style: |
             ha-card { background:none !important; border:none !important; box-shadow:none !important; pointer-events:none !important; }
@@ -217,6 +221,7 @@ cards:
                 pump:'<path d="M-6 8V-2a4 4 0 0 1 8 0M-6 8h8M2-2h5M4-2v3"/><circle cx="-2" cy="-2" r="1"/>',
                 radiator:'<path d="M-8-6v12M-3-6v12M2-6v12M7-6v12M-9 6h18"/>',
                 desk:'<rect x="-7" y="-7" width="14" height="10" rx="1.4"/><path d="M0 3v3M-4 6h8"/>',
+                pc:'<rect x="-9" y="-7" width="11" height="9" rx="1.4"/><path d="M-3.5 2v3M-6 5h5"/><rect x="4" y="-8" width="6" height="16" rx="1.2"/><path d="M6.2-4.5h1.6"/>',
                 more:'<path d="M-6 0h.2M0 0h.2M6 0h.2" stroke-width="3.2"/>'
               };
 
@@ -254,14 +259,18 @@ cards:
                 {id:'sensor.shelly_outdoor_plugs_pool_switch_0_power',       n:'Pool',         ic:'pool',       c:'#7fd0d5'},
                 {id:'sensor.shelly_outdoor_plug_s_gen3_brunnenpumpe_power',  n:'Garten',       ic:'pump',       c:'#bdd27f'},
                 {id:'sensor.shelly_plus_1pm_heizung_switch_0_power',         n:'Heizung',      ic:'radiator',   c:'#79b8c9'},
-                {id:'sensor.shelly_plugs_schreibtisch_switch_0_power',       n:'Schreibtisch', ic:'desk',       c:'#b399d4'}
+                {id:'sensor.shelly_plugs_schreibtisch_switch_0_power',       n:'Schreibtisch', ic:'desk',       c:'#b399d4'},
+                {id:'sensor.buro_shelly_plug_m_gen3_pc_leistung',            n:'PC',           ic:'pc',         c:'#b399d4', pin:true}
               ].map(o=>Object.assign(o,{w:g(o.id)}))
                .filter(o=>!isNaN(o.w)&&o.w>0)
                .sort((a,b)=>b.w-a.w);
               let rest=Math.max(0,H-list.reduce((a,o)=>a+o.w,0)), folded=0;
               if(list.length+(rest>=TH?1:0)>MAXN){
-                const drop=list.slice(MAXN-1);
-                rest+=drop.reduce((a,o)=>a+o.w,0); folded=drop.length; list=list.slice(0,MAXN-1);
+                // pin:true ab TH immer sichtbar, die uebrigen Plaetze an die groessten
+                const pin=list.filter(o=>o.pin&&o.w>=TH);
+                const keep=pin.concat(list.filter(o=>!pin.includes(o)).slice(0,Math.max(0,MAXN-1-pin.length)));
+                const drop=list.filter(o=>!keep.includes(o));
+                rest+=drop.reduce((a,o)=>a+o.w,0); folded=drop.length; list=keep.sort((a,b)=>b.w-a.w);
               }
               if(rest>=TH||folded) list.push({n:'Sonstige', ic:'more', c:C.mut, w:rest, neutral:true});
 
