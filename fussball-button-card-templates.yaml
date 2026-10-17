@@ -73,7 +73,7 @@
 #   - Messung (Reiter "Messung"): was OpenLigaDB und ESPN fuer dieses Spiel
 #     liefern -- Abruf und Fehler je Pfad (ein TypeError ohne HTTP-Status
 #     heisst Netzwerk oder CORS), Ereignistypen, Kommentar, Statistik,
-#     Aufstellung, Sprache und wann ein Spielstand je Quelle zuerst zu sehen
+#     Aufstellung samt Positionsangaben und wann ein Spielstand je Quelle zuerst zu sehen
 #     war (Genauigkeit etwa 30 s, nur solange die View offen ist). "Messung
 #     kopieren" legt alles als JSON in die Zwischenablage; geht das nicht,
 #     steht das JSON darunter zum Markieren.
@@ -94,6 +94,18 @@
 #     (subbedIn/subbedOut, bei 8 Wechseln). Wer kommt und wer geht, ergibt
 #     sich deshalb aus diesen Feldern; passt keiner, stehen beide Namen ohne
 #     Richtung da.
+#   - Reiter "Aufstellung" (Variante A der Entwurfsseite "Reiter Aufstellung"):
+#     je Verein Formation, Startelf nach Tor/Abwehr/Mittelfeld/Angriff, Bank
+#     mit den Eingewechselten zuerst; Tor, Karte und Wechsel als Marke mit
+#     Minute am Spieler. Die Marken kommen aus den ESPN-Ereignissen (gleiche
+#     Schreibweise wie die Aufstellung; OpenLigaDB schreibt Namen teils mit
+#     Diakritika). Tor und Karte gelten dem zuerst genannten Teilnehmer, den
+#     auch der Ereignistext nennt. Gruppiert wird nach position (Kuerzel oder
+#     Name); ist auch nur ein Spieler der Startelf nicht zuzuordnen, steht die
+#     Startelf ungegliedert da, sortiert nach formationPlace. Inhalt von
+#     position und formationPlace ist noch ungemessen; die Messung zeigt dazu
+#     Beispiele, alle Kuerzel und wie viele Ereignis-Namen in der Aufstellung
+#     gefunden werden.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
 #     ohne Aktion pointer-events: none und verwirft am Handy den click nach
 #     touchend; Tippziele setzen pointer-events: auto und loesen ueber
@@ -116,7 +128,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 5, alt = window.__fussball;
+          const VERSION = 6, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -309,7 +321,7 @@ button_card_templates:
           fb.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"';
           fb.antippbar = m => fb.status(m) !== 'pre';
           fb.waehle = (L, id) => {
-            fb.sel = { L, id: Number(id) }; fb.tab = 'ticker'; fb.kopiert = '';
+            fb.sel = { L, id: Number(id) }; fb.tab = 'ticker'; fb.kopiert = ''; fb.aufSeite = null;
             if (location.hash !== HASH) {
               history.pushState(null, '', location.pathname + location.search + HASH);
               window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
@@ -317,6 +329,7 @@ button_card_templates:
             fb.neu();
           };
           fb.zeige = tab => { fb.tab = tab; fb.kopiert = ''; fb.neu(); };
+          fb.zeigeSeite = seite => { fb.aufSeite = seite; fb.neu(); };
           // Schliessen wie removeHash(true) in Bubble Card (siehe fr.schliesse im Flugradar)
           fb.schliesse = () => {
             if (!location.hash) return;
@@ -422,8 +435,37 @@ button_card_templates:
               seite: seite(r.team, r.homeAway), formation: r.formation || '',
               n: (r.roster || []).length, start: (r.roster || []).filter(p => p.starter).length
             }));
+            // Aufstellung je Verein fuer den Reiter
+            const teams = {};
+            (Array.isArray(d.rosters) ? d.rosters : []).forEach(r => {
+              const s = seite(r.team, r.homeAway);
+              if (!s) return;
+              teams[s] = { formation: r.formation || '', spieler: (r.roster || []).map(p => ({
+                nr: p.jersey ?? '', name: p.athlete?.displayName || p.athlete?.shortName || '', pos: p.position ?? null,
+                start: !!p.starter, ein: !!p.subbedIn, aus: !!p.subbedOut, platz: p.formationPlace ?? null
+              })) };
+            });
+            // Marken am Spieler aus den Ereignissen; Tor und Karte gelten dem zuerst genannten Teilnehmer
+            const marken = new Map(), inAufstellung = new Set(spieler.map(p => norm(p.athlete?.displayName)).filter(Boolean));
+            let namenGesamt = 0, namenGefunden = 0;
+            const merke = (n, mk) => {
+              if (!n) return;
+              const k = norm(n);
+              namenGesamt++; if (inAufstellung.has(k)) namenGefunden++;
+              if (!marken.has(k)) marken.set(k, []);
+              marken.get(k).push(mk);
+            };
+            ev.forEach(x => {
+              if (x.typ === 'tor') merke(x.namen[0], { typ: 'tor', text: x.min + (x.label === 'Tor (Elfmeter)' ? ' E' : x.label === 'Eigentor' ? ' ET' : '') });
+              else if (x.typ === 'gelb') merke(x.namen[0], { typ: 'gelb', text: x.min });
+              else if (x.typ === 'rot') merke(x.namen[0], { typ: 'rot', text: x.min + (x.label === 'Gelb-Rot' ? ' G-R' : '') });
+              else if (x.typ === 'wechsel' && x.wechsel) {
+                merke(x.wechsel.aus, { typ: 'aus', text: x.min, sort: x.sort });
+                merke(x.wechsel.ein, { typ: 'ein', text: `${x.min} für ${x.wechsel.aus}`, sort: x.sort });
+              }
+            });
             return {
-              heimId, gastId, ev, kom, komEigen, stat, aufst, wechsel, keys: Object.keys(d),
+              heimId, gastId, ev, kom, komEigen, stat, aufst, wechsel, keys: Object.keys(d), teams, marken, namenGesamt, namenGefunden,
               rosterFelder: spieler[0] ? Object.keys(spieler[0]) : [],
               eingewechselt: spieler.filter(p => p.subbedIn).length, ausgewechselt: spieler.filter(p => p.subbedOut).length
             };
@@ -432,6 +474,13 @@ button_card_templates:
             const l = (e?.roh?.links || []).find(x => /summary|gamecast|desktop/i.test((x.rel || []).join(' '))) || (e?.roh?.links || [])[0];
             return l && /^https:\/\//.test(l.href || '') ? l.href : '';
           };
+
+          // Positionsgruppe aus position (Kuerzel, displayName oder name). Mittelfeld vor Abwehr,
+          // damit "Defensive Midfielder" nicht als Abwehr gilt. Ohne Treffer: null.
+          const GRUPPE = [['Tor', /^(g|gk)$|goal ?keeper|torwart/i], ['Mittelfeld', /^(m|cm|dm|am|lm|rm|cdm|cam)(-[lrc])?$|midfield/i],
+            ['Abwehr', /^(d|cb|cd|lb|rb|lwb|rwb|sw)(-[lrc])?$|defen|back/i], ['Angriff', /^(f|fw|cf|st|lw|rw|ss)(-[lrc])?$|forward|striker|wing/i]];
+          const posTexte = pos => !pos ? [] : typeof pos === 'string' ? [pos] : [pos.abbreviation, pos.displayName, pos.name].filter(Boolean).map(String);
+          const gruppe = pos => { const t = posTexte(pos); const g = GRUPPE.find(([, re]) => t.some(x => re.test(x))); return g ? g[0] : null; };
 
           // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
           const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
@@ -485,13 +534,16 @@ button_card_templates:
             // ----- Reiter -----
             const statZeilen = STAT.filter(([n]) => det && det.stat[n] && det.stat[n].heim != null && det.stat[n].gast != null);
             const reiter = [['ticker', 'Ticker']];
+            if (det && Object.values(det.teams).some(x => x.spieler.length)) reiter.push(['aufstellung', 'Aufstellung']);
             if (det && det.komEigen) reiter.push(['kommentar', 'Kommentar']);
             if (statZeilen.length) reiter.push(['statistik', 'Statistik']);
             reiter.push(['messung', 'Messung']);
             const tab = reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
-            const reiterHtml = `<div role="tablist" style="display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
+            // Bis 4 Reiter gleich breit; bei 5 waagerecht scrollbar statt abgeschnitten
+            const viele = reiter.length > 4;
+            const reiterHtml = `<div role="tablist" style="${viele ? 'display:flex;overflow-x:auto;scrollbar-width:none;' : `display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));`}gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
               const an = id === tab;
-              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px 2px;border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
+              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px ${viele ? '12px' : '2px'};${viele ? 'flex:0 0 auto;' : ''}border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
             }).join('')}</div>`;
 
             // Warum ESPN fehlt (fuer Ticker und Messung)
@@ -540,6 +592,56 @@ button_card_templates:
             const kommentar = () => {
               const l = det.kom.slice().sort((p, q) => q.sort - p.sort || q.i - p.i).slice(0, 80);
               return `<div style="display:flex;flex-direction:column;gap:4px;">${fb.hinweis('Kommentar von ESPN in der gelieferten Sprache')}${l.map(x => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);"><span style="font-size:12px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span><span style="font-size:12.5px;color:#f2f5f8;min-width:0;">${fb.esc(x.text)}</span></div>`).join('')}</div>`;
+            };
+
+            // ----- Aufstellung (Variante A) -----
+            const aufstellung = () => {
+              const seiten = ['heim', 'gast'].filter(x => det.teams[x] && det.teams[x].spieler.length);
+              let sw = fb.aufSeite;
+              if (!seiten.includes(sw)) sw = FAV && m.gast_id == FAV && seiten.includes('gast') ? 'gast' : seiten[0];
+              const T = det.teams[sw], unser = FAV && (sw === 'heim' ? m.heim_id : m.gast_id) == FAV;
+              const MK = {
+                tor: ['#ff8a80', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>'],
+                gelb: ['#e6b566', '<svg viewBox="0 0 24 24" width="11" height="11"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>'],
+                rot: ['#f0736a', '<svg viewBox="0 0 24 24" width="11" height="11"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>'],
+                aus: ['#8794a5', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'],
+                ein: ['#7fb3d5', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>']
+              };
+              const markenVon = p => det.marken.get(norm(p.name)) || [];
+              const zeileSp = p => {
+                const mk = markenVon(p).map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:${c}1f;border:1px solid ${c}3d;">${ic}${fb.esc(x.text)}</span>`; }).join('');
+                const kurzPos = (posTexte(p.pos)[0] || '').replace(/^sub$/i, '');
+                return `<div style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);font-size:13px;color:#f2f5f8;">
+                  <span style="width:30px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;${unser ? 'background:rgba(227,6,19,0.16);border:1px solid rgba(227,6,19,0.24);color:#ff8a80;' : 'background:rgba(255,255,255,0.06);color:#b4c0cf;'}">${fb.esc(p.nr)}</span>
+                  <span style="min-width:0;display:flex;flex-direction:column;"><b style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(p.name)}</b>${kurzPos ? `<small style="font-size:11px;color:#8794a5;">${fb.esc(kurzPos)}</small>` : ''}</span>
+                  <span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${mk}</span></div>`;
+              };
+              const titel = t => `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8794a5;padding:6px 2px 0;">${t}</div>`;
+              const start = T.spieler.filter(p => p.start), bank = T.spieler.filter(p => !p.start);
+              const platz = p => { const n = Number(p.platz); return isFinite(n) && p.platz !== null && p.platz !== '' ? n : 99; };
+              const nummer = p => { const n = Number(p.nr); return isFinite(n) && p.nr !== '' ? n : 999; };
+              const gruppiert = start.length && start.every(p => gruppe(p.pos));
+              const startHtml = gruppiert
+                ? ['Tor', 'Abwehr', 'Mittelfeld', 'Angriff'].map(g => { const l = start.filter(p => gruppe(p.pos) === g).sort((a, b) => platz(a) - platz(b)); return l.length ? titel(g) + l.map(zeileSp).join('') : ''; }).join('')
+                : titel('Startelf') + start.slice().sort((a, b) => platz(a) - platz(b)).map(zeileSp).join('');
+              // Bank: Eingewechselte zuerst (nach Minute), dann nach Rueckennummer
+              const einSort = p => { const x = markenVon(p).find(k => k.typ === 'ein'); return x ? x.sort : null; };
+              const bankSortiert = bank.slice().sort((a, b) => {
+                const ea = einSort(a), eb = einSort(b);
+                if (ea != null || eb != null) return ea == null ? 1 : eb == null ? -1 : ea - eb;
+                return nummer(a) - nummer(b);
+              });
+              const wahl = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">${['heim', 'gast'].map(x => {
+                const an = x === sw, n = x === 'heim' ? m.heim : m.gast, ok = seiten.includes(x);
+                return `<button type="button" aria-pressed="${an}" ${ok ? fb.tippAttr(`window.__fussball.zeigeSeite('${x}')`) : 'disabled'} style="font:inherit;font-size:12.5px;font-weight:700;padding:8px 6px;border-radius:12px;cursor:${ok ? 'pointer' : 'default'};pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.06)'};">${fb.wappen(x === 'heim' ? m.heim_logo : m.gast_logo, n, 18)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(n)}</span></button>`;
+              }).join('')}</div>`;
+              return `<div style="display:flex;flex-direction:column;gap:6px;">
+                ${wahl}
+                ${T.formation ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#8794a5;padding:4px 2px 0;"><span>Formation</span><b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;">${fb.esc(T.formation)}</b></div>` : ''}
+                ${startHtml}
+                ${bankSortiert.length ? titel('Bank') + bankSortiert.map(zeileSp).join('') : ''}
+                ${!gruppiert && start.length ? fb.hinweis('Positionen nicht zuzuordnen, Startelf ungegliedert (siehe Messung).') : ''}
+              </div>`;
             };
 
             // ----- Statistik -----
@@ -592,6 +694,10 @@ button_card_templates:
                   ereignis_beispiel: det && det.ev[0] ? kurz(det.ev[0].text, 160) : null,
                   statistik: det ? Object.keys(det.stat) : null, statistik_beide_seiten: statZeilen.map(x => x[0]),
                   aufstellung: det ? det.aufst : null, heim_id: det ? det.heimId : null, gast_id: det ? det.gastId : null,
+                  // Inhalt von jersey, position und formationPlace: drei Beispiele der Startelf je Verein
+                  aufstellung_beispiel: det ? Object.entries(det.teams).map(([x, T]) => ({ seite: x, spieler: T.spieler.filter(p => p.start).slice(0, 3).map(p => ({ nr: p.nr, name: p.name, position: p.pos, formationPlace: p.platz })) })) : null,
+                  positionen: det ? Object.entries(det.teams).map(([x, T]) => { const st = T.spieler.filter(p => p.start); return { seite: x, kuerzel: st.map(p => posTexte(p.pos)[0] || '?'), formationPlace: st.map(p => p.platz), ohne_gruppe: st.filter(p => !gruppe(p.pos)).length }; }) : null,
+                  ereignis_namen_in_aufstellung: det ? `${det.namenGefunden}/${det.namenGesamt}` : null,
                   wechsel_beispiel: det ? det.wechsel : null, aufstellung_felder: det ? det.rosterFelder : null,
                   eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null,
                   wechsel: det ? det.ev.filter(x => x.typ === 'wechsel').length : null,
@@ -620,6 +726,8 @@ button_card_templates:
                   zeile(S.wechsel && S.wechsel_mit_richtung === S.wechsel ? 'ok' : 'leer', `Wechsel: ${S.wechsel}, davon ${S.wechsel_mit_richtung} mit Richtung`, 'Richtung aus subbedIn/subbedOut der Aufstellung'),
                   zeile(S.wechsel_beispiel ? 'ok' : 'leer', 'Wechsel (Rohdaten)', S.wechsel_beispiel ? fb.esc(S.wechsel_beispiel.text) + ' · ' + S.wechsel_beispiel.teilnehmer.map(x => `${fb.esc(x.name)} [${fb.esc(x.felder.join(', '))}]`).join(' · ') + ` · Aufstellung: ${S.eingewechselt} eingewechselt, ${S.ausgewechselt} ausgewechselt` : '–'),
                   zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
+                  zeile(S.positionen.length && S.positionen.every(x => !x.ohne_gruppe) ? 'ok' : 'leer', 'Positionen der Startelf', S.positionen.length ? S.positionen.map(x => `${x.seite}: ${fb.esc(x.kuerzel.join(', '))}${x.ohne_gruppe ? ` · ${x.ohne_gruppe} ohne Gruppe` : ''} · formationPlace ${fb.esc(x.formationPlace.join(', '))}`).join(' · ') : '–'),
+                  zeile(det.namenGesamt && det.namenGefunden === det.namenGesamt ? 'ok' : 'leer', `Ereignis-Namen in der Aufstellung: ${S.ereignis_namen_in_aufstellung}`, 'Tore, Karten und Wechsel, die einem Spieler zugeordnet werden konnten'),
                   zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
               const gesZeilen = gesehen.length ? gesehen.map(x => zeile(x.oldb && x.espn ? 'ok' : 'offen', 'Stand ' + x.stand,
                 `OpenLigaDB ${x.oldb || '–'} · ESPN ${x.espn || '–'}${x.espn_frueher_s != null ? ` · ESPN ${Math.abs(x.espn_frueher_s)} s ${x.espn_frueher_s >= 0 ? 'früher' : 'später'}` : ''}`)).join('')
@@ -643,7 +751,7 @@ button_card_templates:
               </div>`;
             };
 
-            const inhalt = tab === 'kommentar' ? kommentar() : tab === 'statistik' ? statistik() : tab === 'messung' ? messung() : ticker();
+            const inhalt = tab === 'aufstellung' ? aufstellung() : tab === 'kommentar' ? kommentar() : tab === 'statistik' ? statistik() : tab === 'messung' ? messung() : ticker();
             const link = e ? fb.espnLink(e) : '';
             const cO = fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`], cE = fb.cache[sumKey];
             const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#8794a5;">
