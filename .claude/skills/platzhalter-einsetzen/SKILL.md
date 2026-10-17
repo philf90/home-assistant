@@ -72,8 +72,8 @@ wiederholt sie nicht.
 - Neue oder geaenderte Karten verwenden die vorhandenen Platzhalter.
 - Taucht eine neue persoenliche Angabe auf, einen neutralen Platzhalter
   einfuehren: zuerst in `design/platzhalter.yaml` eintragen, dann die Zeile
-  `Platzhalter:` im Kopfblock der Datei ergaenzen und die Tabelle in
-  `README.md` erweitern. `ci/check_kopf.py` meldet Dateien, deren
+  `Platzhalter:` im Kopfblock der Datei ergaenzen und
+  `python ci/gen_index.py` laufen lassen (erzeugt die Tabelle im README). `ci/check_kopf.py` meldet Dateien, deren
   Kopfzeile nicht zu den gefundenen Platzhaltern passt.
 - Vor jedem Commit `git diff --cached` auf echte Werte pruefen, die in
   dieser Sitzung aufgeloest wurden, und `lokal/` darf nicht gestaged sein

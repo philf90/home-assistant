@@ -35,5 +35,8 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
 
 ## Pruefungen
 
-Vor einem Push die Checks aus `ci/README.md` lokal ausfuehren. Neue
-`custom:`-Kartentypen in `ci/known_cards.txt` eintragen.
+Regeln fuer neue und geaenderte Dateien: `CONTRIBUTING.md`. Vor einem Push die
+Checks aus `ci/README.md` lokal ausfuehren. Nach Aenderungen an Kopfbloecken
+oder `design/platzhalter.yaml` `python ci/gen_index.py` laufen lassen und das
+Ergebnis mit committen. Neue `custom:`-Kartentypen in `ci/known_cards.txt`
+eintragen.

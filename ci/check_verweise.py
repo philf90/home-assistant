@@ -49,7 +49,7 @@ TOKEN = re.compile(
 INCLUDE = re.compile(r"^[^#]*!include(?:_dir_\w+)?\s+([^\s#]+)")
 URL = re.compile(r"[a-z][a-z0-9+.-]*://\S+")
 
-GROSS_DATEIEN = {"README.md", "DESIGN.md", "CLAUDE.md", "SKILL.md"}
+GROSS_DATEIEN = {"README.md", "DESIGN.md", "CLAUDE.md", "CONTRIBUTING.md", "SKILL.md"}
 
 # Dateien, die absichtlich alte Namen auflisten, und deshalb nicht geprueft werden.
 AUSGENOMMENE_DATEIEN = {
