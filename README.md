@@ -213,6 +213,8 @@ Der Workflow `Validate` läuft bei jedem Push und Pull Request und prüft:
 - YAML-Struktur: Parsing, doppelte Schlüssel, bekannte Kartentypen, Format der Entity-IDs
 - `yamllint`, `ruff` und Python-Übersetzung
 - dass jede Datei einer Art zugeordnet ist (`ci/dateien.py`), damit keine Datei still aus den Prüfungen fällt
+- dass jeder genannte Dateiname und jedes `!include`-Ziel existiert (`ci/check_verweise.py`)
+- Ablage und Dateinamen nach der geplanten Ordnerstruktur, vorerst nur als Bericht (`ci/check_struktur.py`)
 - Grafana-JSON sowie den Abgleich mit `proxmox_dashboards.py`
 - Secrets mit `gitleaks`
 
