@@ -14,6 +14,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 |---|---|
 | `dateien.py` | Gemeinsame Dateiliste aller Pruefungen (aus `git ls-files`, in allen Ordnern). Ohne Argument: jede Datei hat genau eine Art (`lovelace`, `ressource`, `grafana`, `python`, `doku`, `entwurf`, `meta`), sonst Fehler. Mit Art als Argument: gibt deren Dateien aus. |
 | `check_verweise.py` | Jeder genannte Repo-Dateiname existiert: `!include`-Ziele relativ zur einbindenden Datei, Pfade mit `/` relativ zum Repo oder zur Datei, blanke Dateinamen irgendwo im Repo. Erfasst werden Namen mit bekannter Endung und Bindestrich oder Unterstrich (wie alle Repo-Dateien), Punktdateien und `README.md`/`DESIGN.md`/`CLAUDE.md`/`SKILL.md`. Bewusste Ausnahmen stehen in `AUSNAHMEN` im Skript, ausgenommene Dateien (die Liste alter Namen in `doku/umbenennung-2026-10.md`) in `AUSGENOMMENE_DATEIEN`. |
+| `check_kopf.py` | Kopfblock jeder Datei unter `dashboard/` und jedes Entwurfs (siehe unten): Schluessel der Dateiart in fester Reihenfolge, Art/Bereich/Status passend zu Name und Ort, `Karten` = genutzte `custom:`-Karten plus card-mod, `Templates` = genutzte Templates mit definierender Datei, `Platzhalter` = Treffer der Muster aus `design/platzhalter.yaml`. Dateien ohne Kopfblock mit Platzhaltern muessen dort unter `dateien_ohne_kopf` stehen. |
 | `check_struktur.py` | Ablage und Dateinamen nach der Repo-Struktur (siehe unten). Mit `--streng` (CI, pre-commit) schlaegt sie bei Verstoessen fehl, ohne nur Bericht. |
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus (Werte mit Templates oder Decluttering-Variablen `[[name]]` werden uebersprungen). |
@@ -65,6 +66,42 @@ Schema bilden, beim Umbenennen oder Verschieben `git mv` verwenden und alle
 Verweise im selben Commit anpassen -- `check_verweise.py` meldet vergessene.
 Ein neuer Bereich wird in `BEREICHE` in `ci/dateien.py` eingetragen.
 
+## Dateikopf
+
+Jede Datei unter `dashboard/` und jeder Entwurf beginnt mit diesem Block.
+Lange Werte gehen in einer mit mindestens drei Leerzeichen eingerueckten
+Zeile weiter. Darunter folgt frei der bisherige Erklaertext mit der Zeile
+`Voraussetzung` (Integrationen, Helfer, Sensoren).
+
+```yaml
+# ============================================================================
+# Waschmaschine (Home Connect)
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       hausgeraete
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     owlet_geraete_fx (hausgeraete-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   seriennr_<geraet>
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+```
+
+| Art | Schluessel |
+|---|---|
+| `karte`, `view`, `templates` | Art, Bereich, Status, Karten, Templates, Einfuegen, Platzhalter |
+| `konfig`, `ressource` (JS, mit `//`) | Art, Bereich, Status, Einfuegen, Platzhalter |
+| `entwurf` (HTML, Markdown, in `<!-- ... -->` ganz oben, ohne Praefix) | Art, Bereich, Status, Gehoert-zu, Platzhalter |
+
+- `Status`: `aktiv` im Bereichsordner, `entwurf` in `entwuerfe/`, in `archiv/`
+  `archiv: ersetzt durch <datei>` oder nur `archiv`, wenn keine Nachfolgerin
+  belegt ist.
+- `Karten` und `Templates` nennen nur, was die Datei selbst nutzt; Dateien
+  hinter `!include` haben ihren eigenen Kopf. Keine: `keine`.
+- `Platzhalter`: die `id`s aus `design/platzhalter.yaml`, dahinter
+  `(vor dem Einfuegen ersetzen, siehe README.md)`; sonst `keine`.
+
 ## Warum doppelte Schluessel eigenen Aufwand wert sind
 
 PyYAML und Home Assistant melden ein doppelt vergebenes Mapping-Feld nicht --
@@ -81,6 +118,7 @@ pip install pyyaml yamllint ruff
 python ci/dateien.py
 python ci/check_verweise.py
 python ci/check_struktur.py --streng
+python ci/check_kopf.py
 node ci/check-js-templates.js
 python ci/check_yaml.py
 python ci/check_palette.py

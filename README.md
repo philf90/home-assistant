@@ -102,8 +102,11 @@ Datei erklärt den Unterschied.
   `homeassistant: packages:` in der `configuration.yaml`; URL und lokaler
   API-Schlüssel stehen in der `secrets.yaml` (Details im Dateikopf).
 
-Welche Karten und Integrationen eine Datei braucht, steht in ihrem
-Kommentarkopf unter **Voraussetzung**.
+Jede Datei beginnt mit einem festen Kopfblock: Art, Bereich, Status, die
+genutzten HACS-Karten (**Karten**), die nötigen Templates mit ihrer Datei
+(**Templates**), wie sie eingefügt wird (**Einfuegen**) und ihre
+**Platzhalter**. Integrationen und weitere Voraussetzungen stehen im Text
+darunter unter **Voraussetzung**.
 
 ## Verwendung
 
@@ -141,8 +144,9 @@ template: !include dashboard/fahrzeuge/autos-passat-konfig.yaml
 Persönliche Angaben (Namen, Gerätenamen, Adresse, Kennzeichen) sind im Repo
 anonymisiert. Die Platzhalter gibt es in keiner Home-Assistant-Instanz: Eine
 unverändert eingefügte Karte bleibt leer oder meldet „Entität nicht
-verfügbar“. Betroffene Dateien tragen oben den Kommentar
-`HINWEIS PLATZHALTER`.
+verfügbar“. Welche Platzhalter eine Datei enthält, steht in ihrem Kopfblock
+in der Zeile `Platzhalter:`. Die verbindliche Liste mit Suchmustern steht in
+[`design/platzhalter.yaml`](design/platzhalter.yaml).
 
 | Platzhalter | Steht für | Echte ID finden | Dateien |
 |---|---|---|---|
@@ -227,6 +231,7 @@ Der Workflow `Validate` läuft bei jedem Push und Pull Request und prüft:
 - `yamllint`, `ruff` und Python-Übersetzung
 - dass jede Datei einer Art zugeordnet ist (`ci/dateien.py`), damit keine Datei still aus den Prüfungen fällt
 - dass jeder genannte Dateiname und jedes `!include`-Ziel existiert (`ci/check_verweise.py`)
+- den Kopfblock jeder Datei: Karten, Templates und Platzhalter müssen zum Inhalt passen (`ci/check_kopf.py`)
 - Ablage und Dateinamen nach der Ordnerstruktur (`ci/check_struktur.py`)
 - Grafana-JSON sowie den Abgleich mit `proxmox_dashboards.py`
 - Secrets mit `gitleaks`

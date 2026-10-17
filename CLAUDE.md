@@ -29,6 +29,9 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
   `templates` oder `konfig`. Regeln und Ablauf: `ci/README.md`, Abschnitt
   "Repo-Struktur". Verschieben und Umbenennen nur mit `git mv`, Verweise im
   selben Commit anpassen.
+- Jede Datei beginnt mit dem Kopfblock aus `ci/README.md`, Abschnitt
+  "Dateikopf". `Karten`, `Templates` und `Platzhalter` beim Aendern
+  mitpflegen; `ci/check_kopf.py` vergleicht sie mit dem Inhalt.
 
 ## Pruefungen
 
