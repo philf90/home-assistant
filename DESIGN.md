@@ -126,13 +126,22 @@ Farbverlauf (`temperaturen-button-card-v2.yaml`, Variablen `t_min`/`t_max`):
 | über dem Bereich bis 30 °C | Amber `#e6b566` | getönte Pille |
 | über 30 °C | Rot `#f0736a` | gefüllte Pille, Schrift `#3d1512` (5,6:1) |
 | Nebenraum ohne Bereich | Hellgrau `#b4c0cf` | getönte Pille, keine Bewertung |
-| Außentemperatur | Wolkengrau `#cdd6e0` | getönte Pille, keine Bewertung |
+| außen unter 0 °C (Frost) | Blau `#7fb3d5` | getönt |
+| außen 0 bis unter 25 °C | Wolkengrau `#cdd6e0` | getönt |
+| außen ab 25 °C (Sommertag) | Amber `#e6b566` | getönt |
+| außen ab 30 °C (heißer Tag) | Rot `#f0736a` | Pille gefüllt, Kachel getönt |
 | keine Daten | `#8794a5` | ohne Tönung, Rand Weiß 0,06 |
 
 Die Bereiche folgen den Richtwerten des Umweltbundesamts (Wohnen 20 °C,
 Schlafen 17–20 °C, Küche 18–20 °C, Bad 20–23 °C) mit dem WHO-Mindestwert
 18 °C als Untergrenze für Kinderzimmer. Rot beginnt bei 30 °C, weil die ASR A3.5
 dort Maßnahmen verlangt; die 26-°C-Empfehlung der ASR deckt Amber ab.
+Die Außentemperatur folgt den klimatologischen Kenntagen des Deutschen
+Wetterdienstes (Frosttag, Sommertag, heißer Tag), bewertet wird der aktuelle,
+auf eine Nachkommastelle gerundete Messwert. In der Wetter-Karte steht der Wert
+immer in `#f2f5f8`, Rot tönt dort nur Kachel und Icon; in der Pille ist Rot
+gefüllt. Die Luftfeuchte außen ist ein Info-Wert in Blau ohne Bewertung, weil
+der Komfortbereich von etwa 30–65 % für Innenräume gilt.
 Koralle-Orange entfällt hier, weil in der Pille kein Platz für die Stufe als
 Text ist. Rote Schrift auf roter Tönung erreicht als 13,5-px-Schrift nur
 4,37:1 auf `#1b2231`, deshalb ist die kritische Stufe gefüllt.

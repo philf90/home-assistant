@@ -1,8 +1,10 @@
 # Wetter-Ansicht im Design der ueberarbeiteten Owlet-Smart-Sock-Karte.
 # Variante A: "Wetter" und "Wind" je als eine Owlet-Karte mit Kopfzeile +
 # Metrik-Raster (wie die Owlet-Basiskarte). Farben semantisch auf Icon-Kachel
-# + Wert: Temperatur nach Schwelle, Feuchte blau, Trocken gruen / Regen blau,
-# Wind teal. Werte/Einheiten/Labels wie im Original.
+# + Wert: Temperatur in Stufen nach den DWD-Kenntagen (unter 0 °C Blau, ab
+# 25 °C Amber, ab 30 °C Rot, sonst Wolkengrau; DESIGN.md "Temperaturstufen"),
+# Feuchte blau ohne Bewertung, Trocken gruen / Regen blau, Wind teal.
+# Werte/Einheiten/Labels wie im Original.
 #
 # Tap-Verhalten beider Karten: Jede Metrik-Kachel oeffnet die more-info ihrer
 # eigenen Entitaet -- Wetter: Bedingung -> weather.landau_pfalz, Temperatur,
@@ -144,31 +146,17 @@ cards:
           };
           const cInfo=condMap[cond]||[(cond||'–'),iCloud,muted];
 
-          // ---- Temperatur-Farbe: gleiche Farbskala wie in der Heizung-View ----
-          // (weich interpolierte Skala kalt->warm; als 6-stelliges Hex, damit die
-          //  cell()-Logik ${accent}1f/3d/29/3d wie gewohnt getoenten Hintergrund erzeugt)
+          // ---- Temperatur: Stufen nach den DWD-Kenntagen (DESIGN.md "Temperaturstufen") ----
+          // unter 0 °C Frost Blau, ab 25 °C (Sommertag) Amber, ab 30 °C (heisser Tag) Rot,
+          // dazwischen Wolkengrau. Verglichen wird der angezeigte, gerundete Wert.
           const tE=S('sensor.wetterstation_pro_temperatur');
-          const t=tE?parseFloat(tE.state):NaN;
-          const pcHex=(temp)=>{
-            const SC=[[-10,67,100,179],[0,79,143,208],[7,75,176,196],[14,92,191,154],[19,134,200,119],[22,184,207,106],[25,230,195,88],[28,231,159,73],[32,224,116,63],[36,214,79,74]];
-            let x=Math.max(SC[0][0],Math.min(SC[SC.length-1][0],temp)),r,g,b;
-            for(let i=0;i<SC.length-1;i++){const a=SC[i],c=SC[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
-            const h=n=>n.toString(16).padStart(2,'0');
-            return '#'+h(r)+h(g)+h(b);
-          };
-          const tColor=isNaN(t)?muted:pcHex(t);
+          const t=tE?Math.round(parseFloat(tE.state)*10)/10:NaN;
+          const tColor=isNaN(t)?muted:t>=30?red:t>=25?amber:t<0?blue:'#cdd6e0';
 
-          // ---- Luftfeuchte-Farbe: Komfortskala (trocken=Amber -> ideal ~50%=Grün -> feucht=Blau) ----
+          // ---- Luftfeuchte: Info-Wert in Blau, aussen ohne Komfort-Bewertung ----
           const hE=S('sensor.wetterstation_pro_luftfeuchtigkeit');
           const hum=hE?parseFloat(hE.state):NaN;
-          const hcHex=(h)=>{
-            const HS=[[0,230,181,102],[25,205,208,138],[40,166,212,158],[55,134,204,176],[68,127,208,213],[82,127,179,213],[100,95,136,196]];
-            let x=Math.max(HS[0][0],Math.min(HS[HS.length-1][0],h)),r,g,b;
-            for(let i=0;i<HS.length-1;i++){const a=HS[i],c=HS[i+1];if(x>=a[0]&&x<=c[0]){const f=(x-a[0])/(c[0]-a[0]);r=Math.round(a[1]+(c[1]-a[1])*f);g=Math.round(a[2]+(c[2]-a[2])*f);b=Math.round(a[3]+(c[3]-a[3])*f);break;}}
-            const hx=n=>n.toString(16).padStart(2,'0');
-            return '#'+hx(r)+hx(g)+hx(b);
-          };
-          const hColor=isNaN(hum)?blue:hcHex(hum);
+          const hColor=isNaN(hum)?muted:blue;
 
           // ---- Regen (Wetterstation) ----
           const rb=S('binary_sensor.wetterstation_pro_regen');
