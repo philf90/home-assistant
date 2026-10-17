@@ -69,8 +69,7 @@
 #     selben Tag), Zuordnung wie bei der Minute. Hat ESPN mehr Tore als
 #     OpenLigaDB, erscheinen die fehlenden mit Quelle "ESPN".
 #   - Abgerufen wird nur, solange das Popup offen ist: Spieltag und
-#     Spieldetails alle 45 s (live) bzw. 5-15 min, die Sprachprobe (lang=de)
-#     nur im Reiter "Messung" alle 10 min.
+#     Spieldetails alle 45 s (live) bzw. 5-15 min.
 #   - Messung (Reiter "Messung"): was OpenLigaDB und ESPN fuer dieses Spiel
 #     liefern -- Abruf und Fehler je Pfad (ein TypeError ohne HTTP-Status
 #     heisst Netzwerk oder CORS), Ereignistypen, Kommentar, Statistik,
@@ -86,9 +85,15 @@
 #     commentary: 15 Eintraege, so viele wie keyEvents, Beispiel wortgleich mit
 #     dem Ereignistext -- in der 2. Liga also nur eine Wiederholung. Der Reiter
 #     "Kommentar" erscheint deshalb nur, wenn er Texte enthaelt, die keinem
-#     Ereignis entsprechen. lang=de lieferte denselben englischen Text.
-#     Offen: welcher Name bei Wechseln ein- und welcher ausgewechselt wird;
-#     die Messung zeigt dazu Rohdaten (wechsel_beispiel, aufstellung_felder).
+#     Ereignis entsprechen. lang=de lieferte denselben englischen Text (beim
+#     zweiten Versuch HTTP 504); die Sprachprobe ist deshalb entfallen.
+#   - Gemessen 17.10.2026 an Kaiserslautern-Bochum (ger.2, live, 88'): dasselbe
+#     Bild, Kommentar wieder nur Wiederholung. Ein Wechsel hat zwei Teilnehmer,
+#     der Text nennt nur einen; die Reihenfolge ist also kein Beleg. Die
+#     Aufstellung markiert genau die 8 ein- und 8 ausgewechselten Spieler
+#     (subbedIn/subbedOut, bei 8 Wechseln). Wer kommt und wer geht, ergibt
+#     sich deshalb aus diesen Feldern; passt keiner, stehen beide Namen ohne
+#     Richtung da.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
 #     ohne Aktion pointer-events: none und verwirft am Handy den click nach
 #     touchend; Tippziele setzen pointer-events: auto und loesen ueber
@@ -111,7 +116,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 4, alt = window.__fussball;
+          const VERSION = 5, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -181,12 +186,16 @@ button_card_templates:
             return c && Array.isArray(c.d) ? c.d.find(x => x.matchID === id) : null;
           };
           // Erstes Auftauchen eines Spielstands je Quelle (Messung des Verzugs). Gezaehlt wird
-          // beim Zeichnen, also etwa alle 30 s und nur, solange die View offen ist; 0:0 zaehlt nicht.
-          fb.gesehen = {};
+          // beim Zeichnen, also etwa alle 30 s und nur, solange die View offen ist. Nur ein Wechsel
+          // des Stands zaehlt: der beim Oeffnen schon vorhandene Stand ist bloss Ausgangswert
+          // (gemessen 17.10.2026: beide Quellen "gleichzeitig", weil das 2:0 schon vorher stand).
+          fb.gesehen = {}; fb.letzterStand = {};
           fb.sieh = (q, id, h, g) => {
             h = Number(h); g = Number(g);
-            if (!isFinite(h) || !isFinite(g) || h + g === 0) return;
-            const k = `${id}:${h}:${g}`;
+            if (!isFinite(h) || !isFinite(g)) return;
+            const k = `${id}:${h}:${g}`, vorher = fb.letzterStand[q + ':' + id];
+            fb.letzterStand[q + ':' + id] = k;
+            if (vorher === undefined || vorher === k) return;
             fb.gesehen[k] = fb.gesehen[k] || {};
             if (!fb.gesehen[k][q]) fb.gesehen[k][q] = Date.now();
           };
@@ -332,7 +341,7 @@ button_card_templates:
             const e = paar(espnEvents(fb.get(pfad, fb.status(m) === 'live' ? 45e3 : 15 * MIN, 'espn')), m);
             return { e, pfad, geladen: !!fb.cache['espn:' + pfad], fehler: fb.fehlerPfad['espn:' + pfad] || '' };
           };
-          fb.summaryPfad = (L, id, lang) => `${SLUG[L]}/summary?event=${encodeURIComponent(id)}${lang ? `&lang=${lang}&region=${lang}` : ''}`;
+          fb.summaryPfad = (L, id) => `${SLUG[L]}/summary?event=${encodeURIComponent(id)}`;
           // Ereignistyp aus type.text (englisch), Reihenfolge zaehlt
           const EREIGNIS = [
             [/disallowed|no goal/i, 'phase', 'Tor aberkannt'],
@@ -367,14 +376,27 @@ button_card_templates:
               if (id && id === gastId) return 'gast';
               return ha === 'home' ? 'heim' : (ha === 'away' ? 'gast' : '');
             };
+            // Aufstellung: wer wurde ein-, wer ausgewechselt (subbedIn/subbedOut)
+            const spieler = (Array.isArray(d.rosters) ? d.rosters : []).flatMap(r => r.roster || []);
+            const rolle = new Map();
+            spieler.forEach(p => { const n = p.athlete?.displayName; if (n) rolle.set(n, { ein: !!p.subbedIn, aus: !!p.subbedOut }); });
+            // Wechsel: Richtung aus der Aufstellung, nicht aus der Reihenfolge der Teilnehmer
+            const richtung = namen => {
+              if (namen.length !== 2) return null;
+              const [p, q] = namen.map(n => rolle.get(n) || {});
+              if ((p.ein && !q.ein) || (q.aus && !p.aus)) return { ein: namen[0], aus: namen[1] };
+              if ((q.ein && !p.ein) || (p.aus && !q.aus)) return { ein: namen[1], aus: namen[0] };
+              return null;
+            };
             const ev = (Array.isArray(d.keyEvents) ? d.keyEvents : []).map((e, i) => {
               const roh = [e.type?.text, e.type?.type].filter(Boolean).join(' ');
               const r = EREIGNIS.find(([re]) => re.test(roh));
+              const namen = (e.participants || []).map(p => p.athlete?.displayName || p.athlete?.shortName).filter(Boolean);
               return {
                 i, typ: r ? r[1] : 'sonst', label: r ? r[2] : (e.type?.text || 'Ereignis'), typText: e.type?.text || '',
                 min: e.clock?.displayValue || '', sort: minSort(e.clock?.displayValue, e.clock?.value),
                 seite: seite(e.team), team: e.team?.displayName || '',
-                namen: (e.participants || []).map(p => p.athlete?.displayName || p.athlete?.shortName).filter(Boolean),
+                namen, wechsel: r && r[1] === 'wechsel' ? richtung(namen) : null,
                 text: e.text || e.shortText || ''
               };
             });
@@ -387,7 +409,6 @@ button_card_templates:
             // Rohdaten fuer die Messung: Wechsel (wer kommt, wer geht?) und Felder der Aufstellung
             const w = (Array.isArray(d.keyEvents) ? d.keyEvents : []).find(e => /substitution/i.test(e.type?.text || ''));
             const wechsel = w ? { text: w.text || w.shortText || '', teilnehmer: (w.participants || []).map(p => ({ name: p.athlete?.displayName || '', felder: Object.keys(p) })) } : null;
-            const spieler = (Array.isArray(d.rosters) ? d.rosters : []).flatMap(r => r.roster || []);
             const stat = {};
             (d.boxscore?.teams || []).forEach((t, i) => {
               const s = seite(t.team, t.homeAway) || 't' + i;
@@ -497,7 +518,7 @@ button_card_templates:
                   unser: FAV && ((x.seite === 'heim' && m.heim_id == FAV) || (x.seite === 'gast' && m.gast_id == FAV)) }));
                 det.ev.filter(x => x.typ !== 'tor').forEach(x => z.push({ sort: x.sort, i: 1000 + x.i, typ: x.typ, min: x.min,
                   titel: x.typ === 'phase' ? x.label : `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`,
-                  d: x.typ === 'phase' ? '' : x.namen.join(' · '), q: 'ESPN' }));
+                  d: x.typ === 'phase' ? '' : (x.wechsel ? `${x.wechsel.ein} für ${x.wechsel.aus}` : x.namen.join(' · ')), q: 'ESPN' }));
               }
               z.sort((p, q) => q.sort - p.sort || q.i - p.i);
               const zeilen = z.map(x => {
@@ -538,9 +559,6 @@ button_card_templates:
             const messung = () => {
               const roh = fb.rohSpiel(s.L, sp.nr, m.id) || {}, tore = Array.isArray(roh.goals) ? roh.goals : [];
               const sumFehler = fb.fehlerPfad[sumKey] || '';
-              // Sprachprobe nur in diesem Reiter
-              const dePfad = e ? fb.summaryPfad(s.L, e.id, 'de') : '', deKey = 'espn:' + dePfad;
-              const de = e && offen ? fb.get(dePfad, 10 * MIN, 'espn') : undefined, deDet = fb.espnDetails(de, e);
               const probe = x => x ? kurz((x.kom[0] && x.kom[0].text) || (x.ev[0] && x.ev[0].text) || '', 160) : '';
               const gesehen = Object.entries(fb.gesehen).filter(([kk]) => kk.startsWith(m.id + ':')).map(([kk, v]) => {
                 const [, h, g] = kk.split(':'), d = v.oldb && v.espn ? Math.round((v.oldb - v.espn) / 1000) : null;
@@ -575,12 +593,9 @@ button_card_templates:
                   statistik: det ? Object.keys(det.stat) : null, statistik_beide_seiten: statZeilen.map(x => x[0]),
                   aufstellung: det ? det.aufst : null, heim_id: det ? det.heimId : null, gast_id: det ? det.gastId : null,
                   wechsel_beispiel: det ? det.wechsel : null, aufstellung_felder: det ? det.rosterFelder : null,
-                  eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null
-                },
-                sprache_de: {
-                  pfad: dePfad || null, geladen: !!fb.cache[deKey], fehler: fb.fehlerPfad[deKey] || null,
-                  probe_de: deDet ? probe(deDet) : null, probe_standard: det ? probe(det) : null,
-                  gleich: deDet && det ? probe(deDet) === probe(det) : null
+                  eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null,
+                  wechsel: det ? det.ev.filter(x => x.typ === 'wechsel').length : null,
+                  wechsel_mit_richtung: det ? det.ev.filter(x => x.typ === 'wechsel' && x.wechsel).length : null
                 },
                 zuerst_gesehen: gesehen
               };
@@ -589,7 +604,7 @@ button_card_templates:
               const zeile = (st, t, v) => `<div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;align-items:start;padding:6px 2px;border-top:1px solid rgba(255,255,255,0.04);"><span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${farbe[st]};"></span><span style="min-width:0;font-size:12.5px;color:#f2f5f8;"><b style="font-weight:700;">${t}</b><span style="display:block;color:#b4c0cf;overflow-wrap:anywhere;">${v}</span></span></div>`;
               const titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#8794a5;padding-top:8px;">${t}</div>`;
               const liste = o => o && Object.keys(o).length ? Object.entries(o).map(([n, z]) => `${fb.esc(n)} ${z}`).join(' · ') : '–';
-              const S = w.espn_summary, D = w.sprache_de, B = w.espn_scoreboard, O = w.oldb;
+              const S = w.espn_summary, B = w.espn_scoreboard, O = w.oldb;
               const nichtOffen = !offen ? zeile('offen', 'Popup geschlossen', 'ESPN wird nur bei offenem Popup abgerufen.') : '';
               const sbZeile = B.fehler ? zeile('fehler', 'Abruf', fb.esc(B.fehler))
                 : !B.geladen ? zeile('offen', 'Abruf', 'läuft …')
@@ -602,15 +617,13 @@ button_card_templates:
                 : [zeile('ok', 'Abruf', 'ok · Schlüssel: ' + fb.esc(S.schluessel.join(', '))),
                   zeile(S.ereignisse ? 'ok' : 'leer', `Ereignisse (keyEvents): ${S.ereignisse}`, liste(S.ereignistypen) + (S.ereignisse_ohne_zuordnung.length ? ' · ohne deutsche Beschriftung: ' + fb.esc(S.ereignisse_ohne_zuordnung.join(', ')) : '') + (S.ereignisse_ohne_team ? ` · ${S.ereignisse_ohne_team} ohne Vereinszuordnung` : '')),
                   zeile(S.kommentar_eigen ? 'ok' : 'leer', `Kommentar: ${S.kommentar}, davon ${S.kommentar_eigen} ohne passendes Ereignis`, fb.esc(S.kommentar_beispiel || '–') + (S.kommentar && !S.kommentar_eigen ? ' · nur Wiederholung der Ereignisse, Reiter ausgeblendet' : '')),
+                  zeile(S.wechsel && S.wechsel_mit_richtung === S.wechsel ? 'ok' : 'leer', `Wechsel: ${S.wechsel}, davon ${S.wechsel_mit_richtung} mit Richtung`, 'Richtung aus subbedIn/subbedOut der Aufstellung'),
                   zeile(S.wechsel_beispiel ? 'ok' : 'leer', 'Wechsel (Rohdaten)', S.wechsel_beispiel ? fb.esc(S.wechsel_beispiel.text) + ' · ' + S.wechsel_beispiel.teilnehmer.map(x => `${fb.esc(x.name)} [${fb.esc(x.felder.join(', '))}]`).join(' · ') + ` · Aufstellung: ${S.eingewechselt} eingewechselt, ${S.ausgewechselt} ausgewechselt` : '–'),
                   zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
                   zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
-              const deZeile = !e ? '' : D.fehler ? zeile('fehler', 'lang=de', fb.esc(D.fehler))
-                : !deDet ? zeile('offen', 'lang=de', 'läuft …')
-                : zeile(D.gleich === false ? 'ok' : 'leer', D.gleich === false ? 'lang=de liefert anderen Text' : 'lang=de liefert denselben Text', fb.esc(D.probe_de || '–'));
               const gesZeilen = gesehen.length ? gesehen.map(x => zeile(x.oldb && x.espn ? 'ok' : 'offen', 'Stand ' + x.stand,
                 `OpenLigaDB ${x.oldb || '–'} · ESPN ${x.espn || '–'}${x.espn_frueher_s != null ? ` · ESPN ${Math.abs(x.espn_frueher_s)} s ${x.espn_frueher_s >= 0 ? 'früher' : 'später'}` : ''}`)).join('')
-                : zeile('offen', 'Noch kein Tor gesehen', 'Gezählt wird nur bei laufendem Spiel und offener View.');
+                : zeile('offen', 'Noch kein Tor gesehen', 'Gezählt wird nur ein Tor, das fällt, während die View offen ist.');
               const knopf = `<button type="button" ${fb.tippAttr('window.__fussball.kopiere()')} style="font:inherit;font-size:12.5px;font-weight:700;color:#7fb3d5;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);border-radius:12px;padding:8px 12px;cursor:pointer;pointer-events:auto;">Messung kopieren</button>`;
               const kopiert = fb.kopiert === 'ok' ? '<span style="font-size:12px;font-weight:700;color:#a6d49e;">kopiert</span>'
                 : fb.kopiert === 'nein' ? '<span style="font-size:12px;color:#e6b566;">Zwischenablage gesperrt – Text unten markieren</span>' : '';
@@ -623,8 +636,6 @@ button_card_templates:
                 ${e ? zeile(B.details && Object.keys(B.details).length ? 'ok' : 'leer', 'Ereignisse im Scoreboard', liste(B.details)) : ''}
                 ${titel('ESPN Spieldetails')}
                 ${sumZeilen}
-                ${titel('Sprache')}
-                ${deZeile}
                 ${titel('Zuerst gesehen')}
                 ${gesZeilen}
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;">${knopf}${kopiert}</div>
