@@ -33,6 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Fuer den Vergleich mit dem Basiszweig (Template-VERSION).
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -48,6 +51,12 @@ jobs:
         run: python ci/check_struktur.py --streng
       - name: Kopfblock (Karten, Templates, Platzhalter)
         run: python ci/check_kopf.py
+      - name: Uebersichten im README aktuell
+        run: python ci/gen_index.py --pruefen
+      - name: Template-VERSION bei geaenderter Bibliothek erhoeht
+        run: python ci/check_template_version.py --basis "$BASIS"
+        env:
+          BASIS: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
       - name: Struktur pruefen (Parsing, doppelte Schluessel, Kartentypen)
         run: python ci/check_yaml.py
       - name: Farben gegen die Owlet-Palette pruefen

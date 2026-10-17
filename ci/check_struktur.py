@@ -68,6 +68,8 @@ def pruefe(pfad: PurePosixPath) -> list[str]:
 
     if teile[0] != "dashboard":
         return []
+    if pfad.as_posix() == "dashboard/README.md":
+        return []  # erzeugt von ci/gen_index.py
 
     fehler: list[str] = []
     if len(teile) < 3 or teile[1] not in BEREICHE:
