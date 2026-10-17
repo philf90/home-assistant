@@ -70,8 +70,10 @@
 #     OpenLigaDB, erscheinen die fehlenden mit Quelle "ESPN".
 #   - Abgerufen wird nur, solange das Popup offen ist: Spieltag und
 #     Spieldetails alle 45 s (live) bzw. 5-15 min.
-#   - Messung (Reiter "Messung"): was OpenLigaDB und ESPN fuer dieses Spiel
-#     liefern -- Abruf und Fehler je Pfad (ein TypeError ohne HTTP-Status
+#   - Messung (Knopf "Messung" im Fuss des Popups; als fuenfter Reiter lag sie
+#     in der 1. Liga ausserhalb der scrollenden Reiterleiste, jetzt sind es
+#     hoechstens vier Reiter ohne Scrollen): was OpenLigaDB und ESPN fuer dieses
+#     Spiel liefern -- Abruf und Fehler je Pfad (ein TypeError ohne HTTP-Status
 #     heisst Netzwerk oder CORS), Ereignistypen, Kommentar, Statistik,
 #     Aufstellung samt Positionsangaben und wann ein Spielstand je Quelle zuerst zu sehen
 #     war (Genauigkeit etwa 30 s, nur solange die View offen ist). "Messung
@@ -121,8 +123,8 @@
 #     (Tor) nach oben, darin nach Seite und bei Gleichstand nach
 #     formationPlace. Gezeichnet wird nur, wenn die Reihen genau zur Formation
 #     passen (Torwartreihe plus z. B. 3-4-2-1); sonst Liste mit Hinweis. Das
-#     belegen bisher nur die zwei Formationen oben; Ergebnis je Verein steht im
-#     Reiter Messung ("Spielfeld"). Auf dem Feld steht die Startelf (die
+#     belegen bisher nur die zwei Formationen oben; Ergebnis je Verein steht in
+#     der Messung ("Spielfeld"). Auf dem Feld steht die Startelf (die
 #     Position Eingewechselter ist ungemessen), darunter die Wechsel dieses
 #     Vereins in zeitlicher Folge und die uebrige Bank.
 #   - Text im Popup steht links: button-card zentriert Custom Fields, die
@@ -149,7 +151,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 8, alt = window.__fussball;
+          const VERSION = 9, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -491,6 +493,11 @@ button_card_templates:
             return {
               heimId, gastId, ev, kom, komEigen, stat, aufst, wechsel, keys: Object.keys(d), teams, marken, namenGesamt, namenGefunden,
               rosterFelder: spieler[0] ? Object.keys(spieler[0]) : [],
+              // Namensfelder fuer den Kurznamen auf dem Feld: Felder von athlete, drei Beispiele
+              // und alle Spieler, deren displayName nicht aus genau zwei Woertern besteht
+              athletFelder: [...new Set(spieler.flatMap(p => Object.keys(p.athlete || {})))],
+              namenBeispiel: spieler.slice(0, 3).concat(spieler.filter(p => String(p.athlete?.displayName || '').trim().split(/\s+/).length !== 2).slice(0, 8))
+                .map(p => Object.fromEntries(['displayName', 'shortName', 'fullName', 'firstName', 'lastName'].filter(k => p.athlete && p.athlete[k] != null).map(k => [k, p.athlete[k]]))),
               eingewechselt: spieler.filter(p => p.subbedIn).length, ausgewechselt: spieler.filter(p => p.subbedOut).length
             };
           };
@@ -581,17 +588,15 @@ button_card_templates:
 
             // ----- Reiter -----
             const statZeilen = STAT.filter(([n]) => det && det.stat[n] && det.stat[n].heim != null && det.stat[n].gast != null);
+            // Hoechstens vier Reiter, die Messung oeffnet der Knopf im Fuss
             const reiter = [['ticker', 'Ticker']];
             if (det && Object.values(det.teams).some(x => x.spieler.length)) reiter.push(['aufstellung', 'Aufstellung']);
             if (det && det.komEigen) reiter.push(['kommentar', 'Kommentar']);
             if (statZeilen.length) reiter.push(['statistik', 'Statistik']);
-            reiter.push(['messung', 'Messung']);
-            const tab = reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
-            // Bis 4 Reiter gleich breit; bei 5 waagerecht scrollbar statt abgeschnitten
-            const viele = reiter.length > 4;
-            const reiterHtml = `<div role="tablist" style="${viele ? 'display:flex;overflow-x:auto;scrollbar-width:none;' : `display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));`}gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
+            const tab = fb.tab === 'messung' || reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
+            const reiterHtml = `<div role="tablist" style="display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
               const an = id === tab;
-              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px ${viele ? '12px' : '2px'};${viele ? 'flex:0 0 auto;' : ''}border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
+              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px 2px;border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
             }).join('')}</div>`;
 
             // Warum ESPN fehlt (fuer Ticker und Messung)
@@ -777,6 +782,7 @@ button_card_templates:
                   positionen: det ? Object.entries(det.teams).map(([x, T]) => { const st = T.spieler.filter(p => p.start); return { seite: x, kuerzel: st.map(p => posTexte(p.pos)[0] || '?'), formationPlace: st.map(p => p.platz), ohne_gruppe: st.filter(p => !gruppe(p.pos)).length }; }) : null,
                   ereignis_namen_in_aufstellung: det ? `${det.namenGefunden}/${det.namenGesamt}` : null,
                   wechsel_beispiel: det ? det.wechsel : null, aufstellung_felder: det ? det.rosterFelder : null,
+                  athlet_felder: det ? det.athletFelder : null, namen_beispiel: det ? det.namenBeispiel : null,
                   eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null,
                   wechsel: det ? det.ev.filter(x => x.typ === 'wechsel').length : null,
                   wechsel_mit_richtung: det ? det.ev.filter(x => x.typ === 'wechsel' && x.wechsel).length : null,
@@ -807,6 +813,7 @@ button_card_templates:
                   zeile(S.wechsel_beispiel ? 'ok' : 'leer', 'Wechsel (Rohdaten)', S.wechsel_beispiel ? fb.esc(S.wechsel_beispiel.text) + ' · ' + S.wechsel_beispiel.teilnehmer.map(x => `${fb.esc(x.name)} [${fb.esc(x.felder.join(', '))}]`).join(' · ') + ` · Aufstellung: ${S.eingewechselt} eingewechselt, ${S.ausgewechselt} ausgewechselt` : '–'),
                   zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
                   zeile(S.positionen.length && S.positionen.every(x => !x.ohne_gruppe) ? 'ok' : 'leer', 'Positionen der Startelf', S.positionen.length ? S.positionen.map(x => `${x.seite}: ${fb.esc(x.kuerzel.join(', '))}${x.ohne_gruppe ? ` · ${x.ohne_gruppe} ohne Gruppe` : ''} · formationPlace ${fb.esc(x.formationPlace.join(', '))}`).join(' · ') : '–'),
+                  zeile(S.athlet_felder.length ? 'ok' : 'leer', 'Namensfelder (athlete)', fb.esc(S.athlet_felder.join(', ') || '–') + (S.namen_beispiel.length ? ' · ' + S.namen_beispiel.map(x => fb.esc(Object.entries(x).map(([k, v]) => `${k}: ${v}`).join(', '))).join(' | ') : '')),
                   zeile(S.spielfeld.length && S.spielfeld.every(x => x.feld) ? 'ok' : 'leer', 'Spielfeld', S.spielfeld.length ? S.spielfeld.map(x => `${x.seite}: ${fb.esc(x.formation || '–')} · Reihen ${x.reihen.join('·')} · ${x.feld ? 'Feld' : 'Liste'}`).join(' · ') : '–'),
                   zeile(det.namenGesamt && det.namenGefunden === det.namenGesamt ? 'ok' : 'leer', `Ereignis-Namen in der Aufstellung: ${S.ereignis_namen_in_aufstellung}`, 'Tore, Karten und Wechsel, die einem Spieler zugeordnet werden konnten'),
                   zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
@@ -837,7 +844,10 @@ button_card_templates:
             const cO = fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`], cE = fb.cache[sumKey];
             const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#8794a5;">
                 <span>Stand${cO ? ' OpenLigaDB ' + fb.zeit(new Date(cO.t)) : ''}${cE ? ' · ESPN ' + fb.zeit(new Date(cE.t)) : ''}</span>
-                ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:6px 10px;border-radius:10px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
+                <span style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button type="button" aria-pressed="${tab === 'messung'}" ${fb.tippAttr(`window.__fussball.zeige('${tab === 'messung' ? 'ticker' : 'messung'}')`)} style="font:inherit;font-size:12px;font-weight:700;color:${tab === 'messung' ? '#7fb3d5' : '#b4c0cf'};padding:6px 10px;border-radius:10px;cursor:pointer;pointer-events:auto;background:${tab === 'messung' ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'};border:1px solid ${tab === 'messung' ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.08)'};">${tab === 'messung' ? 'Messung schließen' : 'Messung'}</button>
+                  ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:6px 10px;border-radius:10px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
+                </span>
               </div>`;
             return huelle(kopf(`${s.L === 'bl1' ? '1.' : '2.'} Bundesliga · ${sp.nr}. Spieltag · ${fb.tag(a)} ${fb.zeit(a)}`) + stand + reiterHtml + inhalt + fuss);
           };
