@@ -1,3 +1,13 @@
+// ============================================================================
+// UniFi-Netzplan – custom:unifi-netzplan-card
+// ----------------------------------------------------------------------------
+// Art:           ressource
+// Bereich:       netzwerk
+// Status:        aktiv
+// Einfuegen:     nach /config/www/,
+//                Ressource /local/unifi-netzplan-card.js (JavaScript-Modul)
+// Platzhalter:   keine
+// ============================================================================
 /*
  * UniFi-Netzplan – custom:unifi-netzplan-card (Prototyp)
  *

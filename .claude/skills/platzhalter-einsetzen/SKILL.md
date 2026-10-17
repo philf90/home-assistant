@@ -9,8 +9,10 @@ Persoenliche Angaben sind im Repo anonymisiert. Die Platzhalter existieren in
 keiner Instanz. Diese Anleitung beschreibt, wie sie fuer die eigene Instanz
 aufgeloest werden, ohne dass die echten Werte ins Repo gelangen.
 
-Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
-"Platzhalter ersetzen". Zuerst dort lesen; diese Datei wiederholt sie nicht.
+Die verbindliche Liste der Platzhalter steht in `design/platzhalter.yaml`
+(id, Suchmuster, Bedeutung, wo die echte ID zu finden ist), erklaert in
+`README.md`, Abschnitt "Platzhalter ersetzen". Zuerst dort lesen; diese Datei
+wiederholt sie nicht.
 
 ## Grundregeln
 
@@ -24,9 +26,10 @@ Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
 
 ## Ablauf: Datei fuer die Instanz vorbereiten
 
-1. **Platzhalter in der Zieldatei finden.** Kopfkommentar
-   `HINWEIS PLATZHALTER` lesen und die Datei durchsuchen:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|_mac_|fin_(passat|touran)|ieee_adresse|kind_[12]' <datei>`
+1. **Platzhalter in der Zieldatei finden.** Die Zeile `Platzhalter:` im
+   Kopfblock der Datei lesen und die Datei mit den Mustern aus
+   `design/platzhalter.yaml` durchsuchen, z. B.:
+   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
@@ -68,8 +71,10 @@ Die verbindliche Liste der Platzhalter steht in `README.md`, Abschnitt
 
 - Neue oder geaenderte Karten verwenden die vorhandenen Platzhalter.
 - Taucht eine neue persoenliche Angabe auf, einen neutralen Platzhalter
-  einfuehren, den Kopfkommentar `HINWEIS PLATZHALTER` der Datei ergaenzen
-  und die Tabelle in `README.md` erweitern.
+  einfuehren: zuerst in `design/platzhalter.yaml` eintragen, dann die Zeile
+  `Platzhalter:` im Kopfblock der Datei ergaenzen und die Tabelle in
+  `README.md` erweitern. `ci/check_kopf.py` meldet Dateien, deren
+  Kopfzeile nicht zu den gefundenen Platzhaltern passt.
 - Vor jedem Commit `git diff --cached` auf echte Werte pruefen, die in
   dieser Sitzung aufgeloest wurden, und `lokal/` darf nicht gestaged sein
   (`git status --short lokal/` muss leer sein).

@@ -1,3 +1,14 @@
+<!--
+============================================================================
+Proxmox VE & PBS – Erlaeuterung zu den Mockups
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       grafana
+Status:        entwurf
+Gehoert-zu:    proxmox-mockups.html
+Platzhalter:   keine
+============================================================================
+-->
 # Mockups: Grafana-Dashboards für Proxmox VE und Proxmox Backup Server
 
 `proxmox-mockups.html` ist eine einzelne, in sich geschlossene HTML-Datei mit zwei
