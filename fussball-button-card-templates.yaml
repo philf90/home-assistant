@@ -77,9 +77,18 @@
 #     Aufstellung, Sprache und wann ein Spielstand je Quelle zuerst zu sehen
 #     war (Genauigkeit etwa 30 s, nur solange die View offen ist). "Messung
 #     kopieren" legt alles als JSON in die Zwischenablage; geht das nicht,
-#     steht das JSON darunter zum Markieren. Die Feldnamen der ESPN-Antwort
-#     stammen aus Drittdokumentation und sind ungeprueft, bis die Messung
-#     sie bestaetigt.
+#     steht das JSON darunter zum Markieren.
+#   - Gemessen 17.10.2026 an Cottbus-Nuernberg (ger.2, beendet): Abruf aus
+#     dem Browser klappt fuer scoreboard?dates= und summary (CORS), die
+#     Zuordnung ebenso. keyEvents: 15 (8 Wechsel, 5 Gelb, 2 Tore), alle mit
+#     Verein und deutscher Beschriftung; Statistik 28 Werte, die 9 gezeigten
+#     fuer beide Vereine; Aufstellung je 20 Spieler, 11 Startelf, Formation.
+#     commentary: 15 Eintraege, so viele wie keyEvents, Beispiel wortgleich mit
+#     dem Ereignistext -- in der 2. Liga also nur eine Wiederholung. Der Reiter
+#     "Kommentar" erscheint deshalb nur, wenn er Texte enthaelt, die keinem
+#     Ereignis entsprechen. lang=de lieferte denselben englischen Text.
+#     Offen: welcher Name bei Wechseln ein- und welcher ausgewechselt wird;
+#     die Messung zeigt dazu Rohdaten (wechsel_beispiel, aufstellung_felder).
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
 #     ohne Aktion pointer-events: none und verwirft am Handy den click nach
 #     touchend; Tippziele setzen pointer-events: auto und loesen ueber
@@ -102,7 +111,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 3, alt = window.__fussball;
+          const VERSION = 4, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -346,7 +355,7 @@ button_card_templates:
             const t = /(\d+)'?\s*(?:\+\s*(\d+))?/.exec(String(dv || ''));
             return t ? Number(t[1]) * 100 + Number(t[2] || 0) : (Number(sek) > 0 ? Math.floor(Number(sek) / 60) * 100 : 0);
           };
-          // Summary auswerten. Feldnamen laut Drittdokumentation, bis die Messung sie bestaetigt.
+          // Summary auswerten. Felder gemessen 17.10.2026 (siehe Kopf).
           fb.espnDetails = (d, sb) => {
             if (!d || typeof d !== 'object') return null;
             const comp = d.header?.competitions?.[0] || sb?.roh?.competitions?.[0] || {}, cs = comp.competitors || [];
@@ -372,6 +381,13 @@ button_card_templates:
             const kom = (Array.isArray(d.commentary) ? d.commentary : [])
               .map((c, i) => ({ i, min: c.time?.displayValue || '', sort: minSort(c.time?.displayValue, c.time?.value), text: c.text || c.play?.text || '' }))
               .filter(c => c.text);
+            // Kommentar, der nur Ereignistexte wiederholt (so in der 2. Liga gemessen), zaehlt nicht
+            const evTexte = new Set(ev.map(x => x.text).filter(Boolean));
+            const komEigen = kom.filter(c => !evTexte.has(c.text)).length;
+            // Rohdaten fuer die Messung: Wechsel (wer kommt, wer geht?) und Felder der Aufstellung
+            const w = (Array.isArray(d.keyEvents) ? d.keyEvents : []).find(e => /substitution/i.test(e.type?.text || ''));
+            const wechsel = w ? { text: w.text || w.shortText || '', teilnehmer: (w.participants || []).map(p => ({ name: p.athlete?.displayName || '', felder: Object.keys(p) })) } : null;
+            const spieler = (Array.isArray(d.rosters) ? d.rosters : []).flatMap(r => r.roster || []);
             const stat = {};
             (d.boxscore?.teams || []).forEach((t, i) => {
               const s = seite(t.team, t.homeAway) || 't' + i;
@@ -385,7 +401,11 @@ button_card_templates:
               seite: seite(r.team, r.homeAway), formation: r.formation || '',
               n: (r.roster || []).length, start: (r.roster || []).filter(p => p.starter).length
             }));
-            return { heimId, gastId, ev, kom, stat, aufst, keys: Object.keys(d) };
+            return {
+              heimId, gastId, ev, kom, komEigen, stat, aufst, wechsel, keys: Object.keys(d),
+              rosterFelder: spieler[0] ? Object.keys(spieler[0]) : [],
+              eingewechselt: spieler.filter(p => p.subbedIn).length, ausgewechselt: spieler.filter(p => p.subbedOut).length
+            };
           };
           fb.espnLink = e => {
             const l = (e?.roh?.links || []).find(x => /summary|gamecast|desktop/i.test((x.rel || []).join(' '))) || (e?.roh?.links || [])[0];
@@ -444,7 +464,7 @@ button_card_templates:
             // ----- Reiter -----
             const statZeilen = STAT.filter(([n]) => det && det.stat[n] && det.stat[n].heim != null && det.stat[n].gast != null);
             const reiter = [['ticker', 'Ticker']];
-            if (det && det.kom.length) reiter.push(['kommentar', 'Kommentar']);
+            if (det && det.komEigen) reiter.push(['kommentar', 'Kommentar']);
             if (statZeilen.length) reiter.push(['statistik', 'Statistik']);
             reiter.push(['messung', 'Messung']);
             const tab = reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
@@ -550,10 +570,12 @@ button_card_templates:
                   ereignisse: det ? det.ev.length : null, ereignistypen: det ? zaehle(det.ev.map(x => x.typText || '?')) : null,
                   ereignisse_ohne_zuordnung: det ? det.ev.filter(x => x.typ === 'sonst').map(x => x.typText) : null,
                   ereignisse_ohne_team: det ? det.ev.filter(x => x.typ !== 'phase' && !x.seite).length : null,
-                  kommentar: det ? det.kom.length : null, kommentar_beispiel: det ? probe({ kom: det.kom, ev: [] }) : null,
+                  kommentar: det ? det.kom.length : null, kommentar_eigen: det ? det.komEigen : null, kommentar_beispiel: det ? probe({ kom: det.kom, ev: [] }) : null,
                   ereignis_beispiel: det && det.ev[0] ? kurz(det.ev[0].text, 160) : null,
                   statistik: det ? Object.keys(det.stat) : null, statistik_beide_seiten: statZeilen.map(x => x[0]),
-                  aufstellung: det ? det.aufst : null, heim_id: det ? det.heimId : null, gast_id: det ? det.gastId : null
+                  aufstellung: det ? det.aufst : null, heim_id: det ? det.heimId : null, gast_id: det ? det.gastId : null,
+                  wechsel_beispiel: det ? det.wechsel : null, aufstellung_felder: det ? det.rosterFelder : null,
+                  eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null
                 },
                 sprache_de: {
                   pfad: dePfad || null, geladen: !!fb.cache[deKey], fehler: fb.fehlerPfad[deKey] || null,
@@ -579,7 +601,8 @@ button_card_templates:
                 : !det ? zeile('offen', 'Abruf', 'läuft …')
                 : [zeile('ok', 'Abruf', 'ok · Schlüssel: ' + fb.esc(S.schluessel.join(', '))),
                   zeile(S.ereignisse ? 'ok' : 'leer', `Ereignisse (keyEvents): ${S.ereignisse}`, liste(S.ereignistypen) + (S.ereignisse_ohne_zuordnung.length ? ' · ohne deutsche Beschriftung: ' + fb.esc(S.ereignisse_ohne_zuordnung.join(', ')) : '') + (S.ereignisse_ohne_team ? ` · ${S.ereignisse_ohne_team} ohne Vereinszuordnung` : '')),
-                  zeile(S.kommentar ? 'ok' : 'leer', `Kommentar: ${S.kommentar}`, fb.esc(S.kommentar_beispiel || '–')),
+                  zeile(S.kommentar_eigen ? 'ok' : 'leer', `Kommentar: ${S.kommentar}, davon ${S.kommentar_eigen} ohne passendes Ereignis`, fb.esc(S.kommentar_beispiel || '–') + (S.kommentar && !S.kommentar_eigen ? ' · nur Wiederholung der Ereignisse, Reiter ausgeblendet' : '')),
+                  zeile(S.wechsel_beispiel ? 'ok' : 'leer', 'Wechsel (Rohdaten)', S.wechsel_beispiel ? fb.esc(S.wechsel_beispiel.text) + ' · ' + S.wechsel_beispiel.teilnehmer.map(x => `${fb.esc(x.name)} [${fb.esc(x.felder.join(', '))}]`).join(' · ') + ` · Aufstellung: ${S.eingewechselt} eingewechselt, ${S.ausgewechselt} ausgewechselt` : '–'),
                   zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
                   zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
               const deZeile = !e ? '' : D.fehler ? zeile('fehler', 'lang=de', fb.esc(D.fehler))
