@@ -115,6 +115,16 @@
 #     Ereignistext nennt den Eingewechselten). formationPlace folgt nicht den
 #     Reihen (3-4-2-1: RM 2, LM 3, Abwehr 4-6) und taugt deshalb nicht zum
 #     Sortieren nach Seite.
+#   - Spielfeld (Variante B der Entwurfsseite "Aufstellung Spielfeld"): Feld ist
+#     die Startansicht des Reiters, umschaltbar auf die Liste (fb.aufAnsicht,
+#     gilt bis zum Neuladen). Jede belegte Tiefe wird eine Reihe, von unten
+#     (Tor) nach oben, darin nach Seite und bei Gleichstand nach
+#     formationPlace. Gezeichnet wird nur, wenn die Reihen genau zur Formation
+#     passen (Torwartreihe plus z. B. 3-4-2-1); sonst Liste mit Hinweis. Das
+#     belegen bisher nur die zwei Formationen oben; Ergebnis je Verein steht im
+#     Reiter Messung ("Spielfeld"). Auf dem Feld steht die Startelf (die
+#     Position Eingewechselter ist ungemessen), darunter die Wechsel dieses
+#     Vereins in zeitlicher Folge und die uebrige Bank.
 #   - Text im Popup steht links: button-card zentriert Custom Fields, die
 #     Huelle setzt deshalb text-align: left.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
@@ -139,7 +149,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 7, alt = window.__fussball;
+          const VERSION = 8, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -301,6 +311,8 @@ button_card_templates:
           // ---------- Spiel-Popup (#fussball-spiel), Muster wie #flug im Flugradar ----------
           const HASH = '#fussball-spiel';
           fb.sel = null; fb.tab = 'ticker'; fb.kopiert = ''; fb.messwerte = null;
+          // Ansicht im Reiter Aufstellung (feld oder liste), gilt bis zum Neuladen fuer alle Spiele
+          fb.aufAnsicht = 'feld';
           fb.offen = () => !!fb.sel && location.hash === HASH;
           // Antippen wie fr.tipp im Flugradar: button-card ruft auf ha-card bei touchend
           // preventDefault() auf, dann kommt am Handy kein click an. touchend loest nur bei
@@ -341,6 +353,7 @@ button_card_templates:
           };
           fb.zeige = tab => { fb.tab = tab; fb.kopiert = ''; fb.neu(); };
           fb.zeigeSeite = seite => { fb.aufSeite = seite; fb.neu(); };
+          fb.zeigeAnsicht = a => { fb.aufAnsicht = a; fb.neu(); };
           // Schliessen wie removeHash(true) in Bubble Card (siehe fr.schliesse im Flugradar)
           fb.schliesse = () => {
             if (!location.hash) return;
@@ -502,6 +515,20 @@ button_card_templates:
             const a = String(posTexte(pos)[0] || '').toUpperCase();
             return /-L$/.test(a) ? 1 : /-R$/.test(a) ? 3 : /^L/.test(a) ? 0 : /^R/.test(a) ? 4 : 2;
           };
+          const platz = p => { const n = Number(p.platz); return isFinite(n) && p.platz !== null && p.platz !== '' ? n : 99; };
+          // Reihen fuers Spielfeld: je belegte Tiefe eine Reihe (Tor zuerst), darin nach Seite, dann formationPlace
+          const reihen = start => {
+            const r = new Map();
+            start.forEach(p => { const t = tiefe(p.pos); if (!r.has(t)) r.set(t, []); r.get(t).push(p); });
+            return [...r.keys()].sort((a, b) => a - b).map(t => r.get(t).sort((a, b) => quer(a.pos) - quer(b.pos) || platz(a) - platz(b)));
+          };
+          // Feld nur, wenn die Reihen genau zur Formation passen (Torwartreihe + Formation), sonst Liste
+          const feldPruefung = T => {
+            const start = T.spieler.filter(p => p.start), ist = reihen(start).map(x => x.length);
+            const soll = /^\d+(-\d+)+$/.test(T.formation || '') ? [1, ...T.formation.split('-').map(Number)] : null;
+            return { ist, soll, ok: !!soll && start.length > 0 && start.every(p => gruppe(p.pos)) && ist.join() === soll.join() };
+          };
+          const nachname = n => { const w = String(n || '').trim().split(/\s+/); return w.length > 1 ? w.slice(1).join(' ') : w[0]; };
 
           // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
           const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
@@ -615,7 +642,7 @@ button_card_templates:
               return `<div style="display:flex;flex-direction:column;gap:4px;">${fb.hinweis('Kommentar von ESPN in der gelieferten Sprache')}${l.map(x => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);"><span style="font-size:12px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span><span style="font-size:12.5px;color:#f2f5f8;min-width:0;">${fb.esc(x.text)}</span></div>`).join('')}</div>`;
             };
 
-            // ----- Aufstellung (Variante A) -----
+            // ----- Aufstellung: Spielfeld (Variante B) oder Liste (Variante A) -----
             const aufstellung = () => {
               const seiten = ['heim', 'gast'].filter(x => det.teams[x] && det.teams[x].spieler.length);
               let sw = fb.aufSeite;
@@ -639,7 +666,6 @@ button_card_templates:
               };
               const titel = t => `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8794a5;padding:6px 2px 0;">${t}</div>`;
               const start = T.spieler.filter(p => p.start), bank = T.spieler.filter(p => !p.start);
-              const platz = p => { const n = Number(p.platz); return isFinite(n) && p.platz !== null && p.platz !== '' ? n : 99; };
               const nummer = p => { const n = Number(p.nr); return isFinite(n) && p.nr !== '' ? n : 999; };
               const gruppiert = start.length && start.every(p => gruppe(p.pos));
               const startHtml = gruppiert
@@ -652,15 +678,46 @@ button_card_templates:
                 if (ea != null || eb != null) return ea == null ? 1 : eb == null ? -1 : ea - eb;
                 return nummer(a) - nummer(b);
               });
+              // Spielfeld: Startelf in den Reihen der Formation, Anker ist die Mitte des Nummernkreises
+              const pr = feldPruefung(T), feld = pr.ok && fb.aufAnsicht !== 'liste';
+              const feldHtml = () => {
+                const R = reihen(start), n = R.length;
+                const punkte = R.map((reihe, ri) => {
+                  const y = 86 - ri * (78 / (n - 1)), k = reihe.length, abst = k > 1 ? Math.min(30, 88 / k) : 0;
+                  return reihe.map((p, i) => {
+                    const mk = markenVon(p).filter(x => x.typ !== 'ein').map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;padding:0 4px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:linear-gradient(${c}1f,${c}1f),#10151d;border:1px solid ${c}3d;">${ic.replace(/width="11" height="11"/, 'width="9" height="9"')}${fb.esc(x.text)}</span>`; }).join('');
+                    return `<div style="position:absolute;left:${50 + (i - (k - 1) / 2) * abst}%;top:${y}%;width:${k > 1 ? abst : 30}%;transform:translate(-50%,-15px);display:flex;flex-direction:column;align-items:center;gap:2px;">
+                      <span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;color:#f2f5f8;background:${unser ? '#e30613' : '#3a4453'};border:1.5px solid rgba(255,255,255,0.24);box-sizing:border-box;">${fb.esc(p.nr)}</span>
+                      <span style="font-size:10.5px;font-weight:700;color:#f2f5f8;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${fb.esc(nachname(p.name))}</span>
+                      ${mk ? `<span style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;">${mk}</span>` : ''}</div>`;
+                  }).join('');
+                }).join('');
+                const linien = '<svg viewBox="0 0 68 86" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;"><g fill="none" stroke="rgba(166,212,158,0.24)" stroke-width="0.45"><rect x="1.5" y="1.5" width="65" height="83"/><path d="M24.85 1.5 A 9.15 9.15 0 0 0 43.15 1.5"/><rect x="13.85" y="68" width="40.3" height="16.5"/><rect x="24.85" y="81" width="18.3" height="3.5"/></g></svg>';
+                // Wechsel dieses Vereins in zeitlicher Folge; Bank ohne die Eingewechselten
+                const namen = new Set(T.spieler.map(p => p.name));
+                const wl = det.ev.filter(x => x.typ === 'wechsel' && (x.seite ? x.seite === sw : x.namen.some(nn => namen.has(nn)))).sort((a, b) => a.sort - b.sort || a.i - b.i);
+                const pfeil = (typ, t, c) => `<span style="display:flex;align-items:center;gap:5px;min-width:0;color:${c};"><span style="color:${MK[typ][0]};display:inline-flex;">${MK[typ][1]}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(t)}</span></span>`;
+                const wechselHtml = wl.map(x => `<div style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);font-size:12.5px;">
+                    <span style="font-weight:800;color:#7fb3d5;font-variant-numeric:tabular-nums;white-space:nowrap;">${fb.esc(x.min)}</span>
+                    <span style="display:flex;flex-direction:column;min-width:0;">${x.wechsel ? pfeil('ein', x.wechsel.ein, '#f2f5f8') + pfeil('aus', x.wechsel.aus, '#8794a5') : `<span style="color:#b4c0cf;">${fb.esc(x.namen.join(' · '))}</span>`}</span></div>`).join('');
+                const rest = bank.filter(p => !p.ein).sort((a, b) => nummer(a) - nummer(b));
+                return `<div style="position:relative;width:100%;height:0;padding-bottom:126.5%;border-radius:16px;overflow:hidden;background:rgba(166,212,158,0.12);border:1px solid rgba(166,212,158,0.24);box-sizing:border-box;">${linien}${punkte}</div>
+                  ${wl.length ? titel('Wechsel') + wechselHtml : ''}
+                  ${rest.length ? titel('Bank') + `<div style="font-size:12.5px;color:#b4c0cf;padding:0 2px;line-height:1.6;">${rest.map(p => `<b style="color:#f2f5f8;font-variant-numeric:tabular-nums;">${fb.esc(p.nr)}</b> ${fb.esc(p.name)}`).join(' · ')}</div>` : ''}`;
+              };
+              const ansichtKnopf = !pr.ok ? '' : `<span style="display:inline-flex;gap:3px;padding:3px;border-radius:11px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);">${[['feld', 'Feld'], ['liste', 'Liste']].map(([id, n]) => {
+                const an = (id === 'feld') === feld;
+                return `<button type="button" aria-pressed="${an}" ${fb.tippAttr(`window.__fussball.zeigeAnsicht('${id}')`)} style="font:inherit;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};">${n}</button>`;
+              }).join('')}</span>`;
               const wahl = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">${['heim', 'gast'].map(x => {
                 const an = x === sw, n = x === 'heim' ? m.heim : m.gast, ok = seiten.includes(x);
                 return `<button type="button" aria-pressed="${an}" ${ok ? fb.tippAttr(`window.__fussball.zeigeSeite('${x}')`) : 'disabled'} style="font:inherit;font-size:12.5px;font-weight:700;padding:8px 6px;border-radius:12px;cursor:${ok ? 'pointer' : 'default'};pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.06)'};">${fb.wappen(x === 'heim' ? m.heim_logo : m.gast_logo, n, 18)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(n)}</span></button>`;
               }).join('')}</div>`;
               return `<div style="display:flex;flex-direction:column;gap:6px;">
                 ${wahl}
-                ${T.formation ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#8794a5;padding:4px 2px 0;"><span>Formation</span><b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;">${fb.esc(T.formation)}</b></div>` : ''}
-                ${startHtml}
-                ${bankSortiert.length ? titel('Bank') + bankSortiert.map(zeileSp).join('') : ''}
+                ${T.formation ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:#8794a5;padding:4px 2px 0;min-height:30px;"><span>Formation <b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;margin-left:4px;">${fb.esc(T.formation)}</b></span>${ansichtKnopf}</div>` : ''}
+                ${gruppiert && !pr.ok && pr.soll ? fb.hinweis(`Kein Spielfeld: Reihen ${pr.ist.join('·')} passen nicht zur Formation ${fb.esc(T.formation)}, deshalb die Liste.`) : ''}
+                ${feld ? feldHtml() : startHtml + (bankSortiert.length ? titel('Bank') + bankSortiert.map(zeileSp).join('') : '')}
                 ${!gruppiert && start.length ? fb.hinweis('Positionen nicht zuzuordnen, Startelf ungegliedert (siehe Messung).') : ''}
               </div>`;
             };
@@ -722,7 +779,9 @@ button_card_templates:
                   wechsel_beispiel: det ? det.wechsel : null, aufstellung_felder: det ? det.rosterFelder : null,
                   eingewechselt: det ? det.eingewechselt : null, ausgewechselt: det ? det.ausgewechselt : null,
                   wechsel: det ? det.ev.filter(x => x.typ === 'wechsel').length : null,
-                  wechsel_mit_richtung: det ? det.ev.filter(x => x.typ === 'wechsel' && x.wechsel).length : null
+                  wechsel_mit_richtung: det ? det.ev.filter(x => x.typ === 'wechsel' && x.wechsel).length : null,
+                  // Spielfeld: berechnete Reihen (mit Torwartreihe) gegen die Formation
+                  spielfeld: det ? Object.entries(det.teams).map(([x, T]) => { const r = feldPruefung(T); return { seite: x, formation: T.formation, reihen: r.ist, feld: r.ok }; }) : null
                 },
                 zuerst_gesehen: gesehen
               };
@@ -748,6 +807,7 @@ button_card_templates:
                   zeile(S.wechsel_beispiel ? 'ok' : 'leer', 'Wechsel (Rohdaten)', S.wechsel_beispiel ? fb.esc(S.wechsel_beispiel.text) + ' · ' + S.wechsel_beispiel.teilnehmer.map(x => `${fb.esc(x.name)} [${fb.esc(x.felder.join(', '))}]`).join(' · ') + ` · Aufstellung: ${S.eingewechselt} eingewechselt, ${S.ausgewechselt} ausgewechselt` : '–'),
                   zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
                   zeile(S.positionen.length && S.positionen.every(x => !x.ohne_gruppe) ? 'ok' : 'leer', 'Positionen der Startelf', S.positionen.length ? S.positionen.map(x => `${x.seite}: ${fb.esc(x.kuerzel.join(', '))}${x.ohne_gruppe ? ` · ${x.ohne_gruppe} ohne Gruppe` : ''} · formationPlace ${fb.esc(x.formationPlace.join(', '))}`).join(' · ') : '–'),
+                  zeile(S.spielfeld.length && S.spielfeld.every(x => x.feld) ? 'ok' : 'leer', 'Spielfeld', S.spielfeld.length ? S.spielfeld.map(x => `${x.seite}: ${fb.esc(x.formation || '–')} · Reihen ${x.reihen.join('·')} · ${x.feld ? 'Feld' : 'Liste'}`).join(' · ') : '–'),
                   zeile(det.namenGesamt && det.namenGefunden === det.namenGesamt ? 'ok' : 'leer', `Ereignis-Namen in der Aufstellung: ${S.ereignis_namen_in_aufstellung}`, 'Tore, Karten und Wechsel, die einem Spieler zugeordnet werden konnten'),
                   zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
               const gesZeilen = gesehen.length ? gesehen.map(x => zeile(x.oldb && x.espn ? 'ok' : 'offen', 'Stand ' + x.stand,
