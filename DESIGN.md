@@ -55,7 +55,10 @@ Icon in der vollen Farbe.
 **Gefüllte Kachel** – für „an/läuft“, wie die Lichtkachel: Verlauf von der
 aufgehellten zur vollen Farbe, Schrift und Icon in der passenden dunklen Farbe
 (`schrift_auf_fuellung` in der Palette), Rand und Leuchten
-(`0 0 14px -3px`) in der Farbe mit 0,5 Deckkraft.
+(`0 0 14px -3px`) in der Farbe mit 0,5 Deckkraft. Dieselbe Füllung markiert
+auch einen kritischen Messwert, etwa eine Raumtemperatur über 30 °C (siehe
+„Temperaturstufen“). Rot hat in der Palette keine aufgehellte Stufe und bleibt
+deshalb ohne Verlauf.
 
 | Füllung | Schrift | Kontrast |
 |---|---|---|
@@ -110,6 +113,29 @@ Text-Weiß `#f2f5f8`.
 
 Koralle-Orange liegt nah an Amber und Rot. Wer sie verwendet, schreibt die Stufe
 immer auch als Text dazu.
+
+### Temperaturstufen
+
+Raumtemperaturen bekommen Statusfarben nach einem grünen Bereich je Raum, keinen
+Farbverlauf (`temperaturen-button-card-v2.yaml`, Variablen `t_min`/`t_max`):
+
+| Stufe | Farbe | Darstellung |
+|---|---|---|
+| unter dem Bereich | Blau `#7fb3d5` | getönte Pille (0,12 / 0,24) |
+| im Bereich | Grün `#a6d49e` | getönte Pille |
+| über dem Bereich bis 30 °C | Amber `#e6b566` | getönte Pille |
+| über 30 °C | Rot `#f0736a` | gefüllte Pille, Schrift `#3d1512` (5,6:1) |
+| Nebenraum ohne Bereich | Hellgrau `#b4c0cf` | getönte Pille, keine Bewertung |
+| Außentemperatur | Wolkengrau `#cdd6e0` | getönte Pille, keine Bewertung |
+| keine Daten | `#8794a5` | ohne Tönung, Rand Weiß 0,06 |
+
+Die Bereiche folgen den Richtwerten des Umweltbundesamts (Wohnen 20 °C,
+Schlafen 17–20 °C, Küche 18–20 °C, Bad 20–23 °C) mit dem WHO-Mindestwert
+18 °C als Untergrenze für Kinderzimmer. Rot beginnt bei 30 °C, weil die ASR A3.5
+dort Maßnahmen verlangt; die 26-°C-Empfehlung der ASR deckt Amber ab.
+Koralle-Orange entfällt hier, weil in der Pille kein Platz für die Stufe als
+Text ist. Rote Schrift auf roter Tönung erreicht als 13,5-px-Schrift nur
+4,37:1 auf `#1b2231`, deshalb ist die kritische Stufe gefüllt.
 
 ### Akzente und Bereiche
 
