@@ -17,6 +17,8 @@
 #   fussball_fck_kopf / fussball_fck              Lieblingsverein (F1)
 #   fussball_spieltag_kopf / fussball_spieltag    Spieltag als Liste (S1)
 #   fussball_tabelle_kopf / fussball_tabelle      Tabelle mit Zonen (T1)
+#   fussball_spiel       Inhalt des Bubble-Card-Popups #fussball-spiel
+#                        (Ticker, Kommentar, Statistik, Messung)
 #   Hervorhebung des Lieblingsvereins in Liste und Tabelle nach H1
 #   (FCK-Rot als Flaeche + Kante, ohne Zonenstrich).
 #
@@ -54,10 +56,43 @@
 #   durch Web-Apps, die die API direkt per fetch nutzen. Schlaegt der Abruf
 #   fehl, zeigt die Karte den Fehler statt leerer Flaechen.
 #
+# Spiel-Popup (#fussball-spiel), Muster wie #flug im Flugradar:
+#   - Antippen von Spielstand (Vereinskarte) oder Spielzeile (Spieltag) merkt
+#     das Spiel im Browser (fb.sel, je Geraet) und setzt den Hash per
+#     history.pushState + location-changed; Bubble Card oeffnet das Popup.
+#     Antippbar ist jedes Spiel ab Anstoss (live, beendet, offen), damit sich
+#     die Messung auch nach Spielende ausfuehren laesst.
+#   - Tore: aus OpenLigaDB (dieselben wie in der Karte). Karten, Wechsel,
+#     Spielphasen, Kommentar und Statistik: ESPN summary?event=<id>
+#     (inoffiziell). Die Event-ID kommt aus scoreboard?dates=JJJJMMTT des
+#     Anstosstags (UTC; deutsche Anstosszeiten liegen auch in US-Zeit am
+#     selben Tag), Zuordnung wie bei der Minute. Hat ESPN mehr Tore als
+#     OpenLigaDB, erscheinen die fehlenden mit Quelle "ESPN".
+#   - Abgerufen wird nur, solange das Popup offen ist: Spieltag und
+#     Spieldetails alle 45 s (live) bzw. 5-15 min, die Sprachprobe (lang=de)
+#     nur im Reiter "Messung" alle 10 min.
+#   - Messung (Reiter "Messung"): was OpenLigaDB und ESPN fuer dieses Spiel
+#     liefern -- Abruf und Fehler je Pfad (ein TypeError ohne HTTP-Status
+#     heisst Netzwerk oder CORS), Ereignistypen, Kommentar, Statistik,
+#     Aufstellung, Sprache und wann ein Spielstand je Quelle zuerst zu sehen
+#     war (Genauigkeit etwa 30 s, nur solange die View offen ist). "Messung
+#     kopieren" legt alles als JSON in die Zwischenablage; geht das nicht,
+#     steht das JSON darunter zum Markieren. Die Feldnamen der ESPN-Antwort
+#     stammen aus Drittdokumentation und sind ungeprueft, bis die Messung
+#     sie bestaetigt.
+#   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
+#     ohne Aktion pointer-events: none und verwirft am Handy den click nach
+#     touchend; Tippziele setzen pointer-events: auto und loesen ueber
+#     fb.tipp bei touchend aus. Links oeffnen per window.open.
+#   - Kopf und Schliessen-Knopf rendert fussball_spiel selbst (Bubble zeigt
+#     keinen Kopf, weil die Auswahl im Browser liegt).
+#
 # Wappen: teamIconUrl aus OpenLigaDB (meist Wikimedia-SVG). Bis das Bild
 # geladen ist bzw. falls es fehlt, stehen die Initialen im Kreis.
 #
-# Voraussetzung: custom:button-card (HACS, getestet mit v7.0.1).
+# Voraussetzung: custom:button-card (HACS, getestet mit v7.0.1),
+#                fuer das Popup custom:bubble-card (Muster aus dem Flugradar,
+#                dort mit v3.4.1).
 # ============================================================================
 button_card_templates:
   fussball_daten:
@@ -67,7 +102,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 2, alt = window.__fussball;
+          const VERSION = 3, alt = window.__fussball;
           if (alt && alt.version === VERSION) return alt;
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -75,11 +110,12 @@ button_card_templates:
           // OpenLigaDB: Spielplan, Stand, Tabelle. ESPN (inoffiziell): nur die Spielminute.
           const BASIS = { oldb: 'https://api.openligadb.de/', espn: 'https://site.api.espn.com/apis/site/v2/sports/soccer/' };
           const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
-          const fb = { version: VERSION, F, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, live: {}, subs: new Map() };
+          const fb = { version: VERSION, F, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
           fb.saison = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
           // Abruf mit Cache: liefert sofort den letzten Stand und holt im Hintergrund neu,
           // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad.
           // ESPN-Fehler stehen getrennt in fehlerEspn: ohne ESPN fehlt nur die Minute.
+          // fehlerPfad haelt den letzten Fehler je Pfad (fuer die Messung im Spiel-Popup).
           fb.get = (pfad, maxAlter, quelle = 'oldb') => {
             const key = quelle === 'oldb' ? pfad : quelle + ':' + pfad;
             const c = fb.cache[key], now = Date.now();
@@ -87,9 +123,10 @@ button_card_templates:
               fb.laeuft[key] = true;
               fetch(BASIS[quelle] + pfad)
                 .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-                .then(d => { fb.cache[key] = { t: Date.now(), d }; if (quelle === 'oldb') fb.fehler = null; else fb.fehlerEspn = null; })
+                .then(d => { fb.cache[key] = { t: Date.now(), d }; delete fb.fehlerPfad[key]; if (quelle === 'oldb') fb.fehler = null; else fb.fehlerEspn = null; })
                 .catch(e => {
                   const t = (e && e.message) || String(e);
+                  fb.fehlerPfad[key] = (e && e.name && e.name !== 'Error' ? e.name + ': ' : '') + t;
                   if (quelle === 'oldb') fb.fehler = t; else fb.fehlerEspn = t;
                   fb.sperre[key] = Date.now() + (quelle === 'oldb' ? MIN : 5 * MIN);
                 })
@@ -126,11 +163,28 @@ button_card_templates:
             if (!Array.isArray(d)) return null;
             const spiele = d.map(fb.kompakt), now = Date.now();
             fb.live[L] = spiele.some(m => { const a = Date.parse(m.anstoss); return !m.beendet && now >= a - 5 * MIN && now <= a + 150 * MIN; });
+            spiele.forEach(m => { if (fb.status(m) === 'live') fb.sieh('oldb', m.id, m.th, m.tg); });
             return { nr: gr.groupOrderID, spiele };
+          };
+          // Rohdaten eines Spiels aus dem Spieltag (fuer die Messung: Kommentarfeld, letzte Aenderung)
+          fb.rohSpiel = (L, nr, id) => {
+            const c = fb.cache[`getmatchdata/${L}/${fb.saison()}/${nr}`];
+            return c && Array.isArray(c.d) ? c.d.find(x => x.matchID === id) : null;
+          };
+          // Erstes Auftauchen eines Spielstands je Quelle (Messung des Verzugs). Gezaehlt wird
+          // beim Zeichnen, also etwa alle 30 s und nur, solange die View offen ist; 0:0 zaehlt nicht.
+          fb.gesehen = {};
+          fb.sieh = (q, id, h, g) => {
+            h = Number(h); g = Number(g);
+            if (!isFinite(h) || !isFinite(g) || h + g === 0) return;
+            const k = `${id}:${h}:${g}`;
+            fb.gesehen[k] = fb.gesehen[k] || {};
+            if (!fb.gesehen[k][q]) fb.gesehen[k][q] = Date.now();
           };
           // Spielminute laufender Spiele von ESPN (ger.1 / ger.2), nur solange die Liga live ist.
           // Zuordnung zu OpenLigaDB ueber Anstoss (+-10 min) und Vereinsnamen; ESPN benennt
           // einige Vereine englisch (gemessen 11.10.2026: "FC Cologne"), daher Aliasse.
+          const SLUG = { bl1: 'ger.1', bl2: 'ger.2' };
           const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss');
           const ALIAS = { cologne: 'koln', munich: 'munchen', nuremberg: 'nurnberg', hanover: 'hannover', brunswick: 'braunschweig' };
           const STOPP = new Set(['fc', 'sc', 'sv', 'vfl', 'vfb', 'tsg', 'fsv', 'ssv', 'spvgg', 'sg', 'tsv', 'bsc', 'dsc', 'borussia', 'eintracht', 'rb', 'de', 'der']);
@@ -140,23 +194,25 @@ button_card_templates:
             return w;
           };
           const passt = (a, b) => { let n = 0; a.forEach(x => b.forEach(y => { if (x === y || (x.length >= 5 && y.length >= 5 && (x.includes(y) || y.includes(x)))) n++; })); return n; };
-          fb.espn = L => {
-            if (!fb.live[L]) return null;
-            const d = fb.get(`${L === 'bl1' ? 'ger.1' : 'ger.2'}/scoreboard`, 45e3, 'espn');
+          // Tore stehen im Scoreboard als Text ("1"), in manchen Antworten als Objekt
+          const tor = s => s && typeof s === 'object' ? (s.displayValue ?? s.value) : s;
+          const espnEvents = d => {
             if (!d || !Array.isArray(d.events)) return null;
             return d.events.map(e => {
               const c = e.competitions?.[0] || {}, t = c.competitors || [];
-              const h = t.find(x => x.homeAway === 'home')?.team || {}, g = t.find(x => x.homeAway === 'away')?.team || {};
+              const hc = t.find(x => x.homeAway === 'home') || {}, gc = t.find(x => x.homeAway === 'away') || {};
+              const h = hc.team || {}, g = gc.team || {};
               return {
+                id: e.id, roh: e, sh: tor(hc.score), sg: tor(gc.score),
                 anstoss: Date.parse(e.date), status: e.status?.type?.name || '', zustand: e.status?.type?.state || '',
                 uhr: e.status?.displayClock || '', kurz: e.status?.type?.shortDetail || '',
                 heim: woerter([h.displayName, h.shortDisplayName, h.location]), gast: woerter([g.displayName, g.shortDisplayName, g.location])
               };
             });
           };
-          // Minute fuer ein OpenLigaDB-Spiel: "67'", "45'+2'" oder "HZ"; null, wenn unbekannt
-          fb.minute = (L, m) => {
-            const ev = fb.espn(L);
+          fb.espn = L => fb.live[L] ? espnEvents(fb.get(`${SLUG[L]}/scoreboard`, 45e3, 'espn')) : null;
+          // Bestes ESPN-Spiel zu einem OpenLigaDB-Spiel
+          const paar = (ev, m) => {
             if (!ev) return null;
             const a = Date.parse(m.anstoss), wh = woerter([m.heim, m.heim_voll]), wg = woerter([m.gast, m.gast_voll]);
             let best = null, bestN = 0;
@@ -165,10 +221,16 @@ button_card_templates:
               const n = passt(wh, e.heim) + passt(wg, e.gast);
               if (n > bestN) { best = e; bestN = n; }
             });
-            if (!best) return null;
-            if (best.status === 'STATUS_HALFTIME' || /^(HT|HZ)$/i.test(best.kurz)) return 'HZ';
-            return best.zustand === 'in' && /\d/.test(best.uhr) ? best.uhr : null;
+            if (best && best.zustand === 'in') fb.sieh('espn', m.id, best.sh, best.sg);
+            return best;
           };
+          const uhr = e => {
+            if (!e) return null;
+            if (e.status === 'STATUS_HALFTIME' || /^(HT|HZ)$/i.test(e.kurz)) return 'HZ';
+            return e.zustand === 'in' && /\d/.test(e.uhr) ? e.uhr : null;
+          };
+          // Minute fuer ein OpenLigaDB-Spiel: "67'", "45'+2'" oder "HZ"; null, wenn unbekannt
+          fb.minute = (L, m) => uhr(paar(fb.espn(L), m));
           // Tabelle einer Liga
           fb.tabelle = L => {
             const d = fb.get(`getbltable/${L}/${fb.saison()}`, fb.live[L] ? MIN : 15 * MIN);
@@ -194,6 +256,367 @@ button_card_templates:
                 }
               });
             return { form: form.slice(-5), naechstes };
+          };
+          // ---------- Spiel-Popup (#fussball-spiel), Muster wie #flug im Flugradar ----------
+          const HASH = '#fussball-spiel';
+          fb.sel = null; fb.tab = 'ticker'; fb.kopiert = ''; fb.messwerte = null;
+          fb.offen = () => !!fb.sel && location.hash === HASH;
+          // Antippen wie fr.tipp im Flugradar: button-card ruft auf ha-card bei touchend
+          // preventDefault() auf, dann kommt am Handy kein click an. touchend loest nur bei
+          // einem echten Tipp aus (< 10 px Bewegung, < 800 ms), damit Scrollen nichts oeffnet;
+          // der folgende click wird ignoriert.
+          fb.tipp = (e, aktion) => {
+            e.stopPropagation();
+            if (e.type === 'touchstart') {
+              const t = e.touches && e.touches[0];
+              fb._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+              return;
+            }
+            if (e.type === 'touchend') {
+              const t = e.changedTouches && e.changedTouches[0], st = fb._tipp;
+              fb._tipp = null;
+              if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+              if (e.cancelable) e.preventDefault();
+              fb._tippZeit = Date.now();
+              if (aktion) aktion();
+              return;
+            }
+            if (e.type === 'click') {
+              e.preventDefault();
+              if (Date.now() - (fb._tippZeit || 0) < 700) return;
+              if (aktion) aktion();
+            }
+          };
+          fb.tippAttr = js => `ontouchstart="window.__fussball.tipp(event)" ontouchend="window.__fussball.tipp(event,()=>{${js}})" onclick="window.__fussball.tipp(event,()=>{${js}})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${js}}"`;
+          fb.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"';
+          fb.antippbar = m => fb.status(m) !== 'pre';
+          fb.waehle = (L, id) => {
+            fb.sel = { L, id: Number(id) }; fb.tab = 'ticker'; fb.kopiert = '';
+            if (location.hash !== HASH) {
+              history.pushState(null, '', location.pathname + location.search + HASH);
+              window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+            }
+            fb.neu();
+          };
+          fb.zeige = tab => { fb.tab = tab; fb.kopiert = ''; fb.neu(); };
+          // Schliessen wie removeHash(true) in Bubble Card (siehe fr.schliesse im Flugradar)
+          fb.schliesse = () => {
+            if (!location.hash) return;
+            history.replaceState(history.state, '', location.href.split('#')[0]);
+            const ev = new Event('location-changed');
+            ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
+            window.dispatchEvent(ev);
+          };
+          fb.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fb.tippAttr('window.__fussball.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#b4c0cf;display:grid;place-items:center;cursor:pointer;pointer-events:auto;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+          fb.pfeil = '<svg viewBox="0 0 24 24" width="12" height="12" style="display:block;"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          fb.kopiere = () => {
+            const t = JSON.stringify(fb.messwerte, null, 2);
+            console.info('Fussball-Messung', fb.messwerte);
+            const ok = () => { fb.kopiert = 'ok'; fb.neu(); }, nein = () => { fb.kopiert = 'nein'; fb.neu(); };
+            try { navigator.clipboard.writeText(t).then(ok, nein); } catch (e) { nein(); }
+          };
+
+          // ESPN zum Spiel: Scoreboard des Anstosstags (UTC-Datum) und Spieldetails
+          fb.espnSpiel = (L, m) => {
+            const a = new Date(m.anstoss), tag = (isNaN(a) ? new Date() : a).toISOString().slice(0, 10).replace(/-/g, '');
+            const pfad = `${SLUG[L]}/scoreboard?dates=${tag}`;
+            const e = paar(espnEvents(fb.get(pfad, fb.status(m) === 'live' ? 45e3 : 15 * MIN, 'espn')), m);
+            return { e, pfad, geladen: !!fb.cache['espn:' + pfad], fehler: fb.fehlerPfad['espn:' + pfad] || '' };
+          };
+          fb.summaryPfad = (L, id, lang) => `${SLUG[L]}/summary?event=${encodeURIComponent(id)}${lang ? `&lang=${lang}&region=${lang}` : ''}`;
+          // Ereignistyp aus type.text (englisch), Reihenfolge zaehlt
+          const EREIGNIS = [
+            [/disallowed|no goal/i, 'phase', 'Tor aberkannt'],
+            [/own goal/i, 'tor', 'Eigentor'],
+            [/penalty.*scored/i, 'tor', 'Tor (Elfmeter)'],
+            [/penalty.*(miss|saved)/i, 'elf', 'Elfmeter vergeben'],
+            [/goal/i, 'tor', 'Tor'],
+            [/second yellow|yellow.*red/i, 'rot', 'Gelb-Rot'],
+            [/red card/i, 'rot', 'Rote Karte'],
+            [/yellow/i, 'gelb', 'Gelbe Karte'],
+            [/substitution/i, 'wechsel', 'Wechsel'],
+            [/kick ?off/i, 'phase', 'Anpfiff'],
+            [/half ?time/i, 'phase', 'Halbzeit'],
+            [/2nd half|second half/i, 'phase', 'Wiederanpfiff'],
+            [/full ?time|end regular|end of (the )?(match|game)/i, 'phase', 'Abpfiff'],
+            [/\bvar\b/i, 'phase', 'Videobeweis']
+          ];
+          // Sortierschluessel aus "45'+2'" bzw. Sekunden
+          const minSort = (dv, sek) => {
+            const t = /(\d+)'?\s*(?:\+\s*(\d+))?/.exec(String(dv || ''));
+            return t ? Number(t[1]) * 100 + Number(t[2] || 0) : (Number(sek) > 0 ? Math.floor(Number(sek) / 60) * 100 : 0);
+          };
+          // Summary auswerten. Feldnamen laut Drittdokumentation, bis die Messung sie bestaetigt.
+          fb.espnDetails = (d, sb) => {
+            if (!d || typeof d !== 'object') return null;
+            const comp = d.header?.competitions?.[0] || sb?.roh?.competitions?.[0] || {}, cs = comp.competitors || [];
+            const tid = c => String(c?.team?.id ?? c?.id ?? '');
+            const heimId = tid(cs.find(c => c.homeAway === 'home')), gastId = tid(cs.find(c => c.homeAway === 'away'));
+            const seite = (t, ha) => {
+              const id = String(t?.id ?? '');
+              if (id && id === heimId) return 'heim';
+              if (id && id === gastId) return 'gast';
+              return ha === 'home' ? 'heim' : (ha === 'away' ? 'gast' : '');
+            };
+            const ev = (Array.isArray(d.keyEvents) ? d.keyEvents : []).map((e, i) => {
+              const roh = [e.type?.text, e.type?.type].filter(Boolean).join(' ');
+              const r = EREIGNIS.find(([re]) => re.test(roh));
+              return {
+                i, typ: r ? r[1] : 'sonst', label: r ? r[2] : (e.type?.text || 'Ereignis'), typText: e.type?.text || '',
+                min: e.clock?.displayValue || '', sort: minSort(e.clock?.displayValue, e.clock?.value),
+                seite: seite(e.team), team: e.team?.displayName || '',
+                namen: (e.participants || []).map(p => p.athlete?.displayName || p.athlete?.shortName).filter(Boolean),
+                text: e.text || e.shortText || ''
+              };
+            });
+            const kom = (Array.isArray(d.commentary) ? d.commentary : [])
+              .map((c, i) => ({ i, min: c.time?.displayValue || '', sort: minSort(c.time?.displayValue, c.time?.value), text: c.text || c.play?.text || '' }))
+              .filter(c => c.text);
+            const stat = {};
+            (d.boxscore?.teams || []).forEach((t, i) => {
+              const s = seite(t.team, t.homeAway) || 't' + i;
+              (t.statistics || []).forEach(x => {
+                if (!x || !x.name) return;
+                stat[x.name] = stat[x.name] || { label: x.label || x.name };
+                stat[x.name][s] = x.displayValue ?? x.value;
+              });
+            });
+            const aufst = (Array.isArray(d.rosters) ? d.rosters : []).map(r => ({
+              seite: seite(r.team, r.homeAway), formation: r.formation || '',
+              n: (r.roster || []).length, start: (r.roster || []).filter(p => p.starter).length
+            }));
+            return { heimId, gastId, ev, kom, stat, aufst, keys: Object.keys(d) };
+          };
+          fb.espnLink = e => {
+            const l = (e?.roh?.links || []).find(x => /summary|gamecast|desktop/i.test((x.rel || []).join(' '))) || (e?.roh?.links || [])[0];
+            return l && /^https:\/\//.test(l.href || '') ? l.href : '';
+          };
+
+          // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
+          const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
+            ['foulsCommitted', 'Fouls'], ['offsides', 'Abseits'], ['yellowCards', 'Gelbe Karten'], ['redCards', 'Rote Karten'], ['saves', 'Paraden']];
+          const FARBE = { tor: '#ff8a80', gelb: '#e6b566', rot: '#f0736a', elf: '#e6b566', wechsel: '#7fb3d5', phase: '#8794a5', sonst: '#8794a5' };
+          const ICON = {
+            tor: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>',
+            gelb: '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>',
+            wechsel: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg>',
+            phase: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="14" r="5"/><path d="M13 11.5 21 8v3l-6 2.2M9 4v3M5 5.5l1.5 2M13 5.5l-1.5 2"/></svg>'
+          };
+          ICON.rot = ICON.gelb; ICON.elf = ICON.tor; ICON.sonst = ICON.phase;
+          const kurz = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+          const uhrzeit = t => t ? new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
+          const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
+
+          fb.spielPopup = FAV => {
+            const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
+            const kopf = t => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:10px;align-items:center;"><div style="font-size:12.5px;font-weight:600;color:#8794a5;min-width:0;">${t}</div>${fb.zuKnopf()}</div>`;
+            const s = fb.sel;
+            if (!s) return huelle(kopf('Spiel') + fb.hinweis('Spielstand der Vereinskarte oder ein Spiel im Spieltag antippen.'));
+            const sp = fb.spieltag(s.L), m = sp ? sp.spiele.find(x => x.id === s.id) : null;
+            if (!sp) return huelle(kopf('Spiel') + fb.warte('Spieltag'));
+            if (!m) return huelle(kopf('Spiel') + fb.hinweis('Spiel nicht mehr im aktuellen Spieltag.'));
+            const offen = fb.offen(), k = fb.status(m), a = new Date(m.anstoss);
+            // ESPN nur bei offenem Popup abrufen
+            const es = offen ? fb.espnSpiel(s.L, m) : { e: null, pfad: '', geladen: false, fehler: '' }, e = es.e;
+            const sumPfad = e ? fb.summaryPfad(s.L, e.id) : '', sumKey = 'espn:' + sumPfad;
+            const sum = e ? fb.get(sumPfad, k === 'live' ? 45e3 : 5 * MIN, 'espn') : undefined;
+            const det = fb.espnDetails(sum, e);
+            const fav = FAV && (m.heim_id == FAV || m.gast_id == FAV);
+            let th = m.th, tg = m.tg, standEspn = false;
+            if (k === 'live' && th == null) { th = 0; tg = 0; }
+            // Laufendes Spiel: hat ESPN mehr Tore als OpenLigaDB, gilt der ESPN-Stand (wie im Ticker)
+            if (k === 'live' && e) {
+              const eh = Number(e.sh), eg = Number(e.sg);
+              if (e.sh !== '' && e.sg !== '' && isFinite(eh) && isFinite(eg) && eh + eg > (th || 0) + (tg || 0)) { th = eh; tg = eg; standEspn = true; }
+            }
+
+            // ----- Kopf und Spielstand -----
+            const min = k === 'live' ? uhr(e) : null;
+            const status = k === 'live'
+              ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${min ? ' · ' + (min === 'HZ' ? 'Halbzeit' : fb.esc(min)) : ''}</span>`
+              : `<span style="color:#8794a5;">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+            const seite = (n, l) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:#f2f5f8;min-width:0;">${fb.wappen(l, n, 42)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span></div>`;
+            const stand = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:12px 8px;border-radius:16px;${fav ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);' : 'background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);'}">
+                ${seite(m.heim, m.heim_logo)}
+                <div style="display:flex;flex-direction:column;align-items:center;gap:5px;"><b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th ?? '–'} : ${tg ?? '–'}</b><span style="font-size:11.5px;font-weight:700;">${status}</span>${standEspn ? '<span style="font-size:10.5px;font-weight:600;color:#8794a5;">Stand laut ESPN</span>' : ''}</div>
+                ${seite(m.gast, m.gast_logo)}</div>`;
+
+            // ----- Reiter -----
+            const statZeilen = STAT.filter(([n]) => det && det.stat[n] && det.stat[n].heim != null && det.stat[n].gast != null);
+            const reiter = [['ticker', 'Ticker']];
+            if (det && det.kom.length) reiter.push(['kommentar', 'Kommentar']);
+            if (statZeilen.length) reiter.push(['statistik', 'Statistik']);
+            reiter.push(['messung', 'Messung']);
+            const tab = reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
+            const reiterHtml = `<div role="tablist" style="display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
+              const an = id === tab;
+              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px 2px;border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
+            }).join('')}</div>`;
+
+            // Warum ESPN fehlt (fuer Ticker und Messung)
+            const espnGrund = !offen ? '' : es.fehler ? 'ESPN nicht erreichbar (' + fb.esc(es.fehler) + ')'
+              : !es.geladen ? 'ESPN wird geladen …' : !e ? 'Spiel bei ESPN nicht gefunden'
+              : fb.fehlerPfad[sumKey] ? 'ESPN-Spieldetails nicht abrufbar (' + fb.esc(fb.fehlerPfad[sumKey]) + ')'
+              : !det ? 'ESPN-Spieldetails werden geladen …' : '';
+            const teamName = x => x.seite === 'heim' ? m.heim : (x.seite === 'gast' ? m.gast : x.team);
+
+            // ----- Ticker: Tore aus OpenLigaDB, alles andere aus ESPN, neueste oben -----
+            const ticker = () => {
+              const z = [];
+              let ph = 0;
+              (m.tore || []).forEach((x, i) => {
+                const heimTor = x.h > ph; ph = x.h;
+                z.push({ sort: (Number(x.min) || 0) * 100, i, typ: 'tor', min: x.min ? x.min + "'" : '',
+                  titel: `${x.et ? 'Eigentor' : 'Tor'} · ${x.h}:${x.g} ${heimTor ? m.heim : m.gast}`,
+                  d: (x.name || '') + (x.elf ? ' (Elfmeter)' : ''), q: 'OpenLigaDB', unser: FAV && (heimTor ? m.heim_id : m.gast_id) == FAV });
+              });
+              if (det) {
+                const espnTore = det.ev.filter(x => x.typ === 'tor');
+                espnTore.slice((m.tore || []).length).forEach(x => z.push({ sort: x.sort, i: 1000 + x.i, typ: 'tor', min: x.min,
+                  titel: `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`, d: x.namen.join(' · '), q: 'ESPN, bei OpenLigaDB noch nicht eingetragen',
+                  unser: FAV && ((x.seite === 'heim' && m.heim_id == FAV) || (x.seite === 'gast' && m.gast_id == FAV)) }));
+                det.ev.filter(x => x.typ !== 'tor').forEach(x => z.push({ sort: x.sort, i: 1000 + x.i, typ: x.typ, min: x.min,
+                  titel: x.typ === 'phase' ? x.label : `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`,
+                  d: x.typ === 'phase' ? '' : x.namen.join(' · '), q: 'ESPN' }));
+              }
+              z.sort((p, q) => q.sort - p.sort || q.i - p.i);
+              const zeilen = z.map(x => {
+                const c = FARBE[x.typ] || '#8794a5';
+                const bg = x.unser ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);box-shadow:inset 3px 0 0 #e30613;'
+                  : x.typ === 'tor' ? 'background:rgba(255,138,128,0.12);border:1px solid rgba(255,138,128,0.24);'
+                  : x.typ === 'phase' ? 'border:1px dashed rgba(255,255,255,0.08);' : 'background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);';
+                return `<div style="display:grid;grid-template-columns:40px 30px minmax(0,1fr);gap:10px;align-items:start;padding:9px 10px;border-radius:13px;${bg}">
+                  <span style="font-size:12.5px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;padding-top:6px;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span>
+                  <span style="width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:${c};background:${c}29;">${ICON[x.typ] || ICON.phase}</span>
+                  <span style="min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:#f2f5f8;"><b style="font-weight:700;">${fb.esc(x.titel)}</b>${x.d ? `<span style="font-size:12.5px;color:#b4c0cf;">${fb.esc(x.d)}</span>` : ''}<span style="font-size:10.5px;font-weight:600;color:#8794a5;">${x.q}</span></span></div>`;
+              }).join('');
+              const leer = !z.length ? fb.hinweis(k === 'live' ? 'Noch keine Tore.' : 'Keine Tore.') : '';
+              const fehlt = espnGrund || (det && !det.ev.length ? 'ESPN meldet für dieses Spiel keine Ereignisse' : '');
+              return `<div style="display:flex;flex-direction:column;gap:6px;">${zeilen}${leer}${fehlt ? `<div style="border:1px dashed rgba(255,255,255,0.1);border-radius:13px;padding:10px 12px;font-size:12.5px;color:#8794a5;">Karten, Wechsel und Spielphasen fehlen: ${fehlt}.</div>` : ''}</div>`;
+            };
+
+            // ----- Kommentar von ESPN, Sprache wie geliefert -----
+            const kommentar = () => {
+              const l = det.kom.slice().sort((p, q) => q.sort - p.sort || q.i - p.i).slice(0, 80);
+              return `<div style="display:flex;flex-direction:column;gap:4px;">${fb.hinweis('Kommentar von ESPN in der gelieferten Sprache')}${l.map(x => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);"><span style="font-size:12px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span><span style="font-size:12.5px;color:#f2f5f8;min-width:0;">${fb.esc(x.text)}</span></div>`).join('')}</div>`;
+            };
+
+            // ----- Statistik -----
+            const statistik = () => {
+              const hf = m.heim_id == FAV ? '#e30613' : '#7fb3d5';
+              return `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 2px;">${statZeilen.map(([n, label, einheit]) => {
+                const x = det.stat[n], h = parseFloat(x.heim), g = parseFloat(x.gast);
+                const w = v => isFinite(v) ? (einheit === '%' ? Math.round(v) + ' %' : fb.esc(String(Math.round(v * 10) / 10))) : fb.esc(String(v));
+                const sum = (isFinite(h) ? h : 0) + (isFinite(g) ? g : 0);
+                return `<div style="display:flex;flex-direction:column;gap:5px;">
+                  <div style="display:grid;grid-template-columns:52px minmax(0,1fr) 52px;font-size:13px;font-weight:700;color:#f2f5f8;font-variant-numeric:tabular-nums;"><span>${w(h)}</span><span style="text-align:center;font-size:11.5px;font-weight:600;color:#8794a5;">${label}</span><span style="text-align:right;">${w(g)}</span></div>
+                  ${sum > 0 ? `<div style="display:grid;grid-template-columns:${h / sum}fr ${g / sum}fr;gap:3px;height:6px;"><i style="border-radius:3px;background:${hf};"></i><i style="border-radius:3px;background:#8794a5;"></i></div>` : ''}</div>`;
+              }).join('')}</div>`;
+            };
+
+            // ----- Messung -----
+            const messung = () => {
+              const roh = fb.rohSpiel(s.L, sp.nr, m.id) || {}, tore = Array.isArray(roh.goals) ? roh.goals : [];
+              const sumFehler = fb.fehlerPfad[sumKey] || '';
+              // Sprachprobe nur in diesem Reiter
+              const dePfad = e ? fb.summaryPfad(s.L, e.id, 'de') : '', deKey = 'espn:' + dePfad;
+              const de = e && offen ? fb.get(dePfad, 10 * MIN, 'espn') : undefined, deDet = fb.espnDetails(de, e);
+              const probe = x => x ? kurz((x.kom[0] && x.kom[0].text) || (x.ev[0] && x.ev[0].text) || '', 160) : '';
+              const gesehen = Object.entries(fb.gesehen).filter(([kk]) => kk.startsWith(m.id + ':')).map(([kk, v]) => {
+                const [, h, g] = kk.split(':'), d = v.oldb && v.espn ? Math.round((v.oldb - v.espn) / 1000) : null;
+                return { stand: h + ':' + g, oldb: v.oldb ? uhrzeit(v.oldb) : '', espn: v.espn ? uhrzeit(v.espn) : '', espn_frueher_s: d };
+              });
+              const w = fb.messwerte = {
+                version: VERSION, gemessen: new Date().toISOString(),
+                spiel: { liga: s.L, oldb_id: m.id, heim: m.heim, gast: m.gast, anstoss: m.anstoss, status: k },
+                oldb: {
+                  // Stand laut OpenLigaDB selbst, nicht der ggf. von ESPN uebernommene Kopf-Stand
+                  stand: m.th == null ? (k === 'live' ? '0:0' : null) : `${m.th}:${m.tg}`, tore: tore.length,
+                  tore_ohne_minute: tore.filter(x => x.matchMinute == null).length,
+                  tore_mit_kommentar: tore.filter(x => x.comment).length,
+                  kommentar_beispiel: kurz((tore.find(x => x.comment) || {}).comment || '', 120),
+                  letzte_aenderung: roh.lastUpdateDateTime || null, felder_spiel: Object.keys(roh), fehler: fb.fehler || null
+                },
+                espn_scoreboard: {
+                  pfad: es.pfad, geladen: es.geladen, fehler: es.fehler || null, event_id: e ? e.id : null,
+                  name: e ? e.roh.name || e.roh.shortName || null : null, status: e ? e.status : null, uhr: e ? e.uhr : null,
+                  stand: e ? `${e.sh}:${e.sg}` : null,
+                  details: e ? zaehle((e.roh.competitions?.[0]?.details || []).map(x => x.type?.text || '?')) : null,
+                  link: e ? fb.espnLink(e) || null : null
+                },
+                espn_summary: {
+                  pfad: sumPfad || null, geladen: !!fb.cache[sumKey], fehler: sumFehler || null,
+                  schluessel: det ? det.keys : null,
+                  ereignisse: det ? det.ev.length : null, ereignistypen: det ? zaehle(det.ev.map(x => x.typText || '?')) : null,
+                  ereignisse_ohne_zuordnung: det ? det.ev.filter(x => x.typ === 'sonst').map(x => x.typText) : null,
+                  ereignisse_ohne_team: det ? det.ev.filter(x => x.typ !== 'phase' && !x.seite).length : null,
+                  kommentar: det ? det.kom.length : null, kommentar_beispiel: det ? probe({ kom: det.kom, ev: [] }) : null,
+                  ereignis_beispiel: det && det.ev[0] ? kurz(det.ev[0].text, 160) : null,
+                  statistik: det ? Object.keys(det.stat) : null, statistik_beide_seiten: statZeilen.map(x => x[0]),
+                  aufstellung: det ? det.aufst : null, heim_id: det ? det.heimId : null, gast_id: det ? det.gastId : null
+                },
+                sprache_de: {
+                  pfad: dePfad || null, geladen: !!fb.cache[deKey], fehler: fb.fehlerPfad[deKey] || null,
+                  probe_de: deDet ? probe(deDet) : null, probe_standard: det ? probe(det) : null,
+                  gleich: deDet && det ? probe(deDet) === probe(det) : null
+                },
+                zuerst_gesehen: gesehen
+              };
+              // Ampel je Zeile: gruen geliefert, amber leer oder abweichend, rot Fehler, grau offen
+              const farbe = { ok: '#a6d49e', leer: '#e6b566', fehler: '#f0736a', offen: '#8794a5' };
+              const zeile = (st, t, v) => `<div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;align-items:start;padding:6px 2px;border-top:1px solid rgba(255,255,255,0.04);"><span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${farbe[st]};"></span><span style="min-width:0;font-size:12.5px;color:#f2f5f8;"><b style="font-weight:700;">${t}</b><span style="display:block;color:#b4c0cf;overflow-wrap:anywhere;">${v}</span></span></div>`;
+              const titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#8794a5;padding-top:8px;">${t}</div>`;
+              const liste = o => o && Object.keys(o).length ? Object.entries(o).map(([n, z]) => `${fb.esc(n)} ${z}`).join(' · ') : '–';
+              const S = w.espn_summary, D = w.sprache_de, B = w.espn_scoreboard, O = w.oldb;
+              const nichtOffen = !offen ? zeile('offen', 'Popup geschlossen', 'ESPN wird nur bei offenem Popup abgerufen.') : '';
+              const sbZeile = B.fehler ? zeile('fehler', 'Abruf', fb.esc(B.fehler))
+                : !B.geladen ? zeile('offen', 'Abruf', 'läuft …')
+                : !e ? zeile('leer', 'Zuordnung', 'kein ESPN-Spiel mit Anstoß ±10 min und passenden Vereinsnamen')
+                : zeile('ok', 'Spiel', `${fb.esc(B.name || '')} · Event ${fb.esc(B.event_id)} · ${fb.esc(B.status)}${B.uhr ? ' · ' + fb.esc(B.uhr) : ''}`);
+              const standZeile = e ? zeile(O.stand === B.stand ? 'ok' : 'leer', 'Stand ESPN / OpenLigaDB', `${fb.esc(B.stand)} / ${fb.esc(O.stand ?? '–')}`) : '';
+              const sumZeilen = !e ? zeile('offen', 'Abruf', 'wartet auf die Event-ID') : S.fehler
+                ? zeile('fehler', 'Abruf', fb.esc(S.fehler) + (/TypeError/.test(S.fehler) ? ' – ohne HTTP-Status: Netzwerk oder CORS' : ''))
+                : !det ? zeile('offen', 'Abruf', 'läuft …')
+                : [zeile('ok', 'Abruf', 'ok · Schlüssel: ' + fb.esc(S.schluessel.join(', '))),
+                  zeile(S.ereignisse ? 'ok' : 'leer', `Ereignisse (keyEvents): ${S.ereignisse}`, liste(S.ereignistypen) + (S.ereignisse_ohne_zuordnung.length ? ' · ohne deutsche Beschriftung: ' + fb.esc(S.ereignisse_ohne_zuordnung.join(', ')) : '') + (S.ereignisse_ohne_team ? ` · ${S.ereignisse_ohne_team} ohne Vereinszuordnung` : '')),
+                  zeile(S.kommentar ? 'ok' : 'leer', `Kommentar: ${S.kommentar}`, fb.esc(S.kommentar_beispiel || '–')),
+                  zeile(statZeilen.length ? 'ok' : 'leer', `Statistik: ${S.statistik.length} Werte`, fb.esc(S.statistik.join(', ') || '–') + (S.statistik.length && !statZeilen.length ? ' · keinem Verein zuzuordnen' : '')),
+                  zeile(S.aufstellung.some(x => x.n) ? 'ok' : 'leer', 'Aufstellung', S.aufstellung.length ? S.aufstellung.map(x => `${x.seite || '?'}: ${x.n} Spieler, ${x.start} Startelf${x.formation ? ', ' + fb.esc(x.formation) : ''}`).join(' · ') : '–')].join('');
+              const deZeile = !e ? '' : D.fehler ? zeile('fehler', 'lang=de', fb.esc(D.fehler))
+                : !deDet ? zeile('offen', 'lang=de', 'läuft …')
+                : zeile(D.gleich === false ? 'ok' : 'leer', D.gleich === false ? 'lang=de liefert anderen Text' : 'lang=de liefert denselben Text', fb.esc(D.probe_de || '–'));
+              const gesZeilen = gesehen.length ? gesehen.map(x => zeile(x.oldb && x.espn ? 'ok' : 'offen', 'Stand ' + x.stand,
+                `OpenLigaDB ${x.oldb || '–'} · ESPN ${x.espn || '–'}${x.espn_frueher_s != null ? ` · ESPN ${Math.abs(x.espn_frueher_s)} s ${x.espn_frueher_s >= 0 ? 'früher' : 'später'}` : ''}`)).join('')
+                : zeile('offen', 'Noch kein Tor gesehen', 'Gezählt wird nur bei laufendem Spiel und offener View.');
+              const knopf = `<button type="button" ${fb.tippAttr('window.__fussball.kopiere()')} style="font:inherit;font-size:12.5px;font-weight:700;color:#7fb3d5;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);border-radius:12px;padding:8px 12px;cursor:pointer;pointer-events:auto;">Messung kopieren</button>`;
+              const kopiert = fb.kopiert === 'ok' ? '<span style="font-size:12px;font-weight:700;color:#a6d49e;">kopiert</span>'
+                : fb.kopiert === 'nein' ? '<span style="font-size:12px;color:#e6b566;">Zwischenablage gesperrt – Text unten markieren</span>' : '';
+              return `<div style="display:flex;flex-direction:column;">
+                ${nichtOffen}
+                ${titel('OpenLigaDB')}
+                ${zeile(O.fehler ? 'fehler' : 'ok', 'Spiel ' + m.id, `${O.tore} ${O.tore === 1 ? 'Tor' : 'Tore'} · ${O.tore_ohne_minute} ohne Minute · ${O.tore_mit_kommentar} mit Kommentar${O.kommentar_beispiel ? ' („' + fb.esc(O.kommentar_beispiel) + '“)' : ''}${O.letzte_aenderung ? ' · letzte Änderung ' + fb.esc(O.letzte_aenderung) : ''}`)}
+                ${titel('ESPN Scoreboard')}
+                ${sbZeile}${standZeile}
+                ${e ? zeile(B.details && Object.keys(B.details).length ? 'ok' : 'leer', 'Ereignisse im Scoreboard', liste(B.details)) : ''}
+                ${titel('ESPN Spieldetails')}
+                ${sumZeilen}
+                ${titel('Sprache')}
+                ${deZeile}
+                ${titel('Zuerst gesehen')}
+                ${gesZeilen}
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;">${knopf}${kopiert}</div>
+                <pre style="margin:10px 0 0;max-height:220px;overflow:auto;padding:10px;border-radius:12px;background:#10151d;border:1px solid rgba(255,255,255,0.06);color:#b4c0cf;font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text;">${fb.esc(JSON.stringify(w, null, 2))}</pre>
+              </div>`;
+            };
+
+            const inhalt = tab === 'kommentar' ? kommentar() : tab === 'statistik' ? statistik() : tab === 'messung' ? messung() : ticker();
+            const link = e ? fb.espnLink(e) : '';
+            const cO = fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`], cE = fb.cache[sumKey];
+            const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#8794a5;">
+                <span>Stand${cO ? ' OpenLigaDB ' + fb.zeit(new Date(cO.t)) : ''}${cE ? ' · ESPN ' + fb.zeit(new Date(cE.t)) : ''}</span>
+                ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:6px 10px;border-radius:10px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
+              </div>`;
+            return huelle(kopf(`${s.L === 'bl1' ? '1.' : '2.'} Bundesliga · ${sp.nr}. Spieltag · ${fb.tag(a)} ${fb.zeit(a)}`) + stand + reiterHtml + inhalt + fuss);
           };
           // Bereich einer Karte, der nach jedem Abruf und alle 30 s neu gezeichnet wird
           fb.bereich = (el, key, render) => {
@@ -391,6 +814,8 @@ button_card_templates:
               const diff = a - now, h = Math.round(diff / 3600e3), d = Math.round(diff / 86400e3);
               sub = `<span style="color:#8794a5;">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
             } else sub = `<span style="color:#8794a5;">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+            // Spielstand oeffnet das Spiel-Popup, sobald das Spiel angepfiffen ist
+            const klick = m && k !== 'pre' ? `role="button" tabindex="0" aria-label="Spiel öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
             const score = k === 'pre'
               ? `<b style="font-size:24px;color:#8794a5;font-variant-numeric:tabular-nums;">${fb.zeit(new Date(a))}</b>`
               : `<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th ?? '–'} : ${tg ?? '–'}</b>`;
@@ -408,7 +833,7 @@ button_card_templates:
             return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;">
                 ${seite(heim, hl, 'Heim')}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">${score}<span style="font-size:11.5px;font-weight:700;">${sub}</span></div>
+                <div ${klick} style="display:flex;flex-direction:column;align-items:center;gap:4px;${klick ? 'pointer-events:auto;cursor:pointer;padding:6px 10px;margin:-6px -10px;border-radius:16px;' : ''}">${score}<span style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;">${sub}${klick ? `<span style="color:#8794a5;">${fb.pfeil}</span>` : ''}</span></div>
                 ${seite(gast, gl, 'Gast')}
               </div>
               ${tl ? `<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>` : ''}
@@ -488,7 +913,9 @@ button_card_templates:
               if (k === 'live' && !min) ohneMinute++;
               const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>${min || 'LIVE'}</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
               const bg = fav ? 'background:rgba(227,6,19,0.12);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:rgba(240,115,106,0.12);' : '');
-              html += `<div style="display:grid;grid-template-columns:60px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}"><span style="font-size:11.5px;font-weight:700;color:#8794a5;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div></div>`;
+              // Ab Anstoss oeffnet die Zeile das Spiel-Popup
+              const klick = fb.antippbar(m) ? `role="button" tabindex="0" aria-label="${fb.esc(m.heim + ' gegen ' + m.gast)} öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
+              html += `<div ${klick} style="display:grid;grid-template-columns:60px minmax(0,1fr) 12px;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}"><span style="font-size:11.5px;font-weight:700;color:#8794a5;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div><span style="color:#6e7988;">${klick ? fb.pfeil : ''}</span></div>`;
             });
             // Hinweis nur, wenn ESPN beim Abruf scheitert (Minute fehlt dann)
             const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:#8794a5;padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
@@ -561,4 +988,21 @@ button_card_templates:
                 <tbody>${body}</tbody></table>
               <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;">${leg.map(([c, n]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${n}</span>`).join('')}${live.size ? '<span style="display:inline-flex;align-items:center;gap:6px;color:#f0736a;"><span class="pulse"></span>spielt gerade</span>' : ''}</div></div>`;
           });
+        ]]]
+
+  # ======================= Spiel-Popup (Inhalt der Bubble Card #fussball-spiel) =======================
+  # Variable verein: teamId des Lieblingsvereins (Hervorhebung nach H1).
+  fussball_spiel:
+    template: fussball_inhalt
+    hold_action:
+      action: none
+    styles:
+      card:
+      - padding: 2px 2px 8px
+      - cursor: default
+    custom_fields:
+      inhalt: |
+        [[[
+          const fb = variables.fb;
+          return fb.bereich(this, 'spiel', () => fb.spielPopup(variables.verein));
         ]]]
