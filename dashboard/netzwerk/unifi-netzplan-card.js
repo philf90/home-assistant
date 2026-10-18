@@ -69,7 +69,7 @@
  *                         Sammelknoten, "wan" fuer alle Internetleitungen
  */
 
-const UNP_VERSION = '0.5.1';
+const UNP_VERSION = '0.6.0';
 const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 // Shared Address Space nach RFC 6598, Adressen hinter Carrier-Grade-NAT
 const CGNAT_RE = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
@@ -593,11 +593,16 @@ class UnifiNetzplanCard extends HTMLElement {
 
 UnifiNetzplanCard.styles = `
   :host {
-    --unp-bg: linear-gradient(180deg, #1b2231 0%, #171d29 55%);
-    --unp-fg: #f2f5f8; --unp-muted: #8794a5; --unp-line: rgba(255,255,255,0.10);
-    --unp-tile: rgba(255,255,255,0.028); --unp-tile-line: rgba(255,255,255,0.06);
-    --unp-ok: #a6d49e; --unp-warn: #e6b566; --unp-bad: #f0736a; --unp-info: #7fb3d5;
-    --unp-edge: rgba(255,255,255,0.18);
+    /* Farben aus dem Theme owlet (hell/dunkel), dunkler Palettenwert als Rueckfall.
+       Weiss mit Deckkraft ueber 0,08 bleibt dunkel unveraendert und nimmt hell
+       ueber den Schalter owlet-dunkel-anteil die passende Variable. */
+    --unp-bg: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%);
+    --unp-fg: var(--owlet-text, #f2f5f8); --unp-muted: var(--owlet-text-sekundaer, #8794a5);
+    --unp-line: color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));
+    --unp-tile: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)); --unp-tile-line: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));
+    --unp-ok: var(--owlet-gruen, #a6d49e); --unp-warn: var(--owlet-amber, #e6b566); --unp-bad: var(--owlet-rot, #f0736a); --unp-info: var(--owlet-blau, #7fb3d5);
+    --unp-edge: color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--owlet-dunkel-anteil, 100%), var(--owlet-aus, #3a4453));
+    --unp-hover: color-mix(in srgb, rgba(255, 255, 255, 0.16) var(--owlet-dunkel-anteil, 100%), var(--owlet-aus, #3a4453));
     --unp-ico: 34px; --unp-pad: 6px; --unp-indent: 18px;
     container-type: inline-size; display: block;
   }
@@ -610,8 +615,8 @@ UnifiNetzplanCard.styles = `
   ha-card {
     display: block;
     background: var(--unp-bg); color: var(--unp-fg);
-    border: 1px solid rgba(255,255,255,0.05); border-radius: 22px;
-    box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7);
+    border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)); border-radius: 22px;
+    box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7));
     padding: 16px 18px 12px; overflow: hidden;
   }
   ha-icon { --mdc-icon-size: 20px; display: inline-flex; }
@@ -624,16 +629,16 @@ UnifiNetzplanCard.styles = `
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .head .mt { white-space: normal; }
   .hico { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex: none;
-    background: rgba(166,212,158,0.12); border: 1px solid rgba(166,212,158,0.24); color: var(--unp-ok); }
+    background: color-mix(in srgb, var(--unp-ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-ok) 24%, transparent); color: var(--unp-ok); }
   .title { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
   .badge { font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 12px; white-space: nowrap; }
-  .badge.ok { color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; }
-  .badge.bad { color: var(--unp-bad); background: #f0736a1f; border: 1px solid #f0736a3d; }
+  .badge.ok { color: var(--unp-ok); background: color-mix(in srgb, var(--unp-ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-ok) 24%, transparent); }
+  .badge.bad { color: var(--unp-bad); background: color-mix(in srgb, var(--unp-bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-bad) 24%, transparent); }
 
   .wanrow { display: flex; flex-wrap: wrap; gap: 8px; }
   .wan { display: flex; flex-direction: column; padding: 7px 12px; border-radius: 14px;
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); flex: 1 1 210px; min-width: 0; }
-  .wan.primary { border-color: #a6d49e3d; }
+  .wan.primary { border-color: color-mix(in srgb, var(--unp-ok) 24%, transparent); }
   .wan.standby { border-style: dashed; }
   .wan-head { display: flex; align-items: center; gap: 9px; min-height: 26px; cursor: pointer; }
   .wan-head .nm { flex: 1; }
@@ -664,25 +669,25 @@ UnifiNetzplanCard.styles = `
 
   .node { display: flex; align-items: center; gap: 9px; padding: 6px 9px 6px var(--unp-pad); border-radius: 14px; cursor: pointer;
     background: var(--unp-tile); border: 1px solid var(--unp-tile-line); min-height: 34px; }
-  .node:hover, .wan:hover, .client:hover { border-color: rgba(255,255,255,0.16); }
+  .node:hover, .wan:hover, .client:hover { border-color: var(--unp-hover); }
   .node .ico { width: var(--unp-ico); height: var(--unp-ico); border-radius: 10px; display: grid; place-items: center; flex: none; }
-  .s-ok .ico { color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; }
-  .s-warn .ico { color: var(--unp-warn); background: #e6b5661f; border: 1px solid #e6b5663d; }
-  .s-bad .ico { color: var(--unp-bad); background: #f0736a1f; border: 1px solid #f0736a3d; }
-  .s-off .ico, .s-none .ico { color: var(--unp-muted); background: rgba(255,255,255,0.04); border: 1px dashed var(--unp-line); }
+  .s-ok .ico { color: var(--unp-ok); background: color-mix(in srgb, var(--unp-ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-ok) 24%, transparent); }
+  .s-warn .ico { color: var(--unp-warn); background: color-mix(in srgb, var(--unp-warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-warn) 24%, transparent); }
+  .s-bad .ico { color: var(--unp-bad); background: color-mix(in srgb, var(--unp-bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-bad) 24%, transparent); }
+  .s-off .ico, .s-none .ico { color: var(--unp-muted); background: var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05)); border: 1px dashed var(--unp-line); }
   .s-off { opacity: 0.65; border-style: dashed; }
   .k-cluster { border-style: dashed; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--unp-muted); }
-  .s-ok .dot { background: var(--unp-ok); box-shadow: 0 0 0 3px #a6d49e2e; }
-  .s-warn .dot { background: var(--unp-warn); box-shadow: 0 0 0 3px #e6b5662e; }
-  .s-bad .dot { background: var(--unp-bad); box-shadow: 0 0 0 3px #f0736a2e; }
+  .s-ok .dot { background: var(--unp-ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--unp-ok) 18%, transparent); }
+  .s-warn .dot { background: var(--unp-warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--unp-warn) 18%, transparent); }
+  .s-bad .dot { background: var(--unp-bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--unp-bad) 18%, transparent); }
   .s-off .dot { background: transparent; border: 1.5px solid var(--unp-muted); }
   .tag { flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 6px; color: var(--unp-muted); border: 1px solid var(--unp-line); }
-  .tag.mesh { color: var(--unp-warn); border-color: #e6b5663d; }
-  .wan.primary .tag { color: var(--unp-ok); border-color: #a6d49e3d; }
+  .tag.mesh { color: var(--unp-warn); border-color: color-mix(in srgb, var(--unp-warn) 24%, transparent); }
+  .wan.primary .tag { color: var(--unp-ok); border-color: color-mix(in srgb, var(--unp-ok) 24%, transparent); }
 
   .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; padding: 4px 9px; border-radius: 10px;
-    color: var(--unp-ok); background: #a6d49e1f; border: 1px solid #a6d49e3d; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    color: var(--unp-ok); background: color-mix(in srgb, var(--unp-ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-ok) 24%, transparent); cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .pill ha-icon { --mdc-icon-size: 15px; }
   .pill + .pill { margin-left: -3px; }
   .pill.quiet { color: var(--unp-muted); background: transparent; border-color: var(--unp-line); cursor: default; }
