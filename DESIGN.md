@@ -230,9 +230,12 @@ Profil oder im More-Menü (System, Hell, Dunkel).
 
 **Stand:** Palette und Theme stehen. Umgestellt sind die schwebende
 Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
-`navbar-karte.yaml`) sowie von der Home-View `haustuer-ereignis-karte.yaml`,
-`person-presence-karte.yaml`, `fenster-lichter-karte.yaml`,
-`haustuer-lock-karte.yaml`, `pollenflug-karte.yaml` und `wlan-karte.yaml`.
+`navbar-karte.yaml`), die obere Navigation (Template `top_navigation` und
+`top-navigation-karte.yaml`) sowie von der Home-View
+`haustuer-ereignis-karte.yaml`, `person-presence-karte.yaml`,
+`fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
+`pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml` und
+`meteoalarm-karte.yaml`. Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
@@ -243,9 +246,25 @@ schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
   Karte so aus wie bisher.
 - Tönungen über `color-mix`:
   `color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)`.
-- Weiß mit Deckkraft wird zur passenden Flächenvariable (`owlet-unterkachel`,
-  `owlet-unterkachel-rand`, `owlet-neutral-kachel`, `owlet-huelle-rand`), mit
-  dem bisherigen `rgba(255, 255, 255, …)` als Rückfall.
+- Weiß mit Deckkraft wird nach seiner Rolle zur Flächenvariable, Rückfall
+  ist deren dunkler Wert. Abweichende Deckkräfte rücken auf die nächste Stufe
+  (im Dunklen höchstens 0,02 Unterschied):
+
+  | Weiß mit Deckkraft als | Deckkraft | Variable |
+  |---|---|---|
+  | Rand | bis 0,055 | `owlet-huelle-rand` (0,05) |
+  | Rand, Trennlinie | darüber (0,06–0,08) | `owlet-unterkachel-rand` (0,06) |
+  | Fläche | unter 0,04 | `owlet-unterkachel` (0,028) |
+  | Fläche | ab 0,04 | `owlet-neutral-kachel` (0,05) |
+  | Schrift (0,55–0,66) | – | dunkel unverändert, hell `owlet-text-sekundaer` über den Schalter (unten) |
+
+  Schrift aus Navy mit Deckkraft hielte hell keine 4,5:1 (Navy 0,55 auf der
+  Hülle 3,9:1), deshalb dort der Sekundärtext.
+- **Schalter `owlet-dunkel-anteil`** (dunkel `100%`, hell `0%`, Abschnitt
+  `theme.schalter` der Palette): `color-mix(in srgb, A var(--owlet-dunkel-anteil, 100%), B)`
+  ist dunkel A und hell B. Für Farben, die nur dunkel als Ton taugen, etwa ein
+  Ton als Schrift auf doppelter Tönung (Müll: „abends rausstellen“, sonst
+  4,13:1) oder die DWD-Farben.
 - Gleich bleibende Farben (Füllungen, Schrift auf Füllung, Sonderfarben,
   Schwarz für Abdunklung und Schatten) bleiben als Hex-Wert stehen.
 - `color-mix` braucht einen aktuellen Browser (Chrome/WebView 111,
@@ -371,6 +390,19 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
 
+**DWD-Karte** (`meteoalarm-karte.yaml`): Die Integration liefert eigene
+Farben, nicht die Palettenwerte (Stufe 1 beobachtet als `#ffeb3b`). Deshalb
+gilt hell über den Schalter:
+
+- Icon-Kachel deckend in der DWD-Farbe, Icon in Navy `#171d29` oder Hell
+  `#f2f5f8`, je nachdem was gegen die Farbe mehr Kontrast hat (gerechnet in
+  der Karte).
+- Stufen- und „aktiv“-Pille: Tönung 0,12 und Rand 0,24 der DWD-Farbe,
+  Schrift `owlet-text`.
+- Gemessen (Chromium, Stufen `#ffeb3b`, `#fb9a12`, `#e6480e`, `#c0392b`):
+  Icon 13,82 · 7,82 · 4,26 · 4,97:1, Pillenschrift 13,63–16,45:1.
+- Dunkel bleibt alles wie bisher (Ton als Icon und Schrift auf Tönung).
+
 ### Noch offen
 
 - **Animierte Hintergründe:** Weiß mit Deckkraft (Sterne, Schnee, Blitz,
@@ -380,6 +412,9 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
   hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
+- **Schon vor der Umstellung zu schwach, dunkel:** DWD-Pillenschrift
+  Stufe 3 (3,60:1) und 4 (2,71:1), Icon Stufe 4 (2,63:1); Sekundärtext auf
+  Chips im DWD-Popup (3,95:1) und das Datum in der Müllkarte (4,03:1).
 
 ## Animierte Hintergründe
 

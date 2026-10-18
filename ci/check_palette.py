@@ -97,6 +97,7 @@ def lade_palette() -> tuple[dict[str, str], set[str], set[str], list[str]]:
 
 
 VARIABLE_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+ANTEIL_RE = re.compile(r"^(?:100|[1-9]?[0-9])(?:\.[0-9]+)?%$")
 
 
 def farbwert(text: str) -> tuple[str, float] | None:
@@ -186,6 +187,26 @@ def lade_hell(
             fehler.append(f"{ort}: hell {v['hell']} steht weder in der Palette noch in hell_farben")
         else:
             genutzt.add(hellwert[0])
+
+    for i, s in enumerate(theme.get("schalter") or []):
+        ort = f"theme.schalter[{i}]"
+        if not isinstance(s, dict):
+            fehler.append(f"{ort}: Eintrag ist kein Mapping")
+            continue
+        fehlend = [k for k in ("name", "dunkel", "hell", "zweck") if not s.get(k)]
+        if fehlend:
+            fehler.append(f"{ort}: Pflichtfeld fehlt: {', '.join(fehlend)}")
+            continue
+        name = str(s["name"])
+        ort = f"theme.schalter {name}"
+        if not name.startswith("owlet-") or not VARIABLE_RE.match(name):
+            fehler.append(f"{ort}: Name muss mit 'owlet-' beginnen (a-z, 0-9, Bindestrich)")
+        if name in namen:
+            fehler.append(f"{ort}: Name schon vergeben")
+        namen.add(name)
+        for modus in ("dunkel", "hell"):
+            if not ANTEIL_RE.match(str(s[modus])):
+                fehler.append(f"{ort}: {modus} '{s[modus]}' ist kein Anteil von 0% bis 100%")
 
     for hexwert, name in sorted(hell.items()):
         if hexwert not in genutzt:

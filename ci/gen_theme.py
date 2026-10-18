@@ -2,9 +2,10 @@
 """Erzeugt das Owlet-Theme fuer Home Assistant aus design/palette.yaml.
 
 Quelle ist der Abschnitt "theme" der Palette: jede Variable mit ihrem Wert im
-dunklen und im hellen Modus. Die Datei theme.datei wird vollstaendig erzeugt,
-samt Kopfblock; von Hand gepflegt wird nur die Palette. Ob die Werte selbst
-gueltig sind, prueft ci/check_palette.py.
+dunklen und im hellen Modus, dazu die Schalter (Prozentwerte je Modus). Die
+Datei theme.datei wird vollstaendig erzeugt, samt Kopfblock; von Hand
+gepflegt wird nur die Palette. Ob die Werte selbst gueltig sind, prueft
+ci/check_palette.py.
 
 Aufruf:
   python ci/gen_theme.py            schreibt die Theme-Datei
@@ -41,6 +42,8 @@ KOPF = """\
 # Toenungen entstehen mit color-mix(in srgb, var(--owlet-gruen) 12%, transparent).
 # Die Home-Assistant-Variablen (primary-background-color usw.) bekommen
 # dieselben Werte wie die zugehoerigen owlet-Variablen.
+# Schalter sind keine Farben, sondern Anteile fuer color-mix: Der Wert von
+# owlet-dunkel-anteil (dunkel 100 %, hell 0 %) waehlt zwischen zwei Farben.
 #
 # Aktivieren: Profil -> Theme "{name}", oder fuer alle als Standard mit der
 # Aktion frontend.set_theme (name: {name}).
@@ -65,6 +68,10 @@ def erzeuge(theme: dict) -> str:
             zeilen += [f"      {h}: {wert(w)}" for h, w in ha]
             zeilen.append("      # Owlet")
         zeilen += [f"      {v['name']}: {wert(v[schluessel])}" for v in variablen]
+        schalter = theme.get("schalter") or []
+        if schalter:
+            zeilen.append("      # Schalter")
+            zeilen += [f"      {s['name']}: {wert(s[schluessel])}" for s in schalter]
     return "\n".join(zeilen) + "\n"
 
 
@@ -79,14 +86,15 @@ def main(argv: list[str]) -> int:
     ziel = REPO_ROOT / theme["datei"]
     neu = erzeuge(theme)
     alt = ziel.read_text(encoding="utf-8") if ziel.exists() else ""
+    anzahl = f"{len(theme['variablen'])} Variablen, {len(theme.get('schalter') or [])} Schalter"
     if alt == neu:
-        print(f"{theme['datei']} ist aktuell ({len(theme['variablen'])} Variablen).")
+        print(f"{theme['datei']} ist aktuell ({anzahl}).")
         return 0
     if pruefen:
         print(f"FEHLER  {theme['datei']} ist nicht aktuell -- python ci/gen_theme.py laufen lassen")
         return 1
     ziel.write_text(neu, encoding="utf-8")
-    print(f"Geschrieben: {theme['datei']} ({len(theme['variablen'])} Variablen)")
+    print(f"Geschrieben: {theme['datei']} ({anzahl})")
     return 0
 
 
