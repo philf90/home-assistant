@@ -345,7 +345,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | Farbe | Regel | Messwert hell |
 |---|---|---|
 | Owlet-Identität, Vereinshülle | Hülle bleibt dunkel, Inhalt nutzt die dunkle Palette; Tor `#ff8a80` nur dort | Tor auf heller Hülle 2,09:1 |
-| Dragonfruit `#ff4696` | Abwesend-Rand der Personenkarte; offen, siehe unten | 2,93:1 |
+| Dragonfruit `#ff4696` | bleibt unverändert, auch als Abwesend-Rand der Personenkarte; dort nur Zusatzsignal, der Zustand steht immer auch als Text, Icon und Badge da (WCAG 1.4.11 verlangt 3:1 nur für Grafiken, die allein den Zustand zeigen) | 2,93–3,09:1 auf der Hülle, 2,65:1 zum Seitengrund |
 | Avatar-Platzhalter | unverändert, eigene Fläche | – |
 | Vereinsrot `#e30613` | nur als Fläche mit weißer Schrift | Weiß darauf 4,88:1, als Schrift 4,47:1 |
 | Flugradar-Gelb `#f2c94c` | nur auf dunklem Kartengrund | 1,45:1 |
@@ -361,7 +361,6 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
   hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
-- **Dragonfruit-Rand** mit 2,93:1 knapp unter 3:1.
 
 ## Animierte Hintergründe
 
