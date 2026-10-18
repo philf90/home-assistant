@@ -236,8 +236,10 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
 `pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml`,
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
-(siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-karte.yaml`). Die Owlet-Karte bleibt als Identitätshülle
-dunkel.
+(siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-karte.yaml`)
+und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
+(erste gefüllte Kachel mit `owlet-fuellung-rand-amber` und
+`owlet-leuchten-amber`). Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
