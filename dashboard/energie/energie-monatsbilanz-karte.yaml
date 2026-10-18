@@ -75,13 +75,17 @@
 # "%" ueberlappten sie bei 380 px Kartenbreite, und ApexCharts blendete jedes
 # zweite aus. Mit mehr als einer Achse braucht jede Serie ein yaxis_id.
 #
-# Farben: Die Serien stehen als var(--owlet-...) ohne Ersatzwert, denn
-# apexcharts-card liest sie selbst aus document.documentElement und wertet
-# einen Ersatzwert nicht aus (v2.2.3, computeColor: alles zwischen "var(" und
-# ")" gilt als Name). Ohne aktives Owlet-Theme werden die Saeulen schwarz.
-# Die Serienfarben folgen einem Wechsel zwischen hell und dunkel beim
-# naechsten Datenupdate. Achsen, Legende, Datenlabel und Tooltip holen ihre
-# Farbe per EVAL beim Aufbau des Diagramms, mit dem dunklen Wert als Ersatz.
+# Farben: apexcharts-card zeichnet bei einem Wechsel zwischen hell und dunkel
+# nicht neu (v2.2.3 reagiert nur auf Aenderungen der Serien-Entitaeten, hier
+# Jahr-Helfer und sensor.date). Die Diagrammfarben stehen deshalb im
+# card_mod-CSS der Diagrammkarte als var(--owlet-...) mit dem dunklen Wert als
+# Ersatz: CSS ueberschreibt die Farbattribute von ApexCharts und folgt dem
+# Modus sofort. Die Farben unter series und apex_config gelten nur ohne
+# card-mod und sind die dunklen Werte. Im CSS stehen die Serien nach Index
+# (Reihenfolge unter series), die Legende nach rel = Index + 1; wer Serien
+# umsortiert, passt dort die Zuordnung an. PV-Saeulen und -Linien nutzen
+# owlet-sonnengelb-grafik, sonst waeren sie im hellen Modus so dunkel wie
+# die roten Netzsaeulen (DESIGN.md, Sonnengelb in Grafiken).
 # Der Grund der Autarkie-Schilder deckt im hellen Modus 0,12 statt 0,16:
 # ApexCharts toent ihn in der Schriftfarbe, bei 0,16 laege die Schrift mit
 # 4,39:1 unter 4,5:1 (bei 0,12: 4,66:1).
@@ -201,11 +205,25 @@ cards:
         }
         /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
         .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+        /* Farben je Modus, siehe Kopfkommentar: Serien nach Index, Legende nach rel = Index + 1 */
+        .apexcharts-series[data\:realIndex="0"], .apexcharts-series[data\:realIndex="2"], .apexcharts-series[data\:realIndex="4"],
+        .apexcharts-legend-series[rel="1"], .apexcharts-legend-series[rel="3"], .apexcharts-legend-series[rel="5"] { --mb-c: var(--owlet-rot, #f0736a); }
+        .apexcharts-series[data\:realIndex="1"], .apexcharts-series[data\:realIndex="3"], .apexcharts-series[data\:realIndex="5"],
+        .apexcharts-legend-series[rel="2"], .apexcharts-legend-series[rel="4"], .apexcharts-legend-series[rel="6"] { --mb-c: var(--owlet-sonnengelb-grafik, #e6c15a); }
+        .apexcharts-series[data\:realIndex="6"], .apexcharts-legend-series[rel="7"] { --mb-c: var(--owlet-mint, #89d2b0); }
+        .apexcharts-bar-area { fill: var(--mb-c); stroke: var(--mb-c); }
+        .apexcharts-line { stroke: var(--mb-c); }
+        .apexcharts-marker { fill: var(--mb-c); stroke: var(--owlet-huelle-unten, #171d29); }
+        .apexcharts-datalabel { fill: var(--owlet-mint, #89d2b0); }
+        .apexcharts-datalabels rect { fill: var(--owlet-mint, #89d2b0); stroke: var(--owlet-mint, #89d2b0); opacity: calc(12% + 0.04 * var(--owlet-dunkel-anteil, 100%)); }
+        .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--owlet-text-sekundaer, #8794a5); }
+        .apexcharts-legend-text { color: var(--owlet-text-sekundaer, #8794a5) !important; }
+        .apexcharts-gridline { stroke: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
     apex_config:
       chart:
         background: transparent
         fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
-        foreColor: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-text-sekundaer').trim()||'#8794a5'"
+        foreColor: '#8794a5'
         height: 260
         toolbar:
           show: false
@@ -228,26 +246,26 @@ cards:
         style:
           fontSize: 10px
           fontWeight: 700
-          colors: ["EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-mint').trim()||'#89d2b0'"]
+          colors: ['#89d2b0']
         background:
           enabled: true
-          foreColor: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-mint').trim()||'#89d2b0'"
+          foreColor: '#89d2b0'
           borderRadius: 5
           padding: 3
-          opacity: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-dunkel-anteil').trim()==='0%'?0.12:0.16"
+          opacity: 0.16
           borderWidth: 1
-          borderColor: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-mint').trim()||'#89d2b0'"
+          borderColor: '#89d2b0'
         dropShadow:
           enabled: false
       grid:
-        borderColor: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-unterkachel-rand').trim()||'rgba(255, 255, 255, 0.06)'"
+        borderColor: rgba(255,255,255,0.06)
         strokeDashArray: 3
       # Groesse je Serie in der Reihenfolge unten: nur die Prognose bekommt
       # Punkte, damit ihr Wert auch allein sichtbar ist.
       markers:
         size: [0, 0, 0, 0, 4, 4, 0]
         strokeWidth: 2
-        strokeColors: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-huelle-unten').trim()||'#171d29'"
+        strokeColors: '#171d29'
       # Die Prognose-Serien stehen nicht in der Legende: ApexCharts kann eine
       # Serie ohne Werte dort nicht ausblenden. Der Tooltip benennt sie.
       legend:
@@ -255,13 +273,13 @@ cards:
         position: bottom
         fontSize: 11px
         labels:
-          colors: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-text-sekundaer').trim()||'#8794a5'"
+          colors: '#8794a5'
         # 0 fuer die beiden Prognose-Serien, sonst bliebe ihr Farbpunkt stehen.
         markers:
           size: [5, 5, 5, 5, 0, 0]
           strokeWidth: 0
       tooltip:
-        theme: "EVAL:getComputedStyle(document.documentElement).getPropertyValue('--owlet-dunkel-anteil').trim()==='0%'?'light':'dark'"
+        theme: dark
         shared: true
         intersect: false
         x:
@@ -311,7 +329,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Netzbezug
         type: column
-        color: var(--owlet-rot)
+        color: '#f0736a'
         yaxis_id: kwh
         unit: kWh
         float_precision: 1
@@ -351,7 +369,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Solarertrag
         type: column
-        color: var(--owlet-sonnengelb)
+        color: '#e6c15a'
         yaxis_id: kwh
         unit: kWh
         float_precision: 1
@@ -391,7 +409,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Trend Netzbezug
         type: line
-        color: var(--owlet-rot)
+        color: '#f0736a'
         yaxis_id: kwh
         curve: smooth
         stroke_width: 2
@@ -442,7 +460,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Trend Solar
         type: line
-        color: var(--owlet-sonnengelb)
+        color: '#e6c15a'
         yaxis_id: kwh
         curve: smooth
         stroke_width: 2
@@ -493,7 +511,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Prognose Netzbezug
         type: line
-        color: var(--owlet-rot)
+        color: '#f0736a'
         yaxis_id: kwh
         curve: smooth
         stroke_width: 2
@@ -558,7 +576,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Prognose Solar
         type: line
-        color: var(--owlet-sonnengelb)
+        color: '#e6c15a'
         yaxis_id: kwh
         curve: smooth
         stroke_width: 2
@@ -623,7 +641,7 @@ cards:
       - entity: input_number.energie_monatsbilanz_jahr
         name: Autarkie in %
         type: line
-        color: var(--owlet-mint)
+        color: '#89d2b0'
         yaxis_id: band
         stroke_width: 0
         extend_to: false

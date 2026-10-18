@@ -242,7 +242,8 @@ und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
 `owlet-leuchten-amber`), von der Energie-View die Templates
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
 `energie-zaehler-karte.yaml`, `energie-solarbank-pv-karte.yaml` und
-`energie-monatsbilanz-karte.yaml` (Diagrammfarben aus dem Theme, siehe deren
+`energie-monatsbilanz-karte.yaml` (Diagrammfarben per card-mod-CSS, weil
+apexcharts-card bei einem Themewechsel nicht neu zeichnet; siehe deren
 Kopfkommentar) und `energie-flow-karte.yaml` (SVG-Farben als `style`, nicht
 als Attribut). Damit ist die Energie-View vollständig umgestellt. Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
@@ -354,6 +355,16 @@ Seitengrund hält der Sekundärtext 4,98:1.
 Die Variablen heißen wie die Farbe: `owlet-gruen`, `owlet-amber`,
 `owlet-koralle`, `owlet-rot`, `owlet-blau` usw. Alle Tieftöne dürfen Text
 färben.
+
+- **Sonnengelb in Grafiken** (`owlet-sonnengelb-grafik`, hell `#a47800`):
+  Der Tiefton `#776202` ist genau so hell wie Rot `#ae3c38` (1,01:1). Wo PV
+  und Netz nebeneinander stehen (Energiefluss, Monatsbilanz), waren sie im
+  hellen Modus kaum zu trennen, bei Rot-Grün-Schwäche ΔE 14,9. `#a47800`
+  liegt im selben Farbton (43,9° statt 44°), 1,50:1 heller als Rot, ΔE bei
+  Deuteranopie 27,1 (dunkel Pastell: 26,4). Es hält 3:1 für Grafiken
+  (Hülle 3,65:1, Balkenspur 3,13:1, Sonnen-Icon auf Tönung 3,36:1), aber
+  nicht 4,5:1: nur für Leitungen, Ringe, Balken, Säulen und Icons, Text in
+  Sonnengelb bleibt `owlet-sonnengelb`. Dunkel ist es Sonnengelb `#e6c15a`.
 
 - **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `owlet-licht-an`
   ist hell Amber `#855c04`. Schon dunkel liegen beide nur ΔE00 3,2
