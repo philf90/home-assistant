@@ -34,7 +34,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
 | [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
 | [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
-| [`fussball/`](dashboard/fussball/) | `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
+| [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
 | [`sonstiges/`](dashboard/sonstiges/) | `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | – |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
 | [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md` | – | – |
