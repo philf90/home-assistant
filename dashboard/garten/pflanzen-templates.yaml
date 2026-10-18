@@ -46,7 +46,15 @@
 #     <img> im HTML, das bei jeder Aktualisierung neu entstuende.
 #   - Popup: button-card wertet [[[ ]]] auch in fire-dom-event-Daten aus;
 #     der Titel nimmt daher den Anzeigenamen der Pflanze. popup_styles setzt
-#     die Owlet-Popupflaeche #222b3c (browser_mod 3.3, documentation/styles.md).
+#     die Owlet-Popupflaeche owlet-flaeche-erhoeht (browser_mod 3.3,
+#     documentation/styles.md).
+#   - Popup-Diagramm, Farben: apexcharts-card 2.2.3 zeichnet bei einem Wechsel
+#     zwischen hell und dunkel nicht neu, und var() in series/apex_config
+#     bricht das Diagramm. Die Farben stehen deshalb im card_mod-CSS als
+#     var(--owlet-...); die Werte unter series und apex_config gelten nur ohne
+#     card-mod und sind die dunklen (wie energie-monatsbilanz-karte.yaml).
+#     Min/Max bleiben in beiden Modi #6e7988 (owlet-muted ist hell und dunkel
+#     gleich), der Tooltip bleibt dunkel.
 #   - Popup-Diagramm: statistics.align: start legt jeden Tagesmittelwert auf
 #     00:00 seines Tages; mit dem Standard "middle" (12:00) begann die Flaeche
 #     eingerueckt. chart.offsetX greift auf iOS nicht, deshalb rueckt ein
@@ -81,14 +89,14 @@ decluttering_templates:
           service: browser_mod.popup
           data:
             title: "[[[ return (entity && entity.attributes.friendly_name ? entity.attributes.friendly_name : variables.p) + ' · Bodenfeuchte'; ]]]"
-            # Owlet: Popups bekommen die erhoehte Flaeche #222b3c (DESIGN.md)
+            # Owlet: Popups bekommen die erhoehte Flaeche owlet-flaeche-erhoeht (DESIGN.md)
             popup_styles:
               - style: all
                 styles: |
                   ha-dialog {
-                    --ha-dialog-surface-background: #222b3c;
+                    --ha-dialog-surface-background: var(--owlet-flaeche-erhoeht, #222b3c);
                     --ha-card-background: transparent;
-                    --primary-text-color: #f2f5f8;
+                    --primary-text-color: var(--owlet-text, #f2f5f8);
                     --ha-dialog-border-radius: 22px !important;
                   }
             content:
@@ -149,7 +157,13 @@ decluttering_templates:
                   ha-card { background: transparent !important; border: none !important; box-shadow: none !important; }
                   /* apexcharts-card 2.2.3 rendert den Titel als #header__title */
                   #header { padding: 4px 4px 0 !important; }
-                  #header__title { font-size: 13px !important; font-weight: 600 !important; color: #b4c0cf !important; }
+                  #header__title { font-size: 13px !important; font-weight: 600 !important; color: var(--owlet-label, #b4c0cf) !important; }
+                  /* Diagrammfarben folgen dem Modus nur hier; Werte unter series/apex_config sind die dunklen (s. Dateikopf) */
+                  .apexcharts-series[data\:realIndex="0"] .apexcharts-area:not([fill="none"]) { fill: color-mix(in srgb, var(--owlet-gruen, #a6d49e) 18%, transparent); }
+                  .apexcharts-series[data\:realIndex="0"] .apexcharts-area:not([stroke="none"]) { stroke: var(--owlet-gruen, #a6d49e); }
+                  .apexcharts-series[data\:realIndex="0"] .apexcharts-marker { fill: var(--owlet-gruen, #a6d49e); }
+                  .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--owlet-text-sekundaer, #8794a5); }
+                  .apexcharts-gridline { stroke: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
                   /* ApexCharts laesst links ~23 px frei, bevor die y-Beschriftung beginnt. chart.offsetX wirkt
                      auf iOS nicht (SVG-transform); negativer Rand am HTML-Container rueckt "100" unter den Titel. */
                   #graph { margin-left: -23px !important; }
@@ -160,21 +174,21 @@ decluttering_templates:
             const name=A.friendly_name||variables.p;
             const abS=states[variables.ab];
             if(abS&&abS.state==='on'){
-              return `<div style="font-size:15px;font-weight:700;letter-spacing:-0.02em;color:#b4c0cf;">${name}</div>
-                <div style="font-size:11.5px;color:#8794a5;margin-top:1px;">Abgeerntet · Werte ausgeblendet</div>`;
+              return `<div style="font-size:15px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-label, #b4c0cf);">${name}</div>
+                <div style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);margin-top:1px;">Abgeerntet · Werte ausgeblendet</div>`;
             }
             const zahl=id=>{const s=states[id];const v=s?parseFloat(s.state):NaN;return Number.isFinite(v)?v:NaN;};
             const p=variables.p;
             const f=zahl(`sensor.${p}_bodenfeuchtigkeit`), fMin=zahl(`number.${p}_min_bodenfeuchtigkeit`), fMax=zahl(`number.${p}_max_bodenfeuchtigkeit`);
             const t=zahl(`sensor.${p}_bodentemperatur`), tMin=zahl(`number.${p}_min_bodentemperatur`), tMax=zahl(`number.${p}_max_bodentemperatur`);
-            let col='#a6d49e', txt='Alles gut';
-            if(f<fMin){col='#e6b566';txt='Gießen';}
-            else if(f>fMax){col='#e6b566';txt='Zu nass';}
-            else if(t<tMin){col='#e6b566';txt='Boden kalt';}
-            else if(t>tMax){col='#e6b566';txt='Boden warm';}
-            const pille=`<span style="display:inline-flex;align-items:center;color:${col};background:${col}1f;border:1px solid ${col}3d;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:9px;white-space:nowrap;">${txt}</span>`;
-            return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:16px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${name}</span>${pille}</div>
-              <div style="font-size:12px;font-style:italic;color:#8794a5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${A.species||''}</div>`;
+            let col='var(--owlet-gruen, #a6d49e)', txt='Alles gut';
+            if(f<fMin){col='var(--owlet-amber, #e6b566)';txt='Gießen';}
+            else if(f>fMax){col='var(--owlet-amber, #e6b566)';txt='Zu nass';}
+            else if(t<tMin){col='var(--owlet-amber, #e6b566)';txt='Boden kalt';}
+            else if(t>tMax){col='var(--owlet-amber, #e6b566)';txt='Boden warm';}
+            const pille=`<span style="display:inline-flex;align-items:center;color:${col};background:color-mix(in srgb, ${col} 12%, transparent);border:1px solid color-mix(in srgb, ${col} 24%, transparent);font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:9px;white-space:nowrap;">${txt}</span>`;
+            return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:16px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);">${name}</span>${pille}</div>
+              <div style="font-size:12px;font-style:italic;color:var(--owlet-text-sekundaer, #8794a5);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${A.species||''}</div>`;
           ]]]
         werte: |
           [[[
@@ -185,26 +199,26 @@ decluttering_templates:
             const p=variables.p;
             const kachel=(o)=>{
               const v=zahl(o.wert), mn=zahl(o.min), mx=zahl(o.max);
-              let col='#8794a5', txt='keine Daten';
+              let col='var(--owlet-text-sekundaer, #8794a5)', txt='keine Daten';
               if(Number.isFinite(v)){
                 if(v<mn){col=o.aus;txt=o.tief;}
                 else if(v>mx){col=o.aus;txt=o.hoch;}
-                else {col='#a6d49e';txt='im Sollbereich';}
+                else {col='var(--owlet-gruen, #a6d49e)';txt='im Sollbereich';}
               }
               const pos=x=>Math.max(0,Math.min(100,(x-o.von)/(o.bis-o.von)*100));
-              const band=(Number.isFinite(mn)&&Number.isFinite(mx))?`<i style="position:absolute;top:0;bottom:0;left:${pos(mn)}%;width:${pos(mx)-pos(mn)}%;background:rgba(166,212,158,0.24);border-radius:3px;"></i>`:'';
-              const mark=Number.isFinite(v)?`<i style="position:absolute;top:-3px;left:${pos(v)}%;width:4px;height:12px;margin-left:-2px;border-radius:2px;background:${col};box-shadow:0 0 0 2px #171d29;"></i>`:'';
-              return `<div style="background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:13px;padding:10px 12px;min-width:0;">
-                <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#8794a5;"><ha-icon icon="${o.icon}" style="--mdc-icon-size:15px;width:15px;height:15px;display:flex;margin:0;color:${col};"></ha-icon>${o.titel}</div>
-                <div style="font-size:20px;font-weight:750;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;margin-top:4px;">${de(v,1)}<span style="font-size:0.6em;color:#8794a5;font-weight:600;margin-left:2px;">${o.einheit}</span></div>
-                <div style="position:relative;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);margin:8px 0 7px;">${band}${mark}</div>
-                <div style="font-size:11px;font-weight:600;color:${col===o.aus?col:'#8794a5'};">${txt}</div>
-                <div style="font-size:11px;color:#8794a5;">Soll ${de(mn,0)}–${de(mx,0)} ${o.einheit}</div>
+              const band=(Number.isFinite(mn)&&Number.isFinite(mx))?`<i style="position:absolute;top:0;bottom:0;left:${pos(mn)}%;width:${pos(mx)-pos(mn)}%;background:color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent);border-radius:3px;"></i>`:'';
+              const mark=Number.isFinite(v)?`<i style="position:absolute;top:-3px;left:${pos(v)}%;width:4px;height:12px;margin-left:-2px;border-radius:2px;background:${col};box-shadow:0 0 0 2px var(--owlet-huelle-unten, #171d29);"></i>`:'';
+              return `<div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:10px 12px;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);"><ha-icon icon="${o.icon}" style="--mdc-icon-size:15px;width:15px;height:15px;display:flex;margin:0;color:${col};"></ha-icon>${o.titel}</div>
+                <div style="font-size:20px;font-weight:750;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;margin-top:4px;">${de(v,1)}<span style="font-size:0.6em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;margin-left:2px;">${o.einheit}</span></div>
+                <div style="position:relative;height:6px;border-radius:3px;background:color-mix(in srgb, rgba(255, 255, 255, 0.07) var(--owlet-dunkel-anteil, 100%), var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05)));margin:8px 0 7px;">${band}${mark}</div>
+                <div style="font-size:11px;font-weight:600;color:${col===o.aus?col:'var(--owlet-text-sekundaer, #8794a5)'};">${txt}</div>
+                <div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);">Soll ${de(mn,0)}–${de(mx,0)} ${o.einheit}</div>
               </div>`;
             };
             return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">`
-              + kachel({titel:'Bodenfeuchte',icon:'mdi:water',wert:`sensor.${p}_bodenfeuchtigkeit`,min:`number.${p}_min_bodenfeuchtigkeit`,max:`number.${p}_max_bodenfeuchtigkeit`,von:0,bis:100,einheit:'%',aus:'#e6b566',tief:'zu trocken',hoch:'zu nass'})
-              + kachel({titel:'Bodentemperatur',icon:'mdi:thermometer-low',wert:`sensor.${p}_bodentemperatur`,min:`number.${p}_min_bodentemperatur`,max:`number.${p}_max_bodentemperatur`,von:0,bis:40,einheit:'°C',aus:'#e6b566',tief:'zu kalt',hoch:'zu warm'})
+              + kachel({titel:'Bodenfeuchte',icon:'mdi:water',wert:`sensor.${p}_bodenfeuchtigkeit`,min:`number.${p}_min_bodenfeuchtigkeit`,max:`number.${p}_max_bodenfeuchtigkeit`,von:0,bis:100,einheit:'%',aus:'var(--owlet-amber, #e6b566)',tief:'zu trocken',hoch:'zu nass'})
+              + kachel({titel:'Bodentemperatur',icon:'mdi:thermometer-low',wert:`sensor.${p}_bodentemperatur`,min:`number.${p}_min_bodentemperatur`,max:`number.${p}_max_bodentemperatur`,von:0,bis:40,einheit:'°C',aus:'var(--owlet-amber, #e6b566)',tief:'zu kalt',hoch:'zu warm'})
               + `</div>`;
           ]]]
         fuss: |
@@ -213,12 +227,12 @@ decluttering_templates:
             if(abS&&abS.state==='on') return '';
             const s=states[variables.akku];
             const a=s?parseFloat(s.state):NaN;
-            let col='#8794a5';
-            if(Number.isFinite(a)) col=a>=30?'#a6d49e':(a>=15?'#e6b566':'#f0736a');
+            let col='var(--owlet-text-sekundaer, #8794a5)';
+            if(Number.isFinite(a)) col=a>=30?'var(--owlet-gruen, #a6d49e)':(a>=15?'var(--owlet-amber, #e6b566)':'var(--owlet-rot, #f0736a)');
             const icon=!Number.isFinite(a)?'mdi:battery-unknown':(a>=30?'mdi:battery-high':(a>=15?'mdi:battery-medium':'mdi:battery-alert'));
             const akku=`<span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:${col};"><ha-icon icon="${icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;margin:0;"></ha-icon>${Number.isFinite(a)?Math.round(a)+' %':'–'}</span>`;
             const zusatz=variables.hinweis?` · ${variables.hinweis}`:'';
-            return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8794a5;min-width:0;">${akku}<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· Sensor ${variables.sensor}${zusatz}</span></div>`;
+            return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);min-width:0;">${akku}<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· Sensor ${variables.sensor}${zusatz}</span></div>`;
           ]]]
         knopf:
           card:
@@ -236,26 +250,26 @@ decluttering_templates:
                 - padding: 4px 10px
                 - border-radius: 10px
                 - box-shadow: none
-                - background: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? 'rgba(166,212,158,0.12)' : 'rgba(255,255,255,0.028)'; ]]]"
-                - border: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? '1px solid rgba(166,212,158,0.24)' : '1px solid rgba(255,255,255,0.06)'; ]]]"
+                - background: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? 'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)' : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'; ]]]"
+                - border: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? '1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]"
               grid:
                 - grid-template-areas: '"i n"'
                 - grid-template-columns: min-content auto
                 - column-gap: 5px
               icon:
                 - width: 14px
-                - color: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? '#a6d49e' : '#6e7988'; ]]]"
+                - color: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? 'var(--owlet-gruen, #a6d49e)' : 'var(--owlet-muted, #6e7988)'; ]]]"
               name:
                 - font-size: 11.5px
                 - font-weight: 600
-                - color: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? '#a6d49e' : '#8794a5'; ]]]"
+                - color: "[[[ return states['input_boolean.[[pflanze]]_abgeerntet'] && states['input_boolean.[[pflanze]]_abgeerntet'].state === 'on' ? 'var(--owlet-gruen, #a6d49e)' : 'var(--owlet-text-sekundaer, #8794a5)'; ]]]"
       styles:
         card:
           - padding: 14px 16px
           - border-radius: 22px
-          - border: 1px solid rgba(255, 255, 255, 0.05)
-          - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-          - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+          - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+          - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+          - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         grid:
           - grid-template-areas: |
               [[[ const s=states[variables.ab]; return (s&&s.state==='on') ? '"i kopf knopf"' : '"i kopf kopf" "werte werte werte" "fuss fuss knopf"'; ]]]
