@@ -365,6 +365,14 @@ färben.
   (Hülle 3,65:1, Balkenspur 3,13:1, Sonnen-Icon auf Tönung 3,36:1), aber
   nicht 4,5:1: nur für Leitungen, Ringe, Balken, Säulen und Icons, Text in
   Sonnengelb bleibt `owlet-sonnengelb`. Dunkel ist es Sonnengelb `#e6c15a`.
+  Für Flächen direkt neben Rot reicht 1,50:1 nicht (im Gerät geprüft):
+  PV-Säulen der Monatsbilanz sowie PV im Hausring und im Tagesbalken des
+  Energieflusses sind in beiden Modi hellgelb `#e6c15a` gefüllt und haben
+  einen Rand in `owlet-sonnengelb-grafik`. Hell sind Fläche und Rot dann
+  3,47:1 auseinander (ΔE 64,5, bei Deuteranopie 41,9); die Kante zur Hülle
+  trägt der Rand mit 3,65:1, die Fläche allein hätte 1,58:1. Dunkel sind
+  Fläche und Rand gleichfarbig. Linien bleiben im Grafik-Ton, eine
+  hellgelbe Linie verschwände auf heller Hülle.
 
 - **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `owlet-licht-an`
   ist hell Amber `#855c04`. Schon dunkel liegen beide nur ΔE00 3,2
