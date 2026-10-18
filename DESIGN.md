@@ -254,8 +254,10 @@ Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
 `geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
 Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
 (`autos-karte-v4.yaml` mit dem Template `owlet_auto_fx` in
-`autos-templates.yaml`) und die Garten-View (`garten-karte.yaml`). Die
-Owlet-Karte bleibt als Identitätshülle dunkel.
+`autos-templates.yaml`), die Garten-View (`garten-karte.yaml`) und die
+Pflanzen-View (`pflanzen-view.yaml` mit dem Template `owlet_pflanze` in
+`pflanzen-templates.yaml`; das Popup-Diagramm färbt wie die Monatsbilanz
+per card-mod-CSS). Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
