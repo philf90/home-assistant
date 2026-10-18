@@ -136,8 +136,9 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`fussball-espn-konfig.yaml`](fussball/fussball-espn-konfig.yaml) | konfig | Fussball – ESPN-Abruf fuer die Meldungen | – | – | aktiv |
 | [`fussball-templates.yaml`](fussball/fussball-templates.yaml) | templates | Fussball – button-card-Templates | – | – | aktiv |
-| [`fussball-view.yaml`](fussball/fussball-view.yaml) | view | Fussball – komplette Ansicht | bubble-card, button-card, card-mod, decluttering-card | – | aktiv |
+| [`fussball-view.yaml`](fussball/fussball-view.yaml) | view | Fussball – komplette Ansicht | bubble-card, button-card, card-mod, decluttering-card | `notify.mobile_app_iphone` | aktiv |
 
 ## sonstiges
 

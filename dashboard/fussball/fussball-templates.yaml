@@ -28,6 +28,7 @@
 #   fussball_tabelle_kopf / fussball_tabelle      Tabelle mit Zonen (T1)
 #   fussball_spiel       Inhalt des Bubble-Card-Popups #fussball-spiel
 #                        (Ticker, Kommentar, Statistik, Messung)
+#   fussball_meldungen_kopf / fussball_meldungen  Schalter der Meldungen
 #   Hervorhebung des Lieblingsvereins in Liste und Tabelle nach H1
 #   (FCK-Rot als Flaeche + Kante, ohne Zonenstrich).
 #
@@ -56,8 +57,10 @@
 #     weil button-card ohne Entitaetsaenderung nicht neu rendert
 #     (shouldUpdate in v7.0.1).
 #   Folgen: Abgerufen wird nur, solange die View in einem Browser offen ist,
-#   und jedes Geraet ruft selbst ab. Es entstehen keine Entitaeten, also auch
-#   keine Historie und keine Automationen auf Tore o. ae.
+#   und jedes Geraet ruft selbst ab. Es entstehen keine Entitaeten und keine
+#   Historie. Die Meldungen zum Lieblingsverein ruft Home Assistant deshalb
+#   selbst ab (fussball-espn-konfig.yaml, Kopf von fussball-view.yaml); die
+#   Karte "Meldungen" (fussball_meldungen) zeigt nur die Schalter.
 #   - Update-sicher: window.__fussball traegt eine VERSION; nach einem
 #     Dashboard-Update ersetzt eine hoehere Version das alte Objekt der
 #     offenen Seite (sonst "fb.minute is not a function").
@@ -166,15 +169,15 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 10, alt = window.__fussball;
-          if (alt && alt.version === VERSION) return alt;
+          const VERSION = 13, alt = window.__fussball;
+          if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
           const MIN = 60e3;
           // OpenLigaDB: Spielplan, Stand, Tabelle. ESPN (inoffiziell): nur die Spielminute.
           const BASIS = { oldb: 'https://api.openligadb.de/', espn: 'https://site.api.espn.com/apis/site/v2/sports/soccer/' };
           const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
-          const fb = { version: VERSION, F, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
+          const fb = { version: VERSION, F, hass, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
           fb.saison = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
           // Abruf mit Cache: liefert sofort den letzten Stand und holt im Hintergrund neu,
           // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad.
@@ -379,7 +382,7 @@ button_card_templates:
             ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
             window.dispatchEvent(ev);
           };
-          fb.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fb.tippAttr('window.__fussball.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#b4c0cf;display:grid;place-items:center;cursor:pointer;pointer-events:auto;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+          fb.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fb.tippAttr('window.__fussball.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);display:grid;place-items:center;cursor:pointer;pointer-events:auto;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
           fb.pfeil = '<svg viewBox="0 0 24 24" width="12" height="12" style="display:block;"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
           fb.kopiere = () => {
             const t = JSON.stringify(fb.messwerte, null, 2);
@@ -560,21 +563,26 @@ button_card_templates:
           // Popup-Inhalt (Template fussball_spiel); FAV = teamId des Lieblingsvereins
           const STAT = [['possessionPct', 'Ballbesitz', '%'], ['totalShots', 'Schüsse'], ['shotsOnTarget', 'Aufs Tor'], ['wonCorners', 'Ecken'],
             ['foulsCommitted', 'Fouls'], ['offsides', 'Abseits'], ['yellowCards', 'Gelbe Karten'], ['redCards', 'Rote Karten'], ['saves', 'Paraden']];
-          const FARBE = { tor: '#ff8a80', gelb: '#e6b566', rot: '#f0736a', elf: '#e6b566', wechsel: '#7fb3d5', phase: '#8794a5', sonst: '#8794a5' };
+          const FARBE = { tor: 'color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a))', gelb: 'var(--owlet-amber, #e6b566)', rot: 'var(--owlet-rot, #f0736a)', elf: 'var(--owlet-amber, #e6b566)', wechsel: 'var(--owlet-blau, #7fb3d5)', phase: 'var(--owlet-text-sekundaer, #8794a5)', sonst: 'var(--owlet-text-sekundaer, #8794a5)' };
+          // Karten-Symbol: Fuellung in beiden Modi im Pastellton, Rand in der Statusfarbe
+          // (hell der Tiefton). Wie die PV-Flaechen in DESIGN.md: die helle Statusfarbe
+          // ist ein Textton, als Flaeche wirkte Gelb sonst ocker bis rot.
+          const karte = (f, g) => `<svg viewBox="0 0 24 24" width="${g}" height="${g}"><rect x="7.75" y="4.25" width="8.5" height="15.5" rx="1.25" fill="${f}" stroke="currentColor" stroke-width="1.5"/></svg>`;
           const ICON = {
             tor: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>',
-            gelb: '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>',
+            gelb: karte('#e6b566', 17),
+            rot: karte('#f0736a', 17),
             wechsel: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg>',
             phase: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="14" r="5"/><path d="M13 11.5 21 8v3l-6 2.2M9 4v3M5 5.5l1.5 2M13 5.5l-1.5 2"/></svg>'
           };
-          ICON.rot = ICON.gelb; ICON.elf = ICON.tor; ICON.sonst = ICON.phase;
+          ICON.elf = ICON.tor; ICON.sonst = ICON.phase;
           const kurz = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
           const uhrzeit = t => t ? new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
           const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
 
           fb.spielPopup = FAV => {
             const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
-            const kopf = t => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:10px;align-items:center;"><div style="font-size:12.5px;font-weight:600;color:#8794a5;min-width:0;">${t}</div>${fb.zuKnopf()}</div>`;
+            const kopf = t => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:10px;align-items:center;"><div style="font-size:12.5px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);min-width:0;">${t}</div>${fb.zuKnopf()}</div>`;
             const s = fb.sel;
             if (!s) return huelle(kopf('Spiel') + fb.hinweis('Spielstand der Vereinskarte oder ein Spiel im Spieltag antippen.'));
             const sp = fb.spieltag(s.L), m = sp ? sp.spiele.find(x => x.id === s.id) : null;
@@ -598,12 +606,12 @@ button_card_templates:
             // ----- Kopf und Spielstand -----
             const min = k === 'live' ? uhr(e) : null;
             const status = k === 'live'
-              ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${min ? ' · ' + (min === 'HZ' ? 'Halbzeit' : fb.esc(min)) : ''}</span>`
-              : `<span style="color:#8794a5;">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
-            const seite = (n, l) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:#f2f5f8;min-width:0;">${fb.wappen(l, n, 42)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span></div>`;
-            const stand = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:12px 8px;border-radius:16px;${fav ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);' : 'background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);'}">
+              ? `<span style="display:inline-flex;align-items:center;gap:5px;color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"><span class="pulse"></span>LIVE${min ? ' · ' + (min === 'HZ' ? 'Halbzeit' : fb.esc(min)) : ''}</span>`
+              : `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+            const seite = (n, l) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:var(--owlet-text, #f2f5f8);min-width:0;">${fb.wappen(l, n, 42)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span></div>`;
+            const stand = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:12px 8px;border-radius:16px;${fav ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);' : 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));'}">
                 ${seite(m.heim, m.heim_logo)}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:5px;"><b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th ?? '–'} : ${tg ?? '–'}</b><span style="font-size:11.5px;font-weight:700;">${status}</span>${standEspn ? '<span style="font-size:10.5px;font-weight:600;color:#8794a5;">Stand laut ESPN</span>' : ''}</div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:5px;"><b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${th ?? '–'} : ${tg ?? '–'}</b><span style="font-size:11.5px;font-weight:700;">${status}</span>${standEspn ? '<span style="font-size:10.5px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">Stand laut ESPN</span>' : ''}</div>
                 ${seite(m.gast, m.gast_logo)}</div>`;
 
             // ----- Reiter -----
@@ -614,9 +622,9 @@ button_card_templates:
             if (det && det.komEigen) reiter.push(['kommentar', 'Kommentar']);
             if (statZeilen.length) reiter.push(['statistik', 'Statistik']);
             const tab = fb.tab === 'messung' || reiter.some(r => r[0] === fb.tab) ? fb.tab : 'ticker';
-            const reiterHtml = `<div role="tablist" style="display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${reiter.map(([id, n]) => {
+            const reiterHtml = `<div role="tablist" style="display:grid;grid-template-columns:repeat(${reiter.length},minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">${reiter.map(([id, n]) => {
               const an = id === tab;
-              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px 2px;border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
+              return `<button type="button" role="tab" aria-selected="${an}" ${fb.tippAttr(`window.__fussball.zeige('${id}')`)} style="font:inherit;font-size:12.5px;font-weight:700;padding:7px 2px;border-radius:10px;cursor:pointer;pointer-events:auto;color:${an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)'};background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'none'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'transparent'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n}</button>`;
             }).join('')}</div>`;
 
             // Warum ESPN fehlt (fuer Ticker und Messung)
@@ -647,24 +655,24 @@ button_card_templates:
               }
               z.sort((p, q) => q.sort - p.sort || q.i - p.i);
               const zeilen = z.map(x => {
-                const c = FARBE[x.typ] || '#8794a5';
+                const c = FARBE[x.typ] || 'var(--owlet-text-sekundaer, #8794a5)';
                 const bg = x.unser ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);box-shadow:inset 3px 0 0 #e30613;'
-                  : x.typ === 'tor' ? 'background:rgba(255,138,128,0.12);border:1px solid rgba(255,138,128,0.24);'
-                  : x.typ === 'phase' ? 'border:1px dashed rgba(255,255,255,0.08);' : 'background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);';
+                  : x.typ === 'tor' ? 'background:color-mix(in srgb, color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a)) 12%, transparent);border:1px solid color-mix(in srgb, color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a)) 24%, transparent);'
+                  : x.typ === 'phase' ? 'border:1px dashed var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));' : 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
                 return `<div style="display:grid;grid-template-columns:40px 30px minmax(0,1fr);gap:10px;align-items:start;padding:9px 10px;border-radius:13px;${bg}">
-                  <span style="font-size:12.5px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;padding-top:6px;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span>
-                  <span style="width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:${c};background:${c}29;">${ICON[x.typ] || ICON.phase}</span>
-                  <span style="min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:#f2f5f8;"><b style="font-weight:700;">${fb.esc(x.titel)}</b>${x.d ? `<span style="font-size:12.5px;color:#b4c0cf;">${fb.esc(x.d)}</span>` : ''}<span style="font-size:10.5px;font-weight:600;color:#8794a5;">${x.q}</span></span></div>`;
+                  <span style="font-size:12.5px;font-weight:800;color:var(--owlet-label, #b4c0cf);font-variant-numeric:tabular-nums;padding-top:6px;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span>
+                  <span style="width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:${c};background:color-mix(in srgb, ${c} 16%, transparent);">${ICON[x.typ] || ICON.phase}</span>
+                  <span style="min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--owlet-text, #f2f5f8);"><b style="font-weight:700;">${fb.esc(x.titel)}</b>${x.d ? `<span style="font-size:12.5px;color:var(--owlet-label, #b4c0cf);">${fb.esc(x.d)}</span>` : ''}<span style="font-size:10.5px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">${x.q}</span></span></div>`;
               }).join('');
               const leer = !z.length ? fb.hinweis(k === 'live' ? 'Noch keine Tore.' : 'Keine Tore.') : '';
               const fehlt = espnGrund || (det && !det.ev.length ? 'ESPN meldet für dieses Spiel keine Ereignisse' : '');
-              return `<div style="display:flex;flex-direction:column;gap:6px;">${zeilen}${leer}${fehlt ? `<div style="border:1px dashed rgba(255,255,255,0.1);border-radius:13px;padding:10px 12px;font-size:12.5px;color:#8794a5;">Karten, Wechsel und Spielphasen fehlen: ${fehlt}.</div>` : ''}</div>`;
+              return `<div style="display:flex;flex-direction:column;gap:6px;">${zeilen}${leer}${fehlt ? `<div style="border:1px dashed color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));border-radius:13px;padding:10px 12px;font-size:12.5px;color:var(--owlet-text-sekundaer, #8794a5);">Karten, Wechsel und Spielphasen fehlen: ${fehlt}.</div>` : ''}</div>`;
             };
 
             // ----- Kommentar von ESPN, Sprache wie geliefert -----
             const kommentar = () => {
               const l = det.kom.slice().sort((p, q) => q.sort - p.sort || q.i - p.i).slice(0, 80);
-              return `<div style="display:flex;flex-direction:column;gap:4px;">${fb.hinweis('Kommentar von ESPN in der gelieferten Sprache')}${l.map(x => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);"><span style="font-size:12px;font-weight:800;color:#b4c0cf;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span><span style="font-size:12.5px;color:#f2f5f8;min-width:0;">${fb.esc(x.text)}</span></div>`).join('')}</div>`;
+              return `<div style="display:flex;flex-direction:column;gap:4px;">${fb.hinweis('Kommentar von ESPN in der gelieferten Sprache')}${l.map(x => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:7px 10px;border-radius:12px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"><span style="font-size:12px;font-weight:800;color:var(--owlet-label, #b4c0cf);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;">${fb.esc(x.min)}</span><span style="font-size:12.5px;color:var(--owlet-text, #f2f5f8);min-width:0;">${fb.esc(x.text)}</span></div>`).join('')}</div>`;
             };
 
             // ----- Aufstellung: Spielfeld (Variante B) oder Liste (Variante A) -----
@@ -674,22 +682,22 @@ button_card_templates:
               if (!seiten.includes(sw)) sw = FAV && m.gast_id == FAV && seiten.includes('gast') ? 'gast' : seiten[0];
               const T = det.teams[sw], unser = FAV && (sw === 'heim' ? m.heim_id : m.gast_id) == FAV;
               const MK = {
-                tor: ['#ff8a80', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>'],
-                gelb: ['#e6b566', '<svg viewBox="0 0 24 24" width="11" height="11"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>'],
-                rot: ['#f0736a', '<svg viewBox="0 0 24 24" width="11" height="11"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="currentColor"/></svg>'],
-                aus: ['#8794a5', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'],
-                ein: ['#7fb3d5', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>']
+                tor: ['color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a))', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>'],
+                gelb: ['var(--owlet-amber, #e6b566)', karte('#e6b566', 11)],
+                rot: ['var(--owlet-rot, #f0736a)', karte('#f0736a', 11)],
+                aus: ['var(--owlet-text-sekundaer, #8794a5)', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'],
+                ein: ['var(--owlet-blau, #7fb3d5)', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>']
               };
               const markenVon = p => det.marken.get(norm(p.name)) || [];
               const zeileSp = p => {
-                const mk = markenVon(p).map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:${c}1f;border:1px solid ${c}3d;">${ic}${fb.esc(x.text)}</span>`; }).join('');
+                const mk = markenVon(p).map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">${ic}${fb.esc(x.text)}</span>`; }).join('');
                 const kurzPos = (posTexte(p.pos)[0] || '').replace(/^sub$/i, '');
-                return `<div style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);font-size:13px;color:#f2f5f8;">
-                  <span style="width:30px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;${unser ? 'background:rgba(227,6,19,0.16);border:1px solid rgba(227,6,19,0.24);color:#ff8a80;' : 'background:rgba(255,255,255,0.06);color:#b4c0cf;'}">${fb.esc(p.nr)}</span>
-                  <span style="min-width:0;display:flex;flex-direction:column;"><b style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(p.name)}</b>${kurzPos ? `<small style="font-size:11px;color:#8794a5;">${fb.esc(kurzPos)}</small>` : ''}</span>
+                return `<div style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 10px;border-radius:12px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-size:13px;color:var(--owlet-text, #f2f5f8);">
+                  <span style="width:30px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;${unser ? 'background:rgba(227,6,19,0.16);border:1px solid rgba(227,6,19,0.24);color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));' : 'background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--owlet-label, #b4c0cf);'}">${fb.esc(p.nr)}</span>
+                  <span style="min-width:0;display:flex;flex-direction:column;"><b style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(p.name)}</b>${kurzPos ? `<small style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);">${fb.esc(kurzPos)}</small>` : ''}</span>
                   <span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">${mk}</span></div>`;
               };
-              const titel = t => `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8794a5;padding:6px 2px 0;">${t}</div>`;
+              const titel = t => `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding:6px 2px 0;">${t}</div>`;
               const start = T.spieler.filter(p => p.start), bank = T.spieler.filter(p => !p.start);
               const nummer = p => { const n = Number(p.nr); return isFinite(n) && p.nr !== '' ? n : 999; };
               const gruppiert = start.length && start.every(p => gruppe(p.pos));
@@ -710,37 +718,37 @@ button_card_templates:
                 const punkte = R.map((reihe, ri) => {
                   const y = 86 - ri * (78 / (n - 1)), k = reihe.length, abst = k > 1 ? Math.min(30, 88 / k) : 0;
                   return reihe.map((p, i) => {
-                    const mk = markenVon(p).filter(x => x.typ !== 'ein').map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;padding:0 4px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:linear-gradient(${c}1f,${c}1f),#10151d;border:1px solid ${c}3d;">${ic.replace(/width="11" height="11"/, 'width="9" height="9"')}${fb.esc(x.text)}</span>`; }).join('');
+                    const mk = markenVon(p).filter(x => x.typ !== 'ein').map(x => { const [c, ic] = MK[x.typ]; return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;padding:0 4px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:linear-gradient(color-mix(in srgb, ${c} 12%, transparent),color-mix(in srgb, ${c} 12%, transparent)),var(--owlet-flaeche-vertieft, #10151d);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">${ic.replace(/width="11" height="11"/, 'width="9" height="9"')}${fb.esc(x.text)}</span>`; }).join('');
                     return `<div style="position:absolute;left:${50 + (i - (k - 1) / 2) * abst}%;top:${y}%;width:${k > 1 ? abst : 30}%;transform:translate(-50%,-15px);display:flex;flex-direction:column;align-items:center;gap:2px;">
                       <span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;color:#f2f5f8;background:${unser ? '#e30613' : '#3a4453'};border:1.5px solid rgba(255,255,255,0.24);box-sizing:border-box;">${fb.esc(p.nr)}</span>
-                      <span style="font-size:10.5px;font-weight:700;color:#f2f5f8;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,0.5);">${fb.esc(nachname(p))}</span>
+                      <span style="font-size:10.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px color-mix(in srgb, rgba(0, 0, 0, 0.5) var(--owlet-dunkel-anteil, 100%), transparent);">${fb.esc(nachname(p))}</span>
                       ${mk ? `<span style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;">${mk}</span>` : ''}</div>`;
                   }).join('');
                 }).join('');
-                const linien = '<svg viewBox="0 0 68 86" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;"><g fill="none" stroke="rgba(166,212,158,0.24)" stroke-width="0.45"><rect x="1.5" y="1.5" width="65" height="83"/><path d="M24.85 1.5 A 9.15 9.15 0 0 0 43.15 1.5"/><rect x="13.85" y="68" width="40.3" height="16.5"/><rect x="24.85" y="81" width="18.3" height="3.5"/></g></svg>';
+                const linien = '<svg viewBox="0 0 68 86" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;"><g fill="none" style="stroke:color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)" stroke-width="0.45"><rect x="1.5" y="1.5" width="65" height="83"/><path d="M24.85 1.5 A 9.15 9.15 0 0 0 43.15 1.5"/><rect x="13.85" y="68" width="40.3" height="16.5"/><rect x="24.85" y="81" width="18.3" height="3.5"/></g></svg>';
                 // Wechsel dieses Vereins in zeitlicher Folge; Bank ohne die Eingewechselten
                 const namen = new Set(T.spieler.map(p => p.name));
                 const wl = det.ev.filter(x => x.typ === 'wechsel' && (x.seite ? x.seite === sw : x.namen.some(nn => namen.has(nn)))).sort((a, b) => a.sort - b.sort || a.i - b.i);
                 const pfeil = (typ, t, c) => `<span style="display:flex;align-items:center;gap:5px;min-width:0;color:${c};"><span style="color:${MK[typ][0]};display:inline-flex;">${MK[typ][1]}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(t)}</span></span>`;
-                const wechselHtml = wl.map(x => `<div style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);font-size:12.5px;">
-                    <span style="font-weight:800;color:#7fb3d5;font-variant-numeric:tabular-nums;white-space:nowrap;">${fb.esc(x.min)}</span>
-                    <span style="display:flex;flex-direction:column;min-width:0;">${x.wechsel ? pfeil('ein', x.wechsel.ein, '#f2f5f8') + pfeil('aus', x.wechsel.aus, '#8794a5') : `<span style="color:#b4c0cf;">${fb.esc(x.namen.join(' · '))}</span>`}</span></div>`).join('');
+                const wechselHtml = wl.map(x => `<div style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border-radius:12px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-size:12.5px;">
+                    <span style="font-weight:800;color:var(--owlet-blau, #7fb3d5);font-variant-numeric:tabular-nums;white-space:nowrap;">${fb.esc(x.min)}</span>
+                    <span style="display:flex;flex-direction:column;min-width:0;">${x.wechsel ? pfeil('ein', x.wechsel.ein, 'var(--owlet-text, #f2f5f8)') + pfeil('aus', x.wechsel.aus, 'var(--owlet-text-sekundaer, #8794a5)') : `<span style="color:var(--owlet-label, #b4c0cf);">${fb.esc(x.namen.join(' · '))}</span>`}</span></div>`).join('');
                 const rest = bank.filter(p => !p.ein).sort((a, b) => nummer(a) - nummer(b));
-                return `<div style="position:relative;width:100%;height:0;padding-bottom:126.5%;border-radius:16px;overflow:hidden;background:rgba(166,212,158,0.12);border:1px solid rgba(166,212,158,0.24);box-sizing:border-box;">${linien}${punkte}</div>
+                return `<div style="position:relative;width:100%;height:0;padding-bottom:126.5%;border-radius:16px;overflow:hidden;background:color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent);box-sizing:border-box;">${linien}${punkte}</div>
                   ${wl.length ? titel('Wechsel') + wechselHtml : ''}
-                  ${rest.length ? titel('Bank') + `<div style="font-size:12.5px;color:#b4c0cf;padding:0 2px;line-height:1.6;">${rest.map(p => `<b style="color:#f2f5f8;font-variant-numeric:tabular-nums;">${fb.esc(p.nr)}</b> ${fb.esc(p.name)}`).join(' · ')}</div>` : ''}`;
+                  ${rest.length ? titel('Bank') + `<div style="font-size:12.5px;color:var(--owlet-label, #b4c0cf);padding:0 2px;line-height:1.6;">${rest.map(p => `<b style="color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${fb.esc(p.nr)}</b> ${fb.esc(p.name)}`).join(' · ')}</div>` : ''}`;
               };
-              const ansichtKnopf = !pr.ok ? '' : `<span style="display:inline-flex;gap:3px;padding:3px;border-radius:11px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);">${[['feld', 'Feld'], ['liste', 'Liste']].map(([id, n]) => {
+              const ansichtKnopf = !pr.ok ? '' : `<span style="display:inline-flex;gap:3px;padding:3px;border-radius:11px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">${[['feld', 'Feld'], ['liste', 'Liste']].map(([id, n]) => {
                 const an = (id === 'feld') === feld;
-                return `<button type="button" aria-pressed="${an}" ${fb.tippAttr(`window.__fussball.zeigeAnsicht('${id}')`)} style="font:inherit;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;pointer-events:auto;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'none'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};">${n}</button>`;
+                return `<button type="button" aria-pressed="${an}" ${fb.tippAttr(`window.__fussball.zeigeAnsicht('${id}')`)} style="font:inherit;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:8px;cursor:pointer;pointer-events:auto;color:${an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)'};background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'none'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'transparent'};">${n}</button>`;
               }).join('')}</span>`;
               const wahl = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">${['heim', 'gast'].map(x => {
                 const an = x === sw, n = x === 'heim' ? m.heim : m.gast, ok = seiten.includes(x);
-                return `<button type="button" aria-pressed="${an}" ${ok ? fb.tippAttr(`window.__fussball.zeigeSeite('${x}')`) : 'disabled'} style="font:inherit;font-size:12.5px;font-weight:700;padding:8px 6px;border-radius:12px;cursor:${ok ? 'pointer' : 'default'};pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.06)'};">${fb.wappen(x === 'heim' ? m.heim_logo : m.gast_logo, n, 18)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(n)}</span></button>`;
+                return `<button type="button" aria-pressed="${an}" ${ok ? fb.tippAttr(`window.__fussball.zeigeSeite('${x}')`) : 'disabled'} style="font:inherit;font-size:12.5px;font-weight:700;padding:8px 6px;border-radius:12px;cursor:${ok ? 'pointer' : 'default'};pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;color:${an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)'};background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">${fb.wappen(x === 'heim' ? m.heim_logo : m.gast_logo, n, 18)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.esc(n)}</span></button>`;
               }).join('')}</div>`;
               return `<div style="display:flex;flex-direction:column;gap:6px;">
                 ${wahl}
-                ${T.formation ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:#8794a5;padding:4px 2px 0;min-height:30px;"><span>Formation <b style="font-size:13px;color:#f2f5f8;font-variant-numeric:tabular-nums;margin-left:4px;">${fb.esc(T.formation)}</b></span>${ansichtKnopf}</div>` : ''}
+                ${T.formation ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);padding:4px 2px 0;min-height:30px;"><span>Formation <b style="font-size:13px;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;margin-left:4px;">${fb.esc(T.formation)}</b></span>${ansichtKnopf}</div>` : ''}
                 ${gruppiert && !pr.ok && pr.soll ? fb.hinweis(`Kein Spielfeld: Reihen ${pr.ist.join('·')} passen nicht zur Formation ${fb.esc(T.formation)}, deshalb die Liste.`) : ''}
                 ${feld ? feldHtml() : startHtml + (bankSortiert.length ? titel('Bank') + bankSortiert.map(zeileSp).join('') : '')}
                 ${!gruppiert && start.length ? fb.hinweis('Positionen nicht zuzuordnen, Startelf ungegliedert (siehe Messung).') : ''}
@@ -749,14 +757,14 @@ button_card_templates:
 
             // ----- Statistik -----
             const statistik = () => {
-              const hf = m.heim_id == FAV ? '#e30613' : '#7fb3d5';
+              const hf = m.heim_id == FAV ? '#e30613' : 'var(--owlet-blau, #7fb3d5)';
               return `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 2px;">${statZeilen.map(([n, label, einheit]) => {
                 const x = det.stat[n], h = parseFloat(x.heim), g = parseFloat(x.gast);
                 const w = v => isFinite(v) ? (einheit === '%' ? Math.round(v) + ' %' : fb.esc(String(Math.round(v * 10) / 10))) : fb.esc(String(v));
                 const sum = (isFinite(h) ? h : 0) + (isFinite(g) ? g : 0);
                 return `<div style="display:flex;flex-direction:column;gap:5px;">
-                  <div style="display:grid;grid-template-columns:52px minmax(0,1fr) 52px;font-size:13px;font-weight:700;color:#f2f5f8;font-variant-numeric:tabular-nums;"><span>${w(h)}</span><span style="text-align:center;font-size:11.5px;font-weight:600;color:#8794a5;">${label}</span><span style="text-align:right;">${w(g)}</span></div>
-                  ${sum > 0 ? `<div style="display:grid;grid-template-columns:${h / sum}fr ${g / sum}fr;gap:3px;height:6px;"><i style="border-radius:3px;background:${hf};"></i><i style="border-radius:3px;background:#8794a5;"></i></div>` : ''}</div>`;
+                  <div style="display:grid;grid-template-columns:52px minmax(0,1fr) 52px;font-size:13px;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;"><span>${w(h)}</span><span style="text-align:center;font-size:11.5px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">${label}</span><span style="text-align:right;">${w(g)}</span></div>
+                  ${sum > 0 ? `<div style="display:grid;grid-template-columns:${h / sum}fr ${g / sum}fr;gap:3px;height:6px;"><i style="border-radius:3px;background:${hf};"></i><i style="border-radius:3px;background:var(--owlet-text-sekundaer, #8794a5);"></i></div>` : ''}</div>`;
               }).join('')}</div>`;
             };
 
@@ -812,9 +820,9 @@ button_card_templates:
                 zuerst_gesehen: gesehen
               };
               // Ampel je Zeile: gruen geliefert, amber leer oder abweichend, rot Fehler, grau offen
-              const farbe = { ok: '#a6d49e', leer: '#e6b566', fehler: '#f0736a', offen: '#8794a5' };
-              const zeile = (st, t, v) => `<div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;align-items:start;padding:6px 2px;border-top:1px solid rgba(255,255,255,0.04);"><span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${farbe[st]};"></span><span style="min-width:0;font-size:12.5px;color:#f2f5f8;"><b style="font-weight:700;">${t}</b><span style="display:block;color:#b4c0cf;overflow-wrap:anywhere;">${v}</span></span></div>`;
-              const titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#8794a5;padding-top:8px;">${t}</div>`;
+              const farbe = { ok: 'var(--owlet-gruen, #a6d49e)', leer: 'var(--owlet-amber, #e6b566)', fehler: 'var(--owlet-rot, #f0736a)', offen: 'var(--owlet-text-sekundaer, #8794a5)' };
+              const zeile = (st, t, v) => `<div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;align-items:start;padding:6px 2px;border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));"><span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${farbe[st]};"></span><span style="min-width:0;font-size:12.5px;color:var(--owlet-text, #f2f5f8);"><b style="font-weight:700;">${t}</b><span style="display:block;color:var(--owlet-label, #b4c0cf);overflow-wrap:anywhere;">${v}</span></span></div>`;
+              const titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding-top:8px;">${t}</div>`;
               const liste = o => o && Object.keys(o).length ? Object.entries(o).map(([n, z]) => `${fb.esc(n)} ${z}`).join(' · ') : '–';
               const S = w.espn_summary, B = w.espn_scoreboard, O = w.oldb;
               const nichtOffen = !offen ? zeile('offen', 'Popup geschlossen', 'ESPN wird nur bei offenem Popup abgerufen.') : '';
@@ -840,9 +848,9 @@ button_card_templates:
               const gesZeilen = gesehen.length ? gesehen.map(x => zeile(x.oldb && x.espn ? 'ok' : 'offen', 'Stand ' + x.stand,
                 `OpenLigaDB ${x.oldb || '–'} · ESPN ${x.espn || '–'}${x.espn_frueher_s != null ? ` · ESPN ${Math.abs(x.espn_frueher_s)} s ${x.espn_frueher_s >= 0 ? 'früher' : 'später'}` : ''}`)).join('')
                 : zeile('offen', 'Noch kein Tor gesehen', 'Gezählt wird nur ein Tor, das fällt, während die View offen ist.');
-              const knopf = `<button type="button" ${fb.tippAttr('window.__fussball.kopiere()')} style="font:inherit;font-size:12.5px;font-weight:700;color:#7fb3d5;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);border-radius:12px;padding:8px 12px;cursor:pointer;pointer-events:auto;">Messung kopieren</button>`;
-              const kopiert = fb.kopiert === 'ok' ? '<span style="font-size:12px;font-weight:700;color:#a6d49e;">kopiert</span>'
-                : fb.kopiert === 'nein' ? '<span style="font-size:12px;color:#e6b566;">Zwischenablage gesperrt – Text unten markieren</span>' : '';
+              const knopf = `<button type="button" ${fb.tippAttr('window.__fussball.kopiere()')} style="font:inherit;font-size:12.5px;font-weight:700;color:var(--owlet-blau, #7fb3d5);background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);border-radius:12px;padding:8px 12px;cursor:pointer;pointer-events:auto;">Messung kopieren</button>`;
+              const kopiert = fb.kopiert === 'ok' ? '<span style="font-size:12px;font-weight:700;color:var(--owlet-gruen, #a6d49e);">kopiert</span>'
+                : fb.kopiert === 'nein' ? '<span style="font-size:12px;color:var(--owlet-amber, #e6b566);">Zwischenablage gesperrt – Text unten markieren</span>' : '';
               return `<div style="display:flex;flex-direction:column;">
                 ${nichtOffen}
                 ${titel('OpenLigaDB')}
@@ -855,18 +863,18 @@ button_card_templates:
                 ${titel('Zuerst gesehen')}
                 ${gesZeilen}
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;">${knopf}${kopiert}</div>
-                <pre style="margin:10px 0 0;max-height:220px;overflow:auto;padding:10px;border-radius:12px;background:#10151d;border:1px solid rgba(255,255,255,0.06);color:#b4c0cf;font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text;">${fb.esc(JSON.stringify(w, null, 2))}</pre>
+                <pre style="margin:10px 0 0;max-height:220px;overflow:auto;padding:10px;border-radius:12px;background:var(--owlet-flaeche-vertieft, #10151d);border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--owlet-label, #b4c0cf);font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text;">${fb.esc(JSON.stringify(w, null, 2))}</pre>
               </div>`;
             };
 
             const inhalt = tab === 'aufstellung' ? aufstellung() : tab === 'kommentar' ? kommentar() : tab === 'statistik' ? statistik() : tab === 'messung' ? messung() : ticker();
             const link = e ? fb.espnLink(e) : '';
             const cO = fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`], cE = fb.cache[sumKey];
-            const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:11.5px;color:#8794a5;">
+            const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">
                 <span>Stand${cO ? ' OpenLigaDB ' + fb.zeit(new Date(cO.t)) : ''}${cE ? ' · ESPN ' + fb.zeit(new Date(cE.t)) : ''}</span>
                 <span style="display:flex;gap:6px;flex-wrap:wrap;">
-                  <button type="button" aria-pressed="${tab === 'messung'}" ${fb.tippAttr(`window.__fussball.zeige('${tab === 'messung' ? 'ticker' : 'messung'}')`)} style="font:inherit;font-size:12px;font-weight:700;color:${tab === 'messung' ? '#7fb3d5' : '#b4c0cf'};padding:6px 10px;border-radius:10px;cursor:pointer;pointer-events:auto;background:${tab === 'messung' ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'};border:1px solid ${tab === 'messung' ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.08)'};">${tab === 'messung' ? 'Messung schließen' : 'Messung'}</button>
-                  ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:6px 10px;border-radius:10px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
+                  <button type="button" aria-pressed="${tab === 'messung'}" ${fb.tippAttr(`window.__fussball.zeige('${tab === 'messung' ? 'ticker' : 'messung'}')`)} style="font:inherit;font-size:12px;font-weight:700;color:${tab === 'messung' ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-label, #b4c0cf)'};padding:6px 10px;border-radius:10px;cursor:pointer;pointer-events:auto;background:${tab === 'messung' ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'};border:1px solid ${tab === 'messung' ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">${tab === 'messung' ? 'Messung schließen' : 'Messung'}</button>
+                  ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:var(--owlet-blau, #7fb3d5);text-decoration:none;padding:6px 10px;border-radius:10px;background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
                 </span>
               </div>`;
             return huelle(kopf(`${s.L === 'bl1' ? '1.' : '2.'} Bundesliga · ${sp.nr}. Spieltag · ${fb.tag(a)} ${fb.zeit(a)}`) + stand + reiterHtml + inhalt + fuss);
@@ -894,16 +902,45 @@ button_card_templates:
           };
           // Hilfen fuer die Darstellung
           fb.esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-          fb.hinweis = t => `<div style="${F}color:#8794a5;font-size:12.5px;padding:2px;">${t}</div>`;
+          fb.hinweis = t => `<div style="${F}color:var(--owlet-text-sekundaer, #8794a5);font-size:12.5px;padding:2px;">${t}</div>`;
+          // Unterzeile der Koepfe: Teile einzeln umbruchfrei, umgebrochen wird nur an " · "
+          fb.teile = (...t) => t.filter(Boolean).map(x => `<span style="white-space:nowrap;">${x}</span>`).join(' · ');
           fb.warte = was => fb.fehler
             ? fb.hinweis('OpenLigaDB nicht erreichbar (' + fb.esc(fb.fehler) + ') – neuer Versuch in 1 Min.')
             : fb.hinweis(was + ' wird geladen …');
           fb.wappen = (url, name, px) => {
             const ini = fb.esc(String(name || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
             const img = url ? `<img src="${fb.esc(url)}" alt="" loading="lazy" style="position:absolute;inset:${Math.round(px * 0.08)}px;width:${Math.round(px * 0.84)}px;height:${Math.round(px * 0.84)}px;object-fit:contain;" onload="this.previousElementSibling.style.visibility='hidden';this.parentNode.style.background='none'" onerror="this.remove()">` : '';
-            return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:rgba(255,255,255,0.07);display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px * 0.33)}px;font-weight:800;color:#8794a5;">${ini}</span>${img}</span>`;
+            return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px * 0.33)}px;font-weight:800;color:var(--owlet-text-sekundaer, #8794a5);">${ini}</span>${img}</span>`;
           };
-          fb.badge = (c, t, puls) => `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}1f;border:1px solid ${c}3d;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          fb.badge = (c, t, puls) => `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          // ---------- Meldungen (Schalter; gemeldet wird von der Automation "Fussball: Meldungen") ----------
+          fb.zustand = id => fb.hass && fb.hass.states[id] ? fb.hass.states[id].state : undefined;
+          fb.dienst = (domain, service, data) => fb.hass.callService(domain, service, data).catch(e => console.warn('Fussball:', e));
+          fb.MELDUNGEN = [
+            ['input_boolean.fussball_meldung_anpfiff', 'Anpfiff und Abpfiff', 'Spielbeginn und Endstand'],
+            ['input_boolean.fussball_meldung_wechsel', 'Ein- und Auswechslungen', 'beide Vereine, wer kommt und wer geht'],
+            ['input_boolean.fussball_meldung_tore', 'Tore', 'beide Vereine, mit Torschütze und Spielstand'],
+            ['input_boolean.fussball_meldung_elfmeter', 'Elfmeter', 'beide Vereine'],
+            ['input_boolean.fussball_meldung_platzverweis', 'Platzverweise', 'Rot und Gelb-Rot, beide Vereine']
+          ];
+          fb.meldungenAn = () => fb.MELDUNGEN.filter(([e]) => fb.zustand(e) === 'on').length;
+          fb.schalter = (eid, titel, text) => {
+            const an = fb.zustand(eid) === 'on';
+            return `<div role="switch" tabindex="0" aria-checked="${an}" ${fb.tippAttr(`window.__fussball.dienst('input_boolean','toggle',{entity_id:'${eid}'})`)} style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;pointer-events:auto;border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));">
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:${an ? 'var(--owlet-text, #f2f5f8)' : 'var(--owlet-label, #b4c0cf)'};">${titel}</div>
+                  <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${text}</div>
+                </div>
+                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 45%, transparent)' : 'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 50%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">
+                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? 'color-mix(in srgb, var(--owlet-text, #f2f5f8) var(--owlet-dunkel-anteil, 100%), var(--owlet-flaeche-erhoeht, #222b3c))' : 'var(--owlet-text-sekundaer, #8794a5)'};"></span>
+                </span>
+              </div>`;
+          };
+          fb.meldungen = () => {
+            const zeilen = fb.MELDUNGEN.map(([e, t, x]) => fb.zustand(e) === undefined ? fb.hinweis(`${e} fehlt`) : fb.schalter(e, t, x)).join('');
+            return `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;text-align:left;">${zeilen}</div>`;
+          };
           fb.tag = d => d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
           fb.zeit = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
           fb.timer = setInterval(fb.neu, 30e3);
@@ -931,33 +968,42 @@ button_card_templates:
       icon:
       - width: 23px
       - height: 23px
-      - color: '#7fb3d5'
+      - color: 'var(--owlet-blau, #7fb3d5)'
+      - --ha-icon-display: block
       name:
       - justify-self: start
       - align-self: end
       - font-size: 17px
       - font-weight: 700
       - letter-spacing: -0.02em
-      - color: '#f2f5f8'
+      - color: 'var(--owlet-text, #f2f5f8)'
+      - max-width: 100%
       card:
       - background: none
       - box-shadow: none
       - border: none
       - padding: 2px 2px 6px
       custom_fields:
+        # Unterzeile darf umbrechen (button-card setzt sonst nowrap); mit
+        # minmax(0, 1fr) unten schiebt sie sich nicht mehr unter das Badge
+        # (wie flug_kopf in flugradar-templates.yaml).
         unter:
         - justify-self: start
         - align-self: start
         - font-size: 12.5px
-        - color: '#8794a5'
+        - line-height: 1.35
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
         - margin-top: 1px
         - text-align: left
+        - white-space: normal
+        - max-width: 100%
         badge:
         - justify-self: end
         - align-self: center
+        - margin-left: 10px
       grid:
       - grid-template-areas: '"i n badge" "i unter badge"'
-      - grid-template-columns: min-content 1fr min-content
+      - grid-template-columns: min-content minmax(0, 1fr) min-content
       - grid-template-rows: min-content min-content
       img_cell:
       - width: 44px
@@ -965,8 +1011,8 @@ button_card_templates:
       - border-radius: 13px
       - margin-right: 14px
       - align-self: center
-      - background: rgba(127, 179, 213, 0.12)
-      - border: 1px solid rgba(127, 179, 213, 0.24)
+      - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+      - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
 
   fussball_inhalt:
     template: fussball_daten
@@ -994,10 +1040,10 @@ button_card_templates:
     icon: mdi:shield-star
     styles:
       icon:
-      - color: '#ff8a80'
+      - color: 'color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a))'
       custom_fields:
         unter:
-        - color: '#8794a5'
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
       img_cell:
       - background: rgba(227, 6, 19, 0.16)
       - border: 1px solid rgba(227, 6, 19, 0.24)
@@ -1007,7 +1053,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga;
           return fb.bereich(this, 'unter', () => {
             const s = fb.spieltag(L);
-            return (L === 'bl1' ? '1.' : '2.') + ' Bundesliga' + (s ? ` · ${s.nr}. Spieltag` : '');
+            return fb.teile((L === 'bl1' ? '1.' : '2.') + ' Bundesliga', s ? `${s.nr}. Spieltag` : '');
           });
         ]]]
       badge: |
@@ -1022,11 +1068,11 @@ button_card_templates:
             if (m) {
               const k = fb.status(m);
               if (k === 'live') return `<span style="display:inline-flex;align-items:center;gap:6px;color:#f2f5f8;background:rgba(227,6,19,0.85);border:1px solid rgba(255,255,255,0.14);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span class="pulse"></span>LIVE</span>`;
-              if (k === 'post') return fb.badge('#a6d49e', 'Endstand');
-              if (k === 'offen') return fb.badge('#8794a5', 'offen');
-              return fb.badge('#7fb3d5', anstoss(new Date(m.anstoss)));
+              if (k === 'post') return fb.badge('var(--owlet-gruen, #a6d49e)', 'Endstand');
+              if (k === 'offen') return fb.badge('var(--owlet-text-sekundaer, #8794a5)', 'offen');
+              return fb.badge('var(--owlet-blau, #7fb3d5)', anstoss(new Date(m.anstoss)));
             }
-            return v?.naechstes ? fb.badge('#7fb3d5', anstoss(new Date(v.naechstes.anstoss))) : '';
+            return v?.naechstes ? fb.badge('var(--owlet-blau, #7fb3d5)', anstoss(new Date(v.naechstes.anstoss))) : '';
           });
         ]]]
 
@@ -1062,38 +1108,38 @@ button_card_templates:
               // Minute von ESPN; ohne ESPN die Minute des letzten Tors
               const min = fb.minute(L, m), lt = tore.length ? tore[tore.length - 1] : null;
               const zusatz = min ? (min === 'HZ' ? ' · Halbzeit' : ' · ' + min) : (lt && lt.min ? ` · Tor ${lt.min}'` : '');
-              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:#ff8a80;"><span class="pulse"></span>LIVE${zusatz}</span>`;
+              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"><span class="pulse"></span>LIVE${zusatz}</span>`;
             } else if (k === 'pre') {
               const diff = a - now, h = Math.round(diff / 3600e3), d = Math.round(diff / 86400e3);
-              sub = `<span style="color:#8794a5;">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
-            } else sub = `<span style="color:#8794a5;">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+              sub = `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
+            } else sub = `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
             // Spielstand oeffnet das Spiel-Popup, sobald das Spiel angepfiffen ist
             const klick = m && k !== 'pre' ? `role="button" tabindex="0" aria-label="Spiel öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
             const score = k === 'pre'
-              ? `<b style="font-size:24px;color:#8794a5;font-variant-numeric:tabular-nums;">${fb.zeit(new Date(a))}</b>`
-              : `<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:#f2f5f8;">${th ?? '–'} : ${tg ?? '–'}</b>`;
-            const seite = (n, l, r) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:#f2f5f8;min-width:0;">${fb.wappen(l, n, 46)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span><small style="font-size:11px;color:#8794a5;font-weight:600;">${r}</small></div>`;
+              ? `<b style="font-size:24px;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;">${fb.zeit(new Date(a))}</b>`
+              : `<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${th ?? '–'} : ${tg ?? '–'}</b>`;
+            const seite = (n, l, r) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:var(--owlet-text, #f2f5f8);min-width:0;">${fb.wappen(l, n, 46)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span><small style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;">${r}</small></div>`;
             // Torschuetzen: Heim/Gast aus der Aenderung des Spielstands
             let ph = 0;
             const tl = tore.map(x => {
               const heimTor = x.h > ph; ph = x.h;
               const unser = heimTor === (heimId == ID);
-              return `<span style="color:${unser ? '#f2f5f8' : '#8794a5'};">⚽ ${x.min ? x.min + "' " : ''}${fb.esc(x.name || '')}${x.elf ? ' (E)' : ''}${x.et ? ' (ET)' : ''}</span>`;
+              return `<span style="color:${unser ? 'var(--owlet-text, #f2f5f8)' : 'var(--owlet-text-sekundaer, #8794a5)'};">⚽ ${x.min ? x.min + "' " : ''}${fb.esc(x.name || '')}${x.elf ? ' (E)' : ''}${x.et ? ' (ET)' : ''}</span>`;
             }).join('');
-            const form = v.form.map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#10151d;background:${f === 'S' ? '#a6d49e' : (f === 'N' ? '#f0736a' : '#8794a5')};">${f}</i>`).join('');
-            const zelle = (n, inhalt) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:#8794a5;">${n}</div>${inhalt}</div>`;
-            const wert = (w, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:#f2f5f8;">${w}${e ? `<span style="font-size:0.62em;color:#8794a5;font-weight:600;"> ${e}</span>` : ''}</div>`;
+            const form = v.form.map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#10151d;background:${f === 'S' ? 'var(--owlet-gruen, #a6d49e)' : (f === 'N' ? 'var(--owlet-rot, #f0736a)' : 'var(--owlet-text-sekundaer, #8794a5)')};">${f}</i>`).join('');
+            const zelle = (n, inhalt) => `<div style="background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">${n}</div>${inhalt}</div>`;
+            const wert = (w, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${w}${e ? `<span style="font-size:0.62em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;"> ${e}</span>` : ''}</div>`;
             return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;">
                 ${seite(heim, hl, 'Heim')}
-                <div ${klick} style="display:flex;flex-direction:column;align-items:center;gap:4px;${klick ? 'pointer-events:auto;cursor:pointer;padding:6px 10px;margin:-6px -10px;border-radius:16px;' : ''}">${score}<span style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;">${sub}${klick ? `<span style="color:#8794a5;">${fb.pfeil}</span>` : ''}</span></div>
+                <div ${klick} style="display:flex;flex-direction:column;align-items:center;gap:4px;${klick ? 'pointer-events:auto;cursor:pointer;padding:6px 10px;margin:-6px -10px;border-radius:16px;' : ''}">${score}<span style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;">${sub}${klick ? `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${fb.pfeil}</span>` : ''}</span></div>
                 ${seite(gast, gl, 'Gast')}
               </div>
               ${tl ? `<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>` : ''}
               <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
                 ${zelle('Platz', wert(z.platz ?? '–'))}
                 ${zelle('Punkte', wert(z.pkt ?? '–', z.sp != null ? z.sp + ' Sp' : ''))}
-                ${zelle('Form', `<div style="display:flex;gap:4px;margin-top:4px;">${form || '<span style="color:#8794a5;font-size:12px;">–</span>'}</div>`)}
+                ${zelle('Form', `<div style="display:flex;gap:4px;margin-top:4px;">${form || '<span style="color:var(--owlet-text-sekundaer, #8794a5);font-size:12px;">–</span>'}</div>`)}
               </div></div>`;
           });
         ]]]
@@ -1111,7 +1157,7 @@ button_card_templates:
             if (!s) return 'Spieltag';
             let post = 0, pre = 0;
             s.spiele.forEach(m => { const k = fb.status(m); if (k === 'post') post++; else if (k === 'pre') pre++; });
-            return `${s.nr}. Spieltag · ${post} beendet · ${pre} ausstehend`;
+            return fb.teile(`${s.nr}. Spieltag`, `${post} beendet`, `${pre} ausstehend`);
           });
         ]]]
       badge: |
@@ -1127,9 +1173,9 @@ button_card_templates:
               if (k === 'live') live++; else if (k === 'post') post++;
               else if (k === 'pre' && (next === null || a < next)) next = a;
             });
-            if (live) return fb.badge('#f0736a', live + ' live', true);
-            if (s.spiele.length && post === s.spiele.length) return fb.badge('#a6d49e', 'beendet');
-            if (next) { const d = new Date(next); return fb.badge('#7fb3d5', fb.tag(d) + ' ' + fb.zeit(d)); }
+            if (live) return fb.badge('var(--owlet-rot, #f0736a)', live + ' live', true);
+            if (s.spiele.length && post === s.spiele.length) return fb.badge('var(--owlet-gruen, #a6d49e)', 'beendet');
+            if (next) { const d = new Date(next); return fb.badge('var(--owlet-blau, #7fb3d5)', fb.tag(d) + ' ' + fb.zeit(d)); }
             return '';
           });
         ]]]
@@ -1153,25 +1199,25 @@ button_card_templates:
             spiele.forEach(m => {
               const a = Date.parse(m.anstoss), d = new Date(a), k = fb.status(m);
               const g = Math.abs(a - mitte) > 4 * 86400e3 ? `${fb.tag(d)} ${datum(d)} · ${fb.zeit(d)}` : `${fb.tag(d)} · ${fb.zeit(d)}`;
-              if (g !== grp) { html += `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#8794a5;padding:${grp ? '8px' : '0'} 2px 2px;">${g}</div>`; grp = g; }
+              if (g !== grp) { html += `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding:${grp ? '8px' : '0'} 2px 2px;">${g}</div>`; grp = g; }
               const fav = FAV && (m.heim_id == FAV || m.gast_id == FAV);
               let th = m.th, tg = m.tg;
               if (k === 'live' && (th === null || th === undefined)) { th = 0; tg = 0; }
               const zeile = (n, l, x, y) => {
-                const r = (k === 'post' && x !== y) ? (x > y ? 'w' : 'l') : '', c = r === 'l' ? '#8794a5' : '#f2f5f8';
+                const r = (k === 'post' && x !== y) ? (x > y ? 'w' : 'l') : '', c = r === 'l' ? 'var(--owlet-text-sekundaer, #8794a5)' : 'var(--owlet-text, #f2f5f8)';
                 return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(l, n, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r === 'w' ? 700 : 500};">${fb.esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k === 'pre' || x === null || x === undefined ? '' : x}</span></div>`;
               };
               // Laufend: Minute von ESPN ("67'", "HZ"), sonst "LIVE"
               const min = k === 'live' ? fb.minute(L, m) : null;
               if (k === 'live' && !min) ohneMinute++;
-              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:#f0736a;"><span class="pulse"></span>${min || 'LIVE'}</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
-              const bg = fav ? 'background:rgba(227,6,19,0.12);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:rgba(240,115,106,0.12);' : '');
+              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--owlet-rot, #f0736a);"><span class="pulse"></span>${min || 'LIVE'}</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
+              const bg = fav ? 'background:rgba(227,6,19,0.12);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent);' : '');
               // Ab Anstoss oeffnet die Zeile das Spiel-Popup
               const klick = fb.antippbar(m) ? `role="button" tabindex="0" aria-label="${fb.esc(m.heim + ' gegen ' + m.gast)} öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
-              html += `<div ${klick} style="display:grid;grid-template-columns:60px minmax(0,1fr) 12px;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}"><span style="font-size:11.5px;font-weight:700;color:#8794a5;white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div><span style="color:#6e7988;">${klick ? fb.pfeil : ''}</span></div>`;
+              html += `<div ${klick} style="display:grid;grid-template-columns:60px minmax(0,1fr) 12px;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}"><span style="font-size:11.5px;font-weight:700;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div><span style="color:#6e7988;">${klick ? fb.pfeil : ''}</span></div>`;
             });
             // Hinweis nur, wenn ESPN beim Abruf scheitert (Minute fehlt dann)
-            const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:#8794a5;padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
+            const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
             return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}${notiz}</div>`;
           });
         ]]]
@@ -1186,7 +1232,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga;
           return fb.bereich(this, 'unter', () => {
             const c = fb.cache[`getbltable/${L}/${fb.saison()}`];
-            return c ? 'Tabelle · Stand ' + fb.zeit(new Date(c.t)) + ' Uhr' : 'Tabelle';
+            return c ? fb.teile('Tabelle', 'Stand ' + fb.zeit(new Date(c.t)) + ' Uhr') : 'Tabelle';
           });
         ]]]
       badge: |
@@ -1196,8 +1242,8 @@ button_card_templates:
           return fb.bereich(this, 'badge', () => {
             const s = fb.spieltag(L);
             if (!s) return '';
-            if (s.spiele.some(m => fb.status(m) === 'live')) return fb.badge('#f0736a', 'Live-Stand', true);
-            return `<span style="display:inline-flex;align-items:center;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${s.nr}. Spieltag</span>`;
+            if (s.spiele.some(m => fb.status(m) === 'live')) return fb.badge('var(--owlet-rot, #f0736a)', 'Live-Stand', true);
+            return `<span style="display:inline-flex;align-items:center;color:var(--owlet-text-sekundaer, #8794a5);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${s.nr}. Spieltag</span>`;
           });
         ]]]
 
@@ -1214,32 +1260,32 @@ button_card_templates:
             // 2. Liga: 1-2 Aufstieg, 3 + 16 Relegation, 17-18 Abstieg;
             // 1. Liga: 1-4 Champions League, 16 Relegation, 17-18 Abstieg
             const zone = p => L === 'bl2'
-              ? (p <= 2 ? '#a6d49e' : ((p === 3 || p === 16) ? '#e6b566' : (p >= 17 ? '#f0736a' : '')))
-              : (p <= 4 ? '#7fb3d5' : (p === 16 ? '#e6b566' : (p >= 17 ? '#f0736a' : '')));
+              ? (p <= 2 ? 'var(--owlet-gruen, #a6d49e)' : ((p === 3 || p === 16) ? 'var(--owlet-amber, #e6b566)' : (p >= 17 ? 'var(--owlet-rot, #f0736a)' : '')))
+              : (p <= 4 ? 'var(--owlet-blau, #7fb3d5)' : (p === 16 ? 'var(--owlet-amber, #e6b566)' : (p >= 17 ? 'var(--owlet-rot, #f0736a)' : '')));
             // Vereine mit laufendem Spiel (die Tabelle zaehlt sie schon mit)
             const s = fb.spieltag(L), live = new Set();
             (s ? s.spiele : []).forEach(m => { if (fb.status(m) === 'live') { live.add(m.heim_id); live.add(m.gast_id); } });
-            const th = 'font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#8794a5;padding:0 6px 6px;text-align:right;';
+            const th = 'font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding:0 6px 6px;text-align:right;';
             let body = '';
             rows.forEach((r, i) => {
               const fav = FAV && r.id == FAV, z = zone(r.platz);
-              const td = 'padding:5px 6px;text-align:right;color:#8794a5;' + (i ? 'border-top:1px solid rgba(255,255,255,0.04);' : '') + (fav ? 'background:rgba(227,6,19,0.12);' : '');
+              const td = 'padding:5px 6px;text-align:right;color:var(--owlet-text-sekundaer, #8794a5);' + (i ? 'border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));' : '') + (fav ? 'background:rgba(227,6,19,0.12);' : '');
               const strich = (!fav && z) ? `<span style="position:absolute;left:0;top:5px;bottom:5px;width:3px;border-radius:3px;background:${z};"></span>` : '';
               body += `<tr>
-                <td style="${td}${fav ? 'box-shadow:inset 3px 0 0 #e30613;border-radius:8px 0 0 8px;' : ''}position:relative;text-align:center;width:30px;font-weight:700;color:#f2f5f8;">${strich}${r.platz}</td>
-                <td style="${td}text-align:left;color:#f2f5f8;width:100%;max-width:0;"><div style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(r.logo, r.name, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${fav ? 'font-weight:700;' : ''}">${fb.esc(r.name)}</span>${live.has(r.id) ? '<span class="pulse" style="color:#f0736a;flex:0 0 auto;"></span>' : ''}</div></td>
+                <td style="${td}${fav ? 'box-shadow:inset 3px 0 0 #e30613;border-radius:8px 0 0 8px;' : ''}position:relative;text-align:center;width:30px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${strich}${r.platz}</td>
+                <td style="${td}text-align:left;color:var(--owlet-text, #f2f5f8);width:100%;max-width:0;"><div style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(r.logo, r.name, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${fav ? 'font-weight:700;' : ''}">${fb.esc(r.name)}</span>${live.has(r.id) ? '<span class="pulse" style="color:var(--owlet-rot, #f0736a);flex:0 0 auto;"></span>' : ''}</div></td>
                 <td style="${td}">${r.sp}</td>
                 <td style="${td}">${r.td > 0 ? '+' + r.td : r.td}</td>
-                <td style="${td}${fav ? 'border-radius:0 8px 8px 0;' : ''}color:#f2f5f8;font-weight:700;">${r.pkt}</td></tr>`;
+                <td style="${td}${fav ? 'border-radius:0 8px 8px 0;' : ''}color:var(--owlet-text, #f2f5f8);font-weight:700;">${r.pkt}</td></tr>`;
             });
             const leg = L === 'bl2'
-              ? [['#a6d49e', 'Aufstieg'], ['#e6b566', 'Relegation'], ['#f0736a', 'Abstieg']]
-              : [['#7fb3d5', 'Champions League'], ['#e6b566', 'Relegation'], ['#f0736a', 'Abstieg']];
+              ? [['var(--owlet-gruen, #a6d49e)', 'Aufstieg'], ['var(--owlet-amber, #e6b566)', 'Relegation'], ['var(--owlet-rot, #f0736a)', 'Abstieg']]
+              : [['var(--owlet-blau, #7fb3d5)', 'Champions League'], ['var(--owlet-amber, #e6b566)', 'Relegation'], ['var(--owlet-rot, #f0736a)', 'Abstieg']];
             return `<div style="${F}display:flex;flex-direction:column;gap:10px;">
               <table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;">
                 <thead><tr><th style="${th}text-align:center;">#</th><th style="${th}text-align:left;">Verein</th><th style="${th}">Sp</th><th style="${th}">TD</th><th style="${th}">Pkt</th></tr></thead>
                 <tbody>${body}</tbody></table>
-              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;">${leg.map(([c, n]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${n}</span>`).join('')}${live.size ? '<span style="display:inline-flex;align-items:center;gap:6px;color:#f0736a;"><span class="pulse"></span>spielt gerade</span>' : ''}</div></div>`;
+              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">${leg.map(([c, n]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${n}</span>`).join('')}${live.size ? '<span style="display:inline-flex;align-items:center;gap:6px;color:var(--owlet-rot, #f0736a);"><span class="pulse"></span>spielt gerade</span>' : ''}</div></div>`;
           });
         ]]]
 
@@ -1259,3 +1305,32 @@ button_card_templates:
           const fb = variables.fb;
           return fb.bereich(this, 'spiel', () => fb.spielPopup(variables.verein));
         ]]]
+
+  # ======================= Meldungen zum Lieblingsverein =======================
+  # Nur die Schalter; abgefragt und gemeldet wird von Home Assistant selbst
+  # (fussball-espn-konfig.yaml und Automation "Fussball: Meldungen", siehe Kopf
+  # von fussball-view.yaml). Die Karten selbst rufen dafuer nichts ab.
+  fussball_meldungen_kopf:
+    template: fussball_kopf
+    icon: mdi:bell-ring-outline
+    name: Meldungen
+    triggers_update: &meldung_schalter
+    - input_boolean.fussball_meldung_anpfiff
+    - input_boolean.fussball_meldung_wechsel
+    - input_boolean.fussball_meldung_tore
+    - input_boolean.fussball_meldung_elfmeter
+    - input_boolean.fussball_meldung_platzverweis
+    custom_fields:
+      unter: aufs iPhone, bei Spielen des Lieblingsvereins
+      badge: |
+        [[[
+          const fb = variables.fb, n = fb.meldungenAn();
+          return fb.badge(n ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)', `${n} von ${fb.MELDUNGEN.length} an`, false);
+        ]]]
+
+  fussball_meldungen:
+    template: fussball_inhalt
+    triggers_update: *meldung_schalter
+    custom_fields:
+      inhalt: |
+        [[[ return variables.fb.meldungen(); ]]]

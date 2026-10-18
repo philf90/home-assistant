@@ -8,6 +8,8 @@
 # Templates:     floating_navbar (navigation-templates.yaml),
 #                fussball_fck (fussball-templates.yaml),
 #                fussball_fck_kopf (fussball-templates.yaml),
+#                fussball_meldungen (fussball-templates.yaml),
+#                fussball_meldungen_kopf (fussball-templates.yaml),
 #                fussball_spiel (fussball-templates.yaml),
 #                fussball_spieltag (fussball-templates.yaml),
 #                fussball_spieltag_kopf (fussball-templates.yaml),
@@ -15,7 +17,8 @@
 #                fussball_tabelle_kopf (fussball-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
-# Platzhalter:   keine
+# Platzhalter:   notify.mobile_app_iphone
+#                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Fussball – komplette Ansicht (View) im Owlet-Stil
 #
@@ -29,13 +32,13 @@
 #   H1        FCK in Listen: FCK-Rot als Flaeche + Kante, ohne Zonenstrich
 #
 # Die Karten holen die Daten selbst im Browser von OpenLigaDB; Logik und
-# Darstellung stehen in fussball-templates.yaml. Keine Sensoren,
-# kein Paket, kein configuration.yaml.
+# Darstellung stehen in fussball-templates.yaml. Nur die Meldungen (unten)
+# brauchen ein Paket (fussball-espn-konfig.yaml), Helfer und eine Automation.
 #
 # Aufbau (sections, max_columns 2):
 #   Sektion 1: Top-Navigation, FCK-Karte, Liga-Umschalter, Spieltag,
 #              Popup #fussball-spiel (unsichtbar bis zum Antippen)
-#   Sektion 2: Tabelle, Floating-Navbar
+#   Sektion 2: Tabelle, Meldungen (Schalter), Floating-Navbar
 #   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
 #
 # Passt zur Route /dashboard-home/fussball (Eintrag im "More"-Menue von
@@ -52,6 +55,10 @@
 # Reiter "Messung", der zeigt, was beide Quellen fuer das Spiel liefern.
 # Aufbau und Grenzen: Kopf von fussball-templates.yaml.
 #
+# Hell und dunkel: alles folgt dem Theme ausser der Vereinskarte; ihre Huelle
+# setzt die Owlet-Variablen auf die dunklen Werte (DESIGN.md, Identitaets-
+# huellen). Popup-Hintergrund ueber Bubble-Card-styles (siehe dort).
+#
 # Live: OpenLigaDB liefert keine Spielminute. Laufende Spiele zeigen "LIVE",
 # die FCK-Karte zusaetzlich die Minute des letzten Tors. Die Tabelle von
 # OpenLigaDB zaehlt laufende Spiele bereits mit; die Karte markiert Vereine,
@@ -64,6 +71,38 @@
 #   - Helfer input_select.fussball_liga (Einstellungen > Geraete & Dienste >
 #     Helfer > Dropdown), Optionen "1. Bundesliga" und "2. Bundesliga",
 #     ohne "initial"
+#
+# MELDUNGEN ZUM LIEBLINGSVEREIN (Karte "Meldungen", Schalter je Ereignis):
+#   - Paket fussball-espn-konfig.yaml (rest_command.espn_fussball, ESPN-API)
+#   - Helfer input_boolean.fussball_meldung_anpfiff, _wechsel, _tore,
+#     _elfmeter, _platzverweis (Schalter) und input_text.fussball_meldung_stand
+#     (max. 255, Merker der Automation)
+#   - Skript "Fussball: Meldungen auswerten" (UI): holt summary?event=<id>
+#     und meldet alle Ereignisse mit einer ID ueber dem Merker, an
+#     notify.mobile_app_iphone (Tippen oeffnet /dashboard-home/fussball).
+#     Felder liga, event, stand; senden: false und alle: true zum Testen.
+#   - Automation "Fussball: Meldungen" (UI): sucht stuendlich (xx:05:30) und
+#     beim Start das Spiel des Tages (scoreboard?dates=JJJJMMTT, UTC; Verein
+#     ueber die ESPN-Team-ID, FCK = 130, Liga ger.2) und ruft von 5 min vor
+#     bis 4 h nach Anstoss jede Minute das Skript auf, bis Abpfiff. Sonst
+#     loest sie nicht aus. Alle Schalter aus = keine Abfrage.
+#   Gemessen 18.10.2026 an allen 25 Spieltagen der 2. Liga (keyEvents der
+#   Spieldetails): 70 Goal, 97 Own Goal, 98 Penalty - Scored, 94 Yellow Card,
+#   93 Red Card, 76 Substitution, 113 Penalty - Missed, 174 Penalty - Saved;
+#   keine Anpfiff-, Halbzeit- oder VAR-Ereignisse. Daraus folgt:
+#     Anpfiff/Abpfiff  aus dem Spielstatus (pre -> in, -> post)
+#     Gelb-Rot         93 nach 94 desselben Spielers (Klefisch, Darmstadt)
+#     Elfmeter         98 verwandelt (meldet auch "Tore"), 113 verschossen,
+#                      174 in derselben Minute = gehalten von
+#     Eigentor         97 traegt den beguenstigten Verein (Summe je Verein
+#                      ergibt den Endstand, an 3 Spielen geprueft)
+#     Wechsel          erster Teilnehmer kommt, zweiter geht
+#   Neue Ereignisse erkennt die Automation an der ID (keyEvents stehen nach
+#   Spielminute, nicht nach Eingang). Wird ein Spiel erst waehrend des Spiels
+#   gefunden (z. B. Neustart), meldet sie nur, was danach passiert.
+#   Grenzen: ESPN ist inoffiziell und kann sich aendern; DFB-Pokal ist nicht
+#   eingerichtet (Ligapfad ungemessen). Abfrage einmal je Minute, die
+#   Spieldetails sind komprimiert ca. 26 KB.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
 #                + custom:bubble-card (alle via HACS).
@@ -90,6 +129,61 @@ sections:
           box-shadow: 0 18px 44px -22px rgba(0,0,0,0.75) !important;
           padding: 16px 18px !important;
           gap: 8px !important;
+          /* Vereinshuelle bleibt in beiden Modi dunkel (DESIGN.md): die
+             Owlet-Variablen gelten hier mit ihren dunklen Werten aus
+             design/palette.yaml, der Inhalt nutzt also die dunkle Palette. */
+          --owlet-seite: #171d29;
+          --primary-background-color: #171d29;
+          --owlet-huelle-oben: #1b2231;
+          --card-background-color: #1b2231;
+          --owlet-huelle-unten: #171d29;
+          --owlet-huelle-rand: rgba(255, 255, 255, 0.05);
+          --owlet-schatten: rgba(0, 0, 0, 0.7);
+          --owlet-unterkachel: rgba(255, 255, 255, 0.028);
+          --owlet-unterkachel-rand: rgba(255, 255, 255, 0.06);
+          --owlet-neutral-kachel: rgba(255, 255, 255, 0.05);
+          --owlet-flaeche-erhoeht: #222b3c;
+          --owlet-flaeche-vertieft: #10151d;
+          --owlet-aus: #3a4453;
+          --owlet-text: #f2f5f8;
+          --primary-text-color: #f2f5f8;
+          --owlet-titel: #e7ecf3;
+          --owlet-label: #b4c0cf;
+          --owlet-text-sekundaer: #8794a5;
+          --secondary-text-color: #8794a5;
+          --owlet-muted: #6e7988;
+          --owlet-gruen: #a6d49e;
+          --owlet-amber: #e6b566;
+          --owlet-koralle: #e7936e;
+          --owlet-rot: #f0736a;
+          --owlet-blau: #7fb3d5;
+          --owlet-tuerkis: #7fd0d5;
+          --owlet-tuerkis-hell: #77d4d0;
+          --owlet-petrol: #79b8c9;
+          --owlet-violett: #b399d4;
+          --owlet-limette: #bdd27f;
+          --owlet-mint: #89d2b0;
+          --owlet-indigo: #8ea2e6;
+          --owlet-rose: #e6a0c4;
+          --owlet-wolkengrau: #cdd6e0;
+          --owlet-eis: #cfe3f2;
+          --owlet-nachtgrau: #9aa7bd;
+          --owlet-sonnengelb: #e6c15a;
+          --owlet-sonnengelb-grafik: #e6c15a;
+          --owlet-licht-an: #f0c274;
+          --owlet-fuellung-rand-amber: rgba(240, 194, 116, 0.5);
+          --owlet-fuellung-rand-gruen: rgba(166, 212, 158, 0.5);
+          --owlet-fuellung-rand-blau: rgba(127, 179, 213, 0.5);
+          --owlet-fuellung-rand-rot: rgba(240, 115, 106, 0.5);
+          --owlet-fuellung-rand-violett: rgba(179, 153, 212, 0.5);
+          --owlet-fuellung-rand-tuerkis: rgba(127, 208, 213, 0.5);
+          --owlet-leuchten-amber: rgba(240, 194, 116, 0.5);
+          --owlet-leuchten-gruen: rgba(166, 212, 158, 0.5);
+          --owlet-leuchten-blau: rgba(127, 179, 213, 0.5);
+          --owlet-leuchten-rot: rgba(240, 115, 106, 0.5);
+          --owlet-leuchten-violett: rgba(179, 153, 212, 0.5);
+          --owlet-leuchten-tuerkis: rgba(127, 208, 213, 0.5);
+          --owlet-dunkel-anteil: 100%;
         }
     cards:
     - type: custom:button-card
@@ -127,14 +221,14 @@ sections:
         - border-radius: 14px
         - box-shadow: none
         - background: |
-            [[[ return states['input_select.fussball_liga']?.state===variables.option ? 'rgba(127,179,213,0.16)' : 'rgba(255,255,255,0.04)'; ]]]
+            [[[ return states['input_select.fussball_liga']?.state===variables.option ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
         - border: |
-            [[[ return '1px solid ' + (states['input_select.fussball_liga']?.state===variables.option ? 'rgba(127,179,213,0.24)' : 'rgba(255,255,255,0.06)'); ]]]
+            [[[ return '1px solid ' + (states['input_select.fussball_liga']?.state===variables.option ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'); ]]]
         name:
         - font-size: 13.5px
         - font-weight: 700
         - color: |
-            [[[ return states['input_select.fussball_liga']?.state===variables.option ? '#7fb3d5' : '#8794a5'; ]]]
+            [[[ return states['input_select.fussball_liga']?.state===variables.option ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)'; ]]]
       triggers_update: &liga_update
       - input_select.fussball_liga
     - type: custom:button-card
@@ -155,10 +249,10 @@ sections:
     card_mod: &huelle
       style: |
         #root {
-          background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
-          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
           border-radius: 22px !important;
-          box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+          box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
           padding: 16px 18px !important;
           gap: 8px !important;
         }
@@ -201,9 +295,15 @@ sections:
     show_header: false
     popup_mode: fit-content
     with_bottom_offset: true
-    # Popups auf der erhoehten Flaeche (DESIGN.md, Flaechen)
-    bg_color: '#222b3c'
+    # Popups auf der erhoehten Flaeche (DESIGN.md, Flaechen). bg_color loest
+    # Bubble Card (v3.4.2) nur einmal auf und setzt das Ergebnis inline als
+    # --bubble-pop-up-background-color; !important im eigenen CSS schlaegt
+    # diesen Inline-Wert, so folgt der Hintergrund dem Modus.
     bg_opacity: '100'
+    styles: |
+      .bubble-pop-up {
+        --bubble-pop-up-background-color: var(--owlet-flaeche-erhoeht, #222b3c) !important;
+      }
     cards:
     - type: custom:button-card
       template: fussball_spiel
@@ -248,5 +348,15 @@ sections:
       variables:
         liga: bl2
         fav: 76
+
+  # ======================= Meldungen zum Lieblingsverein =======================
+  - type: vertical-stack
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: fussball_meldungen_kopf
+    - type: custom:button-card
+      template: fussball_meldungen
+
   - type: custom:decluttering-card
     template: floating_navbar
