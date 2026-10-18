@@ -17,7 +17,8 @@
 #                fussball_tabelle_kopf (fussball-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
-# Platzhalter:   keine
+# Platzhalter:   notify.mobile_app_iphone
+#                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Fussball – komplette Ansicht (View) im Owlet-Stil
 #
@@ -31,13 +32,13 @@
 #   H1        FCK in Listen: FCK-Rot als Flaeche + Kante, ohne Zonenstrich
 #
 # Die Karten holen die Daten selbst im Browser von OpenLigaDB; Logik und
-# Darstellung stehen in fussball-templates.yaml. Keine Sensoren,
-# kein Paket, kein configuration.yaml.
+# Darstellung stehen in fussball-templates.yaml. Nur die Meldungen (unten)
+# brauchen ein Paket (fussball-espn-konfig.yaml), Helfer und eine Automation.
 #
 # Aufbau (sections, max_columns 2):
 #   Sektion 1: Top-Navigation, FCK-Karte, Liga-Umschalter, Spieltag,
 #              Popup #fussball-spiel (unsichtbar bis zum Antippen)
-#   Sektion 2: Tabelle, Floating-Navbar
+#   Sektion 2: Tabelle, Meldungen (Schalter), Floating-Navbar
 #   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
 #
 # Passt zur Route /dashboard-home/fussball (Eintrag im "More"-Menue von
@@ -54,6 +55,10 @@
 # Reiter "Messung", der zeigt, was beide Quellen fuer das Spiel liefern.
 # Aufbau und Grenzen: Kopf von fussball-templates.yaml.
 #
+# Hell und dunkel: alles folgt dem Theme ausser der Vereinskarte; ihre Huelle
+# setzt die Owlet-Variablen auf die dunklen Werte (DESIGN.md, Identitaets-
+# huellen). Popup-Hintergrund ueber Bubble-Card-styles (siehe dort).
+#
 # Live: OpenLigaDB liefert keine Spielminute. Laufende Spiele zeigen "LIVE",
 # die FCK-Karte zusaetzlich die Minute des letzten Tors. Die Tabelle von
 # OpenLigaDB zaehlt laufende Spiele bereits mit; die Karte markiert Vereine,
@@ -66,6 +71,38 @@
 #   - Helfer input_select.fussball_liga (Einstellungen > Geraete & Dienste >
 #     Helfer > Dropdown), Optionen "1. Bundesliga" und "2. Bundesliga",
 #     ohne "initial"
+#
+# MELDUNGEN ZUM LIEBLINGSVEREIN (Karte "Meldungen", Schalter je Ereignis):
+#   - Paket fussball-espn-konfig.yaml (rest_command.espn_fussball, ESPN-API)
+#   - Helfer input_boolean.fussball_meldung_anpfiff, _wechsel, _tore,
+#     _elfmeter, _platzverweis (Schalter) und input_text.fussball_meldung_stand
+#     (max. 255, Merker der Automation)
+#   - Skript "Fussball: Meldungen auswerten" (UI): holt summary?event=<id>
+#     und meldet alle Ereignisse mit einer ID ueber dem Merker, an
+#     notify.mobile_app_iphone (Tippen oeffnet /dashboard-home/fussball).
+#     Felder liga, event, stand; senden: false und alle: true zum Testen.
+#   - Automation "Fussball: Meldungen" (UI): sucht stuendlich (xx:05:30) und
+#     beim Start das Spiel des Tages (scoreboard?dates=JJJJMMTT, UTC; Verein
+#     ueber die ESPN-Team-ID, FCK = 130, Liga ger.2) und ruft von 5 min vor
+#     bis 4 h nach Anstoss jede Minute das Skript auf, bis Abpfiff. Sonst
+#     loest sie nicht aus. Alle Schalter aus = keine Abfrage.
+#   Gemessen 18.10.2026 an allen 25 Spieltagen der 2. Liga (keyEvents der
+#   Spieldetails): 70 Goal, 97 Own Goal, 98 Penalty - Scored, 94 Yellow Card,
+#   93 Red Card, 76 Substitution, 113 Penalty - Missed, 174 Penalty - Saved;
+#   keine Anpfiff-, Halbzeit- oder VAR-Ereignisse. Daraus folgt:
+#     Anpfiff/Abpfiff  aus dem Spielstatus (pre -> in, -> post)
+#     Gelb-Rot         93 nach 94 desselben Spielers (Klefisch, Darmstadt)
+#     Elfmeter         98 verwandelt (meldet auch "Tore"), 113 verschossen,
+#                      174 in derselben Minute = gehalten von
+#     Eigentor         97 traegt den beguenstigten Verein (Summe je Verein
+#                      ergibt den Endstand, an 3 Spielen geprueft)
+#     Wechsel          erster Teilnehmer kommt, zweiter geht
+#   Neue Ereignisse erkennt die Automation an der ID (keyEvents stehen nach
+#   Spielminute, nicht nach Eingang). Wird ein Spiel erst waehrend des Spiels
+#   gefunden (z. B. Neustart), meldet sie nur, was danach passiert.
+#   Grenzen: ESPN ist inoffiziell und kann sich aendern; DFB-Pokal ist nicht
+#   eingerichtet (Ligapfad ungemessen). Abfrage einmal je Minute, die
+#   Spieldetails sind komprimiert ca. 26 KB.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
 #                + custom:bubble-card (alle via HACS).

@@ -266,7 +266,9 @@ System-View (`system-karte.yaml`) und
 Gesundheit-View (`gesundheit-view.yaml`) sowie die Flüge-View
 (`flugradar-view.yaml` mit `flugradar-templates.yaml`); deren
 Kartenausschnitt mit Legende bleibt mit Flugradar-Gelb in beiden Modi dunkel.
-Die Owlet-Karte bleibt als Identitätshülle dunkel.
+Ebenso die Fußball-View (`fussball-view.yaml` mit `fussball-templates.yaml`);
+ihre Vereinskarte setzt in der Hülle die Owlet-Variablen auf die dunklen
+Werte und bleibt so wie die Owlet-Karte als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 

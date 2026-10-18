@@ -157,7 +157,7 @@ daraus und aus den Kopfblöcken erzeugt.
 |---|---|---|---|
 | `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-karte.yaml`, `doku/karten-basemap-carto.md` |
 | `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-karte.yaml` |
-| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml`, `garten-karte.yaml`, `hausgeraete.html` |
+| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html` |
 | `<breite>`, `<laenge>` | Koordinaten von Zuhause | Entwicklerwerkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` |
 | `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage (in Grafana ohne `sensor.`) | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energiefluss.html`, `grafana/README.md`, `grafana/energie-dashboard.json`; in `archiv/`: `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml` |
 | `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`, `autos-passat-konfig.yaml`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` |
