@@ -13,6 +13,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`owlet-theme-konfig.yaml`](allgemein/owlet-theme-konfig.yaml) | konfig | Owlet-Theme – Farben fuer den hellen und den dunklen Modus | – | – | aktiv |
 | [`top-navigation-karte.yaml`](allgemein/top-navigation-karte.yaml) | karte | Top-Navigation – Launcher-Raster | button-card | – | aktiv |
 | [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | – | aktiv |
+| [`banner-hell.html`](allgemein/entwuerfe/banner-hell.html) | entwurf | Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung | – | – | Entwurf zu `welcome-banner-karte.yaml` |
 | [`home-kacheln.html`](allgemein/entwuerfe/home-kacheln.html) | entwurf | Kachel-Vorschlaege fuer die Home-Ansicht | – | – | Entwurf |
 
 ## energie

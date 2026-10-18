@@ -1,0 +1,379 @@
+<!--
+============================================================================
+Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       allgemein
+Status:        entwurf
+Gehoert-zu:    welcome-banner-karte.yaml
+Platzhalter:   keine
+============================================================================
+-->
+<title>Begrüßungsbanner hell</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: Steuerleiste oben, darunter dieselbe Szene dunkel und hell nebeneinander,
+     danach die drei Entscheidungen, die Messtabelle und die Regeln je Element. */
+  :root {
+    --bg: #e6eaf0;
+    --surface: #fafbfd;
+    --fg: #171d29;
+    --muted: #586475;
+    --line: rgba(23, 29, 41, 0.09);
+    --accent: #266994;
+    --ok: #38702e;
+    --bad: #ae3c38;
+    --chip: rgba(23, 29, 41, 0.05);
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151d; --surface: #1b2231; --fg: #f2f5f8; --muted: #8794a5; --line: rgba(255, 255, 255, 0.07);
+      --accent: #7fb3d5; --ok: #a6d49e; --bad: #f0736a; --chip: rgba(255, 255, 255, 0.05); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151d; --surface: #1b2231; --fg: #f2f5f8; --muted: #8794a5; --line: rgba(255, 255, 255, 0.07);
+    --accent: #7fb3d5; --ok: #a6d49e; --bad: #f0736a; --chip: rgba(255, 255, 255, 0.05); color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+  .page { max-width: 1080px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 36px; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance; }
+  h2 { font-size: 19px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  h3 { font-size: 15px; margin: 0; }
+  p { margin: 0; max-width: 68ch; }
+  .lead { color: var(--muted); }
+  section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+  /* Steuerung */
+  .controls { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--fg); cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+  .switches { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .seg { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .seg .opts { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; padding: 5px 10px; border: 0; background: transparent; color: var(--fg); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--chip); font-weight: 700; color: var(--accent); }
+  .chip:focus-visible, .seg button:focus-visible, .chk input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chk { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+
+  /* Vorschau: eigener Grund je Modus, unabhaengig vom Seitenthema */
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 14px; }
+  .mode { background: var(--owlet-seite); border-radius: 18px; padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .mode .eyebrow { color: var(--owlet-text-sekundaer); }
+  .hull.bn { position: relative; overflow: hidden; isolation: isolate; border-radius: 24px; padding: 16px 20px; min-height: 58px;
+    background: linear-gradient(180deg, var(--owlet-huelle-oben) 0%, var(--owlet-huelle-unten) 55%);
+    border: 1px solid var(--owlet-huelle-rand); box-shadow: 0 18px 44px -22px var(--owlet-schatten);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif; }
+  .hull.bn .body { position: relative; z-index: 1; }
+  .numline { font-size: 12.5px; color: var(--owlet-text-sekundaer); font-variant-numeric: tabular-nums; }
+
+  /* Entscheidungen */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rec { font-size: 13px; font-weight: 700; color: var(--ok); }
+  .card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+  /* Tabellen */
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 12px; color: var(--muted); font-weight: 700; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.n { text-align: right; }
+  td.ok { color: var(--fg); }
+  td.bad { color: var(--bad); font-weight: 700; }
+  td.bad::after { content: " ✕"; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid var(--line); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .note { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+  /* Varianten nur fuer diesen Entwurf; das Template bekommt die gewaehlte */
+  .v-sonne-a .wx-sun { background: radial-gradient(circle, color-mix(in srgb, rgba(230, 193, 90, 0.24) var(--wx-d), color-mix(in srgb, var(--owlet-sonnengelb, #e6c15a) 38%, transparent)) 0%, color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), color-mix(in srgb, var(--owlet-sonnengelb, #e6c15a) 19%, transparent)) 36%, rgba(230, 193, 90, 0) 68%); }
+  .v-sonne-a .wx-rays { background: repeating-conic-gradient(color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), color-mix(in srgb, var(--owlet-sonnengelb, #e6c15a) 18%, transparent)) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); }
+  .v-blitz-a .wx-flash { background: radial-gradient(ellipse 70% 60% at 70% 0%, color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--wx-d), color-mix(in srgb, var(--owlet-text, #f2f5f8) 27%, transparent)), rgba(255, 255, 255, 0) 70%); }
+  .v-ruhe-aus .wx.banner {
+    -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+    mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+  }
+  .blitz-halten .wx-flash { animation: none; opacity: 1; }
+
+  /* Animation: CSS wie im Template owlet_wetter_fx (Vorschlag) */
+  .wx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; --wx-d: var(--wx-dunkel, 100%); }
+  .wx * { will-change: transform; }
+  .wx-sky { position: absolute; inset: 0 -20%; transform: scaleX(var(--wx-dir, 1)); }
+  .wx-flow { position: absolute; inset: -30% -20%; transform: rotate(var(--wx-tilt, 0deg)) scaleX(var(--wx-dir, 1)); transition: transform 1.2s ease; }
+  .wx-fall { position: absolute; inset: -20% -25%; transform: rotate(var(--wx-rain, -6deg)); transition: transform 1.2s ease; }
+  .wx-drift { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wx-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+  @keyframes wx-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
+  .wx-cloud { position: absolute; right: 100%; top: 0; width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: color-mix(in srgb, #cdd6e0 var(--wx-d), var(--owlet-wolkengrau, #cdd6e0)); opacity: calc(var(--o) * (180% - 0.8 * var(--wx-d))); }
+  .wx-cloud::before, .wx-cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+  .wx-cloud::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }
+  .wx-cloud::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }
+  .wx-cloud.dark { background: #6e7988; opacity: var(--o); }
+  .wx-sun { position: absolute; right: -16%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, rgba(230, 193, 90, 0.24) var(--wx-d), rgba(230, 193, 90, 0.6)) 0%, color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), rgba(230, 193, 90, 0.3)) 36%, rgba(230, 193, 90, 0) 68%); transform: translateY(var(--ty, -48%)); animation: wx-sun 8s ease-in-out infinite alternate; }
+  @keyframes wx-sun { from { transform: translateY(var(--ty, -48%)) scale(1); opacity: 0.8; } to { transform: translateY(var(--ty, -48%)) scale(1.08); opacity: 1; } }
+  .wx-rays { position: absolute; right: -30%; top: 0; width: 80%; aspect-ratio: 1; border-radius: 50%; background: repeating-conic-gradient(color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), rgba(230, 193, 90, 0.5)) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); transform: translateY(var(--ty, -50%)); animation: wx-rays 120s linear infinite; }
+  @keyframes wx-rays { from { transform: translateY(var(--ty, -50%)) rotate(0deg); } to { transform: translateY(var(--ty, -50%)) rotate(360deg); } }
+  .wx-sun.soft, .wx-rays.soft { opacity: 0.7; }
+  .wx-night { position: absolute; right: -20%; top: 0; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, rgba(142, 162, 230, 0.18) var(--wx-d), color-mix(in srgb, var(--owlet-indigo, #8ea2e6) 23%, transparent)) 0%, rgba(142, 162, 230, 0) 65%); transform: translateY(-50%); }
+  .wx-star { position: absolute; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-nachtgrau, #9aa7bd) 77%, transparent)); animation: wx-twinkle var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+  @keyframes wx-twinkle { from { opacity: 0.25; } to { opacity: 1; } }
+  .wx-drop, .wx-flake { position: absolute; top: 0; height: 100%; left: var(--x); animation: wx-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+  @keyframes wx-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+  .wx-drop { width: 1.5px; opacity: calc(var(--a) * (133% - 0.33 * var(--wx-d))); }
+  .wx-drop::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), color-mix(in srgb, #7fb3d5 var(--wx-d), var(--owlet-blau, #7fb3d5))); }
+  .wx-flake { width: var(--s); }
+  .wx-flake::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 94%, transparent)); animation: wx-sway var(--sw) ease-in-out infinite alternate; }
+  .wx-flake.hail::after { border-radius: 1px; background: color-mix(in srgb, rgba(205, 214, 224, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) 81%, transparent)); animation: none; }
+  @keyframes wx-sway { from { transform: translateX(-6px); } to { transform: translateX(6px); } }
+  .wx-fog { position: absolute; left: -30%; width: 160%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), color-mix(in srgb, rgba(205, 214, 224, 0.12) var(--wx-d), color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) 21.5%, transparent)) 50%, rgba(205, 214, 224, 0)); -webkit-mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); animation: wx-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+  @keyframes wx-haze { from { transform: translateX(-10%); } to { transform: translateX(10%); } }
+  .wx-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 70% 0%, color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--wx-d), rgba(230, 193, 90, 0.72)), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wx-flash 8s linear infinite; animation-delay: -5s; }
+  @keyframes wx-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }
+  .wx-alert { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 70% at 50% 120%, color-mix(in srgb, rgba(240, 115, 106, 0.18) var(--wx-d), color-mix(in srgb, var(--owlet-rot, #f0736a) 18%, transparent)), rgba(240, 115, 106, 0) 70%); animation: wx-glow 3.5s ease-in-out infinite alternate; }
+  @keyframes wx-glow { from { opacity: 0.5; } to { opacity: 1; } }
+  .wx-streak { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 208, 213, 0), color-mix(in srgb, #7fd0d5 var(--wx-d), var(--owlet-tuerkis, #7fd0d5)) 70%, rgba(127, 208, 213, 0)); opacity: calc(var(--a) * (148% - 0.48 * var(--wx-d))); animation: wx-wave var(--wv) ease-in-out infinite alternate; }
+  .wx-streak.cloud { background: linear-gradient(90deg, rgba(205, 214, 224, 0), color-mix(in srgb, #cdd6e0 var(--wx-d), var(--owlet-wolkengrau, #cdd6e0)) 70%, rgba(205, 214, 224, 0)); opacity: calc(var(--a) * (170% - 0.7 * var(--wx-d))); }
+  .wx-streak.gust { height: 2px; }
+  @keyframes wx-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
+  .wx.banner {
+    --bn-a: max(38%, min(var(--bn-s, 0px), 100% - 133px));
+    -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(90deg, #cdd6e0 calc(100% - var(--bn-w, 0px) - 24px), rgba(205, 214, 224, var(--zone, 1)) calc(100% - var(--bn-w, 0px)));
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(90deg, #cdd6e0 calc(100% - var(--bn-w, 0px) - 24px), rgba(205, 214, 224, var(--zone, 1)) calc(100% - var(--bn-w, 0px)));
+    mask-composite: intersect;
+  }
+  .wx.banner .wx-sun { width: 40%; right: -8%; --ty: -40%; }
+  .wx.banner .wx-rays { width: 62%; right: -20%; --ty: -50%; }
+  .wx.banner .wx-night { width: 50%; right: -12%; }
+  @media (prefers-reduced-motion: reduce) {
+    .wx *, .wx *::before, .wx *::after { animation: none !important; transition: none !important; }
+    .wx-drift { transform: translateX(calc((100% + var(--w)) * var(--p))); }
+    .wx-drop, .wx-flake { transform: translateY(calc(-100% * (1 - var(--p)))); }
+    .wx-flash { opacity: 0; }
+  }
+</style>
+
+<div class="page">
+  <header style="display:flex;flex-direction:column;gap:10px;">
+    <span class="eyebrow">Entwurf · Home-View · Option C</span>
+    <h1>Begrüßungsbanner im hellen Modus</h1>
+    <p class="lead">Die Wetterszene im Banner hat bisher nur Regeln für den dunklen Grund: Wolken, Sterne, Schnee und Blitz sind helle Farben mit wenig Deckkraft und auf hellem Grund nicht zu sehen. Hier stehen die hellen Regeln, die Messung dazu und drei Entscheidungen, die vor dem Umbau fallen sollten.</p>
+  </header>
+
+  <section aria-labelledby="h-vorschau">
+    <h2 id="h-vorschau">Vorschau</h2>
+    <div class="controls">
+      <div class="chips" id="chips" role="group" aria-label="Wetterszene"></div>
+      <div class="switches">
+        <div class="seg"><span>Sonne hell</span><span class="opts" data-key="sonne"><button type="button" data-v="b" aria-pressed="true">Sonnengelb</button><button type="button" data-v="a" aria-pressed="false">Tiefton</button></span></div>
+        <div class="seg"><span>Blitz hell</span><span class="opts" data-key="blitz"><button type="button" data-v="b" aria-pressed="true">gelb aufhellen</button><button type="button" data-v="a" aria-pressed="false">Navy abdunkeln</button></span></div>
+        <div class="seg"><span>Ruhezone rechts</span><span class="opts" data-key="ruhe"><button type="button" data-v="an" aria-pressed="true">an</button><button type="button" data-v="aus" aria-pressed="false">aus</button></span></div>
+        <label class="chk"><input type="checkbox" id="halten"> Blitz in der Spitze anhalten</label>
+      </div>
+    </div>
+    <div class="duo" id="duo"></div>
+    <p class="note">Beide Spalten nutzen die Werte aus <code>owlet-theme-konfig.yaml</code>; die Szene läuft mit dem Code aus <code>wetter-templates.yaml</code> und den hellen Regeln unten. Der Blitz leuchtet nur etwa 1,5 % der Zeit (alle 8 s); mit „anhalten“ bleibt er in der Spitze stehen.</p>
+  </section>
+
+  <section aria-labelledby="h-fragen">
+    <h2 id="h-fragen">Drei Entscheidungen</h2>
+    <div class="cards">
+      <div class="card">
+        <span class="eyebrow">1 · Sonne</span>
+        <h3>Sonnengelb oder Tiefton?</h3>
+        <p class="note">Der Tiefton (Sonnengelb hell) erreicht dieselbe Sichtbarkeit wie dunkel, wirkt auf hellem Grund aber oliv. Sonnengelb selbst bleibt sonnig, kommt aber nicht an die dunkle Sichtbarkeit heran: deckend höchstens 1,68:1 statt 1,74:1. Vorgeschlagen sind 0,6 Deckkraft in der Mitte (1,36:1), damit die Sonne ein Schein bleibt und keine gelbe Fläche wird.</p>
+        <ul class="note" id="q-sonne"></ul>
+        <span class="rec">Empfehlung: Sonnengelb</span>
+      </div>
+      <div class="card">
+        <span class="eyebrow">2 · Blitz</span>
+        <h3>Aufhellen oder abdunkeln?</h3>
+        <p class="note">Weiß ist auf hellem Grund unsichtbar. Abdunkeln mit Navy erreicht die dunkle Sichtbarkeit, liest sich aber eher als Schatten. Gelb aufhellen bleibt ein Leuchten, kommt mit 0,72 Deckkraft aber nur auf 1,44:1 statt 1,78:1 (deckend höchstens 1,68:1).</p>
+        <ul class="note" id="q-blitz"></ul>
+        <span class="rec">Empfehlung: gelb aufhellen</span>
+      </div>
+      <div class="card">
+        <span class="eyebrow">3 · Ruhezone rechts</span>
+        <h3>Icon und Temperatur schützen?</h3>
+        <p class="note">Bisher ist die Animation nur hinter der Datumszeile gedämpft. Icon und Temperatur stehen auf der vollen Szene, die Sonne liegt direkt dahinter. Schon dunkel fällt das Icon so in mehreren Szenen unter 3:1. Vorschlag: die ganze Wetterspalte rechts auf 45 % wie bisher das Datum, in beiden Modi.</p>
+        <ul class="note" id="q-ruhe"></ul>
+        <span class="rec">Empfehlung: an (ändert auch den dunklen Modus)</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-tabelle">
+    <h2 id="h-tabelle">Lesbarkeit je Szene</h2>
+    <p class="note" id="t-satz"></p>
+    <div class="scroll"><table id="tab"></table></div>
+    <p class="note">Rechenweg wie im Entwurf <code>wetter-animiert.html</code>: Kontrast nach WCAG 2, alle Flächen einer Szene gleichzeitig in voller Stärke über der Hülle, die Deckkraft jeder Schicht mal Dämpfung. Dunkel auf <code>#1b2231</code>, hell auf <code>#fafbfd</code> und <code>#f3f5f8</code>, der schlechtere Wert zählt. Dünne bewegte Linien und Punkte bis 4 px (Tropfen, Flocken, Sterne, Schlieren) sind nicht eingerechnet. Grenzen: Datum 13 px 4,5:1, Temperatur 26 px fett 3:1 (große Schrift), Icon 3:1. Der Blitz ist eingerechnet, obwohl er nur kurz leuchtet. Die Rechnung gibt den dunklen Wert des alten Entwurfs wieder (Datum 4,79:1, Unwetter).</p>
+  </section>
+
+  <section aria-labelledby="h-regeln">
+    <h2 id="h-regeln">Regeln je Element</h2>
+    <p class="note">Grundsatz: Jedes Element nimmt hell den Tiefton seiner Rolle aus der Palette. Die Deckkraft ist so gewählt, dass es sich genauso stark von der Hülle abhebt wie dunkel (Kontrast Element zu Hülle). Im Template ist das ein fester Faktor je Element: helle Deckkraft = dunkle Deckkraft × Faktor.</p>
+    <div class="scroll"><table id="regeln"></table></div>
+  </section>
+
+  <section aria-labelledby="h-umsetzung">
+    <h2 id="h-umsetzung">So kommt es in die Karte</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Nur, wer umgestellt ist</h3>
+        <p class="note">Das Template schaltet über <code>--wx-dunkel</code> um, nicht direkt über das Theme. Der Banner setzt <code>--wx-dunkel: var(--owlet-dunkel-anteil, 100%)</code> in <code>styles.card</code>. Die Wetter- und die Wind-Karte setzen es noch nicht und bleiben bis zu ihrer eigenen Umstellung genau wie bisher; in Chromium geprüft: 0 von 931 Elementen weichen ab.</p>
+      </div>
+      <div class="card">
+        <h3>Ohne neue Theme-Werte</h3>
+        <p class="note">Hell nutzt nur vorhandene Variablen (<code>owlet-wolkengrau</code>, <code>owlet-indigo</code>, <code>owlet-nachtgrau</code>, <code>owlet-blau</code>, <code>owlet-eis</code>, <code>owlet-rot</code>, <code>owlet-tuerkis</code>) und den Schalter <code>owlet-dunkel-anteil</code>. Die Deckkraft-Faktoren stehen im Template, nicht im Theme.</p>
+      </div>
+      <div class="card">
+        <h3>Template-Version</h3>
+        <p class="note"><code>VERSION</code> in <code>owlet_wetter_fx</code> steigt von 1 auf 2, sonst behält eine offene Seite die alte Bibliothek. Der Banner selbst bekommt Theme-Variablen wie die übrigen Karten; das Datum wird hell zu Label (<code>#3a4453</code>).</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const THEME = {"dark": {"primary-background-color": "#171d29", "card-background-color": "#1b2231", "primary-text-color": "#f2f5f8", "secondary-text-color": "#8794a5", "owlet-seite": "#171d29", "owlet-huelle-oben": "#1b2231", "owlet-huelle-unten": "#171d29", "owlet-huelle-rand": "rgba(255, 255, 255, 0.05)", "owlet-schatten": "rgba(0, 0, 0, 0.7)", "owlet-unterkachel": "rgba(255, 255, 255, 0.028)", "owlet-unterkachel-rand": "rgba(255, 255, 255, 0.06)", "owlet-neutral-kachel": "rgba(255, 255, 255, 0.05)", "owlet-flaeche-erhoeht": "#222b3c", "owlet-flaeche-vertieft": "#10151d", "owlet-aus": "#3a4453", "owlet-text": "#f2f5f8", "owlet-titel": "#e7ecf3", "owlet-label": "#b4c0cf", "owlet-text-sekundaer": "#8794a5", "owlet-muted": "#6e7988", "owlet-gruen": "#a6d49e", "owlet-amber": "#e6b566", "owlet-koralle": "#e7936e", "owlet-rot": "#f0736a", "owlet-blau": "#7fb3d5", "owlet-tuerkis": "#7fd0d5", "owlet-tuerkis-hell": "#77d4d0", "owlet-petrol": "#79b8c9", "owlet-violett": "#b399d4", "owlet-limette": "#bdd27f", "owlet-mint": "#89d2b0", "owlet-indigo": "#8ea2e6", "owlet-rose": "#e6a0c4", "owlet-wolkengrau": "#cdd6e0", "owlet-eis": "#cfe3f2", "owlet-nachtgrau": "#9aa7bd", "owlet-sonnengelb": "#e6c15a", "owlet-licht-an": "#f0c274", "owlet-fuellung-rand-amber": "rgba(240, 194, 116, 0.5)", "owlet-fuellung-rand-gruen": "rgba(166, 212, 158, 0.5)", "owlet-fuellung-rand-blau": "rgba(127, 179, 213, 0.5)", "owlet-fuellung-rand-rot": "rgba(240, 115, 106, 0.5)", "owlet-fuellung-rand-violett": "rgba(179, 153, 212, 0.5)", "owlet-fuellung-rand-tuerkis": "rgba(127, 208, 213, 0.5)", "owlet-leuchten-amber": "rgba(240, 194, 116, 0.5)", "owlet-leuchten-gruen": "rgba(166, 212, 158, 0.5)", "owlet-leuchten-blau": "rgba(127, 179, 213, 0.5)", "owlet-leuchten-rot": "rgba(240, 115, 106, 0.5)", "owlet-leuchten-violett": "rgba(179, 153, 212, 0.5)", "owlet-leuchten-tuerkis": "rgba(127, 208, 213, 0.5)", "owlet-dunkel-anteil": "100%"}, "light": {"primary-background-color": "#e6eaf0", "card-background-color": "#fafbfd", "primary-text-color": "#171d29", "secondary-text-color": "#586475", "owlet-seite": "#e6eaf0", "owlet-huelle-oben": "#fafbfd", "owlet-huelle-unten": "#f3f5f8", "owlet-huelle-rand": "rgba(23, 29, 41, 0.06)", "owlet-schatten": "rgba(23, 29, 41, 0.3)", "owlet-unterkachel": "rgba(23, 29, 41, 0.03)", "owlet-unterkachel-rand": "rgba(23, 29, 41, 0.07)", "owlet-neutral-kachel": "rgba(23, 29, 41, 0.05)", "owlet-flaeche-erhoeht": "#ffffff", "owlet-flaeche-vertieft": "#e9edf2", "owlet-aus": "#b4c0cf", "owlet-text": "#171d29", "owlet-titel": "#1b2231", "owlet-label": "#3a4453", "owlet-text-sekundaer": "#586475", "owlet-muted": "#6e7988", "owlet-gruen": "#38702e", "owlet-amber": "#855c04", "owlet-koralle": "#a94302", "owlet-rot": "#ae3c38", "owlet-blau": "#266994", "owlet-tuerkis": "#016f74", "owlet-tuerkis-hell": "#016f74", "owlet-petrol": "#066d86", "owlet-violett": "#76559c", "owlet-limette": "#5a6b04", "owlet-mint": "#00714f", "owlet-indigo": "#4b5eb1", "owlet-rose": "#994776", "owlet-wolkengrau": "#5b6571", "owlet-eis": "#506778", "owlet-nachtgrau": "#35435c", "owlet-sonnengelb": "#776202", "owlet-licht-an": "#855c04", "owlet-fuellung-rand-amber": "#855c04", "owlet-fuellung-rand-gruen": "#38702e", "owlet-fuellung-rand-blau": "#266994", "owlet-fuellung-rand-rot": "#ae3c38", "owlet-fuellung-rand-violett": "#76559c", "owlet-fuellung-rand-tuerkis": "#016f74", "owlet-leuchten-amber": "rgba(133, 92, 4, 0.5)", "owlet-leuchten-gruen": "rgba(56, 112, 46, 0.5)", "owlet-leuchten-blau": "rgba(38, 105, 148, 0.5)", "owlet-leuchten-rot": "rgba(174, 60, 56, 0.5)", "owlet-leuchten-violett": "rgba(118, 85, 156, 0.5)", "owlet-leuchten-tuerkis": "rgba(1, 111, 116, 0.5)", "owlet-dunkel-anteil": "0%"}};
+  const wxLib = new Function('variables', "\n  const VERSION = 1, alt = window.__owletWx;\n  if (alt && alt.version === VERSION) return alt;\n\n  // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text\n  const rnd = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };\n  const f2 = (n) => n.toFixed(2);\n\n  // ---------- Bausteine ----------\n  const cloud = (y, w, d, p, o, dark) => `<div class=\"wx-drift\" style=\"--y:${y}%;--w:${w}px;--d:${d}s;--p:${p}\"><div class=\"wx-cloud${dark ? ' dark' : ''}\" style=\"--o:${o}\"></div></div>`;\n  // [y %, Breite px, Dauer s, Phase, Deckkraft]\n  const SETS = {\n    light: [[12, 120, 95, 0.15, 0.12], [44, 90, 120, 0.62, 0.12]],\n    full: [[6, 150, 90, 0.1, 0.16], [32, 110, 120, 0.55, 0.12], [58, 130, 105, 0.85, 0.12]],\n    rain: [[2, 170, 80, 0.2, 0.24], [24, 130, 100, 0.68, 0.24]],\n    // Banner (~90 px hoch): kleinere Wolken\n    b_light: [[8, 64, 60, 0.2, 0.12], [46, 48, 75, 0.65, 0.12]],\n    b_full: [[4, 80, 55, 0.1, 0.16], [36, 58, 70, 0.55, 0.12], [60, 68, 65, 0.85, 0.12]],\n    b_rain: [[2, 92, 50, 0.2, 0.24], [32, 72, 62, 0.68, 0.24]]\n  };\n  const sky = (set, speed, dark) => '<div class=\"wx-sky\">' + SETS[set].map(([y, w, d, p, o]) => cloud(y, w, (d / speed).toFixed(1), p, o, dark)).join('') + '</div>';\n  const sun = (soft) => `<div class=\"wx-rays${soft ? ' soft' : ''}\"></div><div class=\"wx-sun${soft ? ' soft' : ''}\"></div>`;\n  const night = (n) => {\n    let h = '<div class=\"wx-night\"></div>';\n    for (let i = 0; i < n; i++) {\n      const x = (4 + rnd(i, 11) * 92).toFixed(1), y = (4 + rnd(i, 12) * 62).toFixed(1);\n      const s = rnd(i, 13) > 0.7 ? 3 : 2, d = (2.4 + rnd(i, 14) * 2.6).toFixed(1);\n      h += `<i class=\"wx-star\" style=\"left:${x}%;top:${y}%;--s:${s}px;--d:${d}s;--p:${f2(rnd(i, 15))}\"></i>`;\n    }\n    return h;\n  };\n  const drops = (n, base, len) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const x = ((i + rnd(i, 1) * 0.8) / n * 100).toFixed(1);\n      const d = (base * (0.85 + 0.3 * rnd(i, 2))).toFixed(2);\n      h += `<i class=\"wx-drop\" style=\"--x:${x}%;--d:${d}s;--p:${f2(rnd(i, 3))};--len:${len}px;--a:${i % 3 === 0 ? 0.5 : 0.24}\"></i>`;\n    }\n    return h;\n  };\n  const flakes = (n, base, size, hail) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const x = ((i + rnd(i, 21) * 0.8) / n * 100).toFixed(1);\n      const d = (base * (0.8 + 0.4 * rnd(i, 22))).toFixed(2);\n      const sw = (2 + rnd(i, 24) * 2).toFixed(1);\n      h += `<i class=\"wx-flake${hail ? ' hail' : ''}\" style=\"--x:${x}%;--d:${d}s;--p:${f2(rnd(i, 23))};--s:${size}px;--sw:${sw}s\"></i>`;\n    }\n    return h;\n  };\n  const fall = (inner) => `<div class=\"wx-fall\">${inner}</div>`;\n  const fog = () => [[8, 30, 26, 0.1], [34, 34, 34, 0.5], [62, 30, 22, 0.8], [82, 26, 30, 0.3]]\n    .map(([y, hh, d, p]) => `<div class=\"wx-fog\" style=\"--y:${y}%;--h:${hh}%;--d:${d}s;--p:${p}\"></div>`).join('');\n  const flash = '<div class=\"wx-flash\"></div>';\n  const alertGlow = '<div class=\"wx-alert\"></div>';\n\n  // Wind: [Anzahl, Grunddauer s, Laenge px] je Beaufort-Stufe 1..9+\n  const WIND = [null, [2, 10, 50], [3, 7.5, 64], [5, 5.5, 80], [7, 4.2, 96], [9, 3.2, 112], [11, 2.5, 128], [13, 1.9, 144], [15, 1.5, 160], [18, 1.15, 180]];\n  const streaks = (stage, cls) => {\n    if (stage < 1) return '';\n    const [n, base, len] = WIND[Math.min(stage, 9)];\n    const every = stage >= 6 ? 2 : stage >= 3 ? 3 : 0;\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const y = (20 + (i + rnd(i, 4) * 0.9) / n * 60).toFixed(1);\n      const d = (base * (0.8 + 0.4 * rnd(i, 5))).toFixed(2);\n      const w = Math.round(len * (0.7 + 0.6 * rnd(i, 7)));\n      const a = every && i % every === 0 ? 0.5 : 0.24;\n      const wv = (1.6 + rnd(i, 8) * 1.8).toFixed(2);\n      h += `<div class=\"wx-drift\" style=\"--y:${y}%;--w:${w}px;--d:${d}s;--p:${f2(rnd(i, 6))}\"><i class=\"wx-streak${cls ? ' ' + cls : ''}${stage >= 6 ? ' gust' : ''}\" style=\"--a:${a};--wv:${wv}s\"></i></div>`;\n    }\n    return `<div class=\"wx-flow\">${h}</div>`;\n  };\n\n  // ---------- Beaufort (WMO-Grenzen in m/s) ----------\n  const BFT_MS = [0, 0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];\n  const bft = (kmh) => {\n    const v = parseFloat(kmh);\n    if (isNaN(v)) return 0;\n    const ms = v / 3.6; let s = 0;\n    for (let i = 1; i < BFT_MS.length; i++) if (ms >= BFT_MS[i]) s = i;\n    return s;\n  };\n\n  // ---------- Windrichtung (Herkunft) -> Bewegung auf der Karte ----------\n  // rechts = Osten, unten = Sueden; Spiegeln fuer links/rechts, Neigung max. 12 Grad.\n  const DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];\n  const richtung = (dirKey, stage) => {\n    const idx = DIRS.indexOf(String(dirKey || '').toUpperCase());\n    if (idx < 0) return { dir: 1, tilt: 0, rain: -6 };\n    const b = idx * 22.5 * Math.PI / 180;\n    const dx = -Math.sin(b), dy = Math.cos(b);\n    const dir = dx < -0.05 ? -1 : 1;\n    let t = (dir === 1 ? Math.atan2(dy, dx) : Math.atan2(-dy, -dx)) * 180 / Math.PI;\n    t = Math.max(-12, Math.min(12, t));\n    const rain = Math.max(-24, Math.min(24, -dx * Math.min(stage, 8) * 3));\n    return { dir, tilt: Math.round(t), rain: Math.round(rain) };\n  };\n\n  // Regen der eigenen Station hat Vorrang vor der DWD-Bedingung\n  const WET = ['rainy', 'pouring', 'lightning-rainy', 'snowy', 'snowy-rainy', 'hail', 'exceptional'];\n  const effCond = (cond, raining) => {\n    if (!raining || WET.includes(cond)) return cond;\n    return cond === 'lightning' ? 'lightning-rainy' : 'rainy';\n  };\n\n  // ---------- Szenen ----------\n  // Wetter-Karte der Wetter-View\n  const wetter = (cond, stage) => {\n    const sp = 1 + Math.min(stage, 9) * 0.3;\n    let h;\n    switch (cond) {\n      case 'sunny': h = sun(false); break;\n      case 'clear-night': h = night(16); break;\n      case 'partlycloudy': h = sun(true) + sky('light', sp); break;\n      case 'cloudy': h = sky('full', sp); break;\n      case 'fog': h = fog(); break;\n      case 'rainy': h = sky('rain', sp, true) + fall(drops(18, 1.1, 14)); break;\n      case 'pouring': h = sky('rain', sp, true) + fall(drops(28, 0.7, 20)); break;\n      case 'lightning': h = sky('rain', sp, true) + flash; break;\n      case 'lightning-rainy': h = sky('rain', sp, true) + fall(drops(18, 1.0, 14)) + flash; break;\n      case 'snowy': h = sky('light', sp) + fall(flakes(20, 9, 4, false)); break;\n      case 'snowy-rainy': h = sky('rain', sp, true) + fall(drops(10, 1.1, 12) + flakes(12, 8, 4, false)); break;\n      case 'hail': h = sky('rain', sp, true) + fall(flakes(20, 1.6, 3, true)); break;\n      case 'windy': h = streaks(Math.max(stage, 5), 'cloud'); break;\n      case 'windy-variant': h = sky('light', 1 + Math.max(stage, 5) * 0.3) + streaks(Math.max(stage, 5), 'cloud'); break;\n      case 'exceptional': h = alertGlow + sky('rain', sp, true) + fall(drops(26, 0.7, 20)) + flash; break;\n      default: h = '';\n    }\n    return `<div class=\"wx\">${h}</div>`;\n  };\n\n  // Wind-Karte der Wetter-View\n  const wind = (stage) => `<div class=\"wx\">${streaks(stage, '')}</div>`;\n\n  // Begruessungs-Banner: Nachtregel wie beim Banner-Icon, dazu\n  // \"Teils bewoelkt\" bei Nacht als Mondschein\n  const bannerScene = (cond, sunDown) => {\n    if (sunDown && cond === 'sunny') return 'clear-night';\n    if (sunDown && cond === 'partlycloudy') return 'partlycloudy-night';\n    return cond;\n  };\n  // start: x-Position in px, ab der die Animation einsetzen darf\n  // (rechts neben dem Begruessungstext); zone: Daempfung hinter dem Datum\n  const banner = (scene, start, zone) => {\n    const sp = 1.6;\n    let h;\n    switch (scene) {\n      case 'sunny': h = sun(false); break;\n      case 'clear-night': h = night(10); break;\n      case 'partlycloudy': h = sun(true) + sky('b_light', sp); break;\n      case 'partlycloudy-night': h = '<div class=\"wx-night\"></div>' + sky('b_light', sp); break;\n      case 'cloudy': h = sky('b_full', sp); break;\n      case 'fog': h = fog(); break;\n      case 'rainy': h = sky('b_rain', sp, true) + fall(drops(12, 0.55, 10)); break;\n      case 'pouring': h = sky('b_rain', sp, true) + fall(drops(18, 0.4, 14)); break;\n      case 'lightning': h = sky('b_rain', sp, true) + flash; break;\n      case 'lightning-rainy': h = sky('b_rain', sp, true) + fall(drops(12, 0.5, 10)) + flash; break;\n      case 'snowy': h = sky('b_light', sp) + fall(flakes(14, 3.2, 3, false)); break;\n      case 'snowy-rainy': h = sky('b_rain', sp, true) + fall(drops(7, 0.55, 9) + flakes(8, 3, 3, false)); break;\n      case 'hail': h = sky('b_rain', sp, true) + fall(flakes(14, 0.8, 2.5, true)); break;\n      case 'windy': h = streaks(5, 'cloud'); break;\n      case 'windy-variant': h = sky('b_light', sp) + streaks(5, 'cloud'); break;\n      case 'exceptional': h = alertGlow + sky('b_rain', sp, true) + fall(drops(16, 0.4, 14)) + flash; break;\n      default: h = '';\n    }\n    return `<div class=\"wx banner\" style=\"--bn-s:${Math.round(start)}px;--zone:${zone}\">${h}</div>`;\n  };\n\n  // Textbreite fuer den Startpunkt der Banner-Animation\n  const FONT = \"-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif\";\n  let ctx = null;\n  const measure = (text, font) => {\n    try {\n      if (!ctx) ctx = document.createElement('canvas').getContext('2d');\n      ctx.font = font + ' ' + FONT;\n      return ctx.measureText(String(text || '')).width;\n    } catch (e) { return 0; }\n  };\n\n  const lib = { version: VERSION, bft, richtung, effCond, wetter, wind, bannerScene, banner, measure };\n  window.__owletWx = lib;\n  return lib;\n")({});
+  const $ = (id) => document.getElementById(id);
+  const num = (n) => n.toFixed(2).replace('.', ',');
+
+  const SZENEN = [['sunny', 'Sonnig'], ['partlycloudy', 'Teils bewölkt'], ['partlycloudy-night', 'Teils bewölkt, Nacht'], ['cloudy', 'Bewölkt'], ['fog', 'Nebel'],
+    ['clear-night', 'Klar, Nacht'], ['rainy', 'Regnerisch'], ['pouring', 'Starkregen'], ['snowy', 'Schnee'], ['snowy-rainy', 'Schneeregen'], ['hail', 'Hagel'],
+    ['lightning', 'Gewitter'], ['lightning-rainy', 'Gewitter mit Regen'], ['exceptional', 'Unwetter'], ['windy', 'Windig'], ['windy-variant', 'Windig mit Wolken']];
+  const state = { szene: 'partlycloudy', sonne: 'b', blitz: 'b', ruhe: 'an' };
+  try { const s = JSON.parse(localStorage.getItem('banner-hell') || '{}'); Object.assign(state, s); } catch (e) {}
+  const save = () => { try { localStorage.setItem('banner-hell', JSON.stringify(state)); } catch (e) {} };
+
+  // ---------- Banner wie welcome-banner-karte.yaml, Farben als Theme-Variablen ----------
+  const V = (n, fb) => `var(--owlet-${n}, ${fb})`;
+  const ICON_FARBE = { amber: V('amber', '#e6b566'), grau: V('text-sekundaer', '#8794a5'), blau: V('blau', '#7fb3d5'), eis: V('eis', '#cfe3f2'), nacht: V('nachtgrau', '#9aa7bd'), rot: V('rot', '#f0736a') };
+  const ICON_ROLLE = { 'sunny': 'amber', 'clear-night': 'nacht', 'partlycloudy': 'amber', 'partlycloudy-night': 'amber', 'cloudy': 'grau', 'fog': 'grau',
+    'rainy': 'blau', 'pouring': 'blau', 'lightning-rainy': 'amber', 'hail': 'eis', 'snowy-rainy': 'eis', 'snowy': 'eis', 'lightning': 'amber',
+    'windy': 'grau', 'windy-variant': 'grau', 'exceptional': 'rot' };
+  const icon = (szene) => {
+    const S = (inner, c) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:26px;height:26px;flex:none;" aria-hidden="true">${inner}</svg>`;
+    const sun = '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>';
+    const moon = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>';
+    const cl = '<path d="M7 18h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 9.4 3.8 3.8 0 0 0 7 18Z"/>';
+    const pcl = '<circle cx="8.5" cy="7.5" r="3"/><path d="M8.5 2.5v1.4M13.5 7.5h-1.4M12 4l-1 1M5 4l1 1"/><path d="M9 19h8a3.2 3.2 0 0 0 .3-6.4A4.6 4.6 0 0 0 8.7 11 3.5 3.5 0 0 0 9 19Z"/>';
+    const rn = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>';
+    const sn = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>';
+    const bt = '<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>';
+    const fg = '<path d="M5 9h14M4 13h16M6 17h12"/>';
+    const wd = '<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>';
+    const P = { 'sunny': sun, 'clear-night': moon, 'partlycloudy': pcl, 'partlycloudy-night': pcl, 'cloudy': cl, 'fog': fg, 'rainy': rn, 'pouring': rn,
+      'lightning-rainy': bt, 'hail': sn, 'snowy-rainy': sn, 'snowy': sn, 'lightning': bt, 'windy': wd, 'windy-variant': wd, 'exceptional': bt };
+    return S(P[szene] || cl, ICON_FARBE[ICON_ROLLE[szene]]);
+  };
+  const datum = () => { const d = new Date(); return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' · ' + d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' }); };
+  const gruss = () => { const h = new Date().getHours(); return (h >= 5 && h < 11) ? 'Guten Morgen' : (h >= 11 && h < 17) ? 'Guten Tag' : (h >= 17 && h < 22) ? 'Guten Abend' : 'Gute Nacht'; };
+  const body = (szene) => `
+    <div style="display:flex;align-items:center;gap:16px;width:100%;box-sizing:border-box;overflow:hidden;color:${V('text', '#f2f5f8')};text-align:left;">
+      <div style="width:52px;height:52px;flex:none;border-radius:16px;display:grid;place-items:center;font-size:21px;font-weight:700;color:#12161f;box-sizing:border-box;background:linear-gradient(160deg,#4a5a74,#33404f);border:2px solid ${V('gruen', '#a6d49e')};">B</div>
+      <div style="display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto;">
+        <div style="font-size:13px;color:${V('text-sekundaer', '#8794a5')};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${gruss()}</div>
+        <div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Bewohner</div>
+        <div style="font-size:13px;color:${V('text-sekundaer', '#8794a5')};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Willkommen zu Hause</div>
+      </div>
+      <div class="wetter" style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-left:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">${icon(szene)}<span style="font-size:26px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1;">14°</span></div>
+        <div style="font-size:13px;color:${V('label', '#b4c0cf')};line-height:1.2;white-space:nowrap;">${datum()}</div>
+      </div>
+    </div>`;
+
+  const themeStyle = (m) => Object.entries(THEME[m]).map(([k, v]) => `--${k}:${v}`).join(';') + ';--wx-dunkel:var(--owlet-dunkel-anteil, 100%)';
+  const render = () => {
+    const kl = `v-sonne-${state.sonne} v-blitz-${state.blitz} v-ruhe-${state.ruhe}${$('halten').checked ? ' blitz-halten' : ''}`;
+    $('duo').innerHTML = [['dark', 'Dunkel'], ['light', 'Hell']].map(([m, name]) => `
+      <div class="mode ${kl}" style="${themeStyle(m)}">
+        <span class="eyebrow">${name}</span>
+        <div class="hull bn">${wxLib.banner(state.szene, 1 + 20 + 52 + 16 + 120 + 16, 0.45)}<div class="body">${body(state.szene)}</div></div>
+        <div class="numline" data-m="${m}"></div>
+      </div>`).join('');
+    // Breite der Wetterspalte fuer die Ruhezone (die Karte misst sie aus dem Text)
+    document.querySelectorAll('.hull.bn').forEach((h) => { const w = h.querySelector('.wetter'); h.querySelector('.wx').style.setProperty('--bn-w', (w.offsetWidth + 20) + 'px'); });
+    document.querySelectorAll('.numline').forEach((el) => {
+      const r = messe(state.szene, el.dataset.m === 'dark' ? 'd' : 'h');
+      el.textContent = `Datum ${num(r.datum)}:1 · Temperatur ${num(r.temp)}:1 · Icon ${num(r.icon)}:1 (schlechtester Fall dieser Szene)`;
+    });
+    document.querySelectorAll('#chips .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === state.szene)));
+    document.querySelectorAll('.opts').forEach((o) => o.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(state[o.dataset.key] === b.dataset.v))));
+    tabelle(); save();
+  };
+
+  // ---------- Rechnung ----------
+  const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+  const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+  const kr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const mix = (bg, fg, a) => bg.map((v, i) => v * (1 - a) + fg[i] * a);
+  const DK = [['regenwolke', 0.24], ['regenwolke', 0.24]], FL = [['blitz', 0.18]], W = (a) => ['wolke', a];
+  const LAYERS = {
+    'sunny': [['sonne', 0.24], ['strahlen', 0.12]], 'clear-night': [['nachtschein', 0.18]],
+    'partlycloudy': [['sonne', 0.168], ['strahlen', 0.084], W(0.12), W(0.12)], 'partlycloudy-night': [['nachtschein', 0.18], W(0.12), W(0.12)],
+    'cloudy': [W(0.16), W(0.12)], 'fog': [['nebel', 0.12]], 'rainy': DK, 'pouring': DK, 'snowy-rainy': DK, 'hail': DK, 'snowy': [W(0.12), W(0.12)],
+    'lightning': DK.concat(FL), 'lightning-rainy': DK.concat(FL), 'exceptional': [['unwetter', 0.18]].concat(DK, FL), 'windy': [], 'windy-variant': [W(0.12), W(0.12)]
+  };
+  // [Farbe dunkel, Farbe hell, Faktor hell]
+  const EL = () => ({
+    wolke: ['#cdd6e0', '#5b6571', 1.8], regenwolke: ['#6e7988', '#6e7988', 1], nebel: ['#cdd6e0', '#5b6571', 1.8], nachtschein: ['#8ea2e6', '#4b5eb1', 1.28], unwetter: ['#f0736a', '#ae3c38', 1],
+    sonne: state.sonne === 'a' ? ['#e6c15a', '#776202', 1.57] : ['#e6c15a', '#e6c15a', 2.5],
+    strahlen: state.sonne === 'a' ? ['#e6c15a', '#776202', 1.53] : ['#e6c15a', '#e6c15a', 4.2],
+    blitz: state.blitz === 'a' ? ['#ffffff', '#171d29', 1.5] : ['#ffffff', '#e6c15a', 4.0]
+  });
+  const ICON_HEX = { amber: ['#e6b566', '#855c04'], grau: ['#8794a5', '#586475'], blau: ['#7fb3d5', '#266994'], eis: ['#cfe3f2', '#506778'], nacht: ['#9aa7bd', '#35435c'], rot: ['#f0736a', '#ae3c38'] };
+  const kontrast = (szene, txt, f, hull, m) => {
+    const E = EL(); let bg = hex(hull);
+    LAYERS[szene].forEach(([el, a]) => { const [dk, hl, k] = E[el]; bg = mix(bg, hex(m === 'd' ? dk : hl), Math.min(1, m === 'd' ? a : a * k) * f); });
+    return kr(hex(txt), bg);
+  };
+  const messe = (szene, m) => {
+    const huellen = m === 'd' ? ['#1b2231'] : ['#fafbfd', '#f3f5f8'];
+    const zr = state.ruhe === 'an' ? 0.45 : 1;
+    const min = (txt, f) => Math.min(...huellen.map((h) => kontrast(szene, txt, f, h, m)));
+    const i = m === 'd' ? 0 : 1;
+    return { datum: min(m === 'd' ? '#b4c0cf' : '#3a4453', 0.45), temp: min(m === 'd' ? '#f2f5f8' : '#171d29', zr), icon: min(ICON_HEX[ICON_ROLLE[szene]][i], zr) };
+  };
+  const tabelle = () => {
+    let rows = '', fehl = { d: 0, h: 0 };
+    SZENEN.forEach(([s, name]) => {
+      const d = messe(s, 'd'), h = messe(s, 'h');
+      const td = (v, g) => `<td class="n ${v >= g ? 'ok' : 'bad'}">${num(v)}<span class="sr">${v >= g ? ' reicht' : ' zu wenig'}</span></td>`;
+      [[d, 'd'], [h, 'h']].forEach(([r, k]) => { if (r.datum < 4.5 || r.temp < 3 || r.icon < 3) fehl[k]++; });
+      rows += `<tr><td>${name}</td>${td(d.datum, 4.5)}${td(h.datum, 4.5)}${td(d.temp, 3)}${td(h.temp, 3)}${td(d.icon, 3)}${td(h.icon, 3)}</tr>`;
+    });
+    $('tab').innerHTML = `<thead><tr><th>Szene</th><th>Datum dunkel</th><th>Datum hell</th><th>Temp. dunkel</th><th>Temp. hell</th><th>Icon dunkel</th><th>Icon hell</th></tr></thead><tbody>${rows}</tbody>`;
+    $('t-satz').textContent = `Mit der aktuellen Auswahl halten ${16 - fehl.d} von 16 Szenen dunkel und ${16 - fehl.h} von 16 Szenen hell alle drei Grenzen.`;
+  };
+
+  // Kennzahlen fuer die Entscheidungen (unabhaengig von der Auswahl)
+  const mitWahl = (w, fn) => { const alt = { ...state }; Object.assign(state, w); const r = fn(); Object.assign(state, alt); return r; };
+  const minAll = (key, m) => Math.min(...SZENEN.map(([s]) => messe(s, m)[key]));
+  const unter = (key, m, g) => SZENEN.filter(([s]) => messe(s, m)[key] < g).length;
+  $('q-sonne').innerHTML = ['b', 'a'].map((v) => mitWahl({ sonne: v, ruhe: 'aus' }, () => `<li>${v === 'b' ? 'Sonnengelb' : 'Tiefton'}: Icon bei Sonnig ${num(messe('sunny', 'h').icon)}:1, bei Teils bewölkt ${num(messe('partlycloudy', 'h').icon)}:1 (ohne Ruhezone)</li>`)).join('');
+  $('q-blitz').innerHTML = ['b', 'a'].map((v) => mitWahl({ blitz: v, ruhe: 'aus' }, () => `<li>${v === 'b' ? 'Gelb aufhellen' : 'Navy abdunkeln'}: Icon in der Blitzspitze bei Gewitter ${num(messe('lightning', 'h').icon)}:1, bei Unwetter ${num(messe('exceptional', 'h').icon)}:1</li>`)).join('');
+  $('q-ruhe').innerHTML = ['aus', 'an'].map((v) => mitWahl({ ruhe: v, sonne: 'b', blitz: 'b' }, () => `<li>${v === 'an' ? 'Mit' : 'Ohne'} Ruhezone: Icon unter 3:1 in ${unter('icon', 'd', 3)} Szenen dunkel und ${unter('icon', 'h', 3)} hell, schlechtester Wert dunkel ${num(minAll('icon', 'd'))}:1, hell ${num(minAll('icon', 'h'))}:1</li>`)).join('');
+
+  // ---------- Regeln je Element ----------
+  const REGELN = [["Wolke", "rgba(205,214,224,0.16)", "Wolkengrau · 0,12 / 0,16", "rgba(91,101,113,0.29)", "Wolkengrau hell · 0,22 / 0,29", "1,80", "1,34 → 1,35 · 1,50 → 1,50"], ["Regenwolke", "rgba(110,121,136,0.24)", "Muted · 0,24", "rgba(110,121,136,0.24)", "Muted · 0,24", "1,00", "1,33 → 1,33"], ["Sonne, Mitte", "rgba(230,193,90,0.24)", "Sonnengelb · 0,24", "rgba(230,193,90,0.60)", "Sonnengelb (A: Tiefton × 1,57) · 0,60", "2,50", "1,74 → 1,36"], ["Sonnenstrahlen", "rgba(230,193,90,0.12)", "Sonnengelb · 0,12", "rgba(230,193,90,0.50)", "Sonnengelb (A: Tiefton × 1,53) · 0,50", "4,20", "1,29 → 1,29"], ["Nachtschein", "rgba(142,162,230,0.18)", "Indigo · 0,18", "rgba(75,94,177,0.23)", "Indigo hell · 0,23", "1,28", "1,39 → 1,39"], ["Sterne", "rgba(255,255,255,0.5)", "Weiß · 0,50", "rgba(53,67,92,0.77)", "Nachtgrau hell · 0,77", "1,54", "5,01 → 5,02"], ["Regentropfen", "rgba(127,179,213,0.5)", "Blau · 0,24 / 0,50", "rgba(38,105,148,0.67)", "Blau hell · 0,32 / 0,67", "1,33", "1,61 → 1,60 · 2,82 → 2,92"], ["Schneeflocken", "rgba(255,255,255,0.5)", "Weiß · 0,50", "rgba(80,103,120,0.94)", "Eis hell · 0,94", "1,88", "5,01 → 4,99"], ["Hagel", "rgba(205,214,224,0.5)", "Wolkengrau · 0,50", "rgba(91,101,113,0.81)", "Wolkengrau hell · 0,81", "1,62", "3,78 → 3,78"], ["Nebel", "rgba(205,214,224,0.12)", "Wolkengrau · 0,12", "rgba(91,101,113,0.22)", "Wolkengrau hell · 0,22", "1,80", "1,34 → 1,35"], ["Blitz", "rgba(255,255,255,0.18)", "Weiß · 0,18", "rgba(230,193,90,0.72)", "Sonnengelb (A: Navy × 1,5) · 0,72", "4,00", "1,78 → 1,44"], ["Unwetterschein", "rgba(240,115,106,0.18)", "Rot · 0,18", "rgba(174,60,56,0.18)", "Rot hell · 0,18", "1,00", "1,31 → 1,31"], ["Windschlieren", "rgba(127,208,213,0.5)", "Türkis · 0,24 / 0,50", "rgba(1,111,116,0.74)", "Türkis hell · 0,36 / 0,74", "1,48", "1,75 → 1,72 · 3,32 → 3,45"], ["Windschlieren, Wolken", "rgba(205,214,224,0.5)", "Wolkengrau · 0,24 / 0,50", "rgba(91,101,113,0.85)", "Wolkengrau hell · 0,41 / 0,85", "1,70", "1,88 → 1,81 · 3,78 → 4,11"]];
+  $('regeln').innerHTML = `<thead><tr><th>Element</th><th>Dunkel</th><th>Hell</th><th>Faktor</th><th>Abhebung von der Hülle dunkel → hell</th></tr></thead><tbody>` +
+    REGELN.map((r) => `<tr><td>${r[0]}</td><td><span class="sw" style="background:${r[1]}"></span>${r[2]}</td><td><span class="sw" style="background:${r[3]}"></span>${r[4]}</td><td class="n">× ${r[5]}</td><td class="n">${r[6]}</td></tr>`).join('') + '</tbody>';
+
+  // ---------- Bedienung ----------
+  SZENEN.forEach(([s, name]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.s = s; b.textContent = name; b.addEventListener('click', () => { state.szene = s; render(); }); $('chips').appendChild(b); });
+  document.querySelectorAll('.opts').forEach((o) => o.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { state[o.dataset.key] = b.dataset.v; render(); })));
+  $('halten').addEventListener('change', render);
+  render();
+})();
+</script>
