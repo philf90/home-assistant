@@ -228,9 +228,25 @@ und `theme` (jede Variable mit ihrem dunklen und hellen Wert). Daraus erzeugt
 `modes: dark` und `modes: light`. Welcher Modus gilt, wählt jeder Benutzer im
 Profil oder im More-Menü (System, Hell, Dunkel).
 
-**Stand:** Palette und Theme stehen. Die Karten tragen noch die festen
-dunklen Werte und werden schrittweise auf die Theme-Variablen umgestellt;
-bis dahin bleiben sie in beiden Modi dunkel.
+**Stand:** Palette und Theme stehen. Umgestellt ist das More-Menü der
+Navigation (Pilot, `navigation-templates.yaml` und `navbar-karte.yaml`).
+Die übrigen Karten tragen noch die festen dunklen Werte und werden
+schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
+
+### Karten umstellen
+
+- Jede Farbe als Theme-Variable mit dem **dunklen Palettenwert als
+  Rückfall**: `var(--owlet-gruen, #a6d49e)`. Ohne Theme `owlet` sieht die
+  Karte so aus wie bisher.
+- Tönungen über `color-mix`:
+  `color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)`.
+- Weiß mit Deckkraft wird zur passenden Flächenvariable (`owlet-unterkachel`,
+  `owlet-unterkachel-rand`, `owlet-neutral-kachel`, `owlet-huelle-rand`), mit
+  dem bisherigen `rgba(255, 255, 255, …)` als Rückfall.
+- Gleich bleibende Farben (Füllungen, Schrift auf Füllung, Sonderfarben,
+  Schwarz für Abdunklung und Schatten) bleiben als Hex-Wert stehen.
+- `color-mix` braucht einen aktuellen Browser (Chrome/WebView 111,
+  Safari 16.2, Firefox 113).
 
 ### Grundprinzip
 
