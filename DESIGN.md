@@ -252,7 +252,9 @@ damit ist auch die Heizung-View vollständig umgestellt. Von der
 Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
 `waschmaschine-karte.yaml`, `trockner-karte.yaml` und
 `geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
-Staubsauger-Karte ist archiviert). Die
+Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
+(`autos-karte-v4.yaml` mit dem Template `owlet_auto_fx` in
+`autos-templates.yaml`). Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -447,16 +449,9 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Animierte Hintergründe:** Die Wetteranimation ist umgestellt (Banner,
-  Wetter- und Wind-Karte), ebenso der Energiefluss (Leitungen in den
-  Knotenfarben, inaktive Leitungen in `owlet-unterkachel-rand`) und die
-  Heizung (Wellen und Luftzug hell mit höherer Deckkraft, siehe
-  `heizung-templates.yaml`) und die Hausgeräte (siehe
-  `hausgeraete-templates.yaml`): Welle und Glanz hell mit gleichem Kontrast
-  zur Hülle wie dunkel; Blasen, Tropfen und Luft laufen auch hinter dem
-  grünen Programmnamen und decken hell deshalb nur 0,14 (Schrift mindestens
-  4,50:1, Abhebung 1,20–1,22:1 statt dunkel 1,45–1,61:1). Die Animation
-  der Auto-Karte (Eis) braucht noch eigene Regeln.
+- **Animationen in Garten, Fußball und Flugradar** (`garten-karte.yaml`,
+  `fussball-templates.yaml`, `flugradar-templates.yaml`) sind noch dunkel
+  und werden mit ihrer View umgestellt.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
@@ -565,6 +560,28 @@ Element zu Hülle, dunkel auf `#1b2231`, hell auf `#fafbfd`).
 - **Deckkraft per Faktor:** `opacity: calc(var(--o) * (180% - 0.8 * var(--wx-d)))`
   ist dunkel `--o`, hell `--o × 1,8`; Farben wählt `color-mix` mit
   `var(--wx-d)`.
+
+### Weitere Animationen im hellen Modus
+
+Neben der Wetteranimation sind diese Animationen umgestellt, jeweils
+umgeschaltet über `owlet-dunkel-anteil`; dunkel bleibt alles wie bisher.
+
+- **Energiefluss:** Leitungen in den Knotenfarben, inaktive Leitungen in
+  `owlet-unterkachel-rand`.
+- **Heizung** (`heizung-templates.yaml`): Wellen und Luftzug hell mit
+  höherer Deckkraft, gleicher Kontrast zur Kachel wie dunkel.
+- **Hausgeräte** (`hausgeraete-templates.yaml`): Welle und Glanz hell mit
+  gleichem Kontrast zur Hülle wie dunkel; Blasen, Tropfen und Luft laufen
+  auch hinter dem grünen Programmnamen und decken hell deshalb nur 0,14
+  (Schrift mindestens 4,50:1, Abhebung 1,20–1,22:1 statt dunkel
+  1,45–1,61:1).
+- **Auto** (`autos-karte-v4.yaml`, `autos-templates.yaml`): Eiskristalle
+  und Innenschein hell in Eis statt Weiß (0,95 statt 0,5 bzw. 0,28 statt
+  0,12, gleicher Kontrast zum Grund wie dunkel, wie Schnee in der
+  Wetteranimation); die Pille „Glättegefahr“ auf `owlet-flaeche-erhoeht`.
+  Das Tank-Symbol hält auf der Füllung hell mindestens 3,13:1. Die
+  Schloss-Ringe (Amber 0,5, Stufe „Leuchten“) heben sich hell nur mit
+  2,11:1 ab (dunkel 3,04:1); sie sind Zusatzsignal neben Text und Icon.
 
 ## Eine neue Farbe aufnehmen
 
