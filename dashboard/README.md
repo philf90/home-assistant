@@ -70,10 +70,10 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`geschirrspueler-karte.yaml`](hausgeraete/geschirrspueler-karte.yaml) | karte | Geschirrspueler (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
 | [`hausgeraete-templates.yaml`](hausgeraete/hausgeraete-templates.yaml) | templates | Hausgeraete-Animation – button-card-Template owlet_geraete_fx | – | – | aktiv |
-| [`staubsauger-karte.yaml`](hausgeraete/staubsauger-karte.yaml) | karte | Staubsauger mit Karte | button-card, card-mod, mushroom-vacuum-card, xiaomi-vacuum-map-card | – | aktiv |
 | [`trockner-karte.yaml`](hausgeraete/trockner-karte.yaml) | karte | Trockner (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
 | [`waschmaschine-karte.yaml`](hausgeraete/waschmaschine-karte.yaml) | karte | Waschmaschine (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
 | [`hausgeraete.html`](hausgeraete/entwuerfe/hausgeraete.html) | entwurf | Hausgeraete-View – Verbindung und Animation | – | `notify.mobile_app_iphone` | Entwurf zu `hausgeraete-templates.yaml` |
+| [`staubsauger-karte.yaml`](hausgeraete/archiv/staubsauger-karte.yaml) | karte | Staubsauger mit Karte | button-card, mushroom-vacuum-card, xiaomi-vacuum-map-card | – | archiv |
 
 ## netzwerk
 

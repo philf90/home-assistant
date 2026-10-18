@@ -248,7 +248,11 @@ Kopfkommentar) und `energie-flow-karte.yaml` (SVG-Farben als `style`, nicht
 als Attribut). Damit ist die Energie-View vollständig umgestellt. Von der
 Heizung-View sind `heizung-templates.yaml` (Regler und Animation),
 `thermostate-karte-v3.yaml` und `temperaturen-karte-v2.yaml` umgestellt;
-damit ist auch die Heizung-View vollständig umgestellt. Die
+damit ist auch die Heizung-View vollständig umgestellt. Von der
+Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
+`waschmaschine-karte.yaml`, `trockner-karte.yaml` und
+`geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
+Staubsauger-Karte ist archiviert). Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -447,8 +451,12 @@ gilt hell über den Schalter:
   Wetter- und Wind-Karte), ebenso der Energiefluss (Leitungen in den
   Knotenfarben, inaktive Leitungen in `owlet-unterkachel-rand`) und die
   Heizung (Wellen und Luftzug hell mit höherer Deckkraft, siehe
-  `heizung-templates.yaml`). Die Animationen von Hausgeräten und Auto (Luft,
-  Eis) brauchen eigene Regeln.
+  `heizung-templates.yaml`) und die Hausgeräte (siehe
+  `hausgeraete-templates.yaml`): Welle und Glanz hell mit gleichem Kontrast
+  zur Hülle wie dunkel; Blasen, Tropfen und Luft laufen auch hinter dem
+  grünen Programmnamen und decken hell deshalb nur 0,14 (Schrift mindestens
+  4,50:1, Abhebung 1,20–1,22:1 statt dunkel 1,45–1,61:1). Die Animation
+  der Auto-Karte (Eis) braucht noch eigene Regeln.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1

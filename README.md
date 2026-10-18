@@ -28,7 +28,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energie-zaehler-karte.yaml` | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` |
 | [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `wetter-karte.yaml`, `wetter-templates.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml` | `wetter-animiert.html` |
 | [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `fenster-lichter-uebersicht-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | – | – |
-| [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `staubsauger-karte.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | – | `hausgeraete.html` |
+| [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | `staubsauger-karte.yaml` | `hausgeraete.html` |
 | [`netzwerk/`](dashboard/netzwerk/) | `homematic-karte.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte.yaml` | `unifi-udm-system-karte.yaml` | – |
 | [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
 | [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
@@ -62,10 +62,9 @@ Datei erklärt den Unterschied.
 - Home Assistant mit [HACS](https://hacs.xyz/)
 - Frontend-Karten aus HACS, je nach Datei: `button-card`, `card-mod`,
   `apexcharts-card`, `auto-entities`, `bubble-card`, `decluttering-card`, `expander-card`,
-  `flower-card`, `homematicip-system-health-card`, `mushroom` (entity, light,
-  vacuum), `navbar-card`, `power-flow-card-plus`, `sankey-chart`,
-  `slider-button-card`, `trash-card`, `uptime-card`, `webrtc-camera`,
-  `xiaomi-vacuum-map-card`
+  `flower-card`, `homematicip-system-health-card`, `mushroom` (entity,
+  light), `navbar-card`, `power-flow-card-plus`, `sankey-chart`,
+  `slider-button-card`, `trash-card`, `uptime-card`, `webrtc-camera`
 - die Integrationen der jeweiligen Geräte (z. B. Home Connect, UniFi,
   Homematic IP, VW Group Connect, Flightradar24)
 - optional für den UniFi-Netzplan: die Integration
