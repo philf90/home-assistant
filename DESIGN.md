@@ -246,8 +246,9 @@ und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
 apexcharts-card bei einem Themewechsel nicht neu zeichnet; siehe deren
 Kopfkommentar) und `energie-flow-karte.yaml` (SVG-Farben als `style`, nicht
 als Attribut). Damit ist die Energie-View vollständig umgestellt. Von der
-Heizung-View sind `heizung-templates.yaml` (Regler und Animation) und
-`thermostate-karte-v3.yaml` umgestellt. Die
+Heizung-View sind `heizung-templates.yaml` (Regler und Animation),
+`thermostate-karte-v3.yaml` und `temperaturen-karte-v2.yaml` umgestellt;
+damit ist auch die Heizung-View vollständig umgestellt. Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
