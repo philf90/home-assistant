@@ -169,7 +169,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 11, alt = window.__fussball;
+          const VERSION = 12, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -898,6 +898,8 @@ button_card_templates:
           // Hilfen fuer die Darstellung
           fb.esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
           fb.hinweis = t => `<div style="${F}color:var(--owlet-text-sekundaer, #8794a5);font-size:12.5px;padding:2px;">${t}</div>`;
+          // Unterzeile der Koepfe: Teile einzeln umbruchfrei, umgebrochen wird nur an " · "
+          fb.teile = (...t) => t.filter(Boolean).map(x => `<span style="white-space:nowrap;">${x}</span>`).join(' · ');
           fb.warte = was => fb.fehler
             ? fb.hinweis('OpenLigaDB nicht erreichbar (' + fb.esc(fb.fehler) + ') – neuer Versuch in 1 Min.')
             : fb.hinweis(was + ' wird geladen …');
@@ -970,25 +972,33 @@ button_card_templates:
       - font-weight: 700
       - letter-spacing: -0.02em
       - color: 'var(--owlet-text, #f2f5f8)'
+      - max-width: 100%
       card:
       - background: none
       - box-shadow: none
       - border: none
       - padding: 2px 2px 6px
       custom_fields:
+        # Unterzeile darf umbrechen (button-card setzt sonst nowrap); mit
+        # minmax(0, 1fr) unten schiebt sie sich nicht mehr unter das Badge
+        # (wie flug_kopf in flugradar-templates.yaml).
         unter:
         - justify-self: start
         - align-self: start
         - font-size: 12.5px
+        - line-height: 1.35
         - color: 'var(--owlet-text-sekundaer, #8794a5)'
         - margin-top: 1px
         - text-align: left
+        - white-space: normal
+        - max-width: 100%
         badge:
         - justify-self: end
         - align-self: center
+        - margin-left: 10px
       grid:
       - grid-template-areas: '"i n badge" "i unter badge"'
-      - grid-template-columns: min-content 1fr min-content
+      - grid-template-columns: min-content minmax(0, 1fr) min-content
       - grid-template-rows: min-content min-content
       img_cell:
       - width: 44px
@@ -1038,7 +1048,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga;
           return fb.bereich(this, 'unter', () => {
             const s = fb.spieltag(L);
-            return (L === 'bl1' ? '1.' : '2.') + ' Bundesliga' + (s ? ` · ${s.nr}. Spieltag` : '');
+            return fb.teile((L === 'bl1' ? '1.' : '2.') + ' Bundesliga', s ? `${s.nr}. Spieltag` : '');
           });
         ]]]
       badge: |
@@ -1142,7 +1152,7 @@ button_card_templates:
             if (!s) return 'Spieltag';
             let post = 0, pre = 0;
             s.spiele.forEach(m => { const k = fb.status(m); if (k === 'post') post++; else if (k === 'pre') pre++; });
-            return `${s.nr}. Spieltag · ${post} beendet · ${pre} ausstehend`;
+            return fb.teile(`${s.nr}. Spieltag`, `${post} beendet`, `${pre} ausstehend`);
           });
         ]]]
       badge: |
@@ -1217,7 +1227,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga;
           return fb.bereich(this, 'unter', () => {
             const c = fb.cache[`getbltable/${L}/${fb.saison()}`];
-            return c ? 'Tabelle · Stand ' + fb.zeit(new Date(c.t)) + ' Uhr' : 'Tabelle';
+            return c ? fb.teile('Tabelle', 'Stand ' + fb.zeit(new Date(c.t)) + ' Uhr') : 'Tabelle';
           });
         ]]]
       badge: |
