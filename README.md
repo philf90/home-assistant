@@ -35,7 +35,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
 | [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
 | [`fussball/`](dashboard/fussball/) | `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
-| [`sonstiges/`](dashboard/sonstiges/) | `kameras-karte.yaml`, `muellabfuhr-karte-v2.yaml` | `muellabfuhr-karte.yaml` | – |
+| [`sonstiges/`](dashboard/sonstiges/) | `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | – |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
 | [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md` | – | – |
 <!-- index:end -->
@@ -167,14 +167,14 @@ daraus und aus den Kopfblöcken erzeugt.
 | `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | `fenster-lichter-uebersicht-karte.yaml`, `garten-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` |
 | `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml` |
 | `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-view.yaml`; in `archiv/`: `pflanzen-flower-karte.yaml` |
-| `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `fenster-lichter-uebersicht-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `temperaturen-karte.yaml` |
+| `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `fenster-lichter-uebersicht-karte.yaml`, `kameras-view.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `temperaturen-karte.yaml` |
 | `weather.wohnort` | Wetter-Entity des Wohnorts (Vorhersage, Bedingung fürs Icon) | Einstellungen → Geräte & Dienste → Deutscher Wetterdienst (HACS, `dwd_weather`) → Station → Entität `weather.*` | `welcome-banner-karte.yaml`, `wetter-karte.yaml` |
 | `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml` |
 <!-- platzhalter:end -->
 
 Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
 `visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-karte.yaml`,
-`navigation-templates.yaml`, `kameras-karte.yaml`). Am einfachsten
+`navigation-templates.yaml`, `kameras-view.yaml`). Am einfachsten
 im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
 Ebenso die Entitäten in `unifi-netzplan-karte.yaml`: die `device_tracker` der
 eigenen UniFi-Geräte und die Sensoren von UniFi WAN, deren IDs Host und Site
