@@ -140,7 +140,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 17, vorher = window.__flugradar;
+          const VERSION = 18, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -151,7 +151,11 @@ button_card_templates:
           const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
           const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
           const F = 'font-family:' + SANS + ';';
-          const PLANE = 'M0,-7 L1.2,-2 L7,1.6 L7,3 L1.2,1.6 L0.9,4.8 L2.6,6.3 L2.6,7.3 L0,6.6 L-2.6,7.3 L-2.6,6.3 L-0.9,4.8 L-1.2,1.6 L-7,3 L-7,1.6 L-1.2,-2 Z';
+          // Flugzeug, um den Drehpunkt (0,0) zentriert: Pfad gegenueber der Zeichnung um 1 nach oben
+          // verschoben (zwischen Flaechenschwerpunkt und Rahmenmitte), damit das Symbol bei jedem
+          // Kurs mittig bleibt; viewBox -8.5 -8.5 17 17, Groesse etwa x 17/16 (ganzzahlig, sonst
+          // rastet die SVG um einen halben Pixel versetzt ein).
+          const PLANE = 'M0,-8 L1.2,-3 L7,0.6 L7,2 L1.2,0.6 L0.9,3.8 L2.6,5.3 L2.6,6.3 L0,5.6 L-2.6,6.3 L-2.6,5.3 L-0.9,3.8 L-1.2,0.6 L-7,2 L-7,0.6 L-1.2,-3 Z';
           const fr = { version: VERSION, hass, F, SENSOR, PLANE, sel: null, subs: new Map(), map: null, mapEl: null, layer: null, laden: null };
 
           // ---------- Daten ----------
@@ -520,7 +524,7 @@ button_card_templates:
               const c = fr.farbeKarte(f), s = f.id === fr.sel, b = lage.get(f.id), g = fr.selten(f), px = g ? 31 : 22;
               // seltener Typ: groesser und golden leuchtend, Hoehenfarbe bleibt
               const html = (s ? `<span class="ring${g ? ' g' : ''}"></span>` : '')
-                + `<span class="p${g ? ' g' : ''}"><svg viewBox="-8 -8 16 16" width="${px}" height="${px}"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
+                + `<span class="p${g ? ' g' : ''}"><svg viewBox="-8.5 -8.5 17 17" width="${px * 17 / 16}" height="${px * 17 / 16}"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
                 + (b ? `<span class="l${b.rechtsbuendig ? ' re' : ''}" style="left:${Math.round(14 + b.dx)}px;top:${Math.round(14 + b.dy)}px;">${fr.esc(fr.cs(f))}${b.kurz ? '' : `<small>${fr.hoehe(f)}</small>`}</span>` : '');
               const m = L.marker([f.latitude, f.longitude], {
                 icon: L.divIcon({ className: 'fr-ic' + (s ? ' sel' : ''), html, iconSize: [28, 28], iconAnchor: [14, 14] }),
@@ -660,7 +664,7 @@ button_card_templates:
             const link = `https://www.flightradar24.com/${encodeURIComponent(z.cs)}/${encodeURIComponent(z.id)}`;
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">
               <div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
-                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, var(--owlet-muted, #6e7988) 16%, transparent);border:1px solid color-mix(in srgb, var(--owlet-muted, #6e7988) 24%, transparent);"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" style="fill:var(--owlet-muted, #6e7988)"/></svg></div>
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, var(--owlet-muted, #6e7988) 16%, transparent);border:1px solid color-mix(in srgb, var(--owlet-muted, #6e7988) 24%, transparent);"><svg viewBox="-8.5 -8.5 17 17" width="26" height="26"><path d="${PLANE}" style="fill:var(--owlet-muted, #6e7988)"/></svg></div>
                 <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(z.cs || 'Flug')}</div><div style="font-size:12.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">nicht mehr im Bereich</div></div>
                 ${fr.zuKnopf()}
               </div>
@@ -685,7 +689,7 @@ button_card_templates:
             const nummer = f.flight_number || f.callsign || f.aircraft_registration || '?';
             const kopfUnter = [f.callsign && f.callsign !== nummer ? f.callsign : '', f.airline_short || f.airline].filter(Boolean).map(fr.esc).join(' · ');
             const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
-                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" style="fill:${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><svg viewBox="-8.5 -8.5 17 17" width="26" height="26"><path d="${PLANE}" style="fill:${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
                 <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
                 ${fr.zuKnopf()}
               </div>`;
@@ -694,7 +698,7 @@ button_card_templates:
                 <span style="position:absolute;left:10px;bottom:7px;font-size:10.5px;color:#f2f5f8;text-shadow:0 1px 3px #000;">Foto: JetPhotos</span></div>` : '';
             const strecke = o || d ? `<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;">
                 <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);">${fr.esc(o || '?')}</div><div style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${fr.esc(f.airport_origin_city || '')}</div>${ab ? `<div style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">ab ${fr.uhr(ab)}</div>` : ''}</div>
-                <div style="position:relative;height:3px;border-radius:3px;background:color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8 -8 16 16" width="16" height="16" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>` : ''}</div>
+                <div style="position:relative;height:3px;border-radius:3px;background:color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8.5 -8.5 17 17" width="17" height="17" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>` : ''}</div>
                 <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">an ${fr.uhr(an)}</div>` : ''}</div>
               </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:var(--owlet-text-sekundaer, #8794a5);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">Route unbekannt</span>`;
             const geraet = [f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
@@ -836,7 +840,7 @@ button_card_templates:
               const wer = [f.airline_short || f.airline, f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
               const zeiten = o || d ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;font-variant-numeric:tabular-nums;">
                   <div style="min-width:0;"><span style="font-size:16px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${fr.esc(o || '?')}</span> <span style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">${ab ? 'ab ' + fr.uhr(ab) : ''}</span></div>
-                  <svg viewBox="-8 -8 16 16" width="14" height="14"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>
+                  <svg viewBox="-8.5 -8.5 17 17" width="15" height="15"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>
                   <div style="min-width:0;text-align:right;"><span style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">${an ? 'an ' + fr.uhr(an) : ''}</span> <span style="font-size:16px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${fr.esc(d || '?')}</span>${ort ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);">${ort} Ortszeit</div>` : ''}</div>
                 </div>` : '';
               return `<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">
