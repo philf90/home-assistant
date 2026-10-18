@@ -40,10 +40,13 @@
 #     sensor.garten_wetterstation_pro_windgeschwindigkeit_mittel_10_min
 #     (zeitgewichtetes Mittel ueber 10 min). Der Rohwert springt alle paar
 #     Minuten zwischen 0,0 und 4-8 km/h; angezeigt wird weiter der Rohwert.
-#   - Lesbarkeit: Kachel-Beschriftungen und Einheiten in #b4c0cf. Die Kacheln
-#     der Wetter-Karte haben einen Schutzgrund (#171d29, Deckkraft 0,62), damit
-#     die Beschriftung auch bei Unwetter mindestens 4,5:1 haelt; die Animation
-#     ist dort zu 38 % sichtbar, in Kopfzeile und Zwischenraeumen voll.
+#   - Lesbarkeit: Kachel-Beschriftungen und Einheiten in Label-Grau. Die
+#     Kacheln der Wetter-Karte haben einen Schutzgrund in Huellenfarbe
+#     (dunkel 0,62, hell 0,70), damit die Beschriftung 4,5:1 und hell auch
+#     die Icons 3:1 halten; die Animation ist dort dunkel zu 38 %, hell zu
+#     30 % sichtbar, in Kopfzeile und Zwischenraeumen voll.
+#   - Heller Modus: --wx-dunkel in styles.card schaltet die Animation mit dem
+#     Theme um (Regeln in banner-hell.html und DESIGN.md).
 #     Die Wind-Karte zeigt nur duenne Linien und braucht keinen Schutzgrund.
 #
 # Voraussetzung: custom:button-card (HACS), Template owlet_wetter_fx und der
@@ -79,11 +82,12 @@ cards:
       card:
         - padding: 16px 18px
         - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+        - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+        - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         - overflow: hidden
         - isolation: isolate
+        - --wx-dunkel: var(--owlet-dunkel-anteil, 100%)
         - --wx-dir: '[[[ return String(variables.wxr.dir) ]]]'
         - --wx-tilt: '[[[ return variables.wxr.tilt + "deg" ]]]'
         - --wx-rain: '[[[ return variables.wxr.rain + "deg" ]]]'
@@ -110,18 +114,19 @@ cards:
         ]]]
       body: |
         [[[
-          const green='#a6d49e', value='#f2f5f8', muted='#8794a5', amber='#e6b566', red='#f0736a', blue='#7fb3d5', teal='#7fd0d5';
+          const green='var(--owlet-gruen, #a6d49e)', value='var(--owlet-text, #f2f5f8)', muted='var(--owlet-text-sekundaer, #8794a5)', amber='var(--owlet-amber, #e6b566)', red='var(--owlet-rot, #f0736a)', blue='var(--owlet-blau, #7fb3d5)', teal='var(--owlet-tuerkis, #7fd0d5)';
           // Wie die animierte Szene: Nacht Indigo, Wolken/Nebel/Wind Wolkengrau, Sonne Sonnengelb
-          const indigo='#8ea2e6', cloud='#cdd6e0', sun='#e6c15a';
+          const indigo='var(--owlet-indigo, #8ea2e6)', cloud='var(--owlet-wolkengrau, #cdd6e0)', sun='var(--owlet-sonnengelb, #e6c15a)';
           // Beschriftung und Einheiten hellgrau: halten auf animiertem Grund 4,5:1
-          const label='#b4c0cf';
+          const label='var(--owlet-label, #b4c0cf)';
+          const tint=(c,p)=>`color-mix(in srgb, ${c} ${p}%, transparent)`;
           const S=(id)=>states[id];
           const numOf=(id,d)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;return isNaN(v)?'–':v.toFixed(d===undefined?1:d);};
           const unit=(u)=>`<span style="font-size:12px;color:${label};font-weight:600;margin-left:3px;">${u}</span>`;
-          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
+          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;">${inner}</svg>`;
 
           const iSun=(c)=>svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',c);
-          const iThermo=(c)=>svg('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path d="M12 9.2v5.2"/><circle cx="12" cy="17.4" r="1.7" fill="'+c+'" stroke="none"/>',c);
+          const iThermo=(c)=>svg('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path d="M12 9.2v5.2"/><circle cx="12" cy="17.4" r="1.7" fill="currentColor" stroke="none"/>',c);
           const iDrop=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/>',c);
           const iDropOff=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/><path d="M4 4l16 16"/>',c);
           const iRain=(c)=>svg('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>',c);
@@ -139,11 +144,12 @@ cards:
           // ebenfalls, damit die Karte keine Hold-Erkennung startet.
           const tap=(id)=>id?` onclick="event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"`:'';
 
-          // Schutzgrund #171d29 (0,62) unter der Toenung: daempft die Animation
-          // in der Kachel auf 38 %, damit die Beschriftung lesbar bleibt
+          // Schutzgrund in Huellenfarbe unter der Toenung: dunkel 0,62, hell 0,70
+          // (owlet-dunkel-anteil). Daempft die Animation in der Kachel, damit
+          // Beschriftung 4,5:1 und Icon 3:1 halten (banner-hell.html, DESIGN.md)
           const cell=(iconFn, valueHtml, text, accent, entityId)=>`
-            <div${tap(entityId)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:linear-gradient(${accent}1f,${accent}1f),rgba(23,29,41,0.62);border:1px solid ${accent}3d;min-width:0;${entityId?'cursor:pointer;':''}">
-              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}29;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
+            <div${tap(entityId)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:linear-gradient(${tint(accent,12)},${tint(accent,12)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) calc(70% - 0.08 * var(--owlet-dunkel-anteil, 100%)), transparent);border:1px solid ${tint(accent,24)};min-width:0;${entityId?'cursor:pointer;':''}">
+              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${tint(accent,16)};border:1px solid ${tint(accent,24)};">${iconFn(accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
                 <div style="font-size:12px;color:${label};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
@@ -168,7 +174,7 @@ cards:
           // dazwischen Wolkengrau. Verglichen wird der angezeigte, gerundete Wert.
           const tE=S('sensor.wetterstation_pro_temperatur');
           const t=tE?Math.round(parseFloat(tE.state)*10)/10:NaN;
-          const tColor=isNaN(t)?muted:t>=30?red:t>=25?amber:t<0?blue:'#cdd6e0';
+          const tColor=isNaN(t)?muted:t>=30?red:t>=25?amber:t<0?blue:'var(--owlet-wolkengrau, #cdd6e0)';
 
           // ---- Luftfeuchte: Info-Wert in Blau, aussen ohne Komfort-Bewertung ----
           const hE=S('sensor.wetterstation_pro_luftfeuchtigkeit');
@@ -192,7 +198,7 @@ cards:
           return `
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}29;border:1px solid ${green}3d;">${iThermo(green)}</div>
+                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${tint(green,16)};border:1px solid ${tint(green,24)};">${iThermo(green)}</div>
                 <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wetter</div>
               </div>
               ${cell(cInfo[1], cInfo[0], 'Bedingung', cInfo[2], 'weather.wohnort')}
@@ -228,11 +234,12 @@ cards:
       card:
         - padding: 16px 18px
         - border-radius: 22px
-        - border: 1px solid rgba(255, 255, 255, 0.05)
-        - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-        - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+        - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+        - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+        - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         - overflow: hidden
         - isolation: isolate
+        - --wx-dunkel: var(--owlet-dunkel-anteil, 100%)
         - --wx-dir: '[[[ return String(variables.wxr.dir) ]]]'
         - --wx-tilt: '[[[ return variables.wxr.tilt + "deg" ]]]'
       grid:
@@ -251,13 +258,14 @@ cards:
       fx: '[[[ return variables.wx.wind(variables.stufe) ]]]'
       body: |
         [[[
-          const green='#a6d49e', value='#f2f5f8', muted='#8794a5', teal='#7fd0d5';
+          const green='var(--owlet-gruen, #a6d49e)', value='var(--owlet-text, #f2f5f8)', muted='var(--owlet-text-sekundaer, #8794a5)', teal='var(--owlet-tuerkis, #7fd0d5)';
           // Beschriftung und Einheiten hellgrau, wie in der Wetter-Karte
-          const label='#b4c0cf';
+          const label='var(--owlet-label, #b4c0cf)';
+          const tint=(c,p)=>`color-mix(in srgb, ${c} ${p}%, transparent)`;
           const S=(id)=>states[id];
           const numOf=(id,d)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;return isNaN(v)?'–':v.toFixed(d===undefined?1:d);};
           const unit=(u)=>`<span style="font-size:12px;color:${label};font-weight:600;margin-left:3px;">${u}</span>`;
-          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;">${inner}</svg>`;
+          const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;">${inner}</svg>`;
           const iWind=(c)=>svg('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h9a2.5 2.5 0 1 1-2.5 2.5"/>',c);
           const iSock=(c)=>svg('<path d="M6 21V4"/><path d="M6 5l11 2.4L6 10.6Z"/>',c);
 
@@ -265,8 +273,8 @@ cards:
           const tap=(id)=>id?` onclick="event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"`:'';
 
           const cell=(iconFn, valueHtml, text, accent, entityId)=>`
-            <div${tap(entityId)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${accent}1f;border:1px solid ${accent}3d;min-width:0;${entityId?'cursor:pointer;':''}">
-              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${accent}29;border:1px solid ${accent}3d;">${iconFn(accent)}</div>
+            <div${tap(entityId)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${tint(accent,12)};border:1px solid ${tint(accent,24)};min-width:0;${entityId?'cursor:pointer;':''}">
+              <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${tint(accent,16)};border:1px solid ${tint(accent,24)};">${iconFn(accent)}</div>
               <div style="min-width:0;">
                 <div style="font-size:21px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
                 <div style="font-size:12px;color:${label};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
@@ -285,7 +293,7 @@ cards:
           return `
             <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${green}29;border:1px solid ${green}3d;">${iWind(green)}</div>
+                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${tint(green,16)};border:1px solid ${tint(green,24)};">${iWind(green)}</div>
                 <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wind</div>
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">

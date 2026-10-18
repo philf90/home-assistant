@@ -236,7 +236,7 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
 `pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml`,
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
-(siehe „Animierte Hintergründe“). Die Owlet-Karte bleibt als Identitätshülle
+(siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-karte.yaml`). Die Owlet-Karte bleibt als Identitätshülle
 dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -403,22 +403,29 @@ gilt hell über den Schalter:
   Schrift `owlet-text`.
 - Gemessen (Chromium, Stufen `#ffeb3b`, `#fb9a12`, `#e6480e`, `#c0392b`):
   Icon 13,82 · 7,82 · 4,26 · 4,97:1, Pillenschrift 13,63–16,45:1.
-- Dunkel bleibt alles wie bisher (Ton als Icon und Schrift auf Tönung).
+- Dunkel stehen Icon und Schrift im DWD-Ton auf seiner Tönung, solange er
+  dort 3:1 (Icon) bzw. 4,5:1 (Schrift) hält; sonst in Hell `#f2f5f8`. Die
+  Karte rechnet das aus der gelieferten Farbe (Funktion `lesbar`), die
+  Fläche bleibt immer im DWD-Ton. Gemessen mit `#e6480e`: Pillenschrift
+  3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
+  2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
+- Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
 
 ### Noch offen
 
-- **Animierte Hintergründe:** Für die Wetteranimation stehen die hellen
-  Regeln (unten); umgestellt ist bisher nur der Banner. Wetter- und
-  Wind-Karte brauchen noch Messungen für ihre Kacheln (Schutzgrund), die
-  Animationen von Hausgeräten, Heizung, Auto und Energiefluss (Luft, Eis,
-  inaktive Leitungen in Weiß mit Deckkraft) eigene Regeln.
+- **Animierte Hintergründe:** Die Wetteranimation ist umgestellt (Banner,
+  Wetter- und Wind-Karte). Die Animationen von Hausgeräten, Heizung, Auto
+  und Energiefluss (Luft, Eis, inaktive Leitungen in Weiß mit Deckkraft)
+  brauchen eigene Regeln.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
   hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
-- **Schon vor der Umstellung zu schwach, dunkel:** DWD-Pillenschrift
-  Stufe 3 (3,60:1) und 4 (2,71:1), Icon Stufe 4 (2,63:1); Sekundärtext auf
-  Chips im DWD-Popup (3,95:1) und das Datum in der Müllkarte (4,03:1).
+- **Schon vor der Umstellung zu schwach, dunkel:** das Datum in der
+  Müllkarte (4,03:1) und die Icons in den Kacheln der Wetter-Karte im
+  schlechtesten Fall (alle Wolken übereinander, 2,60:1 bei Sekundär-Grau,
+  9 Kombinationen aus Szene und Kachelfarbe unter 3:1). Hell halten sie
+  dank Schutzgrund 0,70 mindestens 3,06:1.
 
 ## Animierte Hintergründe
 
@@ -472,7 +479,9 @@ sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlic
   übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
   der Schrift gedämpft: im Banner die ganze Wetterspalte rechts (Icon,
   Temperatur, Datum) auf 45 %, in den Kacheln der Wetter-Karte über einen
-  Schutzgrund `#171d29` mit 0,62 Deckkraft (Animation dort zu 38 % sichtbar).
+  Schutzgrund in Hüllenfarbe (`owlet-huelle-unten`), dunkel 0,62, hell 0,70
+  (Animation dort zu 38 % bzw. 30 % sichtbar; hell halten so auch die Icons
+  3:1, gerechnet in jeder Kombination aus Szene und Kachelfarbe).
 - Icon und große Schrift auf animiertem Grund halten 3:1. Im Banner standen
   sie bis zur Ruhezone rechts auf der vollen Szene und fielen dunkel in
   6 von 16 Szenen darunter (Unwetter 1,72:1); mit Ruhezone mindestens

@@ -115,6 +115,8 @@ card:
               // ---------- Palette (identisch zur Owlet-Karte) ----------
               const value = 'var(--owlet-text, #f2f5f8)';
               const soft  = 'var(--owlet-text-sekundaer, #8794a5)';
+              // Kleine Schrift auf getoenten Chips im Block: Label haelt dort 4,5:1
+              const label = 'var(--owlet-label, #b4c0cf)';
               const muted = 'var(--owlet-text-sekundaer, #8794a5)';
               const line  = 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
               const panel = 'linear-gradient(180deg, var(--owlet-flaeche-erhoeht, #222b3c) 0%, var(--owlet-huelle-unten, #171d29) 100%)';
@@ -126,17 +128,29 @@ card:
               // Die Integration liefert eigene Farben (Stufe 1 z. B. ffeb3b statt der
               // Palettenwerte), deshalb die Schrift nach Kontrast waehlen statt nach Stufe.
               const NAVY = '#171d29', HELL = '#f2f5f8'; // Fuellung: Schrift auf der DWD-Flaeche, beide Modi gleich
-              const lum = (h) => {
+              const rgbOf = (h) => {
                 const m = /^#([0-9a-f]{6})$/i.exec(String(h || '').trim());
-                if (!m) return null;
-                const k = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
-                  .map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+                return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null;
+              };
+              const lum = (c) => {
+                const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
                 return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
               };
+              const kr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
               const aufFlaeche = (c) => {
-                const L = lum(c);
-                if (L === null) return NAVY;
-                return (L + 0.05) / (lum(NAVY) + 0.05) >= (lum(HELL) + 0.05) / (L + 0.05) ? NAVY : HELL;
+                const r = rgbOf(c);
+                if (!r) return NAVY;
+                return kr(r, rgbOf(NAVY)) >= kr(r, rgbOf(HELL)) ? NAVY : HELL;
+              };
+              // Dunkel: der DWD-Ton als Schrift oder Icon nur, wenn er auf seiner
+              // eigenen Toenung (anteil) ueber dem dunklen Grund ziel erreicht
+              // (Schrift 4,5:1, Icon 3:1); sonst Hell. Die Flaeche bleibt im DWD-Ton.
+              const GRUND = ['#222b3c', '#171d29']; // dunkler Grund des Popup-Blocks (oben, unten), nur fuer diese Rechnung
+              const lesbar = (c, anteil, ziel) => {
+                const r = rgbOf(c);
+                if (!r) return c;
+                const ok = GRUND.every((g) => kr(r, rgbOf(g).map((v, i) => v * (1 - anteil) + r[i] * anteil)) >= ziel);
+                return ok ? c : HELL;
               };
 
               const esc = (s) => String(s === null || s === undefined ? '' : s)
@@ -280,7 +294,7 @@ card:
                 };
                 const chips = keys.map((k) =>
                   `<span style="display:inline-flex;align-items:baseline;gap:5px;font-size:12px;line-height:1;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid ${line};border-radius:999px;padding:6px 10px;white-space:nowrap;">`
-                  + `<span style="color:${muted};">${esc(k)}</span>`
+                  + `<span style="color:${label};">${esc(k)}</span>`
                   + `<span style="color:${value};font-weight:600;">${clean(params[k])}</span></span>`
                 ).join('');
                 return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">${chips}</div>`;
@@ -314,14 +328,14 @@ card:
                 const urg   = urgencyLabel[w.urgency] || '';
 
                 const pill = (txt, c, filled) =>
-                  `<span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;color:${filled ? modus(c, value) : c};`
+                  `<span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;color:${filled ? modus(lesbar(c, 0.12, 4.5), value) : c};`
                   + `background:${filled ? tint(c, 12) : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'};border:1px solid ${filled ? tint(c, 24) : line};`
                   + `border-radius:999px;padding:4px 9px;white-space:nowrap;">${esc(txt)}</span>`;
 
                 const pills = [
                   pill(advance ? 'Vorabinformation' : meta.label, color, true),
                   st.live ? pill('aktiv', '#4ade80', true) : '',
-                  (!st.live && urg) ? pill(urg, soft, false) : ''
+                  (!st.live && urg) ? pill(urg, label, false) : ''
                 ].filter(Boolean).join('');
 
                 // Headline nur zeigen, wenn sie mehr aussagt als der Kurzname
@@ -332,7 +346,7 @@ card:
                   <div style="background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;${widthCap}">
                     <div style="display:flex;align-items:flex-start;gap:12px;">
                       <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;background:${modus(tint(color, 16), color)};border:1px solid ${modus(tint(color, 24), color)};">
-                        ${iconFor(w.name, modus(color, aufFlaeche(color)), 22)}
+                        ${iconFor(w.name, modus(lesbar(color, 0.16, 3), aufFlaeche(color)), 22)}
                       </div>
                       <div style="min-width:0;flex:1 1 auto;">
                         <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:anywhere;">${esc(w.name)}</div>
@@ -442,17 +456,29 @@ card:
         // Die Integration liefert eigene Farben (Stufe 1 z. B. ffeb3b statt der
         // Palettenwerte), deshalb die Schrift nach Kontrast waehlen statt nach Stufe.
         const NAVY = '#171d29', HELL = '#f2f5f8'; // Fuellung: Schrift auf der DWD-Flaeche, beide Modi gleich
-        const lum = (h) => {
+        const rgbOf = (h) => {
           const m = /^#([0-9a-f]{6})$/i.exec(String(h || '').trim());
-          if (!m) return null;
-          const k = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255)
-            .map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+          return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null;
+        };
+        const lum = (c) => {
+          const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
           return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
         };
+        const kr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
         const aufFlaeche = (c) => {
-          const L = lum(c);
-          if (L === null) return NAVY;
-          return (L + 0.05) / (lum(NAVY) + 0.05) >= (lum(HELL) + 0.05) / (L + 0.05) ? NAVY : HELL;
+          const r = rgbOf(c);
+          if (!r) return NAVY;
+          return kr(r, rgbOf(NAVY)) >= kr(r, rgbOf(HELL)) ? NAVY : HELL;
+        };
+        // Dunkel: der DWD-Ton als Schrift oder Icon nur, wenn er auf seiner
+        // eigenen Toenung (anteil) ueber dem dunklen Grund ziel erreicht
+        // (Schrift 4,5:1, Icon 3:1); sonst Hell. Die Flaeche bleibt im DWD-Ton.
+        const GRUND = ['#1b2231', '#171d29']; // dunkler Grund der Kartenhuelle (oben, unten), nur fuer diese Rechnung
+        const lesbar = (c, anteil, ziel) => {
+          const r = rgbOf(c);
+          if (!r) return c;
+          const ok = GRUND.every((g) => kr(r, rgbOf(g).map((v, i) => v * (1 - anteil) + r[i] * anteil)) >= ziel);
+          return ok ? c : HELL;
         };
 
         const e = entity;
@@ -500,7 +526,7 @@ card:
         // ---------- Icon nach Warnungstyp ----------
         const iconFor = (n) => {
           const s = (n || '').toLowerCase();
-          const S = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${modus(color, aufFlaeche(color))};width:24px;height:24px;flex:none;">${inner}</svg>`;
+          const S = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${modus(lesbar(color, 0.16, 3), aufFlaeche(color))};width:24px;height:24px;flex:none;">${inner}</svg>`;
           // Gewitter zuerst: DWD-Namen wie "GEWITTER mit ORKANBÖEN" sollen den Blitz zeigen
           if (/(gewitter|blitz)/.test(s))            return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>');
           if (/(wind|böen|boen|sturm|orkan)/.test(s)) return S('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
@@ -518,7 +544,7 @@ card:
             ${iconFor(name)}
           </div>`;
 
-        const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;color:${modus(color, value)};background:${tint(color, 12)};border:1px solid ${tint(color, 24)};border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
+        const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;color:${modus(lesbar(color, 0.12, 4.5), value)};background:${tint(color, 12)};border:1px solid ${tint(color, 24)};border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
         const more = count > 1 ? `<span style="font-size:12px;color:${muted};white-space:nowrap;">+${count - 1} weitere</span>` : '';
 
         // ---------- Aufbau ----------
