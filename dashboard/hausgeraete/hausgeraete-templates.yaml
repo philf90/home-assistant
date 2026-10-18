@@ -53,6 +53,15 @@
 # #a6d49e 5,89:1. Die Wasserwelle liegt nur im unteren Kartenrand (8 px,
 # innerhalb des Innenabstands) und damit nie hinter Text.
 #
+# Heller Modus: Farben ueber die owlet-Variablen, umgeschaltet ueber
+# owlet-dunkel-anteil; dunkel bleibt alles wie bisher. Welle und Glanz decken
+# hell 0,16 statt 0,12 bzw. 0,27 statt 0,18: gleicher Kontrast zur Huelle
+# wie dunkel (1,25 und 1,50:1). Blasen, Tropfen und Luft (hell Wolkengrau
+# statt Weiss) laufen auch hinter dem gruenen Programmnamen; bei gleichem
+# Kontrast (0,33 bzw. 0,27) fiele er auf 3,39:1. Sie decken deshalb hell nur
+# 0,14: Programmname mindestens 4,50:1, Status und Restzeit 7,44:1, die
+# Elemente heben sich mit 1,20-1,22:1 ab (dunkel 1,61 bzw. 1,45:1).
+#
 # Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
 # ein Standbild derselben Szene.
 #
@@ -66,7 +75,7 @@ button_card_templates:
       phase_entity: ''
       hg: |
         [[[
-          const VERSION = 1, alt = window.__owletHg;
+          const VERSION = 2, alt = window.__owletHg;
           if (alt && alt.version === VERSION) return alt;
 
           // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text
@@ -83,11 +92,11 @@ button_card_templates:
             if (s.includes('Run')) return 'run';
             return 'idle';
           };
-          const FARBE = { run: '#a6d49e', pause: '#e6b566', finished: '#7fd0d5', error: '#f0736a', offline: '#e6b566', idle: '#6e7988' };
+          const FARBE = { run: 'var(--owlet-gruen, #a6d49e)', pause: 'var(--owlet-amber, #e6b566)', finished: 'var(--owlet-tuerkis, #7fd0d5)', error: 'var(--owlet-rot, #f0736a)', offline: 'var(--owlet-amber, #e6b566)', idle: 'var(--owlet-muted, #6e7988)' };
           const akzent = (z) => FARBE[z] || FARBE.idle;
           // Szene sichtbar -> kleine Schrift hellgrau (DESIGN.md, animierte Hintergruende)
           const animiert = (z) => z === 'run' || z === 'pause' || z === 'finished';
-          const text = (z) => (animiert(z) ? '#b4c0cf' : '#8794a5');
+          const text = (z) => (animiert(z) ? 'var(--owlet-label, #b4c0cf)' : 'var(--owlet-text-sekundaer, #8794a5)');
 
           // ---------- Szenen ----------
           const blasen = () => {
@@ -158,8 +167,8 @@ button_card_templates:
           - align-self: center
           - display: grid
           - place-items: center
-          - background: '[[[ return variables.hg.akzent(variables.hg.zustand(variables.op_state)) + "29"; ]]]'
-          - border: '[[[ return "1px solid " + variables.hg.akzent(variables.hg.zustand(variables.op_state)) + "3d"; ]]]'
+          - background: '[[[ return "color-mix(in srgb, " + variables.hg.akzent(variables.hg.zustand(variables.op_state)) + " 16%, transparent)"; ]]]'
+          - border: '[[[ return "1px solid color-mix(in srgb, " + variables.hg.akzent(variables.hg.zustand(variables.op_state)) + " 24%, transparent)"; ]]]'
     custom_fields:
       fx: '[[[ return variables.hg.szene(variables.fx_art, variables.hg.zustand(variables.op_state)); ]]]'
       tile: |
@@ -174,27 +183,27 @@ button_card_templates:
       .hg-halt, .hg-halt *, .hg.hg-halt * { animation-play-state: paused !important; }
 
       /* Waschmaschine: Blasen und Wasserwelle im unteren Rand */
-      .hg-welle { position: absolute; left: -10%; right: -10%; bottom: -22px; height: 30px; border-radius: 45%; background: rgba(127, 179, 213, 0.12); animation: hg-schwapp 4.5s ease-in-out infinite alternate; }
+      .hg-welle { position: absolute; left: -10%; right: -10%; bottom: -22px; height: 30px; border-radius: 45%; background: color-mix(in srgb, var(--owlet-blau, #7fb3d5) calc(16% - 0.04 * var(--owlet-dunkel-anteil, 100%)), transparent); animation: hg-schwapp 4.5s ease-in-out infinite alternate; }
       @keyframes hg-schwapp { from { transform: translateX(-4%) scaleY(0.8); } to { transform: translateX(4%) scaleY(1.15); } }
-      .hg-blase { position: absolute; bottom: -12px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid rgba(127, 179, 213, 0.24); animation: hg-steig var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .hg-blase { position: absolute; bottom: -12px; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) calc(14% + 0.10 * var(--owlet-dunkel-anteil, 100%)), transparent); animation: hg-steig var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes hg-steig { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(var(--h)); opacity: 0; } }
 
       /* Trockner: Luftstroeme */
       .hg-zug { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: hg-zug var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes hg-zug { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
-      .hg-luft { position: absolute; right: 100%; top: 0; width: var(--w); height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)); }
+      .hg-luft { position: absolute; right: 100%; top: 0; width: var(--w); height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, 0), color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) 14%, transparent)), rgba(255, 255, 255, 0)); }
 
       /* Geschirrspueler: Tropfen im Bogen (5 px; mit 3 px wirkten sie auf dem Handy wie Staub) */
-      .hg-tropfen { position: absolute; bottom: 0; left: var(--x); width: 5px; height: 5px; border-radius: 50%; background: rgba(127, 179, 213, 0.24); animation: hg-bogen var(--d) ease-in-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .hg-tropfen { position: absolute; bottom: 0; left: var(--x); width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--owlet-blau, #7fb3d5) calc(14% + 0.10 * var(--owlet-dunkel-anteil, 100%)), transparent); animation: hg-bogen var(--d) ease-in-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes hg-bogen { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(var(--dx), -70px); } 100% { transform: translate(calc(var(--dx) * 2), 0); opacity: 0; } }
 
       /* Fertig: zweimal Glanz, dann Ruhe */
-      .hg-glanz { position: absolute; inset: 0; background: linear-gradient(105deg, rgba(127, 208, 213, 0) 30%, rgba(127, 208, 213, 0.18) 50%, rgba(127, 208, 213, 0) 70%); background-size: 250% 100%; background-position: -20% 0; animation: hg-glanz 2.4s ease-in-out 2 both; }
+      .hg-glanz { position: absolute; inset: 0; background: linear-gradient(105deg, rgba(127, 208, 213, 0) 30%, color-mix(in srgb, var(--owlet-tuerkis, #7fd0d5) calc(27% - 0.09 * var(--owlet-dunkel-anteil, 100%)), transparent) 50%, rgba(127, 208, 213, 0) 70%); background-size: 250% 100%; background-position: -20% 0; animation: hg-glanz 2.4s ease-in-out 2 both; }
       @keyframes hg-glanz { from { background-position: 120% 0; } to { background-position: -20% 0; } }
 
       /* Icon-Kachel: Bullauge */
       .hg-trommel { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--acc); position: relative; overflow: hidden; box-sizing: border-box; }
-      .hg-wasser { position: absolute; left: -50%; top: 58%; width: 200%; height: 200%; border-radius: 42%; background: rgba(127, 179, 213, 0.5); animation: hg-dreh 5s linear infinite; }
+      .hg-wasser { position: absolute; left: -50%; top: 58%; width: 200%; height: 200%; border-radius: 42%; background: color-mix(in srgb, var(--owlet-blau, #7fb3d5) 50%, transparent); animation: hg-dreh 5s linear infinite; }
       .hg-ladung { position: absolute; inset: 0; animation: hg-waelz 1.6s ease-in-out infinite alternate; }
       .hg-ladung i { position: absolute; width: 8px; height: 6px; border-radius: 3px; background: var(--acc); opacity: 0.9; }
       .hg-ladung i:nth-child(1) { left: 4px; top: 11px; }
@@ -210,14 +219,14 @@ button_card_templates:
       .hg-spray { width: 30px; height: 30px; position: relative; }
       .hg-wanne { position: absolute; inset: 0; border: 2px solid var(--acc); border-radius: 6px; box-sizing: border-box; }
       .hg-arm { position: absolute; left: 6px; right: 6px; bottom: 7px; height: 2px; border-radius: 2px; background: var(--acc); animation: hg-dreh 1.4s linear infinite; }
-      .hg-strahl { position: absolute; bottom: 9px; width: 2px; height: 2px; border-radius: 50%; background: #7fb3d5; opacity: 0; animation: hg-strahl 0.9s ease-out infinite; }
+      .hg-strahl { position: absolute; bottom: 9px; width: 2px; height: 2px; border-radius: 50%; background: var(--owlet-blau, #7fb3d5); opacity: 0; animation: hg-strahl 0.9s ease-out infinite; }
       .hg-strahl:nth-of-type(3) { left: 9px; }
       .hg-strahl:nth-of-type(4) { left: 14px; animation-delay: 0.3s; }
       .hg-strahl:nth-of-type(5) { left: 19px; animation-delay: 0.6s; }
       @keyframes hg-strahl { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-16px); opacity: 0; } }
 
       /* Fortschrittsbalken beim Laufen: wandernde Streifen */
-      .hg-lauf { background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0) 0 12px, rgba(255, 255, 255, 0.18) 12px 24px); background-size: 24px 100%; animation: hg-streifen 1.2s linear infinite; }
+      .hg-lauf { background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0) 0 12px, rgba(255, 255, 255, 0.18) 12px 24px); background-size: 24px 100%; animation: hg-streifen 1.2s linear infinite; } /* Fuellung: Weiss auf dem Balken */
       @keyframes hg-streifen { from { background-position: 0 0; } to { background-position: 24px 0; } }
 
       @media (prefers-reduced-motion: reduce) {
