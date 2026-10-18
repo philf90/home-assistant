@@ -258,8 +258,8 @@ Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
 Pflanzen-View (`pflanzen-view.yaml` mit dem Template `owlet_pflanze` in
 `pflanzen-templates.yaml`; das Popup-Diagramm färbt wie die Monatsbilanz
 per card-mod-CSS) und die neu gebaute Kamera-View (`kameras-view.yaml` mit
-dem Template `owlet_kamera_kachel` in `kameras-templates.yaml`). Die
-Owlet-Karte bleibt als Identitätshülle dunkel.
+dem Template `owlet_kamera_kachel` in `kameras-templates.yaml`) und
+Homematic-IP-View (`homematic-view.yaml`). Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
