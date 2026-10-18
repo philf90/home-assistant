@@ -21,7 +21,8 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 | `check_struktur.py` | Ablage und Dateinamen nach der Repo-Struktur (siehe unten). Mit `--streng` (CI, pre-commit) schlaegt sie bei Verstoessen fehl, ohne nur Bericht. |
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus (Werte mit Templates oder Decluttering-Variablen `[[name]]` werden uebersprungen). |
-| `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten). Regeln: `DESIGN.md`. |
+| `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten) und den hellen Modus: `hell_farben` und `theme` (Variablennamen, Werte aus der Palette, kein ungenutzter heller Wert). Werte aus `hell_farben` sind nur in der Theme-Datei erlaubt. Regeln: `DESIGN.md`. |
+| `gen_theme.py` | Erzeugt das Theme `dashboard/allgemein/owlet-theme-konfig.yaml` aus dem Abschnitt `theme` der Palette. Mit `--pruefen` (CI, pre-commit) schlaegt es fehl, wenn die committete Datei nicht aktuell ist. |
 | `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste, Farben nur aus `design/palette.yaml` (keine Grafana-Farbnamen ausser `text`/`transparent`). |
 
 Dazu im Workflow:
@@ -140,6 +141,7 @@ python ci/check_verweise.py
 python ci/check_struktur.py --streng
 python ci/check_kopf.py
 python ci/gen_index.py --pruefen
+python ci/gen_theme.py --pruefen
 python ci/check_template_version.py
 node ci/check-js-templates.js
 python ci/check_yaml.py
@@ -176,7 +178,11 @@ im Kartennamen auffaellt, bevor Lovelace nur noch
 `check_palette.py` schlaegt fehl, bis die Farbe in `design/palette.yaml`
 steht. Meist ist ein vorhandener Palettenwert gemeint -- die Meldung nennt den
 naechsten. Ist die Farbe wirklich neu: Eintrag in der Palette und Begruendung
-in `DESIGN.md`, Abschnitt "Eine neue Farbe aufnehmen".
+in `DESIGN.md`, Abschnitt "Eine neue Farbe aufnehmen". Aendert sie sich im
+hellen Modus, gehoert auch ihr heller Wert in die Palette (`hell_farben`,
+`theme.variablen`); danach `python ci/gen_theme.py` und das Theme mit
+committen. Meldet `check_palette.py` einen Wert "des hellen Modus" in einer
+Karte, ist dort die Theme-Variable gemeint (`var(--owlet-...)`).
 
 ## Bewusst nicht geprueft
 

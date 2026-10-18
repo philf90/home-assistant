@@ -22,6 +22,10 @@ Ablauf.
    Akzentfarbe ableiten, nur mit den Stufen aus `DESIGN.md` (Flaeche 0,12,
    Icon-Kachel 0,16, Schein 0,18, Rand 0,24, Leuchten 0,5), keine neuen
    dunklen Mischtoene erfinden.
+   **Heller Modus:** Helle Hex-Werte gehoeren nie in eine Karte. Karten, die
+   beide Modi koennen sollen, nutzen die Theme-Variablen (`var(--owlet-gruen)`,
+   Toenung per `color-mix`), siehe `DESIGN.md`, Abschnitt "Heller Modus".
+   Eine neue Farbe braucht dort auch ihren hellen Wert und eine Variable.
 4. **Sonderfarben nur fuer ihren Zweck.** Eintraege mit `status: sonder` sind
    an das gebunden, was unter `zweck` steht (Owlet, Personen, Fussball,
    Flugradar, DWD).

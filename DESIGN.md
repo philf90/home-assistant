@@ -5,7 +5,9 @@ selbst stehen in [`design/palette.yaml`](design/palette.yaml); diese Datei
 erklärt, wofür sie gedacht sind und wie die Bausteine aussehen.
 
 **Verbindlich heißt:** `ci/check_palette.py` (Karten) und `ci/check_grafana.py`
-(Grafana) lassen keine Farbe durch, die nicht in `design/palette.yaml` steht. Die Prüfung läuft in der CI bei jedem Push und
+(Grafana) lassen keine Farbe durch, die nicht in `design/palette.yaml` steht.
+Die Werte des hellen Modus sind nur im erzeugten Theme erlaubt (siehe
+„Heller Modus“). Die Prüfung läuft in der CI bei jedem Push und
 Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 
 ## Geltungsbereich
@@ -216,6 +218,150 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 - **Wetterwarnungen:** offizielle DWD-Stufenfarben (`#7c8ba1`, `#f2c500`,
   `#fb9a12`, `#e6480e`, `#c0392b`) und `#4ade80` für „aktiv“. Nicht anpassen.
 
+## Heller Modus
+
+Jede Rolle der Palette hat einen Wert für den hellen Modus. Die Werte stehen
+in `design/palette.yaml` unter `hell_farben` (neue Werte mit Name und Zweck)
+und `theme` (jede Variable mit ihrem dunklen und hellen Wert). Daraus erzeugt
+`python ci/gen_theme.py` das Theme
+[`owlet-theme-konfig.yaml`](dashboard/allgemein/owlet-theme-konfig.yaml) mit
+`modes: dark` und `modes: light`. Welcher Modus gilt, wählt jeder Benutzer im
+Profil oder im More-Menü (System, Hell, Dunkel).
+
+**Stand:** Palette und Theme stehen. Die Karten tragen noch die festen
+dunklen Werte und werden schrittweise auf die Theme-Variablen umgestellt;
+bis dahin bleiben sie in beiden Modi dunkel.
+
+### Grundprinzip
+
+- Heller, kühler Grund: Seite `#e6eaf0`, Kartenhülle als Verlauf
+  `#fafbfd` → `#f3f5f8`. Die Grautöne haben den Farbton der dunklen
+  (OKLCH etwa 255°).
+- Akzente im **Tiefband**: Jeder Akzent behält den OKLCH-Farbton seines
+  dunklen Gegenstücks, die Sättigung steigt um den Faktor 1,3 (höchstens
+  Chroma 0,15), die Helligkeit sinkt, bis Schrift auf der eigenen Tönung 0,12
+  mindestens 4,6:1 hält. Ergebnis: OKLCH-Helligkeit 0,49–0,52, auf der Hülle
+  5,41–5,53:1.
+- Den Farbton höchstens um 5° verschieben, und nur, wenn ein Farbpaar sonst
+  schlechter unterscheidbar wäre als im dunklen Modus: Blau +3,2°,
+  Petrol +4,7°, Sonnengelb +4,6°.
+- **Navy statt Weiß:** Ränder, Innenflächen und Schatten entstehen aus
+  `#171d29` mit Deckkraft, so wie dunkel aus Weiß mit Deckkraft. Weiß ist nur
+  als erhöhte Fläche (Popups) deckend erlaubt.
+- Zustände färben Icon, Wert und Kachel, nie die ganze Karte.
+- **Identitätshüllen bleiben dunkel:** Owlet-Karte (Night Violet) und
+  Vereinshülle im Fußball-View behalten in beiden Modi Hülle und Farben.
+
+**Gemessen** wird nach WCAG 2.x im ungünstigsten Fall aus Hülle oben, Hülle
+unten, Unterkachel (Navy 0,03 über der Hülle = `#eceff2`) und Popup
+`#ffffff`; Akzente zusätzlich gegen ihre eigene Tönung 0,12. Maßgeblich ist
+fast immer die Unterkachel. Die dunklen Werte sind wie oben auf `#1b2231`
+gemessen.
+
+### Flächen und Text
+
+| Rolle | Dunkel | Hell | Hell, Kontrast | Variable |
+|---|---|---|---|---|
+| Seitengrund | `#171d29` | `#e6eaf0` | – | `owlet-seite` |
+| Kartenhülle oben / unten | `#1b2231` / `#171d29` | `#fafbfd` / `#f3f5f8` | – | `owlet-huelle-oben`, `-unten` |
+| Rand der Hülle | Weiß 0,05 | Navy 0,06 | – | `owlet-huelle-rand` |
+| Schatten | Schwarz 0,7 | Navy 0,30 | – | `owlet-schatten` |
+| Unterkachel / Rand | Weiß 0,028 / 0,06 | Navy 0,03 / 0,07 | – | `owlet-unterkachel`, `-rand` |
+| Neutrale Icon-Kachel | Weiß 0,05 | Navy 0,05 | – | `owlet-neutral-kachel` |
+| Erhöhte Fläche | `#222b3c` | `#ffffff` | – | `owlet-flaeche-erhoeht` |
+| Vertiefte Fläche | `#10151d` | `#e9edf2` | – | `owlet-flaeche-vertieft` |
+| Zustand aus | `#3a4453` | `#b4c0cf` | 1,69:1 (dunkel 1,62:1) | `owlet-aus` |
+| Primärtext | `#f2f5f8` | `#171d29` | 14,62:1 | `owlet-text` |
+| Titel | `#e7ecf3` | `#1b2231` | 13,79:1 | `owlet-titel` |
+| Labels | `#b4c0cf` | `#3a4453` | 8,54:1 | `owlet-label` |
+| Sekundärtext, jede kleine Schrift | `#8794a5` | `#586475` | 5,21:1 | `owlet-text-sekundaer` |
+| Muted, **nie Text** | `#6e7988` | `#6e7988` | 3,83:1 | `owlet-muted` |
+
+Primärtext, Titel, Labels, Zustand aus und Muted sind vorhandene
+Palettenwerte; neu sind nur die Flächen und der Sekundärtext. Auf dem
+Seitengrund hält der Sekundärtext 4,98:1.
+
+### Status und Akzente
+
+| Farbe | Dunkel | Hell | Auf Tönung 0,12 | Auf Hülle | Icon auf Icon-Kachel |
+|---|---|---|---|---|---|
+| Grün | `#a6d49e` | `#38702e` | 4,64:1 | 5,45:1 | 4,39:1 |
+| Amber | `#e6b566` | `#855c04` | 4,64:1 | 5,45:1 | 4,38:1 |
+| Koralle-Orange | `#e7936e` | `#a94302` | 4,63:1 | 5,51:1 | 4,37:1 |
+| Rot | `#f0736a` | `#ae3c38` | 4,62:1 | 5,49:1 | 4,33:1 |
+| Blau | `#7fb3d5` | `#266994` | 4,61:1 | 5,45:1 | 4,38:1 |
+| Türkis | `#7fd0d5` | `#016f74` | 4,60:1 | 5,45:1 | 4,35:1 |
+| Türkis hell | `#77d4d0` | `#016f74` | 4,60:1 | 5,45:1 | 4,35:1 |
+| Petrol | `#79b8c9` | `#066d86` | 4,60:1 | 5,43:1 | 4,32:1 |
+| Violett | `#b399d4` | `#76559c` | 4,62:1 | 5,42:1 | 4,35:1 |
+| Limette | `#bdd27f` | `#5a6b04` | 4,61:1 | 5,43:1 | 4,38:1 |
+| Mint | `#89d2b0` | `#00714f` | 4,66:1 | 5,53:1 | 4,40:1 |
+| Indigo | `#8ea2e6` | `#4b5eb1` | 4,63:1 | 5,44:1 | 4,38:1 |
+| Rosé | `#e6a0c4` | `#994776` | 4,62:1 | 5,47:1 | 4,37:1 |
+| Wolkengrau | `#cdd6e0` | `#5b6571` | 4,64:1 | 5,42:1 | 4,39:1 |
+| Eis | `#cfe3f2` | `#506778` | 4,62:1 | 5,41:1 | 4,37:1 |
+| Nachtgrau | `#9aa7bd` | `#35435c` | 7,51:1 | 9,12:1 | 7,03:1 |
+| Sonnengelb | `#e6c15a` | `#776202` | 4,61:1 | 5,44:1 | 4,36:1 |
+
+Die Variablen heißen wie die Farbe: `owlet-gruen`, `owlet-amber`,
+`owlet-koralle`, `owlet-rot`, `owlet-blau` usw. Alle Tieftöne dürfen Text
+färben.
+
+- **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `owlet-licht-an`
+  ist hell Amber `#855c04`. Schon dunkel liegen beide nur ΔE00 3,2
+  auseinander.
+- **Türkis hell** hat keinen eigenen hellen Wert: `owlet-tuerkis-hell` ist
+  hell `#016f74` wie Türkis. Getrennt lägen beide nur ΔE00 3,2 auseinander
+  (dunkel 4,0).
+- **Nachtgrau** ist bewusst tiefer gesetzt. Im Tiefband allein läge es nur
+  ΔE00 5,8 neben Wolkengrau (dunkel 13,3); jetzt sind es 13,2.
+- **Unterscheidbarkeit** der engsten Paare, ΔE00 dunkel → hell: Amber/
+  Sonnengelb 6,4 → 7,2, Türkis/Petrol 8,3 → 8,8, Blau/Petrol 7,4 → 8,3,
+  Blau/Indigo 10,7 → 10,9, Violett/Indigo 13,0 → 12,5, Eis/Wolkengrau
+  4,6 → 4,4.
+
+### Tönungen und gefüllte Kachel
+
+Die Deckkraft-Stufen gelten unverändert (Fläche 0,12, Icon-Kachel 0,16,
+Schein 0,18, Rand 0,24, Leuchten 0,5), angewendet auf den Tiefton. Mit
+Variablen entsteht die Tönung über `color-mix`:
+`color-mix(in srgb, var(--owlet-gruen) 12%, transparent)`.
+
+Gefüllte Kacheln behalten Füllung und Schrift auf Füllung, damit auch deren
+Kontrast (5,6–8,1:1). Anders sind nur Rand und Leuchten:
+
+| | Dunkel | Hell | Variable |
+|---|---|---|---|
+| Rand | Pastell 0,5 | Tiefton deckend | `owlet-fuellung-rand-<farbe>` |
+| Leuchten (`0 0 14px -3px`) | Pastell 0,5 | Tiefton 0,5 | `owlet-leuchten-<farbe>` |
+
+Der dunkle Rand erreicht auf heller Hülle nur 2,10–2,23:1, der deckende
+Tiefton 5,42–5,49:1. Die Füllung allein hebt sich nur mit 1,53–2,61:1 von
+der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
+(Lichtkachel), Grün, Blau, Rot, Violett und Türkis.
+
+### Sonderfarben im hellen Modus
+
+| Farbe | Regel | Messwert hell |
+|---|---|---|
+| Owlet-Identität, Vereinshülle | Hülle bleibt dunkel, Inhalt nutzt die dunkle Palette; Tor `#ff8a80` nur dort | Tor auf heller Hülle 2,09:1 |
+| Dragonfruit `#ff4696` | bleibt unverändert, auch als Abwesend-Rand der Personenkarte; dort nur Zusatzsignal, der Zustand steht immer auch als Text, Icon und Badge da (WCAG 1.4.11 verlangt 3:1 nur für Grafiken, die allein den Zustand zeigen) | 2,93–3,09:1 auf der Hülle, 2,65:1 zum Seitengrund |
+| Avatar-Platzhalter | unverändert, eigene Fläche | – |
+| Vereinsrot `#e30613` | nur als Fläche mit weißer Schrift | Weiß darauf 4,88:1, als Schrift 4,47:1 |
+| Flugradar-Gelb `#f2c94c` | nur auf dunklem Kartengrund | 1,45:1 |
+| DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
+| Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
+
+### Noch offen
+
+- **Animierte Hintergründe:** Weiß mit Deckkraft (Sterne, Schnee, Blitz,
+  Luft, inaktive Leitungen) ist auf hellem Grund unsichtbar. Dafür braucht es
+  eigene Regeln und Messungen.
+- **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
+  nicht gemessen.
+- **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
+  hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
+
 ## Animierte Hintergründe
 
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
@@ -282,4 +428,8 @@ sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlic
 2. Neue Akzente bleiben im Pastellband (Helligkeit 63–76 %) und erreichen auf
    `#1b2231` mindestens 4,5:1, wenn sie Text färben.
 3. Eintrag in `design/palette.yaml` mit `hex`, `name`, `status` und `zweck`.
-4. Rolle hier in `DESIGN.md` ergänzen.
+4. Hellen Wert festlegen (Abschnitt „Heller Modus“): Tiefband-Wert unter
+   `hell_farben` aufnehmen und die Rolle unter `theme.variablen` mit
+   `dunkel` und `hell` eintragen, dann `python ci/gen_theme.py`. Bleibt die
+   Farbe in beiden Modi gleich (Füllung, Sonderfarbe), entfällt das.
+5. Rolle hier in `DESIGN.md` ergänzen.
