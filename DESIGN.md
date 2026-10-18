@@ -261,7 +261,8 @@ per card-mod-CSS) und die neu gebaute Kamera-View (`kameras-view.yaml` mit
 dem Template `owlet_kamera_kachel` in `kameras-templates.yaml`) und
 Homematic-IP-View (`homematic-view.yaml`), dazu die Netzwerk-View mit den
 sechs UniFi-Karten und der Ressource `unifi-netzplan-card.js` (Diagramm- und
-uptime-Balkenfarben per card-mod-CSS, siehe Kopfkommentare). Die Owlet-Karte bleibt als Identitätshülle dunkel.
+uptime-Balkenfarben per card-mod-CSS, siehe Kopfkommentare). Ebenso die
+System-View (`system-karte.yaml`). Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
