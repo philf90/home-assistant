@@ -263,7 +263,10 @@ Homematic-IP-View (`homematic-view.yaml`), dazu die Netzwerk-View mit den
 sechs UniFi-Karten und der Ressource `unifi-netzplan-card.js` (Diagramm- und
 uptime-Balkenfarben per card-mod-CSS, siehe Kopfkommentare). Ebenso die
 System-View (`system-karte.yaml`) und
-Gesundheit-View (`gesundheit-view.yaml`). Die Owlet-Karte bleibt als Identitätshülle dunkel.
+Gesundheit-View (`gesundheit-view.yaml`) sowie die Flüge-View
+(`flugradar-view.yaml` mit `flugradar-templates.yaml`); deren
+Kartenausschnitt mit Legende bleibt mit Flugradar-Gelb in beiden Modi dunkel.
+Die Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
