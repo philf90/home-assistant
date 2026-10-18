@@ -33,6 +33,13 @@
 # (Raten rx/tx). Welche Leitung er bei aktivem Policy-Routing misst, ist nicht
 # dokumentiert; der Titel nennt deshalb das Gateway, keine Leitung.
 #
+# Farben: apexcharts-card zeichnet bei einem Wechsel zwischen hell und dunkel
+# nicht neu. Linien, Flaeche, Achsen und Gitter faerbt deshalb das
+# card_mod-CSS der Diagrammkarte mit var(--owlet-...); die Farben unter
+# series und apex_config gelten nur ohne dieses CSS. Den Verlauf der
+# Download-Flaeche faerbt das CSS ueber die Stopps des einzigen
+# linearGradient im Diagramm.
+#
 # ┌────────────── ENTITÄTEN PRÜFEN ───────────────────────────────────────────┐
 # │ Alle unifi_wan_*-IDs legt "UniFi WAN" an; sie enthalten Host und Site der │
 # │ eigenen Konsole. Die Speedtest-Buttons je Leitung gibt es nur bei mehr als │
@@ -45,10 +52,10 @@ type: vertical-stack
 card_mod:
   style: |
     #root {
-      background: linear-gradient(180deg, #1b2231 0%, #171d29 55%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
       border-radius: 22px !important;
-      box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7) !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
       padding: 16px 18px !important;
       gap: 10px !important;
     }
@@ -69,8 +76,8 @@ cards:
       badge: |
         [[[
           if(!entity || entity.state!=='on') return '';
-          const c='#7fb3d5';
-          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}1f;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>Test läuft</span>`;
+          const c='var(--owlet-blau, #7fb3d5)';
+          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>Test läuft</span>`;
         ]]]
     styles:
       card:
@@ -88,24 +95,24 @@ cards:
         - border-radius: 13px
         - margin-right: 14px
         - align-self: center
-        - background: 'rgba(127, 179, 213, 0.12)'
-        - border: 1px solid rgba(127, 179, 213, 0.24)
+        - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
       icon:
         - width: 23px
         - height: 23px
-        - color: '#7fb3d5'
+        - color: 'var(--owlet-blau, #7fb3d5)'
       name:
         - justify-self: start
         - align-self: end
         - font-size: 17px
         - font-weight: 700
         - letter-spacing: -0.02em
-        - color: '#f2f5f8'
+        - color: 'var(--owlet-text, #f2f5f8)'
       label:
         - justify-self: start
         - align-self: start
         - font-size: 12px
-        - color: '#8794a5'
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
         - margin-top: 2px
       custom_fields:
         badge:
@@ -138,8 +145,11 @@ cards:
       stroke:
         curve: smooth
         width: 2
+      # Verlauf nur fuer die Download-Flaeche. Mit einem Typ fuer alle Serien
+      # bekam auch die Upload-Linie den Verlauf (0,28 -> 0,02) und war kaum
+      # zu sehen.
       fill:
-        type: gradient
+        type: [gradient, solid]
         gradient:
           shadeIntensity: 0
           opacityFrom: 0.28
@@ -158,6 +168,16 @@ cards:
           border: none !important;
           box-shadow: none !important;
         }
+        /* Farben je Modus, siehe Kopfkommentar: 0 Download, 1 Upload */
+        .apexcharts-series[data\:realIndex="0"] { --nw-c: var(--owlet-gruen, #a6d49e); }
+        .apexcharts-series[data\:realIndex="1"] { --nw-c: var(--owlet-amber, #e6b566); }
+        .apexcharts-area[fill="none"], .apexcharts-line { stroke: var(--nw-c); }
+        .apexcharts-series .apexcharts-marker { fill: var(--nw-c); }
+        /* einziger Verlauf im Diagramm: Download-Flaeche, Deckkraft wie ApexCharts (Farbe 0,28 x Stopp 0,28) */
+        .apexcharts-svg defs linearGradient stop { stop-color: color-mix(in srgb, var(--owlet-gruen, #a6d49e) 2%, transparent); }
+        .apexcharts-svg defs linearGradient stop[offset="0"] { stop-color: color-mix(in srgb, var(--owlet-gruen, #a6d49e) 28%, transparent); }
+        .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--owlet-text-sekundaer, #8794a5); }
+        .apexcharts-gridline { stroke: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
     yaxis:
       - min: 0
         decimals: 0
@@ -203,7 +223,7 @@ cards:
     custom_fields:
       nums: &nums |
         [[[
-          const M='#8794a5';
+          const M='var(--owlet-text-sekundaer, #8794a5)';
           const n=(id)=>{ const s=states[id]; const v=s?parseFloat(s.state):NaN; return Number.isFinite(v)?Math.round(v):'–'; };
           const d=entity?parseFloat(entity.state):NaN;
           return `${Number.isFinite(d)?Math.round(d):'–'} <span style="color:${M};font-weight:600;">↓</span> · ${n(variables.up)} <span style="color:${M};font-weight:600;">↑ Mbit/s</span> · ${n(variables.ping)} <span style="color:${M};font-weight:600;">ms</span>`;
@@ -212,7 +232,7 @@ cards:
         [[[
           const s=states[variables.lastrun];
           const net=states[variables.internet];
-          const off=net && net.state!=='on' ? '<span style="color:#f0736a;">ohne Internet</span> · ' : '';
+          const off=net && net.state!=='on' ? '<span style="color:var(--owlet-rot, #f0736a);">ohne Internet</span> · ' : '';
           const t=s?Date.parse(s.state):NaN;
           if(!Number.isFinite(t)) return `${off}noch kein Speedtest`;
           const h=(Date.now()-t)/3600000;
@@ -237,7 +257,7 @@ cards:
               [[[
                 const p=states['binary_sensor.unifi_wan_192_168_1_1_default_unifi_speedtest_in_progress'];
                 const txt=p && p.state==='on' ? 'läuft' : 'Test';
-                return `<span style="display:inline-flex;align-items:center;gap:5px;line-height:1;"><ha-icon icon="mdi:speedometer" style="--mdc-icon-size:16px;width:16px;height:16px;display:flex;color:#7fb3d5;"></ha-icon><span style="font-size:12px;font-weight:700;color:#7fb3d5;white-space:nowrap;">${txt}</span></span>`;
+                return `<span style="display:inline-flex;align-items:center;gap:5px;line-height:1;"><ha-icon icon="mdi:speedometer" style="--mdc-icon-size:16px;width:16px;height:16px;display:flex;color:var(--owlet-blau, #7fb3d5);"></ha-icon><span style="font-size:12px;font-weight:700;color:var(--owlet-blau, #7fb3d5);white-space:nowrap;">${txt}</span></span>`;
               ]]]
           tap_action:
             action: perform-action
@@ -251,8 +271,8 @@ cards:
               - padding: 7px 11px
               - border-radius: 11px
               - box-shadow: none
-              - background: 'rgba(127, 179, 213, 0.12)'
-              - border: 1px solid rgba(127, 179, 213, 0.24)
+              - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+              - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
             grid:
               - grid-template-areas: '"btn"'
               - grid-template-columns: min-content
@@ -265,8 +285,8 @@ cards:
         - border-radius: 16px
         - padding: 11px 13px
         - box-shadow: none
-        - background: 'rgba(255,255,255,0.028)'
-        - border: 1px solid rgba(255,255,255,0.06)
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
         - grid-template-areas: '"n run" "nums run" "meta run"'
         - grid-template-columns: 1fr min-content
@@ -276,18 +296,18 @@ cards:
         - justify-self: start
         - font-size: 13.5px
         - font-weight: 650
-        - color: '#f2f5f8'
+        - color: 'var(--owlet-text, #f2f5f8)'
       custom_fields:
         nums:
           - justify-self: start
           - font-size: 13px
           - font-weight: 700
-          - color: '#b4c0cf'
+          - color: 'var(--owlet-label, #b4c0cf)'
           - font-variant-numeric: tabular-nums
         meta:
           - justify-self: start
           - font-size: 11.5px
-          - color: '#8794a5'
+          - color: 'var(--owlet-text-sekundaer, #8794a5)'
         run:
           - align-self: center
           - justify-self: end

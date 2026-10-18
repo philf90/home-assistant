@@ -46,7 +46,9 @@ triggers_update: all
 tap_action:
   action: none
 variables:
-  # device_tracker von Geraeten, die bewusst getrennt sind (grau statt Stoerung)
+  # device_tracker von Geraeten, die bewusst getrennt sind (grau statt Stoerung).
+  # Ausgebaute Geraete stehen hier, bis sie im UniFi-Controller vergessen sind;
+  # danach blendet die Karte sie selbst aus (Zustand restored).
   inactive:
     - device_tracker.usw_lite_8_poe_garage
   # device_tracker, die nicht als Client zaehlen (z. B. das Modem einer Leitung)
@@ -66,7 +68,7 @@ variables:
 custom_fields:
   body: |
     [[[
-      const G='#a6d49e', A='#e6b566', R='#f0736a', M='#8794a5', V='#f2f5f8';
+      const G='var(--owlet-gruen, #a6d49e)', A='var(--owlet-amber, #e6b566)', R='var(--owlet-rot, #f0736a)', M='var(--owlet-text-sekundaer, #8794a5)', V='var(--owlet-text, #f2f5f8)';
       const st=hass.states, ents=hass.entities||{}, devs=hass.devices||{};
       const uni=Object.values(ents).filter(e=>e.platform==='unifi');
       const inactiveDev=new Set((variables.inactive||[]).map(id=>ents[id]&&ents[id].device_id).filter(Boolean));
@@ -139,7 +141,7 @@ custom_fields:
       const badge=nProb?`${nProb} Störung${nProb>1?'en':''}`:'alles ok';
       const sub=`${ok}/${total-off} Geräte${off?` · ${off} inaktiv`:''} · ${upd?`<span style="color:${A}">${upd} Update${upd>1?'s':''}</span>`:'Firmware aktuell'}`;
 
-      const chip=(v,l,col)=>`<div style="background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:9px 10px 8px;min-width:0;display:flex;flex-direction:column;gap:2px;">
+      const chip=(v,l,col)=>`<div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:9px 10px 8px;min-width:0;display:flex;flex-direction:column;gap:2px;">
           <span style="font-size:16px;font-weight:750;letter-spacing:-0.02em;color:${col||V};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}</span>
           <span style="font-size:11px;color:${M};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l}</span></div>`;
       const small=(t)=>`<span style="font-size:0.62em;color:${M};font-weight:600;margin:0 3px 0 1px;">${t}</span>`;
@@ -147,19 +149,19 @@ custom_fields:
       const shown=problems.slice(0,3);
       const alerts=shown.map(p=>{
         const pc=p.sev==='bad'?R:A;
-        return `<div style="display:flex;align-items:center;gap:10px;border-radius:14px;padding:9px 11px;background:${pc}1f;border:1px solid ${pc}3d;font-size:12.5px;color:#b4c0cf;line-height:1.35;">
+        return `<div style="display:flex;align-items:center;gap:10px;border-radius:14px;padding:9px 11px;background:color-mix(in srgb, ${pc} 12%, transparent);border:1px solid color-mix(in srgb, ${pc} 24%, transparent);font-size:12.5px;color:var(--owlet-label, #b4c0cf);line-height:1.35;">
           <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:19px;color:${pc};flex:0 0 auto;"></ha-icon><span>${p.text}</span></div>`;
       }).join('')+(problems.length>3?`<div style="font-size:11.5px;color:${M};padding-left:4px;">+${problems.length-3} weitere, Details im Netzplan</div>`:'');
 
       return `<div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
         <div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;">
-          <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${c}29;border:1px solid ${c}3d;">
+          <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">
             <ha-icon icon="mdi:lan" style="--mdc-icon-size:23px;color:${c};"></ha-icon></div>
           <div style="min-width:0;">
             <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${V};line-height:1.2;">Netzwerk</div>
             <div style="font-size:12.5px;color:${M};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div>
-          <span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}1f;border:1px solid ${c}3d;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">
-            <span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px ${c}2e;"></span>${badge}</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">
+            <span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${badge}</span>
         </div>
         ${alerts}
         <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
@@ -171,10 +173,10 @@ custom_fields:
     ]]]
 styles:
   card:
-    - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
-    - border: 1px solid rgba(255, 255, 255, 0.05)
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
     - border-radius: 22px
-    - box-shadow: 0 18px 44px -22px rgba(0,0,0,0.7)
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
     - padding: 16px 18px
   grid:
     - grid-template-areas: '"body"'
