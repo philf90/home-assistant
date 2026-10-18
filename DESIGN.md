@@ -291,7 +291,7 @@ Seitengrund hält der Sekundärtext 4,98:1.
 | Rot | `#f0736a` | `#ae3c38` | 4,62:1 | 5,49:1 | 4,33:1 |
 | Blau | `#7fb3d5` | `#266994` | 4,61:1 | 5,45:1 | 4,38:1 |
 | Türkis | `#7fd0d5` | `#016f74` | 4,60:1 | 5,45:1 | 4,35:1 |
-| Türkis hell | `#77d4d0` | `#026f6d` | 4,64:1 | 5,50:1 | 4,38:1 |
+| Türkis hell | `#77d4d0` | `#016f74` | 4,60:1 | 5,45:1 | 4,35:1 |
 | Petrol | `#79b8c9` | `#066d86` | 4,60:1 | 5,43:1 | 4,32:1 |
 | Violett | `#b399d4` | `#76559c` | 4,62:1 | 5,42:1 | 4,35:1 |
 | Limette | `#bdd27f` | `#5a6b04` | 4,61:1 | 5,43:1 | 4,38:1 |
@@ -310,12 +310,15 @@ färben.
 - **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `owlet-licht-an`
   ist hell Amber `#855c04`. Schon dunkel liegen beide nur ΔE00 3,2
   auseinander.
+- **Türkis hell** hat keinen eigenen hellen Wert: `owlet-tuerkis-hell` ist
+  hell `#016f74` wie Türkis. Getrennt lägen beide nur ΔE00 3,2 auseinander
+  (dunkel 4,0).
 - **Nachtgrau** ist bewusst tiefer gesetzt. Im Tiefband allein läge es nur
   ΔE00 5,8 neben Wolkengrau (dunkel 13,3); jetzt sind es 13,2.
 - **Unterscheidbarkeit** der engsten Paare, ΔE00 dunkel → hell: Amber/
   Sonnengelb 6,4 → 7,2, Türkis/Petrol 8,3 → 8,8, Blau/Petrol 7,4 → 8,3,
   Blau/Indigo 10,7 → 10,9, Violett/Indigo 13,0 → 12,5, Eis/Wolkengrau
-  4,6 → 4,4, Türkis/Türkis hell 4,0 → 3,2.
+  4,6 → 4,4.
 
 ### Tönungen und gefüllte Kachel
 
@@ -358,10 +361,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
   hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
-- **Dragonfruit-Rand** mit 2,93:1 knapp unter 3:1 (2-px-Rand oder Text
-  „abwesend“).
-- **Türkis und Türkis hell** sind hell kaum zu unterscheiden (ΔE00 3,2);
-  zusammenlegen wäre möglich.
+- **Dragonfruit-Rand** mit 2,93:1 knapp unter 3:1.
 
 ## Animierte Hintergründe
 
