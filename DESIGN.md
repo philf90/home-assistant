@@ -254,7 +254,7 @@ Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
 `geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
 Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
 (`autos-karte-v4.yaml` mit dem Template `owlet_auto_fx` in
-`autos-templates.yaml`). Die
+`autos-templates.yaml`) und die Garten-View (`garten-karte.yaml`). Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -449,9 +449,9 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Animationen in Garten, Fußball und Flugradar** (`garten-karte.yaml`,
-  `fussball-templates.yaml`, `flugradar-templates.yaml`) sind noch dunkel
-  und werden mit ihrer View umgestellt.
+- **Animationen in Fußball und Flugradar** (`fussball-templates.yaml`,
+  `flugradar-templates.yaml`) sind noch dunkel und werden mit ihrer View
+  umgestellt.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
@@ -582,6 +582,11 @@ umgeschaltet über `owlet-dunkel-anteil`; dunkel bleibt alles wie bisher.
   Das Tank-Symbol hält auf der Füllung hell mindestens 3,13:1. Die
   Schloss-Ringe (Amber 0,5, Stufe „Leuchten“) heben sich hell nur mit
   2,11:1 ab (dunkel 3,04:1); sie sind Zusatzsignal neben Text und Icon.
+- **Garten** (`garten-karte.yaml`): Wasserringe (Blau 0,5) und Glühen der
+  Brunnenpumpe (Grün 0,5) in der Stufe „Leuchten“, hell im Tiefton; die
+  Ringe heben sich hell mit 2,1:1 ab, Zusatzsignal neben Text und Icon. Der
+  Schalter „Meldung am Ende“ ist an hell voll im Limette-Tiefton (Knopf
+  5,42:1; mit 0,5 wären es 2,11:1).
 
 ## Eine neue Farbe aufnehmen
 
