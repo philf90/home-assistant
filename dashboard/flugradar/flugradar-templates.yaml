@@ -88,6 +88,10 @@
 #          sensor.adsb_notfall (adsb.lol), Zuordnung ueber die ICAO-Adresse
 #          (aircraft_icao_24bit). Der FR24-Squawk kommt trotz Silver-Login leer an.
 #   grau   am Boden
+# Hell und dunkel: Der Kartenausschnitt bleibt in beiden Modi dunkel und nutzt
+#   fr.farbeKarte (feste Werte, auch fuer Leaflet und die Legende unter der
+#   Karte). Liste, Popup und Kopfzeilen nutzen fr.farbe mit Theme-Variablen;
+#   im hellen Modus erscheinen dieselben Baender dort in den hellen Tiefentoenen.
 # Seltene Typen (ICAO-Typcode in input_text.flug_seltene_typen, z. B. A388, B748):
 #   Symbol groesser (31 statt 22 px) mit goldenem Leuchten, Farbe bleibt die des
 #   Hoehenbands; gleiche Liste wie die Meldung in "Fluege: Ein- und Austritt zaehlen".
@@ -136,7 +140,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 16, vorher = window.__flugradar;
+          const VERSION = 18, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -147,7 +151,11 @@ button_card_templates:
           const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
           const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
           const F = 'font-family:' + SANS + ';';
-          const PLANE = 'M0,-7 L1.2,-2 L7,1.6 L7,3 L1.2,1.6 L0.9,4.8 L2.6,6.3 L2.6,7.3 L0,6.6 L-2.6,7.3 L-2.6,6.3 L-0.9,4.8 L-1.2,1.6 L-7,3 L-7,1.6 L-1.2,-2 Z';
+          // Flugzeug, um den Drehpunkt (0,0) zentriert: Pfad gegenueber der Zeichnung um 1 nach oben
+          // verschoben (zwischen Flaechenschwerpunkt und Rahmenmitte), damit das Symbol bei jedem
+          // Kurs mittig bleibt; viewBox -8.5 -8.5 17 17, Groesse etwa x 17/16 (ganzzahlig, sonst
+          // rastet die SVG um einen halben Pixel versetzt ein).
+          const PLANE = 'M0,-8 L1.2,-3 L7,0.6 L7,2 L1.2,0.6 L0.9,3.8 L2.6,5.3 L2.6,6.3 L0,5.6 L-2.6,6.3 L-2.6,5.3 L-0.9,3.8 L-1.2,0.6 L-7,2 L-7,0.6 L-1.2,-3 Z';
           const fr = { version: VERSION, hass, F, SENSOR, PLANE, sel: null, subs: new Map(), map: null, mapEl: null, layer: null, laden: null };
 
           // ---------- Daten ----------
@@ -167,8 +175,8 @@ button_card_templates:
           fr.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
           fr.id = f => String(f.id ?? '').replace(/[^A-Za-z0-9_-]/g, '');
           fr.de = n => Number(n).toLocaleString('de-DE');
-          fr.hinweis = t => `<div style="${F}color:#8794a5;font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
-          fr.badge = (c, t, puls) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:${c}1f;border:1px solid ${c}3d;font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          fr.hinweis = t => `<div style="${F}color:var(--owlet-text-sekundaer, #8794a5);font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
+          fr.badge = (c, t, puls) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
           // Notfall: Squawk von FR24 (liefert die Integration derzeit nicht) oder ADS-B
           // (sensor.adsb_notfall, adsb.lol: "HEX|Callsign|Squawk|Notfallart|Hoehe ft|km;...")
           const NOTFALL_ARTEN = { general: 'Luftnotfall', minfuel: 'Treibstoffmangel', nordo: 'Funkausfall', unlawful: 'Entführung', downed: 'Notlandung' };
@@ -189,8 +197,12 @@ button_card_templates:
             .toUpperCase().split(/[\s,;]+/).includes(String(f.aircraft_code).toUpperCase());
           fr.sonder = f => f.aircraft_category === 'Helicopter'
             || /air force|army|navy|luftwaffe|bundeswehr|police|polizei|ambulan|rettung/i.test(f.airline || '');
-          fr.farbe = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#8794a5' : fr.sonder(f) ? '#b399d4'
+          // Hoehenband: farbeKarte fuer die Karte (bleibt in beiden Modi dunkel, Leaflet
+          // braucht feste Farben), farbe fuer Liste und Popup (Theme-Variablen).
+          fr.farbeKarte = f => fr.notfall(f) ? '#f0736a' : f.on_ground ? '#8794a5' : fr.sonder(f) ? '#b399d4'
             : fr.m(f) < 1500 ? '#e6b566' : fr.m(f) < 7500 ? '#77d4d0' : '#7fb3d5';
+          fr.farbe = f => fr.notfall(f) ? 'var(--owlet-rot, #f0736a)' : f.on_ground ? 'var(--owlet-text-sekundaer, #8794a5)' : fr.sonder(f) ? 'var(--owlet-violett, #b399d4)'
+            : fr.m(f) < 1500 ? 'var(--owlet-amber, #e6b566)' : fr.m(f) < 7500 ? 'var(--owlet-tuerkis-hell, #77d4d0)' : 'var(--owlet-blau, #7fb3d5)';
           fr.band = f => fr.notfall(f) ? 'Notfall ' + fr.notfallCode(f) : f.on_ground ? 'am Boden' : fr.sonder(f) ? 'Sonderflug'
             : fr.m(f) < 1500 ? 'tief' : fr.m(f) < 7500 ? 'Steig-/Sinkflug' : 'Reiseflug';
           // Hoehe in Metern (FR24 liefert Druckhoehe in Fuss), gerundet auf 10 m
@@ -211,11 +223,11 @@ button_card_templates:
           };
           fr.himmel = d => ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'][Math.round(d / 45) % 8];
           fr.uhr = t => t ? new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
-          fr.kachel = (k, v, u, unter) => `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:9px 11px;min-width:0;">
-              <div style="font-size:11px;font-weight:600;color:#8794a5;">${k}</div>
-              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:#8794a5;font-weight:600;"> ${u}</span></div>
-              ${unter ? `<div style="font-size:11px;font-weight:600;color:#8794a5;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>` : ''}</div>`;
-          fr.titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#8794a5;">${t}</div>`;
+          fr.kachel = (k, v, u, unter) => `<div style="background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:9px 11px;min-width:0;">
+              <div style="font-size:11px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">${k}</div>
+              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.62em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;"> ${u}</span></div>
+              ${unter ? `<div style="font-size:11px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>` : ''}</div>`;
+          fr.titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);">${t}</div>`;
 
           // ---------- Grosskreis (P2 Reststrecke, P3 Ziellinie) ----------
           fr.winkel = (a, b) => {
@@ -245,12 +257,12 @@ button_card_templates:
             const plan = f.time_scheduled_arrival, ist = f.time_real_arrival || f.time_estimated_arrival;
             return plan && ist ? Math.round((ist - plan) / 60) : null;
           };
-          fr.chip = (c, t) => `<span style="display:inline-flex;align-items:center;color:${c};background:${c}1f;border:1px solid ${c}3d;font-size:11px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;">${t}</span>`;
+          fr.chip = (c, t) => `<span style="display:inline-flex;align-items:center;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11px;font-weight:700;padding:1px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;">${t}</span>`;
           fr.vChip = (f, kurz) => {
             const v = fr.verspaetung(f);
             if (v == null) return '';
-            if (Math.abs(v) < 5) return kurz ? '' : fr.badge('#a6d49e', 'pünktlich', false);
-            const c = v > 0 ? '#e6b566' : '#77d4d0';
+            if (Math.abs(v) < 5) return kurz ? '' : fr.badge('var(--owlet-gruen, #a6d49e)', 'pünktlich', false);
+            const c = v > 0 ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-tuerkis-hell, #77d4d0)';
             if (kurz) return fr.chip(c, (v > 0 ? '+' : '−') + Math.abs(v));
             return fr.badge(c, Math.abs(v) + (v > 0 ? ' min später' : ' min früher'), false);
           };
@@ -281,7 +293,7 @@ button_card_templates:
             return `<div style="display:flex;flex-direction:column;gap:8px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">${fr.titel('Ankunft')}${fr.vChip(f, false)}</div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;">${kacheln.join('')}</div>
-                ${zusatz ? `<div style="font-size:12px;font-weight:600;color:#b4c0cf;">${zusatz}</div>` : ''}
+                ${zusatz ? `<div style="font-size:12px;font-weight:600;color:var(--owlet-label, #b4c0cf);">${zusatz}</div>` : ''}
               </div>`;
           };
           // ---------- Dienste ----------
@@ -489,7 +501,7 @@ button_card_templates:
             const h = fr.home(), b = fr.bezug(f);
             L.polyline([h, [f.latitude, f.longitude]], { color: '#f2f5f8', weight: 1.5, opacity: 0.55, dashArray: '2 5', interactive: false }).addTo(fr.layer);
             if (b.cpa) {
-              L.polyline([[f.latitude, f.longitude], b.cpa.p], { color: fr.farbe(f), weight: 1.5, opacity: 0.85, dashArray: '1 5', interactive: false }).addTo(fr.layer);
+              L.polyline([[f.latitude, f.longitude], b.cpa.p], { color: fr.farbeKarte(f), weight: 1.5, opacity: 0.85, dashArray: '1 5', interactive: false }).addTo(fr.layer);
               L.polyline([h, b.cpa.p], { color: '#f2c94c', weight: 1, opacity: 0.7, interactive: false }).addTo(fr.layer);
               L.circleMarker(b.cpa.p, { radius: 3.5, color: '#f2c94c', weight: 1.5, fillColor: '#10151d', fillOpacity: 1, interactive: false }).addTo(fr.layer);
             }
@@ -504,15 +516,15 @@ button_card_templates:
               if (!Array.isArray(f.coordinates) || f.coordinates.length < 2) return;
               const s = f.id === fr.sel;
               L.polyline(f.coordinates.concat([[f.latitude, f.longitude]]), {
-                color: fr.farbe(f), weight: s ? 2.5 : 1.5, opacity: s ? 0.9 : 0.4, dashArray: s ? null : '2 6', interactive: false
+                color: fr.farbeKarte(f), weight: s ? 2.5 : 1.5, opacity: s ? 0.9 : 0.4, dashArray: s ? null : '2 6', interactive: false
               }).addTo(fr.layer);
             });
             const lage = fr.beschriftung(liste);
             liste.forEach(f => {
-              const c = fr.farbe(f), s = f.id === fr.sel, b = lage.get(f.id), g = fr.selten(f), px = g ? 31 : 22;
+              const c = fr.farbeKarte(f), s = f.id === fr.sel, b = lage.get(f.id), g = fr.selten(f), px = g ? 31 : 22;
               // seltener Typ: groesser und golden leuchtend, Hoehenfarbe bleibt
               const html = (s ? `<span class="ring${g ? ' g' : ''}"></span>` : '')
-                + `<span class="p${g ? ' g' : ''}"><svg viewBox="-8 -8 16 16" width="${px}" height="${px}"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
+                + `<span class="p${g ? ' g' : ''}"><svg viewBox="-8.5 -8.5 17 17" width="${px * 17 / 16}" height="${px * 17 / 16}"><path d="${PLANE}" fill="${c}" stroke="#10151d" stroke-width="0.6" transform="rotate(${Number(f.heading) || 0})"/></svg></span>`
                 + (b ? `<span class="l${b.rechtsbuendig ? ' re' : ''}" style="left:${Math.round(14 + b.dx)}px;top:${Math.round(14 + b.dy)}px;">${fr.esc(fr.cs(f))}${b.kurz ? '' : `<small>${fr.hoehe(f)}</small>`}</span>` : '');
               const m = L.marker([f.latitude, f.longitude], {
                 icon: L.divIcon({ className: 'fr-ic' + (s ? ' sel' : ''), html, iconSize: [28, 28], iconAnchor: [14, 14] }),
@@ -581,7 +593,7 @@ button_card_templates:
               if (pts.length) { const v = pts[pts.length - 1][1]; while (p[1] - v > 180) p[1] -= 360; while (p[1] - v < -180) p[1] += 360; }
               pts.push(p);
             }
-            const c = fr.farbe(f);
+            const c = fr.farbeKarte(f);
             L.polyline(pts, { color: c, weight: 2, opacity: 0.85, dashArray: '6 7', interactive: false }).addTo(fr.zielLayer);
             const b = fr.map.getBounds();
             let pos;
@@ -615,16 +627,16 @@ button_card_templates:
             if (!l.length) return fr.hinweis('Gerade kein Flugzeug im Bereich.');
             const zeilen = l.slice(0, N).map((f, i) => {
               const id = fr.id(f), c = fr.farbe(f), s = f.id === fr.sel;
-              const rand = s ? 'background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);'
-                : 'border:1px solid transparent;' + (i ? 'border-top-color:rgba(255,255,255,0.045);' : '');
+              const rand = s ? 'background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);'
+                : 'border:1px solid transparent;' + (i ? 'border-top-color:var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));' : '');
               const wer = [f.airline_short || f.airline, f.aircraft_code].filter(Boolean).map(fr.esc).join(' · ');
               return `<div role="button" tabindex="0" ${fr.tippAttr(`window.__flugradar.waehle('${id}')`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.waehle('${id}')}" style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;cursor:pointer;${rand}">
                 <span style="width:10px;height:10px;border-radius:4px;background:${c};"></span>
                 <div style="min-width:0;">
-                  <div style="font-size:13.5px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:#8794a5;font-weight:600;">${fr.esc(fr.route(f))}</span> ${fr.vChip(f, true)}</div>
-                  <div style="font-size:12px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
+                  <div style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(fr.cs(f))} <span style="color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;">${fr.esc(fr.route(f))}</span> ${fr.vChip(f, true)}</div>
+                  <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || '–'}</div>
                 </div>
-                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#f2f5f8;white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:#8794a5;font-weight:600;">${fr.hoehe(f)}</span></div>
+                <div style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--owlet-text, #f2f5f8);white-space:nowrap;">${f.distance != null ? fr.de(Math.round(f.distance)) + ' km' : '–'}<span style="display:block;font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;">${fr.hoehe(f)}</span></div>
               </div>`;
             }).join('');
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`
@@ -645,20 +657,20 @@ button_card_templates:
             ev.detail = { source: 'bubble-popup-remove-hash', direct: true };
             window.dispatchEvent(ev);
           };
-          fr.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fr.tippAttr('window.__flugradar.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#b4c0cf;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+          fr.zuKnopf = () => `<button type="button" aria-label="Schließen" ${fr.tippAttr('window.__flugradar.schliesse()')} style="width:40px;height:40px;padding:0;border-radius:12px;border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`;
           // Flug nicht (mehr) in der FR24-Liste, z. B. nach Tippen auf eine aeltere Meldung
           fr.weg = () => {
             const z = fr.zuletzt && fr.zuletzt.id === fr.sel ? fr.zuletzt : { id: fr.sel, cs: '' };
             const link = `https://www.flightradar24.com/${encodeURIComponent(z.cs)}/${encodeURIComponent(z.id)}`;
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">
               <div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
-                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:#6e798829;border:1px solid #6e79883d;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="#6e7988"/></svg></div>
-                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(z.cs || 'Flug')}</div><div style="font-size:12.5px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">nicht mehr im Bereich</div></div>
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, var(--owlet-muted, #6e7988) 16%, transparent);border:1px solid color-mix(in srgb, var(--owlet-muted, #6e7988) 24%, transparent);"><svg viewBox="-8.5 -8.5 17 17" width="26" height="26"><path d="${PLANE}" style="fill:var(--owlet-muted, #6e7988)"/></svg></div>
+                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(z.cs || 'Flug')}</div><div style="font-size:12.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">nicht mehr im Bereich</div></div>
                 ${fr.zuKnopf()}
               </div>
-              <div style="font-size:13px;line-height:1.45;color:#b4c0cf;">Der Flug hat den Bereich der FR24-Integration (50 km um Zuhause) inzwischen verlassen. Live-Daten gibt es hier nur, solange er im Bereich ist.</div>
+              <div style="font-size:13px;line-height:1.45;color:var(--owlet-label, #b4c0cf);">Der Flug hat den Bereich der FR24-Integration (50 km um Zuhause) inzwischen verlassen. Live-Daten gibt es hier nur, solange er im Bereich ist.</div>
               ${z.cs ? `<div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);">Auf Flightradar24 weiterverfolgen</a>
+                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:var(--owlet-blau, #7fb3d5);text-decoration:none;padding:8px 12px;border-radius:12px;background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);">Auf Flightradar24 weiterverfolgen</a>
               </div>` : ''}
             </div>`;
           };
@@ -677,18 +689,18 @@ button_card_templates:
             const nummer = f.flight_number || f.callsign || f.aircraft_registration || '?';
             const kopfUnter = [f.callsign && f.callsign !== nummer ? f.callsign : '', f.airline_short || f.airline].filter(Boolean).map(fr.esc).join(' · ');
             const kopf = `<div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
-                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${c}29;border:1px solid ${c}3d;"><svg viewBox="-8 -8 16 16" width="24" height="24"><path d="${PLANE}" fill="${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
-                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><svg viewBox="-8.5 -8.5 17 17" width="26" height="26"><path d="${PLANE}" style="fill:${c}" transform="rotate(${Number(f.heading) || 0})"/></svg></div>
+                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}</div><div style="font-size:12.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${kopfUnter || '–'}</div></div>
                 ${fr.zuKnopf()}
               </div>`;
-            const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:#1b2231;border:1px solid rgba(255,255,255,0.07);">
+            const bild = foto ? `<div style="position:relative;border-radius:16px;overflow:hidden;aspect-ratio:16/9;background:var(--owlet-huelle-oben, #1b2231);border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">
                 <img src="${fr.esc(foto)}" alt="" loading="lazy" style="display:block;width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display='none'">
                 <span style="position:absolute;left:10px;bottom:7px;font-size:10.5px;color:#f2f5f8;text-shadow:0 1px 3px #000;">Foto: JetPhotos</span></div>` : '';
             const strecke = o || d ? `<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;">
-                <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(o || '?')}</div><div style="font-size:11.5px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${fr.esc(f.airport_origin_city || '')}</div>${ab ? `<div style="font-size:12px;font-weight:700;color:#b4c0cf;">ab ${fr.uhr(ab)}</div>` : ''}</div>
-                <div style="position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,0.1);">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8 -8 16 16" width="16" height="16" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" fill="${c}" transform="rotate(90)"/></svg>` : ''}</div>
-                <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:#b4c0cf;">an ${fr.uhr(an)}</div>` : ''}</div>
-              </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:#8794a5;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">Route unbekannt</span>`;
+                <div style="min-width:0;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);">${fr.esc(o || '?')}</div><div style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${fr.esc(f.airport_origin_city || '')}</div>${ab ? `<div style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">ab ${fr.uhr(ab)}</div>` : ''}</div>
+                <div style="position:relative;height:3px;border-radius:3px;background:color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));">${anteil != null ? `<div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(anteil * 100)}%;border-radius:3px;background:${c};"></div><svg viewBox="-8.5 -8.5 17 17" width="17" height="17" style="position:absolute;top:50%;left:${Math.round(anteil * 100)}%;transform:translate(-50%,-50%);"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>` : ''}</div>
+                <div style="min-width:0;text-align:right;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);">${fr.esc(d || '?')}</div><div style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;margin-left:auto;">${fr.esc(f.airport_destination_city || '')}</div>${an ? `<div style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">an ${fr.uhr(an)}</div>` : ''}</div>
+              </div>` : `<span style="display:inline-flex;align-self:flex-start;font-size:12px;font-weight:700;padding:5px 10px;border-radius:10px;color:var(--owlet-text-sekundaer, #8794a5);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">Route unbekannt</span>`;
             const geraet = [f.aircraft_model || f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
             const extra = ['Kurs ' + (Number(f.heading) || 0) + '°', f.squawk ? 'Squawk ' + fr.esc(f.squawk) : fr.notfall(f) ? 'Notfall laut ADS-B: ' + fr.esc(fr.notfallCode(f)) : '',
               f.closest_distance != null ? 'am nächsten ' + fr.de(Math.round(f.closest_distance * 10) / 10) + ' km' : ''].filter(Boolean).join(' · ');
@@ -701,7 +713,7 @@ button_card_templates:
               ${kopf}
               ${bild}
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
-                <div style="min-width:0;font-size:13px;font-weight:600;color:#b4c0cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${geraet || '–'}</div>
+                <div style="min-width:0;font-size:13px;font-weight:600;color:var(--owlet-label, #b4c0cf);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${geraet || '–'}</div>
                 ${fr.badge(c, fr.band(f), false)}
               </div>
               ${strecke}
@@ -713,10 +725,10 @@ button_card_templates:
                 ${kachel('Steigen', steig, 'ft/min', '')}
                 ${kachel('Entfernung', f.distance != null ? fr.de(Math.round(f.distance * 10) / 10) : '–', 'km ' + fr.himmel(p), bz.w != null ? Math.round(bz.w) + '° über dem Horizont' : 'am Boden')}
               </div>
-              ${bz.cpa ? `<div style="font-size:12.5px;font-weight:700;color:#f2c94c;">Bei gleichem Kurs: ${fr.cpaText(bz)}</div>` : ''}
-              <div style="font-size:12px;color:#8794a5;">${extra}</div>
+              ${bz.cpa ? `<div style="font-size:12.5px;font-weight:700;color:color-mix(in srgb, #f2c94c var(--owlet-dunkel-anteil, 100%), var(--owlet-amber, #e6b566));">Bei gleichem Kurs: ${fr.cpaText(bz)}</div>` : ''}
+              <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${extra}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:#7fb3d5;text-decoration:none;padding:8px 12px;border-radius:12px;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);">Auf Flightradar24 öffnen</a>
+                <a href="${link}" target="_blank" rel="noopener" ${fr.tippAttr('window.open(this.href)')} style="font-size:12.5px;font-weight:700;color:var(--owlet-blau, #7fb3d5);text-decoration:none;padding:8px 12px;border-radius:12px;background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);">Auf Flightradar24 öffnen</a>
               </div>
             </div>`;
           };
@@ -727,20 +739,20 @@ button_card_templates:
             const ist = fr.zustand(eid);
             const knopf = o => {
               const an = o === ist;
-              return `<button type="button" aria-pressed="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_select','select_option',{entity_id:'${eid}',option:'${o}'})`)} style="${F}font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap;color:${an ? '#7fb3d5' : '#8794a5'};background:${an ? 'rgba(127,179,213,0.16)' : 'transparent'};border:1px solid ${an ? 'rgba(127,179,213,0.24)' : 'transparent'};">${fr.esc(o)}</button>`;
+              return `<button type="button" aria-pressed="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_select','select_option',{entity_id:'${eid}',option:'${o}'})`)} style="${F}font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap;color:${an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)'};background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'transparent'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'transparent'};">${fr.esc(o)}</button>`;
             };
-            return `<div ${fr.touchAttr} style="pointer-events:auto;display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);">${optionen.map(knopf).join('')}</div>`;
+            return `<div ${fr.touchAttr} style="pointer-events:auto;display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">${optionen.map(knopf).join('')}</div>`;
           };
           fr.schalter = (eid, titel, text, hinweis) => {
             const an = fr.zustand(eid) === 'on';
-            return `<div role="switch" tabindex="0" aria-checked="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid rgba(255,255,255,0.045);">
+            return `<div role="switch" tabindex="0" aria-checked="${an}" ${fr.tippAttr(`window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__flugradar.dienst('input_boolean','toggle',{entity_id:'${eid}'})}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));">
                 <div style="min-width:0;">
-                  <div style="font-size:13.5px;font-weight:700;color:${an ? '#f2f5f8' : '#b4c0cf'};">${titel}</div>
-                  <div style="font-size:12px;color:#8794a5;">${text}</div>
-                  ${hinweis ? `<div style="font-size:11.5px;font-weight:600;color:#e6b566;margin-top:2px;">${hinweis}</div>` : ''}
+                  <div style="font-size:13.5px;font-weight:700;color:${an ? 'var(--owlet-text, #f2f5f8)' : 'var(--owlet-label, #b4c0cf)'};">${titel}</div>
+                  <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${text}</div>
+                  ${hinweis ? `<div style="font-size:11.5px;font-weight:600;color:var(--owlet-amber, #e6b566);margin-top:2px;">${hinweis}</div>` : ''}
                 </div>
-                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? 'rgba(127,179,213,0.45)' : 'rgba(255,255,255,0.1)'};border:1px solid ${an ? 'rgba(127,179,213,0.5)' : 'rgba(255,255,255,0.08)'};">
-                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? '#f2f5f8' : '#8794a5'};"></span>
+                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 45%, transparent)' : 'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};border:1px solid ${an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 50%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">
+                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? 'color-mix(in srgb, var(--owlet-text, #f2f5f8) var(--owlet-dunkel-anteil, 100%), var(--owlet-flaeche-erhoeht, #222b3c))' : 'var(--owlet-text-sekundaer, #8794a5)'};"></span>
                 </span>
               </div>`;
           };
@@ -787,10 +799,10 @@ button_card_templates:
               const nummer = b.fn || b.cs || '?';
               const kopf = `<div ${jetzt ? fr.tippAttr(`window.__flugradar.waehle('${fr.id(b)}')`) + ' role="button" tabindex="0"' : ''} style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;${jetzt ? 'cursor:pointer;' : ''}">
                   <div style="min-width:0;">
-                    <div style="font-size:14px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}${b.cs && b.cs !== nummer ? ` <span style="color:#8794a5;font-weight:600;">${fr.esc(b.cs)}</span>` : ''} · ${fr.esc(b.al || '')}</div>
-                    <div style="font-size:12px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${route}${b.t ? ' · ' + fr.esc(b.t) : ''}${jetzt ? ' · <span style="color:#7fb3d5;font-weight:700;">jetzt im Bereich ›</span>' : ''}</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nummer)}${b.cs && b.cs !== nummer ? ` <span style="color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;">${fr.esc(b.cs)}</span>` : ''} · ${fr.esc(b.al || '')}</div>
+                    <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${route}${b.t ? ' · ' + fr.esc(b.t) : ''}${jetzt ? ' · <span style="color:var(--owlet-blau, #7fb3d5);font-weight:700;">jetzt im Bereich ›</span>' : ''}</div>
                   </div>
-                  <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#f2f5f8;font-variant-numeric:tabular-nums;white-space:nowrap;">${fr.de(b.k)}<span style="font-size:0.55em;color:#8794a5;font-weight:600;"> km</span></div>
+                  <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${fr.de(b.k)}<span style="font-size:0.55em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;"> km</span></div>
                 </div>`;
               naechst = `${kopf}<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
                   ${fr.kachel('Abstand', fr.de(b.k), 'km', '')}
@@ -812,10 +824,10 @@ button_card_templates:
             return Array.isArray(l) ? l : [];
           };
           fr.kennung = f => f.flight_number || f.callsign || f.aircraft_registration || '';
-          fr.status = f => f.tracked_type === 'schedule' ? ['#8794a5', 'geplant']
-            : f.time_real_arrival || f.has_landed ? ['#a6d49e', 'gelandet']
-            : f.on_ground ? ['#8794a5', 'am Boden']
-            : f.latitude != null ? ['#7fb3d5', 'in der Luft'] : ['#8794a5', 'gesucht'];
+          fr.status = f => f.tracked_type === 'schedule' ? ['var(--owlet-text-sekundaer, #8794a5)', 'geplant']
+            : f.time_real_arrival || f.has_landed ? ['var(--owlet-gruen, #a6d49e)', 'gelandet']
+            : f.on_ground ? ['var(--owlet-text-sekundaer, #8794a5)', 'am Boden']
+            : f.latitude != null ? ['var(--owlet-blau, #7fb3d5)', 'in der Luft'] : ['var(--owlet-text-sekundaer, #8794a5)', 'gesucht'];
           fr.verfolgtListe = () => {
             if (!fr.hass || !fr.hass.states[VERFOLGT]) return fr.hinweis(`${VERFOLGT} fehlt – ist die Integration Flightradar24 eingerichtet?`);
             const l = fr.verfolgt();
@@ -827,18 +839,18 @@ button_card_templates:
               const ort = an ? fr.ortsUhr(an, f.airport_destination_timezone_offset) : null;
               const wer = [f.airline_short || f.airline, f.aircraft_code, f.aircraft_registration].filter(Boolean).map(fr.esc).join(' · ');
               const zeiten = o || d ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;font-variant-numeric:tabular-nums;">
-                  <div style="min-width:0;"><span style="font-size:16px;font-weight:700;color:#f2f5f8;">${fr.esc(o || '?')}</span> <span style="font-size:12px;font-weight:700;color:#b4c0cf;">${ab ? 'ab ' + fr.uhr(ab) : ''}</span></div>
-                  <svg viewBox="-8 -8 16 16" width="14" height="14"><path d="${PLANE}" fill="${c}" transform="rotate(90)"/></svg>
-                  <div style="min-width:0;text-align:right;"><span style="font-size:12px;font-weight:700;color:#b4c0cf;">${an ? 'an ' + fr.uhr(an) : ''}</span> <span style="font-size:16px;font-weight:700;color:#f2f5f8;">${fr.esc(d || '?')}</span>${ort ? `<div style="font-size:11px;color:#8794a5;">${ort} Ortszeit</div>` : ''}</div>
+                  <div style="min-width:0;"><span style="font-size:16px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${fr.esc(o || '?')}</span> <span style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">${ab ? 'ab ' + fr.uhr(ab) : ''}</span></div>
+                  <svg viewBox="-8.5 -8.5 17 17" width="15" height="15"><path d="${PLANE}" style="fill:${c}" transform="rotate(90)"/></svg>
+                  <div style="min-width:0;text-align:right;"><span style="font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);">${an ? 'an ' + fr.uhr(an) : ''}</span> <span style="font-size:16px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${fr.esc(d || '?')}</span>${ort ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);">${ort} Ortszeit</div>` : ''}</div>
                 </div>` : '';
-              return `<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">
+              return `<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));">
                   <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;">
                     <div style="min-width:0;">
-                      <div style="font-size:14px;font-weight:700;color:#f2f5f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nr || '?')} ${fr.vChip(f, true)}</div>
-                      <div style="font-size:12px;color:#8794a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || (f.airport_origin_city || f.airport_destination_city ? fr.esc(f.airport_origin_city || '?') + ' → ' + fr.esc(f.airport_destination_city || '?') : '–')}</div>
+                      <div style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fr.esc(nr || '?')} ${fr.vChip(f, true)}</div>
+                      <div style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wer || (f.airport_origin_city || f.airport_destination_city ? fr.esc(f.airport_origin_city || '?') + ' → ' + fr.esc(f.airport_destination_city || '?') : '–')}</div>
                     </div>
                     ${fr.chip(c, t)}
-                    <button type="button" aria-label="Nicht mehr verfolgen" ${fr.tippAttr(`window.__flugradar.entferne('${fr.esc(nr).replace(/[^A-Za-z0-9-]/g, '')}')`)} style="width:32px;height:32px;padding:0;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#b4c0cf;display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+                    <button type="button" aria-label="Nicht mehr verfolgen" ${fr.tippAttr(`window.__flugradar.entferne('${fr.esc(nr).replace(/[^A-Za-z0-9-]/g, '')}')`)} style="width:32px;height:32px;padding:0;border-radius:10px;border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
                   </div>
                   ${zeiten}
                 </div>`;
@@ -848,29 +860,29 @@ button_card_templates:
           fr.EINGABE = `<div data-fr-eingabe ${fr.touchAttr} style="${F}pointer-events:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;">
               <input type="text" placeholder="LH400 / DLH400 / D-AIXP" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="12"
                 onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__flugradar.verfolge(this)}" onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
-                style="${F}min-width:0;font-size:16px;font-weight:600;color:#f2f5f8;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px 12px;outline:none;text-transform:uppercase;">
-              <button type="button" ${fr.tippAttr('window.__flugradar.verfolge(this)')} style="${F}font-size:13px;font-weight:700;color:#7fb3d5;background:rgba(127,179,213,0.12);border:1px solid rgba(127,179,213,0.24);border-radius:12px;padding:0 14px;cursor:pointer;">Verfolgen</button>
-              <div data-fr-status style="grid-column:1/-1;white-space:normal;font-size:12px;color:#8794a5;min-height:16px;"></div>
+                style="${F}min-width:0;font-size:16px;font-weight:600;color:var(--owlet-text, #f2f5f8);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));border-radius:12px;padding:9px 12px;outline:none;text-transform:uppercase;">
+              <button type="button" ${fr.tippAttr('window.__flugradar.verfolge(this)')} style="${F}font-size:13px;font-weight:700;color:var(--owlet-blau, #7fb3d5);background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);border-radius:12px;padding:0 14px;cursor:pointer;">Verfolgen</button>
+              <div data-fr-status style="grid-column:1/-1;white-space:normal;font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);min-height:16px;"></div>
             </div>`;
           fr.gefunden = v => fr.verfolgt().some(f => [f.flight_number, f.callsign, f.aircraft_registration].some(x => x && String(x).toUpperCase() === v));
           fr.verfolge = el => {
             const box = el.closest('[data-fr-eingabe]'), inp = box.querySelector('input'), st = box.querySelector('[data-fr-status]');
             const v = (inp.value || '').trim().toUpperCase().replace(/\s+/g, '');
             const melde = (c, t) => { st.style.color = c; st.textContent = t; };
-            if (!/^[A-Z0-9-]{2,12}$/.test(v)) { melde('#e6b566', 'Flugnummer, Callsign oder Kennzeichen eingeben (z. B. LH400).'); inp.focus(); return; }
-            if (fr.gefunden(v)) { melde('#8794a5', v + ' wird schon verfolgt.'); return; }
-            melde('#8794a5', 'Suche ' + v + ' …');
+            if (!/^[A-Z0-9-]{2,12}$/.test(v)) { melde('var(--owlet-amber, #e6b566)', 'Flugnummer, Callsign oder Kennzeichen eingeben (z. B. LH400).'); inp.focus(); return; }
+            if (fr.gefunden(v)) { melde('var(--owlet-text-sekundaer, #8794a5)', v + ' wird schon verfolgt.'); return; }
+            melde('var(--owlet-text-sekundaer, #8794a5)', 'Suche ' + v + ' …');
             // Die Integration sucht innerhalb von text.set_value; der Sensor ist danach aktualisiert,
             // im Browser kommt der neue Zustand aber erst kurz darauf an.
             fr.hass.callService('text', 'set_value', { entity_id: 'text.flightradar24_add_to_track', value: v }).then(() => {
               let n = 0;
               const pruefe = () => {
-                if (fr.gefunden(v)) { melde('#a6d49e', v + ' wird verfolgt.'); inp.value = ''; return; }
+                if (fr.gefunden(v)) { melde('var(--owlet-gruen, #a6d49e)', v + ' wird verfolgt.'); inp.value = ''; return; }
                 if (++n < 8) { setTimeout(pruefe, 500); return; }
-                melde('#e6b566', 'Kein Flug „' + v + '“ gefunden. Flugnummer (LH400), Callsign (DLH400) oder Kennzeichen (D-AIXP) prüfen.');
+                melde('var(--owlet-amber, #e6b566)', 'Kein Flug „' + v + '“ gefunden. Flugnummer (LH400), Callsign (DLH400) oder Kennzeichen (D-AIXP) prüfen.');
               };
               setTimeout(pruefe, 300);
-            }).catch(e => melde('#f0736a', 'Fehler: ' + (e && e.message ? e.message : e)));
+            }).catch(e => melde('var(--owlet-rot, #f0736a)', 'Fehler: ' + (e && e.message ? e.message : e)));
           };
           fr.entferne = nr => { if (nr) fr.dienst('text', 'set_value', { entity_id: 'text.flightradar24_remove_from_track', value: nr }); };
 
@@ -900,14 +912,15 @@ button_card_templates:
       icon:
       - width: 23px
       - height: 23px
-      - color: '#7fb3d5'
+      - color: 'var(--owlet-blau, #7fb3d5)'
+      - --ha-icon-display: block
       name:
       - justify-self: start
       - align-self: end
       - font-size: 17px
       - font-weight: 700
       - letter-spacing: -0.02em
-      - color: '#f2f5f8'
+      - color: 'var(--owlet-text, #f2f5f8)'
       - max-width: 100%
       card:
       - background: none
@@ -923,7 +936,7 @@ button_card_templates:
         - align-self: start
         - font-size: 12.5px
         - line-height: 1.35
-        - color: '#8794a5'
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
         - margin-top: 1px
         - text-align: left
         - white-space: normal
@@ -942,8 +955,8 @@ button_card_templates:
       - border-radius: 13px
       - margin-right: 14px
       - align-self: center
-      - background: rgba(127, 179, 213, 0.12)
-      - border: 1px solid rgba(127, 179, 213, 0.24)
+      - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+      - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
 
   flug_inhalt:
     template: flug_daten
@@ -987,7 +1000,7 @@ button_card_templates:
       badge: |
         [[[
           const fr = variables.fr, n = fr.flights().length;
-          return fr.badge('#7fb3d5', n === 1 ? '1 Flug' : n + ' Flüge', n > 0);
+          return fr.badge('var(--owlet-blau, #7fb3d5)', n === 1 ? '1 Flug' : n + ' Flüge', n > 0);
         ]]]
 
   flug_karte:
@@ -1000,8 +1013,8 @@ button_card_templates:
           const leg = [['#e6b566', 'unter 1.500 m'], ['#77d4d0', '1.500–7.500 m'], ['#7fb3d5', 'Reiseflug'], ['#b399d4', 'Sonderflug'], ['#8794a5', 'am Boden']]
             .map(([c, t]) => `<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:${c};display:inline-block;"></i>${t}</span>`).join('')
             + '<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:8px;height:8px;border-radius:3px;background:#7fb3d5;box-shadow:0 0 4px 1px #f2c94c;display:inline-block;"></i>seltener Typ (größer, leuchtend)</span>';
-          return `<div data-fr-host style="width:100%;height:380px;border-radius:16px;border:1px solid rgba(255,255,255,0.07);background:#171d29;overflow:hidden;"></div>`
-            + `<div style="${fr.F}display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:#8794a5;margin-top:10px;">${leg}</div>`;
+          return `<div data-fr-host style="width:100%;height:380px;border-radius:16px;border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));background:#171d29;overflow:hidden;"></div>`
+            + `<div style="${fr.F}display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);margin-top:10px;">${leg}</div>`;
         ]]]
 
   # ======================= Liste (E2) =======================
@@ -1014,7 +1027,7 @@ button_card_templates:
       badge: |
         [[[
           const fr = variables.fr;
-          return fr.badge('#8794a5', String(fr.flights().length), false);
+          return fr.badge('var(--owlet-text-sekundaer, #8794a5)', String(fr.flights().length), false);
         ]]]
 
   flug_liste:
@@ -1069,7 +1082,7 @@ button_card_templates:
       badge: |
         [[[
           const fr = variables.fr, n = parseFloat(fr.zustand('counter.flug_heute'));
-          return isNaN(n) ? '' : fr.badge('#7fb3d5', fr.de(n) + (n === 1 ? ' Flug' : ' Flüge'), false);
+          return isNaN(n) ? '' : fr.badge('var(--owlet-blau, #7fb3d5)', fr.de(n) + (n === 1 ? ' Flug' : ' Flüge'), false);
         ]]]
 
   flug_heute:
@@ -1101,7 +1114,7 @@ button_card_templates:
       badge: |
         [[[
           const fr = variables.fr, n = fr.meldungenAn();
-          return fr.badge(n ? '#7fb3d5' : '#8794a5', `${n} von ${fr.MELDUNGEN.length} an`, false);
+          return fr.badge(n ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-text-sekundaer, #8794a5)', `${n} von ${fr.MELDUNGEN.length} an`, false);
         ]]]
 
   flug_meldungen:
@@ -1129,7 +1142,7 @@ button_card_templates:
       badge: |
         [[[
           const fr = variables.fr, n = fr.verfolgt().length;
-          return n ? fr.badge('#7fb3d5', String(n), false) : '';
+          return n ? fr.badge('var(--owlet-blau, #7fb3d5)', String(n), false) : '';
         ]]]
 
   # Zwei Felder: "liste" wird neu gezeichnet, "eingabe" ist konstant (fr.EINGABE), damit
