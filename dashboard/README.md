@@ -12,7 +12,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`navigation-templates.yaml`](allgemein/navigation-templates.yaml) | templates | Navigation – Decluttering-Templates top_navigation und floating_navbar | button-card, navbar-card | – | aktiv |
 | [`owlet-theme-konfig.yaml`](allgemein/owlet-theme-konfig.yaml) | konfig | Owlet-Theme – Farben fuer den hellen und den dunklen Modus | – | – | aktiv |
 | [`top-navigation-karte.yaml`](allgemein/top-navigation-karte.yaml) | karte | Top-Navigation – Launcher-Raster | button-card | – | aktiv |
-| [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | – | aktiv |
+| [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | `weather.wohnort` | aktiv |
+| [`banner-hell.html`](allgemein/entwuerfe/banner-hell.html) | entwurf | Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung | – | – | Entwurf zu `welcome-banner-karte.yaml` |
 | [`home-kacheln.html`](allgemein/entwuerfe/home-kacheln.html) | entwurf | Kachel-Vorschlaege fuer die Home-Ansicht | – | – | Entwurf |
 
 ## energie
@@ -38,11 +39,11 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`heizung-templates.yaml`](klima/heizung-templates.yaml) | templates | Heizungs-Animation – button-card-Template owlet_heizung_fx | – | – | aktiv |
-| [`meteoalarm-karte.yaml`](klima/meteoalarm-karte.yaml) | karte | DWD-Wetterwarnung | button-card | – | aktiv |
+| [`meteoalarm-karte.yaml`](klima/meteoalarm-karte.yaml) | karte | DWD-Wetterwarnung | button-card | `sensor.warnregion_*` | aktiv |
 | [`pollenflug-karte.yaml`](klima/pollenflug-karte.yaml) | karte | Pollenflug-Index | button-card | – | aktiv |
 | [`temperaturen-karte-v2.yaml`](klima/temperaturen-karte-v2.yaml) | karte | Temperaturen v2 – Raumliste mit 24-h-Sparkline | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
-| [`wetter-karte.yaml`](klima/wetter-karte.yaml) | karte | Wetter – animierte Szene, Kennzahlen, Vorhersage | button-card | – | aktiv |
+| [`wetter-karte.yaml`](klima/wetter-karte.yaml) | karte | Wetter – animierte Szene, Kennzahlen, Vorhersage | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template owlet_wetter_fx | – | – | aktiv |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
 | [`temperaturen-karte.yaml`](klima/archiv/temperaturen-karte.yaml) | karte | Raum-Temperaturen v1 | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | archiv, ersetzt durch `temperaturen-karte-v2.yaml` |

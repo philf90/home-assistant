@@ -24,7 +24,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 <!-- index:start -->
 | Bereich | Aktuelle Dateien | `archiv/` | `entwuerfe/` |
 |---|---|---|---|
-| [`allgemein/`](dashboard/allgemein/) | `navbar-karte.yaml`, `navigation-templates.yaml`, `owlet-theme-konfig.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `home-kacheln.html` |
+| [`allgemein/`](dashboard/allgemein/) | `navbar-karte.yaml`, `navigation-templates.yaml`, `owlet-theme-konfig.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `banner-hell.html`, `home-kacheln.html` |
 | [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energie-zaehler-karte.yaml` | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` |
 | [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `wetter-karte.yaml`, `wetter-templates.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml` | `wetter-animiert.html` |
 | [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `fenster-lichter-uebersicht-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | – | – |
@@ -169,6 +169,8 @@ daraus und aus den Kopfblöcken erzeugt.
 | `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml` |
 | `ieee_adresse` | IEEE-Adresse des Zigbee-Geräts (`0x…`), solange die Entity nicht umbenannt ist | Einstellungen → Geräte & Dienste → Zigbee-Integration → Gerät | `pflanzen-view.yaml`; in `archiv/`: `pflanzen-flower-karte.yaml` |
 | `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `fenster-lichter-uebersicht-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `temperaturen-karte.yaml` |
+| `weather.wohnort` | Wetter-Entity des Wohnorts (Vorhersage, Bedingung fürs Icon) | Einstellungen → Geräte & Dienste → Deutscher Wetterdienst (HACS, `dwd_weather`) → Station → Entität `weather.*` | `welcome-banner-karte.yaml`, `wetter-karte.yaml` |
+| `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml` |
 <!-- platzhalter:end -->
 
 Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
