@@ -1,0 +1,311 @@
+# ============================================================================
+# Fussball – Meldungen zum Lieblingsverein (Helfer, Skript, Automation)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       fussball
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder Skript und Automation einzeln im YAML-Editor der UI)
+# Platzhalter:   notify.mobile_app_iphone
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Meldungen aufs Handy zu Spielen des Lieblingsvereins, je Ereignis
+# schaltbar ueber die Karte "Meldungen" in fussball-view.yaml. Was gemeldet
+# wird und wie die ESPN-Ereignistypen gemessen wurden, steht im Kopf von
+# fussball-view.yaml (Abschnitt "MELDUNGEN ZUM LIEBLINGSVEREIN").
+#
+# Inhalt:
+#   input_boolean.fussball_meldung_anpfiff, _wechsel, _tore, _elfmeter,
+#     _platzverweis                       Schalter je Ereignis (Karte)
+#   input_text.fussball_meldung_stand     Merker der Automation (JSON:
+#                                         e Event-ID, l Liga, a Anstoss,
+#                                         z Status, m hoechste gemeldete ID)
+#   script.fussball_meldungen_auswerten   holt die Spieldetails, meldet neue
+#                                         Ereignisse, gibt den Stand zurueck
+#   automation "Fussball: Meldungen"      sucht stuendlich (xx:05:30) und beim
+#                                         Start das Spiel des Tages und ruft
+#                                         von 5 min vor bis 4 h nach Anstoss
+#                                         jede Minute das Skript auf
+#
+# Anpassen:
+#   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter, siehe oben)
+#   - variables.verein: ESPN-Team-ID des Vereins als Text (1. FC
+#     Kaiserslautern = "130"); steht im Scoreboard eines Spieltags unter
+#     events[].competitions[0].competitors[].team.id
+#   - variables.ligen: ESPN-Ligapfade, in denen gesucht wird ("ger.1",
+#     "ger.2"); nach einem Auf- oder Abstieg anpassen
+#   - /dashboard-home/fussball: Pfad, den das Tippen auf die Meldung oeffnet
+#
+# Einbinden als Paket in configuration.yaml:
+#   homeassistant:
+#     packages:
+#       fussball_meldungen: !include fussball-meldungen-konfig.yaml
+# Danach Home Assistant neu starten oder unter Entwicklerwerkzeuge -> YAML
+# Eingabe-Booleans, Eingabetexte, Skripte und Automationen neu laden.
+#
+# Achtung bei bestehenden Fassungen aus der UI: Gibt es Helfer, Skript oder
+# Automation mit denselben IDs schon (Einstellungen -> Geraete & Dienste ->
+# Helfer bzw. Automationen & Szenen), diese vorher loeschen. Sonst
+# kollidieren Helfer und Skript, und die Automation laeuft zweimal (die
+# UI-Fassung hat eine andere id), jede Meldung kaeme doppelt.
+# Ohne Paket: Helfer in der UI anlegen (Namen und Icons wie unten), dann
+# Skript und Automation einzeln einfuegen (Neues Skript bzw. Neue
+# Automation -> Drei-Punkte-Menue -> In YAML bearbeiten). Einzufuegen ist
+# beim Skript alles unter "fussball_meldungen_auswerten:", bei der
+# Automation der Listeneintrag ohne "- " (ohne id, die vergibt die UI).
+#
+# Voraussetzung: Paket fussball-espn-konfig.yaml (rest_command.espn_fussball),
+#                Home Assistant Companion App fuer die Meldungen.
+
+input_boolean:
+  fussball_meldung_anpfiff:
+    name: Fussball Meldung Anpfiff
+    icon: mdi:whistle
+  fussball_meldung_wechsel:
+    name: Fussball Meldung Wechsel
+    icon: mdi:swap-vertical
+  fussball_meldung_tore:
+    name: Fussball Meldung Tore
+    icon: mdi:soccer
+  fussball_meldung_elfmeter:
+    name: Fussball Meldung Elfmeter
+    icon: mdi:target
+  fussball_meldung_platzverweis:
+    name: Fussball Meldung Platzverweis
+    icon: mdi:cards
+
+input_text:
+  fussball_meldung_stand:
+    name: Fussball Meldung Stand
+    icon: mdi:database-clock-outline
+    max: 255
+
+script:
+  fussball_meldungen_auswerten:
+    alias: 'Fussball: Meldungen auswerten'
+    description: 'Fussball-View, Meldungen zum Lieblingsverein: holt die ESPN-Spieldetails (rest_command.espn_fussball, Paket fussball-espn-konfig.yaml) eines Spiels und erzeugt Meldungen fuer alle Ereignisse mit einer ID ueber stand.m, je nach Schalter input_boolean.fussball_meldung_*. Anpfiff/Abpfiff aus dem Spielstatus (pre/in/post). Gelb-Rot = Rot (93) nach Gelb (94) desselben Spielers; verschossener Elfmeter 113, gehalten 174 in derselben Minute; Eigentor 97 traegt den beguenstigten Verein. Mit senden: false nur Rueckgabe (Test). Gibt den neuen Stand zurueck; gespeichert wird er von der Automation.'
+    mode: queued
+    max: 3
+    fields:
+      liga:
+        name: Liga (ESPN)
+        required: true
+        selector:
+          text: {}
+      event:
+        name: ESPN-Event-ID
+        required: true
+        selector:
+          text: {}
+      stand:
+        name: Stand
+        required: true
+        selector:
+          object: {}
+      senden:
+        default: true
+        name: Senden
+        selector:
+          boolean: {}
+      alle:
+        default: false
+        name: Alle Ereignisse (Test)
+        selector:
+          boolean: {}
+    sequence:
+    - action: rest_command.espn_fussball
+      continue_on_error: true
+      data:
+        pfad: '{{ liga }}/summary?event={{ event }}'
+      response_variable: r
+    - if:
+      - condition: template
+        value_template: '{{ r is not defined or r.status != 200 or r.content is not mapping or r.content.header is not defined }}'
+      then:
+      - variables:
+          antwort: '{{ {''fehler'': ''ESPN '' ~ (r.status if r is defined else ''ohne Antwort''), ''stand'': stand} }}'
+      - response_variable: antwort
+        stop: ESPN nicht erreichbar
+    - variables:
+        k: '{{ r.content.header.competitions[0] }}'
+        ev: '{{ r.content.keyEvents | default([]) }}'
+        init: '{{ (stand.m | default(0) | int(0)) < 0 }}'
+    - variables:
+        zust: '{{ k.status.type.state }}'
+        heim: '{{ k.competitors | selectattr(''homeAway'', ''eq'', ''home'') | first }}'
+        gast: '{{ k.competitors | selectattr(''homeAway'', ''eq'', ''away'') | first }}'
+        max_id: '{{ ev | map(attribute=''id'') | map(''int'', 0) | max if ev | count > 0 else 0 }}'
+        schalter: '{% set a = alle | default(false) %}{{ {''anpfiff'': (a or is_state(''input_boolean.fussball_meldung_anpfiff'', ''on'')), ''wechsel'': (a or is_state(''input_boolean.fussball_meldung_wechsel'', ''on'')), ''tore'': (a or is_state(''input_boolean.fussball_meldung_tore'', ''on'')), ''elfmeter'': (a or is_state(''input_boolean.fussball_meldung_elfmeter'', ''on'')), ''platzverweis'': (a or is_state(''input_boolean.fussball_meldung_platzverweis'', ''on''))} }}'
+    - variables:
+        m_alt: '{{ max_id if init else stand.m | default(0) | int(0) }}'
+        z_alt: '{{ zust if init else stand.z | default(''pre'') }}'
+    - variables:
+        meldungen: |-
+          {%- set hid = heim.team.id -%}{%- set ha = heim.team.abbreviation -%}{%- set ga = gast.team.abbreviation -%}
+          {%- set hn = heim.team.displayName -%}{%- set gn = gast.team.displayName -%}
+          {%- set ns = namespace(h=0, g=0, l=[], gelb=[]) -%}
+          {%- if z_alt == 'pre' and zust != 'pre' and schalter.anpfiff -%}
+            {%- set ns.l = ns.l + [{'titel': 'Anpfiff: ' ~ ha ~ ' – ' ~ ga, 'text': hn ~ ' gegen ' ~ gn}] -%}
+          {%- endif -%}
+          {%- for e in ev -%}
+            {%- set typ = e.type.id | string -%}
+            {%- set teil = e.participants | default([]) -%}
+            {%- set wer = teil[0].athlete.displayName if teil | count > 0 else '?' -%}
+            {%- set team = e.team.displayName if e.team is defined else '' -%}
+            {%- set min = e.clock.displayValue if e.clock is defined else '' -%}
+            {%- if typ in ['70', '97', '98'] and e.team is defined -%}
+              {%- if e.team.id == hid -%}{%- set ns.h = ns.h + 1 -%}{%- else -%}{%- set ns.g = ns.g + 1 -%}{%- endif -%}
+            {%- endif -%}
+            {%- set titel = ha ~ ' ' ~ ns.h ~ ':' ~ ns.g ~ ' ' ~ ga -%}
+            {%- if (e.id | int(0)) > m_alt -%}
+              {%- set text = '' -%}
+              {%- if typ == '70' and schalter.tore -%}
+                {%- set text = 'Tor für ' ~ team ~ ': ' ~ wer ~ ' (' ~ min ~ ')' -%}
+              {%- elif typ == '98' and (schalter.tore or schalter.elfmeter) -%}
+                {%- set text = 'Tor für ' ~ team ~ ': ' ~ wer ~ ' per Elfmeter (' ~ min ~ ')' -%}
+              {%- elif typ == '97' and schalter.tore -%}
+                {%- set text = 'Eigentor von ' ~ wer ~ ', Tor für ' ~ team ~ ' (' ~ min ~ ')' -%}
+              {%- elif typ == '113' and schalter.elfmeter -%}
+                {%- set geh = ev | selectattr('type.id', 'eq', '174') | selectattr('clock.displayValue', 'eq', min) | list -%}
+                {%- set tw = geh[0].participants[0].athlete.displayName if geh | count > 0 and geh[0].participants | default([]) | count > 0 else '' -%}
+                {%- set text = 'Elfmeter verschossen: ' ~ wer ~ ' (' ~ team ~ ', ' ~ min ~ ')' ~ (', gehalten von ' ~ tw if tw else '') -%}
+              {%- elif typ == '93' and schalter.platzverweis -%}
+                {%- set text = ('Gelb-Rot' if wer in ns.gelb else 'Rot') ~ ' für ' ~ wer ~ ' (' ~ team ~ ', ' ~ min ~ ')' -%}
+              {%- elif typ == '76' and schalter.wechsel -%}
+                {%- set raus = teil[1].athlete.displayName if teil | count > 1 else '' -%}
+                {%- set text = 'Wechsel ' ~ team ~ ' (' ~ min ~ '): ' ~ wer ~ (' kommt für ' ~ raus if raus else '') -%}
+              {%- endif -%}
+              {%- if text -%}{%- set ns.l = ns.l + [{'titel': titel, 'text': text}] -%}{%- endif -%}
+            {%- endif -%}
+            {%- if typ == '94' -%}{%- set ns.gelb = ns.gelb + [wer] -%}{%- endif -%}
+          {%- endfor -%}
+          {%- if z_alt != 'post' and zust == 'post' and schalter.anpfiff -%}
+            {%- set ns.l = ns.l + [{'titel': 'Abpfiff: ' ~ ha ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ ga, 'text': 'Endstand · ' ~ hn ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ gn}] -%}
+          {%- endif -%}
+          {{ ns.l }}
+    - if:
+      - condition: template
+        value_template: '{{ senden | default(true) }}'
+      then:
+      - repeat:
+          for_each: '{{ meldungen }}'
+          sequence:
+          - action: notify.mobile_app_iphone
+            continue_on_error: true
+            data:
+              data:
+                clickAction: /dashboard-home/fussball
+                group: fussball
+                url: /dashboard-home/fussball
+              message: '{{ repeat.item.text }}'
+              title: '{{ repeat.item.titel }}'
+    - variables:
+        antwort: '{{ {''stand'': dict(stand, z=zust, m=[max_id, m_alt] | max), ''zustand'': zust, ''meldungen'': meldungen} }}'
+    - response_variable: antwort
+      stop: fertig
+    trace:
+      stored_traces: 2
+
+automation:
+- id: fussball_meldungen
+  alias: 'Fussball: Meldungen'
+  description: 'Fussball-View, Meldungen zum Lieblingsverein (ESPN-Team-ID in variables.verein, 1. FC Kaiserslautern = 130; ESPN-Ligapfade in variables.ligen). Stuendlich (xx:05:30) und beim Start: Spiel des Tages ueber rest_command.espn_fussball (scoreboard?dates=JJJJMMTT, UTC) suchen und in input_text.fussball_meldung_stand merken (e Event-ID, l Liga, a Anstoss, z Status, m hoechste gemeldete Ereignis-ID; m -1 = mitten im Spiel gefunden, Rueckstand nicht melden). Von 5 min vor bis 4 h nach Anstoss jede Minute script.fussball_meldungen_auswerten aufrufen (meldet neue Ereignisse je nach input_boolean.fussball_meldung_*) und den Stand speichern; nach Abpfiff (z post) Ruhe. Ausserhalb dieser Zeiten loest die Automation nicht aus.'
+  mode: single
+  max_exceeded: silent
+  variables:
+    ligen:
+    - ger.2
+    verein: '130'
+  triggers:
+  - id: suche
+    minutes: '5'
+    seconds: '30'
+    trigger: time_pattern
+  - event: start
+    id: suche
+    trigger: homeassistant
+  - id: takt
+    minutes: /1
+    trigger: time_pattern
+  conditions:
+  - condition: or
+    conditions:
+    - condition: state
+      entity_id: input_boolean.fussball_meldung_anpfiff
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.fussball_meldung_wechsel
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.fussball_meldung_tore
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.fussball_meldung_elfmeter
+      state: 'on'
+    - condition: state
+      entity_id: input_boolean.fussball_meldung_platzverweis
+      state: 'on'
+  - condition: or
+    conditions:
+    - condition: trigger
+      id: suche
+    - condition: template
+      value_template: '{% set r = states(''input_text.fussball_meldung_stand'') %}{% set s = r | from_json if r[:1] == ''{'' else {} %}{% set t = now().timestamp() | int %}{{ s.e is defined and s.z | default('''') != ''post'' and t >= (s.a | int(0)) - 300 and t <= (s.a | int(0)) + 14400 }}'
+  actions:
+  - variables:
+      roh: '{{ states(''input_text.fussball_meldung_stand'') }}'
+  - variables:
+      st: '{{ roh | from_json if roh[:1] == ''{'' else {} }}'
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: suche
+      sequence:
+      - variables:
+          fund: {}
+      - repeat:
+          for_each: '{{ ligen }}'
+          sequence:
+          - action: rest_command.espn_fussball
+            continue_on_error: true
+            data:
+              pfad: '{{ repeat.item }}/scoreboard?dates={{ utcnow().strftime(''%Y%m%d'') }}'
+            response_variable: sb
+          - variables:
+              fund: '{% set ns = namespace(f=fund) %}{% if sb is defined and sb.status == 200 and sb.content is mapping %}{% for e in sb.content.events | default([]) %}{% if verein in (e.competitions[0].competitors | map(attribute=''team.id'') | list) %}{% set ns.f = {''e'': e.id, ''l'': repeat.item, ''a'': as_timestamp(e.date) | int, ''z'': e.status.type.state} %}{% endif %}{% endfor %}{% endif %}{{ ns.f }}'
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ fund.e is defined and fund.e != st.e | default('''') }}'
+          sequence:
+          - action: input_text.set_value
+            data:
+              value: '{{ dict(fund, m=(0 if fund.z == ''pre'' else -1)) | to_json }}'
+            target:
+              entity_id: input_text.fussball_meldung_stand
+        - conditions:
+          - condition: template
+            value_template: '{{ fund.e is defined and fund.a != st.a | default(0) }}'
+          sequence:
+          - action: input_text.set_value
+            data:
+              value: '{{ dict(st, a=fund.a) | to_json }}'
+            target:
+              entity_id: input_text.fussball_meldung_stand
+    default:
+    - action: script.fussball_meldungen_auswerten
+      continue_on_error: true
+      data:
+        event: '{{ st.e }}'
+        liga: '{{ st.l }}'
+        stand: '{{ st }}'
+      response_variable: erg
+    - if:
+      - condition: template
+        value_template: '{{ erg is defined and erg.stand is defined and (erg.stand | to_json) != roh }}'
+      then:
+      - action: input_text.set_value
+        data:
+          value: '{{ erg.stand | to_json }}'
+        target:
+          entity_id: input_text.fussball_meldung_stand
