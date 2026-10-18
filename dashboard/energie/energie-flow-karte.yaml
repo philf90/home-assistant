@@ -51,9 +51,10 @@
 # FARBEN nach DESIGN.md: Hausgeraete und Heizluefter #e6b566, Server/Pool
 # #7fd0d5, PoE, Schreibtisch und PC #b399d4 (Geraete), TV und Klima #7fb3d5,
 # Garten #bdd27f, Heizung #79b8c9, Sonstige neutral. Netzbezug rot,
-# Einspeisung/Autark Mint, PV Sonnengelb (Leitung, Ring, Balken und Icon
-# owlet-sonnengelb-grafik, Schrift owlet-sonnengelb), Akku-Entladung blau,
-# -Ladung gruen. Akku am SOC-Minimum ohne Leistung: Amber + "Reserve", rot
+# Einspeisung/Autark Mint, PV Sonnengelb (Leitung, Ring und Icon
+# owlet-sonnengelb-grafik, Schrift owlet-sonnengelb; wo PV an Rot stoesst,
+# im Hausring und im Tagesbalken, hellgelbe Flaeche PVF mit Rand im
+# Grafik-Ton), Akku-Entladung blau, -Ladung gruen. Akku am SOC-Minimum ohne Leistung: Amber + "Reserve", rot
 # nur darunter. Solar nachts: Mond in Indigo.
 #
 # KLICKBARKEIT: Quellen + Haus (feste Positionen) per transparenter
@@ -215,6 +216,7 @@ cards:
 
               const C={yel:'var(--owlet-sonnengelb-grafik, #e6c15a)',yelT:'var(--owlet-sonnengelb, #e6c15a)',grn:'var(--owlet-gruen, #a6d49e)',red:'var(--owlet-rot, #f0736a)',blu:'var(--owlet-blau, #7fb3d5)',mint:'var(--owlet-mint, #89d2b0)',amb:'var(--owlet-amber, #e6b566)',ind:'var(--owlet-indigo, #8ea2e6)',
                        txt:'var(--owlet-text, #f2f5f8)',lab:'var(--owlet-label, #b4c0cf)',mut:'var(--owlet-text-sekundaer, #8794a5)',deco:'var(--owlet-muted, #6e7988)'};
+              const PVF='#e6c15a';   // Fuellung: PV-Flaeche neben Rot, in beiden Modi hellgelb
               const tint=(c,p)=>`color-mix(in srgb, ${c} ${p}%, transparent)`;
               const SPEED=[16,26,36,48,60,74];   // px/s je Stufe
               const nrm=(w)=>{ const a=Math.abs(w)||0; return Math.max(0,Math.min(1,Math.log10(1+a/10)/Math.log10(301))); };
@@ -358,10 +360,10 @@ cards:
 
               // Haus mit Quellenmix-Ring
               nodes+=`<circle cx="${hx}" cy="${hy}" r="${hr}" style="fill:${tint(C.blu,12)};stroke:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))" stroke-width="4"/>`;
-              const segs=[[sPv,C.yel],[sDis,C.blu],[sImp,C.red]].filter(s=>s[0]>0);
+              const segs=[[sPv,C.yel,PVF],[sDis,C.blu],[sImp,C.red]].filter(s=>s[0]>0);
               const tot=segs.reduce((a,s)=>a+s[0],0)||1, gap=segs.length>1?0.012:0;
               let off=0;
-              segs.forEach(s=>{ const f=s[0]/tot; nodes+=arc(hx,hy,hr,Math.max(0,f-gap),s[1],4,off+gap/2); off+=f; });
+              segs.forEach(s=>{ const f=s[0]/tot; nodes+=arc(hx,hy,hr,Math.max(0,f-gap),s[1],4,off+gap/2); if(s[2]) nodes+=arc(hx,hy,hr,Math.max(0,f-gap),s[2],2,off+gap/2); off+=f; });
               nodes+=ico(I.home,hx,hy-11,C.blu,1.2)+T(hx,hy+15,fmt(haus),15);
 
               // Namen: in der viewBox halten und Ueberlappungen auseinanderschieben
@@ -445,15 +447,15 @@ cards:
           const kwh=(x)=>isNaN(x)?'–':x.toFixed(2).replace('.',',')+' kWh';
           const all=[
             [grid,                                                 'var(--owlet-rot, #f0736a)', 'Netz'],
-            [g('sensor.pv_anlage_tagliche_pv_hausabgabe'),   'var(--owlet-sonnengelb-grafik, #e6c15a)', 'PV'],
+            [g('sensor.pv_anlage_tagliche_pv_hausabgabe'),   '#e6c15a', 'PV', 'var(--owlet-sonnengelb-grafik, #e6c15a)'],
             [g('sensor.pv_anlage_tagliche_akku_hausabgabe'), 'var(--owlet-blau, #7fb3d5)', 'Akku']
           ];
           // Fehlt ein Wert, bleibt der Balken leer: ein Teilbalken saehe vollstaendig aus
           const ok=all.every(s=>!isNaN(s[0]));
           const segs=ok ? all.filter(s=>s[0]>0) : all;
           const tot=segs.reduce((a,s)=>a+(s[0]||0),0)||1;
-          const bar=!ok ? '' : segs.map(s=>`<i style="display:block;height:100%;width:${(s[0]/tot*100).toFixed(1)}%;background:${s[1]};"></i>`).join('');
-          const leg=segs.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:7px;height:7px;border-radius:50%;background:${s[1]};display:inline-block;"></i>${s[2]} ${kwh(s[0])}</span>`).join('');
+          const bar=!ok ? '' : segs.map(s=>`<i style="display:block;height:100%;width:${(s[0]/tot*100).toFixed(1)}%;background:${s[1]};${s[3]?`box-shadow:inset 0 0 0 1px ${s[3]};`:''}"></i>`).join('');
+          const leg=segs.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="width:7px;height:7px;border-radius:50%;background:${s[1]};${s[3]?`box-shadow:inset 0 0 0 1px ${s[3]};`:''}display:inline-block;"></i>${s[2]} ${kwh(s[0])}</span>`).join('');
           // Autarkie heute = Anteil von PV und Akku am Hausverbrauch (gleiche Formel wie die Monatsbilanz)
           const aut=(use>0&&!isNaN(grid)) ? Math.max(0,Math.min(1,1-grid/use)) : NaN;
           const C=2*Math.PI*28.5, len=isNaN(aut)?0:aut*C;
