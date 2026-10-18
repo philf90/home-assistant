@@ -250,9 +250,9 @@ Heizung-View sind `heizung-templates.yaml` (Regler und Animation),
 `thermostate-karte-v3.yaml` und `temperaturen-karte-v2.yaml` umgestellt;
 damit ist auch die Heizung-View vollständig umgestellt. Von der
 Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
-`waschmaschine-karte.yaml`, `trockner-karte.yaml`,
-`geschirrspueler-karte.yaml` und `staubsauger-karte.yaml` umgestellt, also
-die ganze View. Die
+`waschmaschine-karte.yaml`, `trockner-karte.yaml` und
+`geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
+Staubsauger-Karte ist archiviert). Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
