@@ -79,7 +79,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`homematic-karte.yaml`](netzwerk/homematic-karte.yaml) | karte | Homematic IP / OpenCCU | button-card, card-mod, homematicip-system-health-card | `*_seriennr` | aktiv |
+| [`homematic-view.yaml`](netzwerk/homematic-view.yaml) | view | Homematic IP – komplette Ansicht | button-card, card-mod, decluttering-card | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`netzwerk-view.yaml`](netzwerk/netzwerk-view.yaml) | view | Netzwerk – komplette Ansicht | decluttering-card | – | aktiv |
 | [`system-karte.yaml`](netzwerk/system-karte.yaml) | karte | System – Home Assistant und Proxmox-VM | button-card, card-mod, uptime-card | – | aktiv |
 | [`unifi-kabel-clients-konfig.yaml`](netzwerk/unifi-kabel-clients-konfig.yaml) | konfig | UniFi-Kabel-Clients – Switch und Port je Kabel-Client | – | – | aktiv |
@@ -91,6 +91,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`unifi-unas-pro-karte.yaml`](netzwerk/unifi-unas-pro-karte.yaml) | karte | UNAS Pro – Speicher, CPU, RAM, Schaechte | button-card, card-mod | – | aktiv |
 | [`unifi-verlauf-karte.yaml`](netzwerk/unifi-verlauf-karte.yaml) | karte | Netzwerk-Verlauf – aufklappbar | apexcharts-card, button-card, card-mod, expander-card, uptime-card | – | aktiv |
 | [`wlan-karte.yaml`](netzwerk/wlan-karte.yaml) | karte | WLAN-QR – aufklappbar | button-card, card-mod, expander-card | – | aktiv |
+| [`homematic-karte.yaml`](netzwerk/archiv/homematic-karte.yaml) | karte | Homematic IP / OpenCCU | button-card, card-mod, homematicip-system-health-card | `*_seriennr` | archiv, ersetzt durch `homematic-view.yaml` |
 | [`unifi-udm-system-karte.yaml`](netzwerk/archiv/unifi-udm-system-karte.yaml) | karte | UDM SE Systemzustand v1 | button-card, card-mod | – | archiv, ersetzt durch `unifi-udm-system-karte-v2.yaml` |
 
 ## fahrzeuge

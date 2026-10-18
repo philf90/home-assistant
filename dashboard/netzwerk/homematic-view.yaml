@@ -1,0 +1,582 @@
+# ============================================================================
+# Homematic IP – komplette Ansicht
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        button-card, card-mod, decluttering-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                top_navigation (navigation-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
+# Platzhalter:   *_seriennr, kind_1/kind_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Homematic IP / OpenCCU (Owlet-Stil): Zustand der Anlage statt Messwerte.
+# Ersetzt homematic-karte.yaml (jetzt in archiv/). Fenster, Temperaturen,
+# Heizung, Zaehler, Bewaesserung, Schloss und Wetterstation zeigen andere
+# Views; hier steht, was sonst nirgends steht.
+#
+#   Kopfkarte     Wichtigster offener Punkt als Pille: Rauchalarm, CCU
+#                 offline, Funk getrennt (rot); Alarm- oder Servicemeldung,
+#                 schwache Batterie, Firmware-Update (amber); sonst "Alles in
+#                 Ordnung". Dazu Systemzustand, Latenz, letztes Ereignis.
+#                 Antippen oeffnet die CCU.
+#   Funk          CCU (Funkmodul RPI-RF-MOD) und Access Point (HAP, Garage):
+#                 Duty Cycle (vom Funkmodul selbst gemeldet) und Carrier
+#                 Sense;
+#                 Balken gruen unter 50 %, amber ab 50 %, rot ab 80 %.
+#                 Darunter die drei Schnittstellen der CCU.
+#   Rauchmelder   Alarmstatus und Batterie der vier Rauchmelder.
+#   Wartung       Batterien, Firmware, Meldungen, Anlernmodus.
+#   Steckdosen    Kueche (HmIP-PS-2, ohne Messung) und Garten (HmIP-PSM-2,
+#   und Keypad    mit Leistung) zum Schalten, Keypad mit Code-Status und
+#                 Sperre.
+#
+# Batterien und Firmware: keine Liste von Entity-IDs. Die Wartungskarte sucht
+# sie selbst, damit neue Geraete ohne Aenderung auftauchen:
+#   - Batterien: binary_sensor.*_batterie mit device_class battery und
+#     interface_id "homematic-..." (Stand 18.10.2026: 48).
+#   - Firmware: update.* mit entity_picture der Integration
+#     (/api/brands/integration/homematicip_local/...); die Zentrale
+#     (update.homematic_system_update) und die Integration selbst
+#     (update.homematic_ip_local_update, HACS) stehen getrennt.
+#   Gesucht wird ueber Object.keys(states) und erst dann states[id]: button-card
+#   v7 zeichnet neu, wenn sich eine per states[id] gelesene Entity aendert
+#   (State-Proxy, get-Trap). Object.values(states) laese jede Entity und
+#   zeichnete bei jeder Zustandsaenderung im Haus neu.
+#
+# Keypad: "Permanent gesperrt" und "Temporaer gesperrt" sind in der
+# Integration standardmaessig deaktiviert und muessen in HA aktiviert sein
+# (Einstellungen -> Geraete -> HmIP-WKP -> Entitaeten).
+#
+# Die Liste der Rauchmelder steht einmal (Anker &rauchmelder) und wird von
+# Kopfkarte und Rauchmelder-Karte genutzt.
+#
+# Voraussetzung: custom:button-card (v7) + custom:decluttering-card + card-mod
+#                (HACS), Integration "Homematic(IP) Local for OpenCCU" (HACS),
+#                Uptime Kuma (binary_sensor.uptimekuma_openccu), Templates aus
+#                navigation-templates.yaml.
+type: sections
+max_columns: 2
+title: Homematic IP
+path: homematic-ip
+icon: phu:homemati-ip
+sections:
+  - type: grid
+    cards:
+      - type: custom:decluttering-card
+        template: top_navigation
+      # Kopf: wichtigster offener Punkt, Tap oeffnet die CCU
+      - type: custom:button-card
+        entity: binary_sensor.uptimekuma_openccu
+        name: Homematic IP
+        icon: mdi:z-wave
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: url
+          url_path: http://192.168.1.203
+        variables:
+          funk: binary_sensor.homematic_connectivity_hmip_rf
+          service: sensor.homematic_servicemeldungen
+          alarm: sensor.homematic_alarmmeldungen
+          systemzustand: sensor.homematic_systemzustand
+          latenz: sensor.homematic_verbindungslatenz
+          ereignis: sensor.homematic_alter_letztes_ereignis
+          rauchmelder: &rauchmelder
+            - name: Wohnzimmer
+              alarm: binary_sensor.rauchmelder_wohnzimmer_rauchalarm
+              status: sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+              batterie: binary_sensor.rauchmelder_wohnzimmer_batterie
+            - name: Schlafzimmer
+              alarm: binary_sensor.rauchmelder_schlafzimmer_rauchalarm
+              status: sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+              batterie: binary_sensor.rauchmelder_schlafzimmer_batterie
+            - name: Kinderzimmer 1
+              alarm: binary_sensor.rauchmelder_kind_1_rauchalarm
+              status: sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+              batterie: binary_sensor.hmip_swsd_2_seriennr_batterie
+            - name: Kinderzimmer 2
+              alarm: binary_sensor.rauchmelder_buro_rauchalarm
+              status: sensor.rauchmelder_buro_rauchmelder_alarmstatus
+              batterie: binary_sensor.rauchmelder_buro_batterie
+        custom_fields:
+          lage: |
+            [[[
+              const st = (id) => (id && states[id]) ? states[id].state : '';
+              const zahl = (id) => { const v = parseFloat(st(id)); return Number.isFinite(v) ? v : 0; };
+              const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)';
+              const R = variables.rauchmelder;
+              const rauch = R.filter((r) => st(r.alarm) === 'on' || st(r.status) === 'primary_alarm').map((r) => r.name);
+              const keys = Object.keys(states);
+              const bat = keys.filter((k) => k.startsWith('binary_sensor.') && k.endsWith('_batterie'))
+                .filter((k) => { const s = states[k]; return s && s.state === 'on' && s.attributes.device_class === 'battery' && String(s.attributes.interface_id || '').startsWith('homematic'); }).length;
+              const upd = keys.filter((k) => k.startsWith('update.'))
+                .filter((k) => { const s = states[k]; return s && s.state === 'on' && (k === 'update.homematic_ip_local_update' || String(s.attributes.entity_picture || '').startsWith('/api/brands/integration/homematicip_local')); }).length;
+              let c = GRUEN, t = 'Alles in Ordnung';
+              if (rauch.length) { c = ROT; t = `Rauchalarm · ${rauch.join(', ')}`; }
+              else if (R.some((r) => st(r.status) === 'secondary_alarm')) { c = ROT; t = 'Rauchalarm (Folgealarm)'; }
+              else if (R.some((r) => st(r.status) === 'intrusion_alarm')) { c = ROT; t = 'Einbruchalarm'; }
+              else if (!entity || entity.state !== 'on') { c = ROT; t = 'CCU offline'; }
+              else if (st(variables.funk) !== 'on') { c = ROT; t = 'Funk HmIP getrennt'; }
+              else if (zahl(variables.alarm) > 0) { c = AMBER; t = zahl(variables.alarm) === 1 ? '1 Alarmmeldung' : `${zahl(variables.alarm)} Alarmmeldungen`; }
+              else if (zahl(variables.service) > 0) { c = AMBER; t = zahl(variables.service) === 1 ? '1 Servicemeldung' : `${zahl(variables.service)} Servicemeldungen`; }
+              else if (bat) { c = AMBER; t = bat === 1 ? '1 Batterie schwach' : `${bat} Batterien schwach`; }
+              else if (upd) { c = AMBER; t = upd === 1 ? '1 Update' : `${upd} Updates`; }
+              return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+            ]]]
+          info: |
+            [[[
+              const zahl = (id) => { const s = states[id]; const v = s ? parseFloat(s.state) : NaN; return Number.isFinite(v) ? v : NaN; };
+              const de = (v, d) => Number.isFinite(v) ? v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–';
+              const chip = (label, wert) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:11px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--owlet-label, #b4c0cf);font-size:12.5px;font-weight:600;white-space:nowrap;">${label}<b style="font-weight:700;color:var(--owlet-text, #f2f5f8);">${wert}</b></span>`;
+              const e = zahl(variables.ereignis);
+              const ereignis = !Number.isFinite(e) ? '–' : e < 60 ? `vor ${de(e, e < 10 ? 1 : 0)} s` : e < 3600 ? `vor ${Math.round(e / 60)} Min.` : `vor ${Math.round(e / 3600)} Std.`;
+              return `<div style="display:flex;flex-wrap:wrap;gap:6px;">${chip('Systemzustand', de(zahl(variables.systemzustand), 0) + ' %')}${chip('Latenz', de(zahl(variables.latenz), 1) + ' ms')}${chip('Letztes Ereignis', ereignis)}</div>`;
+            ]]]
+        styles:
+          card:
+            - padding: 16px 18px
+            - border-radius: 22px
+            - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+            - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+            - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+          grid:
+            - grid-template-areas: '"i n lage" "info info info"'
+            - grid-template-columns: min-content 1fr min-content
+            - grid-template-rows: min-content min-content
+            - row-gap: 12px
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - background: 'color-mix(in srgb, var(--owlet-violett, #b399d4) 12%, transparent)'
+            - border: '1px solid color-mix(in srgb, var(--owlet-violett, #b399d4) 24%, transparent)'
+          icon:
+            - width: 23px
+            - height: 23px
+            - --ha-icon-display: block
+            - color: 'var(--owlet-violett, #b399d4)'
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: 'var(--owlet-text, #f2f5f8)'
+          custom_fields:
+            lage:
+              - justify-self: end
+            info:
+              - justify-self: start
+              - text-align: left
+  - type: grid
+    cards:
+      # ---- Funk: Duty Cycle, Carrier Sense ----
+      - type: vertical-stack
+        card_mod: &huelle
+          style: |
+            #root {
+              background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+              border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+              border-radius: 22px !important;
+              box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+              padding: 14px 16px 16px !important;
+              gap: 10px !important;
+            }
+        cards:
+          - type: custom:button-card
+            name: Funk
+            show_icon: false
+            tap_action:
+              action: none
+            styles: &gruppe
+              card:
+                - background: none
+                - box-shadow: none
+                - border: none
+                - padding: 2px 2px 0
+              name:
+                - justify-self: start
+                - font-size: 15px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - color: 'var(--owlet-text, #f2f5f8)'
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            tap_action:
+              action: none
+            variables:
+              funkmodule:
+                - titel: CCU
+                  unter: Funkmodul RPI-RF-MOD
+                  dc: sensor.rpi_rf_mod_seriennr_duty_cycle_level
+                  cs: sensor.rpi_rf_mod_seriennr_carrier_sense_level
+                - titel: Access Point
+                  unter: HAP, Garage
+                  dc: sensor.hmip_hap_js1_seriennr_duty_cycle_level
+                  cs: sensor.hmip_hap_js1_seriennr_carrier_sense_level
+              schnittstellen:
+                - name: HmIP-RF
+                  entity: binary_sensor.homematic_connectivity_hmip_rf
+                - name: BidCos-RF
+                  entity: binary_sensor.homematic_connectivity_bidcos_rf
+                - name: Virtuell
+                  entity: binary_sensor.homematic_connectivity_virtualdevices
+            custom_fields:
+              inhalt: |
+                [[[
+                  const zahl = (id) => { const s = states[id]; const v = s ? parseFloat(s.state) : NaN; return Number.isFinite(v) ? v : NaN; };
+                  const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
+                  const farbe = (v) => !Number.isFinite(v) ? GRAU : v >= 80 ? ROT : v >= 50 ? AMBER : GRUEN;
+                  const de = (v) => Number.isFinite(v) ? v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' %' : '–';
+                  const zeile = (label, id) => {
+                    const v = zahl(id);
+                    const w = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+                    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;">
+                      <span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</span>
+                      <span style="font-size:13px;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${de(v)}</span>
+                      <div style="grid-column:1 / -1;height:6px;border-radius:4px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${w}%;min-width:${w > 0 ? 2 : 0}px;border-radius:4px;background:${farbe(v)};"></div></div>
+                    </div>`;
+                  };
+                  const block = (m) => `<div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:10px 12px;display:grid;gap:9px;min-width:0;">
+                      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${m.titel}</span><span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;">${m.unter}</span></div>
+                      ${zeile('Duty Cycle', m.dc)}${zeile('Carrier Sense', m.cs)}
+                    </div>`;
+                  const sch = variables.schnittstellen.map((s) => {
+                    const st = states[s.entity] ? states[s.entity].state : '';
+                    const c = st === 'on' ? GRUEN : st === 'off' ? ROT : GRAU;
+                    return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--owlet-label, #b4c0cf);white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};"></span>${s.name}</span>`;
+                  }).join('');
+                  return `<div style="display:grid;gap:10px;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:8px;">${variables.funkmodule.map(block).join('')}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:0 2px;"><span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">Schnittstellen</span>${sch}</div>
+                  </div>`;
+                ]]]
+            styles: &inhalt
+              card:
+                - background: none
+                - box-shadow: none
+                - border: none
+                - padding: 0
+              grid:
+                - grid-template-areas: '"inhalt"'
+                - grid-template-columns: minmax(0, 1fr)
+              custom_fields:
+                inhalt:
+                  - justify-self: stretch
+                  - text-align: left
+                  - min-width: 0
+  - type: grid
+    cards:
+      # ---- Rauchmelder: Alarmstatus und Batterie ----
+      - type: vertical-stack
+        card_mod: *huelle
+        cards:
+          - type: custom:button-card
+            name: Rauchmelder
+            show_icon: false
+            tap_action:
+              action: none
+            styles: *gruppe
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            tap_action:
+              action: none
+            variables:
+              rauchmelder: *rauchmelder
+            custom_fields:
+              inhalt: |
+                [[[
+                  const st = (id) => (id && states[id]) ? states[id].state : '';
+                  const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
+                  const chip = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:9px;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};"></span>${t}</span>`;
+                  const kachel = (r) => {
+                    const a = st(r.alarm), s = st(r.status), b = st(r.batterie);
+                    let status;
+                    if (a === 'on' || s === 'primary_alarm') status = chip(ROT, 'Rauchalarm');
+                    else if (s === 'secondary_alarm') status = chip(ROT, 'Folgealarm');
+                    else if (s === 'intrusion_alarm') status = chip(ROT, 'Einbruchalarm');
+                    else if (s === 'idle_off') status = chip(GRUEN, 'Ruhe');
+                    else status = chip(GRAU, 'keine Daten');
+                    const bat = b === 'on' ? `<span style="color:${AMBER};font-weight:600;">Batterie schwach</span>` : b === 'off' ? 'Batterie ok' : 'Batterie –';
+                    return `<div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:10px 12px;display:grid;gap:6px;justify-items:start;min-width:0;">
+                      <span style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${r.name}</span>${status}
+                      <span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">${bat}</span>
+                    </div>`;
+                  };
+                  return `<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;">${variables.rauchmelder.map(kachel).join('')}</div>`;
+                ]]]
+            styles: *inhalt
+  - type: grid
+    cards:
+      # ---- Wartung: Batterien, Firmware, Meldungen, Anlernmodus ----
+      - type: vertical-stack
+        card_mod: *huelle
+        cards:
+          - type: custom:button-card
+            name: Wartung
+            show_icon: false
+            tap_action:
+              action: none
+            styles: *gruppe
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            tap_action:
+              action: none
+            variables:
+              system_update: update.homematic_system_update
+              integration_update: update.homematic_ip_local_update
+              service: sensor.homematic_servicemeldungen
+              alarm: sensor.homematic_alarmmeldungen
+              posteingang: sensor.homematic_posteingang
+            custom_fields:
+              inhalt: |
+                [[[
+                  const st = (id) => (id && states[id]) ? states[id].state : '';
+                  const zahl = (id) => { const v = parseFloat(st(id)); return Number.isFinite(v) ? v : 0; };
+                  const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
+                  const chip = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:9px;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};"></span>${t}</span>`;
+                  const zeile = (icon, c, titel, text, rechts) => `<div style="display:flex;align-items:center;gap:10px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:9px 12px;min-width:0;">
+                      <span style="width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><ha-icon icon="${icon}" style="--mdc-icon-size:18px;--ha-icon-display:block;width:18px;height:18px;display:block;"></ha-icon></span>
+                      <span style="flex:1;min-width:0;display:grid;gap:1px;"><span style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${titel}</span><span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:normal;">${text}</span></span>
+                      ${rechts}
+                    </div>`;
+                  const keys = Object.keys(states);
+                  // Batterien: zuerst die Schluessel filtern, dann nur diese lesen (siehe Dateikopf)
+                  const bat = keys.filter((k) => k.startsWith('binary_sensor.') && k.endsWith('_batterie'))
+                    .map((k) => states[k]).filter((s) => s && s.attributes.device_class === 'battery' && String(s.attributes.interface_id || '').startsWith('homematic'));
+                  const leer = bat.filter((s) => s.state === 'on').map((s) => String(s.attributes.friendly_name || s.entity_id).replace(/ Batterie$/, ''));
+                  const batZeile = zeile('mdi:battery-high', leer.length ? AMBER : GRUEN, 'Batterien',
+                    leer.length ? `schwach: ${leer.join(', ')}` : `${bat.length} Geräte, alle in Ordnung`,
+                    chip(leer.length ? AMBER : GRUEN, `${bat.length - leer.length}/${bat.length}`));
+                  // Firmware: Geraete der Integration, Zentrale und Integration getrennt
+                  const geraete = keys.filter((k) => k.startsWith('update.') && k !== variables.system_update)
+                    .map((k) => states[k]).filter((s) => s && String(s.attributes.entity_picture || '').startsWith('/api/brands/integration/homematicip_local'));
+                  const offen = geraete.filter((s) => s.state === 'on').map((s) => String(s.attributes.friendly_name || s.entity_id).replace(/ Update$/, ''));
+                  const sys = states[variables.system_update], intg = states[variables.integration_update];
+                  const ver = (s) => (s && s.attributes.installed_version) ? s.attributes.installed_version : '–';
+                  const zentral = [sys && sys.state === 'on' ? 'Zentrale' : '', intg && intg.state === 'on' ? 'Integration' : ''].filter(Boolean);
+                  const alleOffen = zentral.concat(offen);
+                  const fwText = alleOffen.length ? `Update: ${alleOffen.join(', ')}` : `CCU ${String(ver(sys)).split('.').slice(0, 3).join('.')} · Integration ${ver(intg)} · ${geraete.length} Geräte aktuell`;
+                  const fwZeile = zeile('mdi:download', alleOffen.length ? AMBER : GRUEN, 'Firmware', fwText,
+                    alleOffen.length ? chip(AMBER, alleOffen.length === 1 ? '1 Update' : `${alleOffen.length} Updates`) : chip(GRAU, 'aktuell'));
+                  // Meldungen der CCU
+                  const sv = zahl(variables.service), al = zahl(variables.alarm), pe = zahl(variables.posteingang);
+                  const mFarbe = al > 0 ? ROT : (sv > 0 || pe > 0) ? AMBER : GRUEN;
+                  const mChip = al > 0 ? chip(ROT, 'Alarm') : (sv > 0 || pe > 0) ? chip(AMBER, `${sv + pe} offen`) : chip(GRAU, 'keine');
+                  const mZeile = zeile('mdi:message-alert-outline', mFarbe, 'Meldungen', `Service ${sv} · Alarm ${al} · Posteingang ${pe}`, mChip);
+                  return `<div style="display:grid;gap:8px;">${batZeile}${fwZeile}${mZeile}</div>`;
+                ]]]
+            styles: *inhalt
+          # Anlernmodus: Taste der Integration, Restzeit aus dem Dauer-Sensor
+          - type: custom:button-card
+            entity: button.homematic_anlernmodus_hmip_rf_aktivieren
+            name: Anlernmodus
+            icon: mdi:plus-network-outline
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            variables:
+              dauer: sensor.homematic_anlernmodus_hmip_rf_dauer
+            label: |
+              [[[
+                const s = states[variables.dauer];
+                const v = s ? parseFloat(s.state) : NaN;
+                return Number.isFinite(v) && v > 0 ? `aktiv · noch ${Math.round(v)} s` : 'Neues HmIP-Gerät verbinden';
+              ]]]
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.homematic_anlernmodus_hmip_rf_aktivieren
+              confirmation:
+                text: Anlernmodus HmIP-RF an der CCU starten?
+            custom_fields:
+              knopf: |
+                [[[
+                  const s = states[variables.dauer];
+                  const v = s ? parseFloat(s.state) : NaN;
+                  const aktiv = Number.isFinite(v) && v > 0;
+                  const c = aktiv ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-violett, #b399d4)';
+                  return `<span style="display:inline-flex;align-items:center;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:9px;white-space:nowrap;">${aktiv ? 'aktiv' : 'Starten'}</span>`;
+                ]]]
+            styles:
+              card:
+                - border-radius: 13px
+                - padding: 9px 12px
+                - box-shadow: none
+                - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
+                - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+              grid:
+                - grid-template-areas: '"i n knopf" "i l knopf"'
+                - grid-template-columns: min-content minmax(0, 1fr) min-content
+                - column-gap: 10px
+              img_cell:
+                - width: 34px
+                - height: 34px
+                - border-radius: 10px
+                - background: 'color-mix(in srgb, var(--owlet-violett, #b399d4) 12%, transparent)'
+                - border: '1px solid color-mix(in srgb, var(--owlet-violett, #b399d4) 24%, transparent)'
+              icon:
+                - width: 18px
+                - height: 18px
+                - --ha-icon-display: block
+                - color: 'var(--owlet-violett, #b399d4)'
+              name:
+                - justify-self: start
+                - font-size: 13.5px
+                - font-weight: 700
+                - color: 'var(--owlet-text, #f2f5f8)'
+              label:
+                - justify-self: start
+                - font-size: 11.5px
+                - color: 'var(--owlet-text-sekundaer, #8794a5)'
+              custom_fields:
+                knopf:
+                  - justify-self: end
+  - type: grid
+    cards:
+      # ---- Steckdosen (Schalten) und Keypad (Code-Status, Sperre) ----
+      - type: vertical-stack
+        card_mod: *huelle
+        cards:
+          - type: custom:button-card
+            name: Steckdosen und Keypad
+            show_icon: false
+            tap_action:
+              action: none
+            styles: *gruppe
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: switch.steckdose_kuche
+                name: Küche
+                icon: mdi:power-socket-de
+                show_label: true
+                show_state: false
+                label: "[[[ return entity && entity.state === 'on' ? 'an' : (entity && entity.state === 'off' ? 'aus' : 'keine Daten'); ]]]"
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+                styles: &steckdose
+                  card:
+                    - border-radius: 13px
+                    - padding: 10px 12px
+                    - box-shadow: none
+                    - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
+                    - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                  grid:
+                    - grid-template-areas: '"i n" "i l"'
+                    - grid-template-columns: min-content minmax(0, 1fr)
+                    - column-gap: 10px
+                  img_cell:
+                    - width: 36px
+                    - height: 36px
+                    - border-radius: 11px
+                    - background: "[[[ return entity && entity.state === 'on' ? 'color-mix(in srgb, var(--owlet-violett, #b399d4) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]"
+                    - border: "[[[ return entity && entity.state === 'on' ? '1px solid color-mix(in srgb, var(--owlet-violett, #b399d4) 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]"
+                  icon:
+                    - width: 19px
+                    - height: 19px
+                    - --ha-icon-display: block
+                    - color: "[[[ return entity && entity.state === 'on' ? 'var(--owlet-violett, #b399d4)' : 'var(--owlet-text-sekundaer, #8794a5)'; ]]]"
+                  name:
+                    - justify-self: start
+                    - font-size: 13.5px
+                    - font-weight: 700
+                    - color: 'var(--owlet-text, #f2f5f8)'
+                  label:
+                    - justify-self: start
+                    - font-size: 11.5px
+                    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+              - type: custom:button-card
+                entity: switch.hmip_psm_2_qhj_seriennr
+                name: Garten
+                icon: mdi:power-socket-de
+                show_label: true
+                show_state: false
+                variables:
+                  leistung: sensor.hmip_psm_2_qhj_seriennr_leistung
+                label: |
+                  [[[
+                    const s = states[variables.leistung];
+                    const w = s ? parseFloat(s.state) : NaN;
+                    const zustand = entity && entity.state === 'on' ? 'an' : (entity && entity.state === 'off' ? 'aus' : 'keine Daten');
+                    return Number.isFinite(w) ? `${zustand} · ${w.toLocaleString('de-DE', { maximumFractionDigits: 1 })} W` : zustand;
+                  ]]]
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: more-info
+                styles: *steckdose
+          - type: custom:button-card
+            entity: sensor.hmip_wkp_seriennr_code_status
+            name: Keypad
+            icon: mdi:dialpad
+            show_state: false
+            tap_action:
+              action: more-info
+            variables:
+              dauerhaft: binary_sensor.hmip_wkp_seriennr_dauerhaft_gesperrt
+              voruebergehend: binary_sensor.hmip_wkp_seriennr_vorubergehend_gesperrt
+              batterie: binary_sensor.hmip_wkp_seriennr_batterie
+            custom_fields:
+              zustand: |
+                [[[
+                  const st = (id) => (id && states[id]) ? states[id].state : '';
+                  const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
+                  const chip = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:9px;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};"></span>${t}</span>`;
+                  const code = entity ? entity.state : '';
+                  const codeChip = code === 'known_code_id_received' ? chip(GRUEN, 'Code erkannt') : code === 'unknown_code_detected' ? chip(AMBER, 'Falscher Code') : code === 'idle' ? chip(GRAU, 'Bereit') : chip(GRAU, 'keine Daten');
+                  const d = st(variables.dauerhaft), v = st(variables.voruebergehend);
+                  const sperre = d === 'on' ? chip(ROT, 'Dauerhaft gesperrt') : v === 'on' ? chip(AMBER, 'Vorübergehend gesperrt') : (d === 'off' && v === 'off') ? chip(GRUEN, 'Nicht gesperrt') : chip(GRAU, 'Sperre unbekannt');
+                  const b = st(variables.batterie);
+                  const bat = b === 'on' ? `<span style="color:${AMBER};font-weight:600;">Batterie schwach</span>` : b === 'off' ? 'Batterie ok' : 'Batterie –';
+                  return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">${codeChip}${sperre}<span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">${bat}</span></div>`;
+                ]]]
+            styles:
+              card:
+                - border-radius: 13px
+                - padding: 10px 12px
+                - box-shadow: none
+                - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
+                - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+              grid:
+                - grid-template-areas: '"i n" "i zustand"'
+                - grid-template-columns: min-content minmax(0, 1fr)
+                - grid-template-rows: min-content min-content
+                - column-gap: 10px
+                - row-gap: 6px
+              img_cell:
+                - width: 36px
+                - height: 36px
+                - border-radius: 11px
+                - background: 'color-mix(in srgb, var(--owlet-violett, #b399d4) 12%, transparent)'
+                - border: '1px solid color-mix(in srgb, var(--owlet-violett, #b399d4) 24%, transparent)'
+              icon:
+                - width: 19px
+                - height: 19px
+                - --ha-icon-display: block
+                - color: 'var(--owlet-violett, #b399d4)'
+              name:
+                - justify-self: start
+                - font-size: 13.5px
+                - font-weight: 700
+                - color: 'var(--owlet-text, #f2f5f8)'
+              custom_fields:
+                zustand:
+                  - justify-self: start
+                  - text-align: left
+  - type: grid
+    cards:
+      - type: custom:decluttering-card
+        template: floating_navbar
