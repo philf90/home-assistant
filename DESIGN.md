@@ -234,8 +234,10 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `top-navigation-karte.yaml`) sowie von der Home-View
 `haustuer-ereignis-karte.yaml`, `person-presence-karte.yaml`,
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
-`pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml` und
-`meteoalarm-karte.yaml`. Die Owlet-Karte bleibt als Identitätshülle dunkel.
+`pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml`,
+`meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
+(siehe „Animierte Hintergründe“). Die Owlet-Karte bleibt als Identitätshülle
+dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
@@ -405,9 +407,11 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Animierte Hintergründe:** Weiß mit Deckkraft (Sterne, Schnee, Blitz,
-  Luft, inaktive Leitungen) ist auf hellem Grund unsichtbar. Dafür braucht es
-  eigene Regeln und Messungen.
+- **Animierte Hintergründe:** Für die Wetteranimation stehen die hellen
+  Regeln (unten); umgestellt ist bisher nur der Banner. Wetter- und
+  Wind-Karte brauchen noch Messungen für ihre Kacheln (Schutzgrund), die
+  Animationen von Hausgeräten, Heizung, Auto und Energiefluss (Luft, Eis,
+  inaktive Leitungen in Weiß mit Deckkraft) eigene Regeln.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
@@ -466,14 +470,52 @@ sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlic
 - Kleine Schrift auf animiertem Grund steht in `#b4c0cf` statt `#8794a5`.
 - Kleine Schrift muss im schlechtesten Fall (alle Flächen einer Szene
   übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
-  der Schrift gedämpft: im Banner hinter der Datumszeile auf 45 %, in den
-  Kacheln der Wetter-Karte über einen Schutzgrund `#171d29` mit 0,62
-  Deckkraft (Animation dort zu 38 % sichtbar).
+  der Schrift gedämpft: im Banner die ganze Wetterspalte rechts (Icon,
+  Temperatur, Datum) auf 45 %, in den Kacheln der Wetter-Karte über einen
+  Schutzgrund `#171d29` mit 0,62 Deckkraft (Animation dort zu 38 % sichtbar).
+- Icon und große Schrift auf animiertem Grund halten 3:1. Im Banner standen
+  sie bis zur Ruhezone rechts auf der vollen Szene und fielen dunkel in
+  6 von 16 Szenen darunter (Unwetter 1,72:1); mit Ruhezone mindestens
+  3,10:1 dunkel und 3,74:1 hell.
 - Text links im Banner bleibt ohne Animation; die Ebene beginnt erst rechts
   neben dem gemessenen Text.
 - Blitze höchstens 3 pro Sekunde (WCAG 2.3.1); verwendet wird ein Doppelblitz
   alle 8 s.
 - „Bewegung reduzieren“ am Gerät zeigt ein Standbild derselben Szene.
+
+### Wetteranimation im hellen Modus
+
+Entwurf, Vorschau und Rechnung: `banner-hell.html`. Jedes Element nimmt hell
+den Tiefton seiner Rolle; die Deckkraft wird mit einem festen Faktor so
+erhöht, dass es sich so stark von der Hülle abhebt wie dunkel (Kontrast
+Element zu Hülle, dunkel auf `#1b2231`, hell auf `#fafbfd`).
+
+| Element | Dunkel | Hell | Faktor |
+|---|---|---|---|
+| Wolke, Nebel | Wolkengrau | Wolkengrau hell | × 1,8 |
+| Regenwolke | Muted | Muted | × 1 |
+| Sonne, Strahlen | Sonnengelb | Sonnengelb (Mitte 0,6, Strahlen 0,5) | × 2,5 / × 4,2 |
+| Nachtschein | Indigo | Indigo hell | × 1,28 |
+| Sterne | Weiß 0,5 | Nachtgrau hell | × 1,54 |
+| Regentropfen | Blau | Blau hell | × 1,33 |
+| Schneeflocken | Weiß 0,5 | Eis hell | × 1,88 |
+| Hagel | Wolkengrau 0,5 | Wolkengrau hell | × 1,62 |
+| Blitz | Weiß 0,18 | Sonnengelb 0,72 | × 4 |
+| Unwetterschein | Rot | Rot hell | × 1 |
+| Windschlieren | Türkis / Wolkengrau | Türkis hell / Wolkengrau hell | × 1,48 / × 1,7 |
+
+- **Ausnahmen:** Sonne und Blitz bleiben Sonnengelb statt Tiefton (der wirkt
+  oliv, ein abgedunkelter Blitz wie ein Schatten). Sie erreichen hell nicht
+  die dunkle Abhebung: Sonnenmitte 1,36:1 statt 1,74:1, Blitz 1,44:1 statt
+  1,78:1; deckend wären höchstens 1,68:1 möglich.
+- **Umschalten nur mit Opt-in:** Das Template liest `--wx-dunkel`
+  (Rückfall 100 %). Eine Karte schaltet die hellen Regeln ein, indem sie in
+  `styles.card` `--wx-dunkel: var(--owlet-dunkel-anteil, 100%)` setzt. Ohne
+  den Eintrag bleibt die Animation in beiden Modi dunkel (geprüft: 0 von
+  931 Elementen weichen ab).
+- **Deckkraft per Faktor:** `opacity: calc(var(--o) * (180% - 0.8 * var(--wx-d)))`
+  ist dunkel `--o`, hell `--o × 1,8`; Farben wählt `color-mix` mit
+  `var(--wx-d)`.
 
 ## Eine neue Farbe aufnehmen
 

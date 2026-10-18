@@ -37,10 +37,18 @@
 # die Animation ebenfalls nicht neu.
 #
 # Lesbarkeit (WCAG AA, 4,5:1 fuer kleine Schrift), Rechnung in der Vorschau:
-#   - Banner: Animation nur rechts neben dem Text, hinter der Datumszeile auf
-#     45 % gedaempft, Datum in #b4c0cf (Variante C).
+#   - Banner: Animation nur rechts neben dem Text; die Wetterspalte rechts
+#     (Icon, Temperatur, Datum) liegt in einer Ruhezone mit 45 %. Ihre Breite
+#     setzt die Karte als --bn-w in styles.card (banner-hell.html).
 #   - Wetter-View: Kachel-Beschriftungen in #b4c0cf, Kacheln mit Schutzgrund
 #     #171d29 in 0,62 Deckkraft (Animation in den Kacheln zu 38 % sichtbar).
+#
+# Heller Modus (banner-hell.html): Jedes Element nimmt hell den Tiefton seiner
+# Rolle (var(--owlet-...)), die Deckkraft mal festem Faktor, damit es sich so
+# stark von der Huelle abhebt wie dunkel. Umgeschaltet wird ueber
+# --wx-dunkel, nicht direkt ueber das Theme: Eine Karte setzt in styles.card
+# --wx-dunkel: var(--owlet-dunkel-anteil, 100%), erst dann gilt hell. Ohne
+# den Eintrag (Wetter- und Wind-Karte) bleibt die Animation dunkel.
 #
 # Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
 # ein Standbild derselben Szene.
@@ -236,49 +244,49 @@ button_card_templates:
           return lib;
         ]]]
     extra_styles: |
-      .wx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+      .wx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; --wx-d: var(--wx-dunkel, 100%); }
       .wx * { will-change: transform; }
       .wx-sky { position: absolute; inset: 0 -20%; transform: scaleX(var(--wx-dir, 1)); }
       .wx-flow { position: absolute; inset: -30% -20%; transform: rotate(var(--wx-tilt, 0deg)) scaleX(var(--wx-dir, 1)); transition: transform 1.2s ease; }
       .wx-fall { position: absolute; inset: -20% -25%; transform: rotate(var(--wx-rain, -6deg)); transition: transform 1.2s ease; }
       .wx-drift { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wx-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes wx-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
-      .wx-cloud { position: absolute; right: 100%; top: 0; width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: #cdd6e0; opacity: var(--o); }
+      .wx-cloud { position: absolute; right: 100%; top: 0; width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: color-mix(in srgb, #cdd6e0 var(--wx-d), var(--owlet-wolkengrau, #cdd6e0)); opacity: calc(var(--o) * (180% - 0.8 * var(--wx-d))); }
       .wx-cloud::before, .wx-cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
       .wx-cloud::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }
       .wx-cloud::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }
-      .wx-cloud.dark { background: #6e7988; }
-      .wx-sun { position: absolute; right: -16%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(230, 193, 90, 0.24) 0%, rgba(230, 193, 90, 0.12) 36%, rgba(230, 193, 90, 0) 68%); transform: translateY(var(--ty, -48%)); animation: wx-sun 8s ease-in-out infinite alternate; }
+      .wx-cloud.dark { background: #6e7988; opacity: var(--o); }
+      .wx-sun { position: absolute; right: -16%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, rgba(230, 193, 90, 0.24) var(--wx-d), rgba(230, 193, 90, 0.6)) 0%, color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), rgba(230, 193, 90, 0.3)) 36%, rgba(230, 193, 90, 0) 68%); transform: translateY(var(--ty, -48%)); animation: wx-sun 8s ease-in-out infinite alternate; }
       @keyframes wx-sun { from { transform: translateY(var(--ty, -48%)) scale(1); opacity: 0.8; } to { transform: translateY(var(--ty, -48%)) scale(1.08); opacity: 1; } }
-      .wx-rays { position: absolute; right: -30%; top: 0; width: 80%; aspect-ratio: 1; border-radius: 50%; background: repeating-conic-gradient(rgba(230, 193, 90, 0.12) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); transform: translateY(var(--ty, -50%)); animation: wx-rays 120s linear infinite; }
+      .wx-rays { position: absolute; right: -30%; top: 0; width: 80%; aspect-ratio: 1; border-radius: 50%; background: repeating-conic-gradient(color-mix(in srgb, rgba(230, 193, 90, 0.12) var(--wx-d), rgba(230, 193, 90, 0.5)) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 14%, #cdd6e0 26%, rgba(205, 214, 224, 0) 66%); transform: translateY(var(--ty, -50%)); animation: wx-rays 120s linear infinite; }
       @keyframes wx-rays { from { transform: translateY(var(--ty, -50%)) rotate(0deg); } to { transform: translateY(var(--ty, -50%)) rotate(360deg); } }
       .wx-sun.soft, .wx-rays.soft { opacity: 0.7; }
-      .wx-night { position: absolute; right: -20%; top: 0; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(142, 162, 230, 0.18) 0%, rgba(142, 162, 230, 0) 65%); transform: translateY(-50%); }
-      .wx-star { position: absolute; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wx-twinkle var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wx-night { position: absolute; right: -20%; top: 0; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, rgba(142, 162, 230, 0.18) var(--wx-d), color-mix(in srgb, var(--owlet-indigo, #8ea2e6) 23%, transparent)) 0%, rgba(142, 162, 230, 0) 65%); transform: translateY(-50%); }
+      .wx-star { position: absolute; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-nachtgrau, #9aa7bd) 77%, transparent)); animation: wx-twinkle var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes wx-twinkle { from { opacity: 0.25; } to { opacity: 1; } }
       .wx-drop, .wx-flake { position: absolute; top: 0; height: 100%; left: var(--x); animation: wx-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes wx-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }
-      .wx-drop { width: 1.5px; opacity: var(--a); }
-      .wx-drop::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), #7fb3d5); }
+      .wx-drop { width: 1.5px; opacity: calc(var(--a) * (133% - 0.33 * var(--wx-d))); }
+      .wx-drop::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), color-mix(in srgb, #7fb3d5 var(--wx-d), var(--owlet-blau, #7fb3d5))); }
       .wx-flake { width: var(--s); }
-      .wx-flake::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wx-sway var(--sw) ease-in-out infinite alternate; }
-      .wx-flake.hail::after { border-radius: 1px; background: rgba(205, 214, 224, 0.5); animation: none; }
+      .wx-flake::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 94%, transparent)); animation: wx-sway var(--sw) ease-in-out infinite alternate; }
+      .wx-flake.hail::after { border-radius: 1px; background: color-mix(in srgb, rgba(205, 214, 224, 0.5) var(--wx-d), color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) 81%, transparent)); animation: none; }
       @keyframes wx-sway { from { transform: translateX(-6px); } to { transform: translateX(6px); } }
-      .wx-fog { position: absolute; left: -30%; width: 160%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), rgba(205, 214, 224, 0.12) 50%, rgba(205, 214, 224, 0)); -webkit-mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); animation: wx-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wx-fog { position: absolute; left: -30%; width: 160%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), color-mix(in srgb, rgba(205, 214, 224, 0.12) var(--wx-d), color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) 21.5%, transparent)) 50%, rgba(205, 214, 224, 0)); -webkit-mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); mask: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 25%, #cdd6e0 75%, rgba(205, 214, 224, 0)); animation: wx-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes wx-haze { from { transform: translateX(-10%); } to { transform: translateX(10%); } }
-      .wx-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 70% 0%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wx-flash 8s linear infinite; animation-delay: -5s; }
+      .wx-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 70% 0%, color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--wx-d), rgba(230, 193, 90, 0.72)), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wx-flash 8s linear infinite; animation-delay: -5s; }
       @keyframes wx-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }
-      .wx-alert { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 70% at 50% 120%, rgba(240, 115, 106, 0.18), rgba(240, 115, 106, 0) 70%); animation: wx-glow 3.5s ease-in-out infinite alternate; }
+      .wx-alert { position: absolute; inset: 0; background: radial-gradient(ellipse 90% 70% at 50% 120%, color-mix(in srgb, rgba(240, 115, 106, 0.18) var(--wx-d), color-mix(in srgb, var(--owlet-rot, #f0736a) 18%, transparent)), rgba(240, 115, 106, 0) 70%); animation: wx-glow 3.5s ease-in-out infinite alternate; }
       @keyframes wx-glow { from { opacity: 0.5; } to { opacity: 1; } }
-      .wx-streak { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 208, 213, 0), #7fd0d5 70%, rgba(127, 208, 213, 0)); opacity: var(--a); animation: wx-wave var(--wv) ease-in-out infinite alternate; }
-      .wx-streak.cloud { background: linear-gradient(90deg, rgba(205, 214, 224, 0), #cdd6e0 70%, rgba(205, 214, 224, 0)); }
+      .wx-streak { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 208, 213, 0), color-mix(in srgb, #7fd0d5 var(--wx-d), var(--owlet-tuerkis, #7fd0d5)) 70%, rgba(127, 208, 213, 0)); opacity: calc(var(--a) * (148% - 0.48 * var(--wx-d))); animation: wx-wave var(--wv) ease-in-out infinite alternate; }
+      .wx-streak.cloud { background: linear-gradient(90deg, rgba(205, 214, 224, 0), color-mix(in srgb, #cdd6e0 var(--wx-d), var(--owlet-wolkengrau, #cdd6e0)) 70%, rgba(205, 214, 224, 0)); opacity: calc(var(--a) * (170% - 0.7 * var(--wx-d))); }
       .wx-streak.gust { height: 2px; }
       @keyframes wx-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
       .wx.banner {
         --bn-a: max(38%, min(var(--bn-s, 0px), 100% - 133px));
-        -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+        -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(90deg, #cdd6e0 calc(100% - var(--bn-w, 0px) - 24px), rgba(205, 214, 224, var(--zone, 1)) calc(100% - var(--bn-w, 0px)));
         -webkit-mask-composite: source-in;
-        mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(180deg, #cdd6e0 calc(50% - 4px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 2px), rgba(205, 214, 224, var(--zone, 1)) calc(50% + 26px), #cdd6e0 calc(50% + 32px));
+        mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) var(--bn-a), #cdd6e0 calc(var(--bn-a) + 60px)), linear-gradient(90deg, #cdd6e0 calc(100% - var(--bn-w, 0px) - 24px), rgba(205, 214, 224, var(--zone, 1)) calc(100% - var(--bn-w, 0px)));
         mask-composite: intersect;
       }
       .wx.banner .wx-sun { width: 40%; right: -8%; --ty: -40%; }
