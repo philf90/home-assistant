@@ -75,6 +75,11 @@
 # etwa y 85; #8794a5 haelt auf der Kachel 4,78:1, ueber Amber 0,24 waeren es
 # nur 2,84:1. Blau #7fb3d5 fuer "Fenster offen" erreicht 6,54:1.
 #
+# Heller Modus: Farben ueber die owlet-Variablen, SVG-Farben als style. Die
+# Wellen decken hell 0,37 statt 0,24 (Stufe 3: 0,74 statt 0,5), der Luftzug
+# 0,85 statt 0,5: gleicher Kontrast zur Kachel wie dunkel (Amber 1,69 und
+# 3,15:1, Wolkengrau 3,78:1), umgeschaltet ueber owlet-dunkel-anteil.
+#
 # Farben nur aus design/palette.yaml. "Bewegung reduzieren" am Geraet zeigt
 # ein Standbild derselben Szene.
 #
@@ -87,7 +92,7 @@ button_card_templates:
       window_entities: []
       hz: |
         [[[
-          const VERSION = 1, alt = window.__owletHz;
+          const VERSION = 2, alt = window.__owletHz;
           if (alt && alt.version === VERSION) return alt;
 
           const num = (x) => (x !== undefined && x !== null && x !== '' && !isNaN(x)) ? Number(x) : null;
@@ -106,7 +111,7 @@ button_card_templates:
             if (act === 'idle') return 'bereit';
             return 'sonst';
           };
-          const FARBE = { heizt: '#e6b566', kuehlt: '#7fb3d5', fenster: '#7fb3d5', bereit: '#a6d49e', aus: '#8794a5', sonst: '#8794a5' };
+          const FARBE = { heizt: 'var(--owlet-amber, #e6b566)', kuehlt: 'var(--owlet-blau, #7fb3d5)', fenster: 'var(--owlet-blau, #7fb3d5)', bereit: 'var(--owlet-gruen, #a6d49e)', aus: 'var(--owlet-text-sekundaer, #8794a5)', sonst: 'var(--owlet-text-sekundaer, #8794a5)' };
           const stufe = (z, v) => {
             if (z !== 'heizt') return 0;
             if (v !== null && v >= 30) return 3;
@@ -142,7 +147,7 @@ button_card_templates:
               : z === 'bereit' ? 'Bereit'
               : z === 'aus' ? 'Aus'
               : (e ? e.state : '');
-            const arcCol = z === 'aus' ? '#3a4453' : col;
+            const arcCol = z === 'aus' ? 'var(--owlet-aus, #3a4453)' : col;
             const val = tgt !== null ? TRACK * anteil(tgt) : 0;
 
             // Fenster offen: gestrichelter Bogen bis zum Sollwert laut Wochenplan
@@ -152,7 +157,7 @@ button_card_templates:
             if (zeigePlan) {
               const th = anteil(plan) * 1.5 * Math.PI;
               const x = (59 + R * Math.cos(th)).toFixed(2), y = (59 + R * Math.sin(th)).toFixed(2);
-              geist = `<path d="M ${59 + R} 59 A ${R} ${R} 0 ${th > Math.PI ? 1 : 0} 1 ${x} ${y}" fill="none" stroke="rgba(127,179,213,0.5)" stroke-width="2" stroke-dasharray="3 4" stroke-linecap="round"/>`;
+              geist = `<path d="M ${59 + R} 59 A ${R} ${R} 0 ${th > Math.PI ? 1 : 0} 1 ${x} ${y}" fill="none" style="stroke:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 50%, transparent)" stroke-width="2" stroke-dasharray="3 4" stroke-linecap="round"/>`;
             }
 
             let curBig = '–', curDec = '°';
@@ -163,17 +168,17 @@ button_card_templates:
                 <div style="position:relative;width:118px;height:118px;">
                   <svg viewBox="0 0 118 118" style="width:118px;height:118px;">
                     <g transform="rotate(135 59 59)">
-                      <circle cx="59" cy="59" r="${R}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8" stroke-linecap="round" stroke-dasharray="${TRACK.toFixed(1)} ${C.toFixed(1)}"/>
+                      <circle cx="59" cy="59" r="${R}" fill="none" style="stroke:color-mix(in srgb, rgba(255, 255, 255, 0.07) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)))" stroke-width="8" stroke-linecap="round" stroke-dasharray="${TRACK.toFixed(1)} ${C.toFixed(1)}"/>
                       ${geist}
-                      ${tgt !== null ? `<circle cx="59" cy="59" r="${R}" fill="none" stroke="${arcCol}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${val.toFixed(1)} ${C.toFixed(1)}"/>` : ''}
+                      ${tgt !== null ? `<circle cx="59" cy="59" r="${R}" fill="none" style="stroke:${arcCol}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${val.toFixed(1)} ${C.toFixed(1)}"/>` : ''}
                     </g>
                   </svg>
                   <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
-                    <div style="color:#f2f5f8;font-weight:750;letter-spacing:-0.02em;">
+                    <div style="color:var(--owlet-text, #f2f5f8);font-weight:750;letter-spacing:-0.02em;">
                       <span style="font-size:26px;font-variant-numeric:tabular-nums;">${curBig}</span><span style="font-size:14px;">${curDec}</span>
                     </div>
-                    <div style="font-size:11px;color:#8794a5;margin-top:3px;font-variant-numeric:tabular-nums;">${tgt !== null ? 'Soll ' + de(tgt, 1) + '°' : '—'}</div>
-                    ${zeigePlan ? `<div style="font-size:11px;color:#8794a5;margin-top:2px;font-variant-numeric:tabular-nums;">Plan ${de(plan, 1)}°</div>` : ''}
+                    <div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);margin-top:3px;font-variant-numeric:tabular-nums;">${tgt !== null ? 'Soll ' + de(tgt, 1) + '°' : '—'}</div>
+                    ${zeigePlan ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);margin-top:2px;font-variant-numeric:tabular-nums;">Plan ${de(plan, 1)}°</div>` : ''}
                   </div>
                 </div>
                 <div style="font-size:11.5px;font-weight:600;color:${col};">${txt}</div>
@@ -181,11 +186,13 @@ button_card_templates:
           };
 
           // ---------- Animation in der Bogenluecke ----------
-          const WELLE = { 1: { n: 1, d: 6.0, o: 0.24 }, 2: { n: 2, d: 4.5, o: 0.24 }, 3: { n: 3, d: 3.2, o: 0.5 } };
+          // Deckkraft dunkel 0,24 / 0,5, hell 0,37 / 0,74 (gleicher Kontrast zur Kachel wie dunkel)
+          const WO1 = 'calc(37% - 0.13 * var(--owlet-dunkel-anteil, 100%))', WO3 = 'calc(74% - 0.24 * var(--owlet-dunkel-anteil, 100%))';
+          const WELLE = { 1: { n: 1, d: 6.0, o: WO1 }, 2: { n: 2, d: 4.5, o: WO1 }, 3: { n: 3, d: 3.2, o: WO3 } };
           const wellen = (st) => {
             const w = WELLE[st];
             const xs = w.n === 1 ? [21] : w.n === 2 ? [14, 28] : [8, 21, 34];
-            return xs.map((x, i) => `<i class="hz-welle" style="left:${x}px;--d:${w.d}s;--p:${(i / w.n + rnd(i, st) * 0.15).toFixed(2)}"><svg width="8" height="22" viewBox="0 0 8 22"><path d="M4 21c-3-3 3-5 0-8s3-5 0-8-1-3 0-4" fill="none" stroke="rgba(230,181,102,${w.o})" stroke-width="1.6" stroke-linecap="round"/></svg></i>`).join('');
+            return xs.map((x, i) => `<i class="hz-welle" style="left:${x}px;--d:${w.d}s;--p:${(i / w.n + rnd(i, st) * 0.15).toFixed(2)}"><svg width="8" height="22" viewBox="0 0 8 22"><path d="M4 21c-3-3 3-5 0-8s3-5 0-8-1-3 0-4" fill="none" style="stroke:color-mix(in srgb, var(--owlet-amber, #e6b566) ${w.o}, transparent)" stroke-width="1.6" stroke-linecap="round"/></svg></i>`).join('');
           };
           const luftzug = () => [[6, 0, 30], [14, 0.35, 6], [22, 0.7, 20]]
             .map(([y, p, rest]) => `<i class="hz-zug" style="top:${y}px;--p:${p}s;--rest:${rest}px"></i>`).join('');
@@ -238,7 +245,7 @@ button_card_templates:
       @keyframes hz-steig { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-26px); opacity: 0; } }
 
       /* Fenster offen: Luftzug, drei Durchgaenge, dann Standbild */
-      .hz-zug { left: 0; width: 26px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(205, 214, 224, 0), rgba(205, 214, 224, 0.5), rgba(205, 214, 224, 0)); animation: hz-zug 2.4s ease-in-out 3 both; animation-delay: var(--p); }
+      .hz-zug { left: 0; width: 26px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--owlet-wolkengrau, #cdd6e0) calc(85% - 0.35 * var(--owlet-dunkel-anteil, 100%)), transparent), transparent); animation: hz-zug 2.4s ease-in-out 3 both; animation-delay: var(--p); }
       @keyframes hz-zug { from { transform: translateX(-28px); } to { transform: translateX(var(--rest)); } }
 
       @media (prefers-reduced-motion: reduce) {

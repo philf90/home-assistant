@@ -245,7 +245,9 @@ und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
 `energie-monatsbilanz-karte.yaml` (Diagrammfarben per card-mod-CSS, weil
 apexcharts-card bei einem Themewechsel nicht neu zeichnet; siehe deren
 Kopfkommentar) und `energie-flow-karte.yaml` (SVG-Farben als `style`, nicht
-als Attribut). Damit ist die Energie-View vollständig umgestellt. Die
+als Attribut). Damit ist die Energie-View vollständig umgestellt. Von der
+Heizung-View sind `heizung-templates.yaml` (Regler und Animation) und
+`thermostate-karte-v3.yaml` umgestellt. Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -442,9 +444,10 @@ gilt hell über den Schalter:
 
 - **Animierte Hintergründe:** Die Wetteranimation ist umgestellt (Banner,
   Wetter- und Wind-Karte), ebenso der Energiefluss (Leitungen in den
-  Knotenfarben, inaktive Leitungen in `owlet-unterkachel-rand`). Die
-  Animationen von Hausgeräten, Heizung und Auto (Luft, Eis) brauchen eigene
-  Regeln.
+  Knotenfarben, inaktive Leitungen in `owlet-unterkachel-rand`) und die
+  Heizung (Wellen und Luftzug hell mit höherer Deckkraft, siehe
+  `heizung-templates.yaml`). Die Animationen von Hausgeräten und Auto (Luft,
+  Eis) brauchen eigene Regeln.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
