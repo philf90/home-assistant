@@ -22,14 +22,14 @@
 #                 Ordnung". Dazu Systemzustand, Latenz, letztes Ereignis.
 #                 Antippen oeffnet die CCU.
 #   Funk          CCU (Funkmodul RPI-RF-MOD) und Access Point (HAP, Garage):
-#                 Duty Cycle des Geraets und der CCU-Systemvariable (beide,
-#                 weil sie voneinander abweichen koennen), Carrier Sense;
+#                 Duty Cycle (vom Funkmodul selbst gemeldet) und Carrier
+#                 Sense;
 #                 Balken gruen unter 50 %, amber ab 50 %, rot ab 80 %.
 #                 Darunter die drei Schnittstellen der CCU.
 #   Rauchmelder   Alarmstatus und Batterie der vier Rauchmelder.
 #   Wartung       Batterien, Firmware, Meldungen, Anlernmodus.
-#   Steckdosen    Kueche und Garten (mit Leistung) zum Schalten, Keypad am
-#   und Keypad    Windfang mit Code-Status und Sperre.
+#   Steckdosen    Kueche und Garten (mit Leistung) zum Schalten, Keypad mit
+#   und Keypad    Code-Status und Sperre.
 #
 # Batterien und Firmware: keine Liste von Entity-IDs. Die Wartungskarte sucht
 # sie selbst, damit neue Geraete ohne Aenderung auftauchen:
@@ -172,7 +172,7 @@ sections:
               - text-align: left
   - type: grid
     cards:
-      # ---- Funk: Duty Cycle (Geraet und CCU-Variable), Carrier Sense ----
+      # ---- Funk: Duty Cycle, Carrier Sense ----
       - type: vertical-stack
         card_mod: &huelle
           style: |
@@ -211,13 +211,11 @@ sections:
               funkmodule:
                 - titel: CCU
                   unter: Funkmodul RPI-RF-MOD
-                  dc_geraet: sensor.rpi_rf_mod_seriennr_duty_cycle_level
-                  dc_ccu: sensor.homematic_sv_dutycycle
+                  dc: sensor.rpi_rf_mod_seriennr_duty_cycle_level
                   cs: sensor.rpi_rf_mod_seriennr_carrier_sense_level
                 - titel: Access Point
                   unter: HAP, Garage
-                  dc_geraet: sensor.hmip_hap_js1_seriennr_duty_cycle_level
-                  dc_ccu: sensor.hmip_hap_js1_seriennr_dutycycle_hmip_hap_js1
+                  dc: sensor.hmip_hap_js1_seriennr_duty_cycle_level
                   cs: sensor.hmip_hap_js1_seriennr_carrier_sense_level
               schnittstellen:
                 - name: HmIP-RF
@@ -244,7 +242,7 @@ sections:
                   };
                   const block = (m) => `<div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:10px 12px;display:grid;gap:9px;min-width:0;">
                       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${m.titel}</span><span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;">${m.unter}</span></div>
-                      ${zeile('Duty Cycle Gerät', m.dc_geraet)}${zeile('Duty Cycle CCU-Variable', m.dc_ccu)}${zeile('Carrier Sense', m.cs)}
+                      ${zeile('Duty Cycle', m.dc)}${zeile('Carrier Sense', m.cs)}
                     </div>`;
                   const sch = variables.schnittstellen.map((s) => {
                     const st = states[s.entity] ? states[s.entity].state : '';
@@ -343,7 +341,7 @@ sections:
                   const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
                   const chip = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:9px;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};"></span>${t}</span>`;
                   const zeile = (icon, c, titel, text, rechts) => `<div style="display:flex;align-items:center;gap:10px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:9px 12px;min-width:0;">
-                      <span style="width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><ha-icon icon="${icon}" style="--mdc-icon-size:18px;width:18px;height:18px;display:block;"></ha-icon></span>
+                      <span style="width:34px;height:34px;flex:0 0 auto;border-radius:10px;display:grid;place-items:center;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><ha-icon icon="${icon}" style="--mdc-icon-size:18px;--ha-icon-display:block;width:18px;height:18px;display:block;"></ha-icon></span>
                       <span style="flex:1;min-width:0;display:grid;gap:1px;"><span style="font-size:13.5px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${titel}</span><span style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:normal;">${text}</span></span>
                       ${rechts}
                     </div>`;
@@ -521,7 +519,7 @@ sections:
                 styles: *steckdose
           - type: custom:button-card
             entity: sensor.hmip_wkp_seriennr_code_status
-            name: Keypad Windfang
+            name: Keypad
             icon: mdi:dialpad
             show_state: false
             tap_action:
@@ -554,6 +552,7 @@ sections:
               grid:
                 - grid-template-areas: '"i n" "i zustand"'
                 - grid-template-columns: min-content minmax(0, 1fr)
+                - grid-template-rows: min-content min-content
                 - column-gap: 10px
                 - row-gap: 6px
               img_cell:
