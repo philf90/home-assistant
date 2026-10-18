@@ -243,7 +243,8 @@ und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
 `energie-zaehler-karte.yaml`, `energie-solarbank-pv-karte.yaml` und
 `energie-monatsbilanz-karte.yaml` (Diagrammfarben aus dem Theme, siehe deren
-Kopfkommentar). Die
+Kopfkommentar) und `energie-flow-karte.yaml` (SVG-Farben als `style`, nicht
+als Attribut). Damit ist die Energie-View vollständig umgestellt. Die
 Owlet-Karte bleibt als Identitätshülle dunkel.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
@@ -421,9 +422,10 @@ gilt hell über den Schalter:
 ### Noch offen
 
 - **Animierte Hintergründe:** Die Wetteranimation ist umgestellt (Banner,
-  Wetter- und Wind-Karte). Die Animationen von Hausgeräten, Heizung, Auto
-  und Energiefluss (Luft, Eis, inaktive Leitungen in Weiß mit Deckkraft)
-  brauchen eigene Regeln.
+  Wetter- und Wind-Karte), ebenso der Energiefluss (Leitungen in den
+  Knotenfarben, inaktive Leitungen in `owlet-unterkachel-rand`). Die
+  Animationen von Hausgeräten, Heizung und Auto (Luft, Eis) brauchen eigene
+  Regeln.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
