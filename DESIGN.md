@@ -230,7 +230,9 @@ Profil oder im More-Menü (System, Hell, Dunkel).
 
 **Stand:** Palette und Theme stehen. Umgestellt sind die schwebende
 Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
-`navbar-karte.yaml`).
+`navbar-karte.yaml`) sowie von der Home-View `haustuer-ereignis-karte.yaml`,
+`person-presence-karte.yaml`, `fenster-lichter-karte.yaml`,
+`haustuer-lock-karte.yaml`, `pollenflug-karte.yaml` und `wlan-karte.yaml`.
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
