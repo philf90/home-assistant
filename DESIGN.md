@@ -228,8 +228,9 @@ und `theme` (jede Variable mit ihrem dunklen und hellen Wert). Daraus erzeugt
 `modes: dark` und `modes: light`. Welcher Modus gilt, wählt jeder Benutzer im
 Profil oder im More-Menü (System, Hell, Dunkel).
 
-**Stand:** Palette und Theme stehen. Umgestellt ist das More-Menü der
-Navigation (Pilot, `navigation-templates.yaml` und `navbar-karte.yaml`).
+**Stand:** Palette und Theme stehen. Umgestellt sind die schwebende
+Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
+`navbar-karte.yaml`).
 Die übrigen Karten tragen noch die festen dunklen Werte und werden
 schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
 
