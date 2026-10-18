@@ -1,0 +1,319 @@
+# ============================================================================
+# Kameras – komplette Ansicht
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card, card-mod, decluttering-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                owlet_kamera_kachel (kameras-templates.yaml),
+#                top_navigation (navigation-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
+# Platzhalter:   kind_1/kind_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Kamera-View (Owlet-Stil): Uebersicht statt sieben Live-Streams untereinander.
+# Ersetzt kameras-karte.yaml (jetzt in archiv/).
+#
+#   Kopfkarte      Was gerade los ist (Klingel, Babyschrei, Person mit
+#                  Kameraname, sonst "Alles ruhig"), letztes Klingeln, Paket
+#                  vor der Tuer, wie viele Kameras online sind
+#   Kinderzimmer   Kinderzimmer 1 und 2
+#   Eingang        Haustuer (G4 Doorbell, volle Breite), Paketkamera und
+#                  Zugang (zweite Kamera am Eingang, UA G3 Pro)
+#   Aussen         Hof, Garage, Trampolin, Pool
+#
+# Jede Kamera ist eine Kachel aus kameras-templates.yaml: Standbild (alle 10 s
+# neu, solange sichtbar), Name, Status; Antippen oeffnet sie live im Popup.
+# Halten oeffnet den more-info-Dialog.
+#
+# Status statt "REC": Die alte Karte las den Kamera-Zustand. Daueraufzeichnung
+# meldet "recording", deshalb stand bei sechs von sieben Kameras ein rotes
+# "REC". Rot ist im Owlet-Stil kritischen Zustaenden vorbehalten. Jetzt zaehlen
+# nur Erkennungen (Person, Babyschrei, Klingel, Paket); Rot gibt es nur fuer
+# "Offline".
+#
+# Signale je Kamera (UniFi Protect, Stand 18.10.2026):
+#   - "Letzte erkannte Bewegung" ist nur bei Kinderzimmer 1, Haustuer, Hof und
+#     Garage aktiv; bei den anderen ist der Sensor in HA deaktiviert.
+#   - Trampolin und Zugang haben kein verlaessliches Signal ("Person erkannt"
+#     nicht verfuegbar, "Bewegung" seit dem Neustart unveraendert) und zeigen
+#     deshalb keinen Status, ausser "Offline".
+#   - Die Kamera "Trampolin" heisst in HA "Garten"; die View behaelt den
+#     Namen Trampolin.
+#
+# Die Liste unter variables.kameras der Kopfkarte muss zu den Kacheln passen:
+# wer eine Kamera ergaenzt, traegt sie an beiden Stellen ein.
+#
+# Sichtbarkeit: Kopfkarte und die drei Huellen nur fuer die beiden
+# freigegebenen Benutzer (wie in der alten Karte). Die Benutzer-IDs sind
+# instanzgebunden, siehe README.md.
+#
+# Voraussetzung: custom:button-card (v7) + custom:decluttering-card + card-mod
+#                + browser_mod (alle via HACS), WebRTC Camera (HACS),
+#                Integration UniFi Protect, Integration "Time & Date"
+#                (sensor.time), Helfer input_boolean.paket_vor_der_tur und
+#                input_datetime.paket_erkannt_um (siehe
+#                haustuer-ereignis-karte.yaml), Templates aus
+#                navigation-templates.yaml und kameras-templates.yaml.
+type: sections
+max_columns: 2
+title: Kamera
+path: kamera
+icon: mdi:cctv
+sections:
+  - type: grid
+    cards:
+      - type: custom:decluttering-card
+        template: top_navigation
+      # Kopf: Lage ueber alle Kameras
+      - type: custom:button-card
+        name: Kameras
+        icon: mdi:cctv
+        show_icon: true
+        show_name: true
+        tap_action:
+          action: none
+        visibility: &nutzer
+          - condition: user
+            users:
+              - cd2f999e65374610be36639942858fed
+              - 04c7352352c44b94a1c5557bb90aa99b
+        variables:
+          klingel_zeit: sensor.haustur_last_doorbell_ring
+          paket: input_boolean.paket_vor_der_tur
+          paket_zeit: input_datetime.paket_erkannt_um
+          kameras:
+            - name: Kinderzimmer 1
+              kamera: camera.kinderzimmer_high_resolution_channel
+              person: binary_sensor.kinderzimmer_person_detected
+              baby: binary_sensor.kinderzimmer_baby_cry_detected
+            - name: Kinderzimmer 2
+              kamera: camera.g4_instant_high_resolution_channel
+              person: binary_sensor.kind_2_person_erkannt
+              baby: binary_sensor.kind_2_babyschrei_erkannt
+            - name: Haustür
+              kamera: camera.haustur_high_resolution_channel
+              person: binary_sensor.haustur_person_detected
+              klingel: binary_sensor.haustur_doorbell
+            - name: Paket
+              kamera: camera.haustur_package_camera
+            - name: Zugang
+              kamera: camera.door_05b8_entry_high_resolution_channel
+            - name: Hof
+              kamera: camera.hof_high_resolution_channel
+              person: binary_sensor.hof_person_detected
+            - name: Garage
+              kamera: camera.garage_high_resolution_channel
+              person: binary_sensor.garage_person_detected
+            - name: Trampolin
+              kamera: camera.g5_bullet_high_resolution_channel
+            - name: Pool
+              kamera: camera.g5_bullet_high_resolution_channel_2
+              person: binary_sensor.pool_person_erkannt
+        custom_fields:
+          lage: |
+            [[[
+              const st = (id) => (id && states[id]) ? states[id].state : '';
+              const K = variables.kameras;
+              const liste = (n) => n.length > 2 ? `${n.length} Kameras` : n.join(', ');
+              const baby = K.filter((k) => st(k.baby) === 'on').map((k) => k.name);
+              const pers = K.filter((k) => st(k.person) === 'on').map((k) => k.name);
+              let c = 'var(--owlet-gruen, #a6d49e)', t = 'Alles ruhig';
+              if (K.some((k) => st(k.klingel) === 'on')) { c = 'var(--owlet-amber, #e6b566)'; t = 'Es klingelt'; }
+              else if (baby.length) { c = 'var(--owlet-amber, #e6b566)'; t = `Babyschrei · ${liste(baby)}`; }
+              else if (pers.length) { c = 'var(--owlet-amber, #e6b566)'; t = `Person · ${liste(pers)}`; }
+              // Status-Pille wie die Kopf-Badges der anderen Views
+              return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+            ]]]
+          info: |
+            [[[
+              states['sensor.time']; // liest die Uhrzeit, damit button-card v7 jede Minute neu zeichnet
+              const st = (id) => (id && states[id]) ? states[id].state : '';
+              const K = variables.kameras;
+              const vor = (ms) => {
+                const min = Math.max(0, Math.floor((Date.now() - ms) / 60000));
+                const h = Math.floor(min / 60), d = Math.floor(h / 24);
+                return min < 1 ? 'gerade eben' : min < 60 ? `vor ${min} Min.` : h < 24 ? `vor ${h} Std.` : (d === 1 ? 'vor 1 Tag' : `vor ${d} Tagen`);
+              };
+              const chip = (label, wert, c) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:11px;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--owlet-label, #b4c0cf);font-size:12.5px;font-weight:600;white-space:nowrap;">${label}<b style="font-weight:700;color:${c || 'var(--owlet-text, #f2f5f8)'};">${wert}</b></span>`;
+              const ring = Date.parse(st(variables.klingel_zeit));
+              const pz = states[variables.paket_zeit];
+              const pMs = (pz && pz.attributes && pz.attributes.timestamp) ? pz.attributes.timestamp * 1000 : NaN;
+              const paket = st(variables.paket) === 'on'
+                ? chip('Paket', Number.isFinite(pMs) ? `seit ${new Date(pMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : 'liegt da', 'var(--owlet-amber, #e6b566)')
+                : chip('Paket', 'keins');
+              const off = K.filter((k) => { const s = st(k.kamera); return !s || s === 'unavailable' || s === 'unknown'; }).length;
+              return `<div style="display:flex;flex-wrap:wrap;gap:6px;">${chip('Klingel', Number.isFinite(ring) ? vor(ring) : '–')}${paket}${chip('Online', `${K.length - off}/${K.length}`, off ? 'var(--owlet-rot, #f0736a)' : '')}</div>`;
+            ]]]
+        styles:
+          card:
+            - padding: 16px 18px
+            - border-radius: 22px
+            - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+            - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+            - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+          grid:
+            - grid-template-areas: '"i n lage" "info info info"'
+            - grid-template-columns: min-content 1fr min-content
+            - grid-template-rows: min-content min-content
+            - row-gap: 12px
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - background: 'color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent)'
+            - border: '1px solid color-mix(in srgb, var(--owlet-rot, #f0736a) 24%, transparent)'
+          icon:
+            - width: 23px
+            - height: 23px
+            - --ha-icon-display: block
+            - color: 'var(--owlet-rot, #f0736a)'
+          name:
+            - justify-self: start
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: 'var(--owlet-text, #f2f5f8)'
+          custom_fields:
+            lage:
+              - justify-self: end
+            info:
+              - justify-self: start
+              - text-align: left
+  - type: grid
+    cards:
+      - type: vertical-stack
+        visibility: *nutzer
+        card_mod: &huelle
+          style: |
+            #root {
+              background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+              border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+              border-radius: 22px !important;
+              box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+              padding: 14px 16px 16px !important;
+              gap: 10px !important;
+            }
+        cards:
+          - type: custom:button-card
+            name: Kinderzimmer
+            show_icon: false
+            tap_action:
+              action: none
+            styles: &gruppe
+              card:
+                - background: none
+                - box-shadow: none
+                - border: none
+                - padding: 2px 2px 0
+              name:
+                - justify-self: start
+                - font-size: 15px
+                - font-weight: 700
+                - letter-spacing: -0.02em
+                - color: 'var(--owlet-text, #f2f5f8)'
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.kinderzimmer_high_resolution_channel
+                  - name: Kinderzimmer 1
+                  - person: binary_sensor.kinderzimmer_person_detected
+                  - baby: binary_sensor.kinderzimmer_baby_cry_detected
+                  - bewegung: sensor.kinderzimmer_last_motion_detected
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.g4_instant_high_resolution_channel
+                  - name: Kinderzimmer 2
+                  - person: binary_sensor.kind_2_person_erkannt
+                  - baby: binary_sensor.kind_2_babyschrei_erkannt
+  - type: grid
+    cards:
+      - type: vertical-stack
+        visibility: *nutzer
+        card_mod: *huelle
+        cards:
+          - type: custom:button-card
+            name: Eingang
+            show_icon: false
+            tap_action:
+              action: none
+            styles: *gruppe
+          - type: custom:decluttering-card
+            template: owlet_kamera_kachel
+            variables:
+              - kamera: camera.haustur_high_resolution_channel
+              - name: Haustür
+              - person: binary_sensor.haustur_person_detected
+              - klingel: binary_sensor.haustur_doorbell
+              - bewegung: sensor.haustur_last_motion_detected
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              # Paketkamera: kein Stream (supported_features 0), im Popup das Standbild
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.haustur_package_camera
+                  - name: Paket
+                  - paket: input_boolean.paket_vor_der_tur
+                  - popup_typ: picture-entity
+              # Zugang (UA G3 Pro): ohne verlaessliches Erkennungssignal, kein Status
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.door_05b8_entry_high_resolution_channel
+                  - name: Zugang
+  - type: grid
+    cards:
+      - type: vertical-stack
+        visibility: *nutzer
+        card_mod: *huelle
+        cards:
+          - type: custom:button-card
+            name: Außen
+            show_icon: false
+            tap_action:
+              action: none
+            styles: *gruppe
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.hof_high_resolution_channel
+                  - name: Hof
+                  - person: binary_sensor.hof_person_detected
+                  - bewegung: sensor.hof_last_motion_detected
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.garage_high_resolution_channel
+                  - name: Garage
+                  - person: binary_sensor.garage_person_detected
+                  - bewegung: sensor.garage_last_motion_detected
+              # Trampolin (in HA "Garten"): ohne verlaessliches Erkennungssignal, kein Status
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.g5_bullet_high_resolution_channel
+                  - name: Trampolin
+              - type: custom:decluttering-card
+                template: owlet_kamera_kachel
+                variables:
+                  - kamera: camera.g5_bullet_high_resolution_channel_2
+                  - name: Pool
+                  - person: binary_sensor.pool_person_erkannt
+  - type: grid
+    cards:
+      - type: custom:decluttering-card
+        template: floating_navbar

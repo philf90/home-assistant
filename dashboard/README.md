@@ -142,6 +142,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`kameras-karte.yaml`](sonstiges/kameras-karte.yaml) | karte | Kameras | button-card, card-mod, webrtc-camera | – | aktiv |
+| [`kameras-templates.yaml`](sonstiges/kameras-templates.yaml) | templates | Kameras – Decluttering-Template owlet_kamera_kachel | button-card, webrtc-camera | – | aktiv |
+| [`kameras-view.yaml`](sonstiges/kameras-view.yaml) | view | Kameras – komplette Ansicht | button-card, card-mod, decluttering-card | `kind_1/kind_2` | aktiv |
 | [`muellabfuhr-karte-v2.yaml`](sonstiges/muellabfuhr-karte-v2.yaml) | karte | Muellabfuhr v2 – Countdown | button-card, card-mod | – | aktiv |
+| [`kameras-karte.yaml`](sonstiges/archiv/kameras-karte.yaml) | karte | Kameras | button-card, card-mod, webrtc-camera | – | archiv, ersetzt durch `kameras-view.yaml` |
 | [`muellabfuhr-karte.yaml`](sonstiges/archiv/muellabfuhr-karte.yaml) | karte | Muellabfuhr v1 – trash-card | button-card, card-mod, trash-card | – | archiv, ersetzt durch `muellabfuhr-karte-v2.yaml` |

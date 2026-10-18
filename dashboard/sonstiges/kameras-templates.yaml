@@ -1,0 +1,191 @@
+# ============================================================================
+# Kameras – Decluttering-Template owlet_kamera_kachel
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card, webrtc-camera
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter decluttering_templates:
+# Platzhalter:   keine
+# ============================================================================
+# EINMAL einfuegen: Raw-Konfigurationseditor des Dashboards -> den Eintrag
+#   unter "decluttering_templates:" ergaenzen (neben top_navigation und
+#   floating_navbar aus navigation-templates.yaml).
+#
+# Eine Kachel je Kamera fuer kameras-view.yaml: Standbild, darunter der Name,
+# oben rechts der Status. Antippen oeffnet die Kamera live im browser_mod-
+# Popup (webrtc-camera mit Ton, Vollbild und Zoom).
+#
+# Warum Standbild statt Live-Stream in der Kachel: Die View zeigt alle neun
+# Kameras auf einem Bildschirm. picture-entity mit camera_view: auto laedt das
+# Bild alle 10 s neu und nur, solange die Kachel sichtbar ist (HA-Frontend,
+# hui-image.ts: UPDATE_INTERVAL = 10000, IntersectionObserver). Ein Stream
+# startet erst im Popup.
+#
+# Status oben rechts, erste zutreffende Zeile gewinnt:
+#   Offline      rot, Kamera-Entity unavailable oder unknown
+#   Klingel      amber, solange die Klingel-Entity "on" ist
+#   Babyschrei   amber, solange die Babyschrei-Erkennung "on" ist
+#   Person       amber, solange die Personenerkennung "on" ist
+#   Paket        amber, wenn der Paket-Helfer "on" ist, sonst grau "Kein Paket"
+#   vor 12 Min.  grau, Zeitpunkt aus dem Sensor "Letzte erkannte Bewegung"
+#   Ruhig        grau, wenn es eine Erkennung gibt, aber keinen Zeitpunkt
+#   (nichts)     ohne Erkennungs-Entities, z. B. bei Kameras ohne
+#                verlaessliches Signal
+# Die Daueraufzeichnung (Kamera-Zustand "recording") zeigt die Kachel nicht:
+# Sie ist der Normalfall und kein Hinweis.
+#
+# Variablen:
+#   kamera     camera.*-Entity (Standbild und Popup)
+#   name       Anzeigename (Kachel und Popup-Titel)
+#   person     optional, binary_sensor "Person erkannt"
+#   baby       optional, binary_sensor "Babyschrei erkannt"
+#   klingel    optional, binary_sensor der Tuerklingel
+#   bewegung   optional, sensor "Letzte erkannte Bewegung" (Zeitstempel)
+#   paket      optional, input_boolean "Paket vor der Tuer"
+#   popup_typ  Karte im Popup; Standard custom:webrtc-camera. Kameras ohne
+#              Stream (supported_features 0, z. B. die Paketkamera) nehmen
+#              picture-entity und zeigen dort das Standbild gross.
+#
+# Hinweise zu den Karten:
+#   - Das Standbild ist eine picture-entity in custom_fields. Ihr Feld hat
+#     pointer-events: none, damit der Tipp bei der button-card ankommt und
+#     das Popup oeffnet statt des more-info-Dialogs.
+#   - Ecken und Rand des Bildes setzt das Feld selbst; die --ha-card-*-
+#     Variablen nehmen der inneren Karte Rahmen und Rundung, ohne card-mod
+#     in einer verschachtelten Karte.
+#   - states['sensor.time'] im Status-Template laesst button-card v7 jede
+#     Minute neu zeichnen, damit "vor 12 Min." nachzieht.
+#   - webrtc-camera ignoriert camera_view, show_name, show_state und
+#     fit_mode; die Schluessel gelten nur fuer picture-entity im Popup.
+#
+# Voraussetzung: custom:decluttering-card, custom:button-card (v7),
+#                WebRTC Camera (HACS-Integration, bringt webrtc-camera mit),
+#                browser_mod (Popup), Integration "Time & Date" (sensor.time).
+# ============================================================================
+decluttering_templates:
+  owlet_kamera_kachel:
+    default:
+      - person: ''
+      - baby: ''
+      - klingel: ''
+      - bewegung: ''
+      - paket: ''
+      - popup_typ: custom:webrtc-camera
+    card:
+      type: custom:button-card
+      entity: '[[kamera]]'
+      name: '[[name]]'
+      show_icon: false
+      show_name: true
+      show_state: false
+      variables:
+        person: '[[person]]'
+        baby: '[[baby]]'
+        klingel: '[[klingel]]'
+        bewegung: '[[bewegung]]'
+        paket: '[[paket]]'
+      tap_action:
+        action: fire-dom-event
+        browser_mod:
+          service: browser_mod.popup
+          data:
+            title: '[[name]]'
+            # Owlet: Popups bekommen die erhoehte Flaeche owlet-flaeche-erhoeht (DESIGN.md)
+            popup_styles:
+              - style: all
+                styles: |
+                  ha-dialog {
+                    --ha-dialog-surface-background: var(--owlet-flaeche-erhoeht, #222b3c);
+                    --ha-card-background: transparent;
+                    --primary-text-color: var(--owlet-text, #f2f5f8);
+                    --ha-dialog-border-radius: 22px !important;
+                  }
+            content:
+              type: '[[popup_typ]]'
+              entity: '[[kamera]]'
+              camera_view: auto
+              show_name: false
+              show_state: false
+              fit_mode: contain
+      hold_action:
+        action: more-info
+      custom_fields:
+        bild:
+          card:
+            type: picture-entity
+            entity: '[[kamera]]'
+            camera_view: auto
+            show_name: false
+            show_state: false
+            aspect_ratio: '16:9'
+            fit_mode: cover
+            tap_action:
+              action: none
+            hold_action:
+              action: none
+        status: |
+          [[[
+            states['sensor.time']; // liest die Uhrzeit, damit button-card v7 jede Minute neu zeichnet
+            const v = variables;
+            const st = (id) => (id && states[id]) ? states[id].state : '';
+            const AMBER = 'var(--owlet-amber, #e6b566)', GRAU = 'var(--owlet-text-sekundaer, #8794a5)', ROT = 'var(--owlet-rot, #f0736a)';
+            // Auf dem Bild: deckender Grund aus der Popupflaeche, getoent wie eine Pille (0,12 / 0,24)
+            const chip = (c, t) => `<span style="display:inline-flex;align-items:center;gap:5px;color:${c};background:color-mix(in srgb, ${c} 12%, var(--owlet-flaeche-erhoeht, #222b3c));border:1px solid color-mix(in srgb, ${c} 24%, var(--owlet-flaeche-erhoeht, #222b3c));font-size:11px;font-weight:700;padding:3px 8px;border-radius:9px;white-space:nowrap;"><span style="width:6px;height:6px;border-radius:50%;background:${c};box-shadow:0 0 0 2px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+            if (!entity || entity.state === 'unavailable' || entity.state === 'unknown') return chip(ROT, 'Offline');
+            if (st(v.klingel) === 'on') return chip(AMBER, 'Klingel');
+            if (st(v.baby) === 'on') return chip(AMBER, 'Babyschrei');
+            if (st(v.person) === 'on') return chip(AMBER, 'Person');
+            if (v.paket) return st(v.paket) === 'on' ? chip(AMBER, 'Paket') : chip(GRAU, 'Kein Paket');
+            const t = v.bewegung ? Date.parse(st(v.bewegung)) : NaN;
+            if (Number.isFinite(t)) {
+              const min = Math.max(0, Math.floor((Date.now() - t) / 60000));
+              const h = Math.floor(min / 60), d = Math.floor(h / 24);
+              const txt = min < 1 ? 'gerade eben' : min < 60 ? `vor ${min} Min.` : h < 24 ? `vor ${h} Std.` : (d === 1 ? 'vor 1 Tag' : `vor ${d} Tagen`);
+              return chip(GRAU, txt);
+            }
+            if (v.person || v.baby) return chip(GRAU, 'Ruhig');
+            return '';
+          ]]]
+      styles:
+        card:
+          - padding: 0
+          - background: none
+          - border: none
+          - box-shadow: none
+          - border-radius: 12px
+        grid:
+          - grid-template-areas: '"bild" "n"'
+          - grid-template-columns: minmax(0, 1fr)
+          - row-gap: 7px
+        name:
+          - justify-self: start
+          - font-size: 13px
+          - font-weight: 700
+          - letter-spacing: -0.01em
+          - color: 'var(--owlet-text, #f2f5f8)'
+          - padding: 0 2px
+          - max-width: 100%
+        custom_fields:
+          bild:
+            - pointer-events: none
+            - border-radius: 12px
+            - overflow: hidden
+            - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+            # Video-Hintergrund (Letterbox), in beiden Modi schwarz; padding-box, sonst
+            # scheint das Schwarz durch den halbtransparenten Rand
+            - background: '#000000'
+            - background-clip: padding-box
+            - line-height: 0
+            - --ha-card-border-width: 0
+            - --ha-card-border-radius: 0
+            - --ha-card-box-shadow: none
+            - --ha-card-background: '#000000'
+          status:
+            - position: absolute
+            - top: 7px
+            - right: 7px
+            - pointer-events: none
+            - line-height: 1
