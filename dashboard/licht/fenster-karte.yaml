@@ -28,14 +28,27 @@
 # Aufgeklappt oder nicht merkt sich nur der Browser (window.__owletFensterAuf);
 # nach dem Laden der Seite ist der Bereich zu. Bis 19.10.2026 schaltete der
 # Kopf input_boolean.fenster_turen_expanded; der Helfer blieb dadurch auf
-# allen Geraeten offen. fenster-lichter-uebersicht-karte.yaml nutzt ihn weiter.
+# allen Geraeten offen. Am 19.10.2026 geloescht, zusammen mit der
+# Archivierung von fenster-lichter-uebersicht-karte.yaml (letzte Nutzerin).
 #
-# "seit": last_changed des Sensors. Nach einem Neustart von Home Assistant
-# setzen alle Sensoren last_changed auf den Startzeitpunkt (am 19.10.2026:
-# 15 der 17 Kontakte innerhalb von 0,2 s). Haben mindestens drei weitere
-# Kontakte ihren Zeitstempel innerhalb von 5 s, gilt er als Neustart und die
-# Zeile zeigt nur "offen". sensor.time laesst die Karte jede Minute neu
-# zeichnen, damit die Dauer nachzieht.
+# "seit": Zeitpunkt des letzten echten Wechsels von off auf on, aus dem
+# Recorder. last_changed allein reicht nicht: Jede Unterbrechung der
+# Integration (on -> unavailable -> on) und jeder Neustart setzt es neu. Am
+# 19.10.2026 war die Tuer Windfang seit 14:35:55 offen, last_changed stand
+# nach zwei Unterbrechungen (16:57 und 18:23) auf 18:24:47.
+#   Ablauf: Fuer jeden offenen Kontakt fragt die Karte einmal je Zustand
+#   (Schluessel entity + last_changed) die Historie der letzten 14 Tage ab
+#   (WebSocket history/history_during_period ueber this._hass bzw. hass),
+#   geht von hinten bis zum letzten "off" zurueck und nimmt das erste "on"
+#   danach; unavailable und unknown zaehlen nicht. Ergebnis in
+#   window.__owletFensterSeit; nach dem Eintreffen traegt die Karte den Text
+#   direkt in ihre Zeile ein (data-fz-seit), ohne auf das Neuzeichnen zu
+#   warten. Ohne "off" im Zeitraum: "seit mind. <aeltester Eintrag>".
+#   Bis die Antwort da ist: last_changed, ausser es sieht nach Neustart aus
+#   (mindestens drei weitere Kontakte mit Zeitstempel innerhalb von 5 s,
+#   am 19.10.2026 15 von 17 innerhalb von 0,2 s), dann nur "offen".
+# sensor.time laesst die Karte jede Minute neu zeichnen, damit die Dauer
+# nachzieht.
 #
 # Klicks: Die Karte selbst hat keine Aktion (kein Ripple). button-card setzt
 # dann ha-card.disabled mit pointer-events: none; das Feld body holt die
@@ -149,29 +162,78 @@ custom_fields:
         const s = states[k.entity];
         const st = s ? s.state : '';
         const t = s ? Date.parse(s.last_changed) : NaN;
-        return { ...k, zustand: st === 'on' ? 'offen' : (st === 'off' ? 'zu' : 'unbekannt'), t };
+        return { ...k, zustand: st === 'on' ? 'offen' : (st === 'off' ? 'zu' : 'unbekannt'), t, lc: s ? s.last_changed : '' };
       });
       // Neustart: mindestens drei weitere Kontakte mit Zeitstempel innerhalb von 5 s
       const neustart = (e) => Number.isFinite(e.t)
         && liste.filter((x) => x !== e && Number.isFinite(x.t) && Math.abs(x.t - e.t) < 5000).length >= 3;
-      const offen = liste.filter((e) => e.zustand === 'offen').sort((a, b) => (a.t || 0) - (b.t || 0));
+      const offen = liste.filter((e) => e.zustand === 'offen');
       const unklar = liste.filter((e) => e.zustand === 'unbekannt');
       const zu = liste.filter((e) => e.zustand === 'zu');
       const auf = !!window.__owletFensterAuf;
 
       const p2 = (n) => String(n).padStart(2, '0');
-      const seit = (e) => {
-        if (!Number.isFinite(e.t) || neustart(e)) return 'offen';
-        const d = new Date(e.t), jetzt = new Date();
+      // Text "seit 14:35 · 4 Std." aus Zeitpunkt (ms); mind = Beginn liegt vor dem Zeitraum
+      F.text = (t, mind) => {
+        const d = new Date(t), jetzt = new Date();
         const uhr = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
-        const tag = d.toDateString() === jetzt.toDateString()
-          ? uhr
-          : `${d.toLocaleDateString('de-DE', { weekday: 'short' })} ${uhr}`;
-        const min = Math.max(0, Math.floor((Date.now() - e.t) / 60000));
+        const tage = Math.floor((new Date(jetzt.toDateString()) - new Date(d.toDateString())) / 86400000);
+        const tag = tage === 0 ? uhr
+          : tage < 7 ? `${d.toLocaleDateString('de-DE', { weekday: 'short' })} ${uhr}`
+          : `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
+        const min = Math.max(0, Math.floor((Date.now() - t) / 60000));
         const h = Math.floor(min / 60), tg = Math.floor(h / 24);
         const dauer = min < 1 ? 'gerade eben' : min < 60 ? `${min} Min.` : h < 24 ? `${h} Std.` : (tg === 1 ? '1 Tag' : `${tg} Tage`);
-        return `seit ${tag} · ${dauer}`;
+        return mind ? `seit mind. ${tag}` : `seit ${tag} · ${dauer}`;
       };
+      // Historie: letzter echter Wechsel off -> on (Erklaerung im Dateikopf)
+      const C = window.__owletFensterSeit = window.__owletFensterSeit || {};
+      const schluessel = (e) => `${e.entity}|${e.lc}`;
+      const ausHistorie = (liste) => {
+        let mind = false, beginn = null;
+        for (let i = liste.length - 1; i >= 0; i--) {
+          const s = liste[i].s !== undefined ? liste[i].s : liste[i].state;
+          const z = liste[i].lc || liste[i].lu;
+          const t = typeof z === 'number' ? z * 1000 : Date.parse(liste[i].last_changed || liste[i].last_updated);
+          if (s === 'off') return { t: beginn, mind: false };
+          if (s === 'on') beginn = t;
+          if (i === 0) mind = true;
+        }
+        return beginn === null ? null : { t: beginn, mind };
+      };
+      const karte = this;
+      const holen = offen0 => {
+        const ws = (karte && karte._hass) || hass;
+        const neu = offen0.filter((e) => !C[schluessel(e)]);
+        if (!neu.length || !ws || typeof ws.callWS !== 'function') return;
+        neu.forEach((e) => { C[schluessel(e)] = { laeuft: true }; });
+        ws.callWS({
+          type: 'history/history_during_period',
+          start_time: new Date(Date.now() - 14 * 86400000).toISOString(),
+          entity_ids: neu.map((e) => e.entity),
+          include_start_time_state: true,
+          significant_changes_only: false,
+          minimal_response: true,
+          no_attributes: true,
+        }).then((r) => {
+          neu.forEach((e) => {
+            const erg = ausHistorie((r && r[e.entity]) || []);
+            C[schluessel(e)] = erg || { leer: true };
+            const root = karte && karte.shadowRoot;
+            const el = root && root.querySelector(`[data-fz-seit="${e.entity}"]`);
+            if (el && erg && Number.isFinite(erg.t)) el.textContent = F.text(erg.t, erg.mind);
+          });
+        }).catch(() => { neu.forEach((e) => { delete C[schluessel(e)]; }); });
+      };
+      const seit = (e) => {
+        const h = C[schluessel(e)];
+        if (h && Number.isFinite(h.t)) return F.text(h.t, h.mind);
+        if (!Number.isFinite(e.t) || neustart(e)) return 'offen';
+        return F.text(e.t, false);
+      };
+      // am laengsten offen zuerst: Zeit aus der Historie, sonst last_changed
+      const beginn = (e) => { const h = C[schluessel(e)]; return h && Number.isFinite(h.t) ? h.t : (e.t || 0); };
+      offen.sort((a, b) => beginn(a) - beginn(b));
       const symbol = (e) => e.art === 'tuer'
         ? (e.zustand === 'zu' ? 'mdi:door-closed' : 'mdi:door-open')
         : (e.zustand === 'zu' ? 'mdi:window-closed' : 'mdi:window-open');
@@ -212,9 +274,10 @@ custom_fields:
           <div ${klick('info', e.entity)} style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:7px 10px 7px 8px;border-radius:12px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};">
             ${kachel(e, c)}
             <div style="min-width:0;flex:1;font-size:14px;font-weight:700;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.name)}</div>
-            <div style="flex:none;font-size:12px;font-weight:600;color:${LABEL};white-space:nowrap;">${sub}</div>
+            <div ${e.zustand === 'offen' ? `data-fz-seit="${e.entity}"` : ''} style="flex:none;font-size:12px;font-weight:600;color:${LABEL};white-space:nowrap;">${sub}</div>
           </div>`;
       };
+      holen(offen);
       const oben = (n || u)
         ? `<div style="display:flex;flex-direction:column;gap:6px;">${offen.concat(unklar).map(zeile).join('')}</div>`
         : '';

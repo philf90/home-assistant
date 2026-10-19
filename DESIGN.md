@@ -332,9 +332,10 @@ Live-Konfiguration (alle 17 Views, Templates und die Ressource
 `unifi-netzplan-card.js`): Jede feste Farbe ist dort dunkler Rückfall in
 `var()`, ein Zweig über `owlet-dunkel-anteil` oder eine der Ausnahmen unten.
 Feste dunkle Werte tragen nur noch Kartenvarianten, die das Dashboard nicht
-verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`,
-`lichter-slider-karte.yaml` und `fenster-lichter-uebersicht-karte.yaml`
-(Alternativen zur Lichter-View). Sie bleiben in beiden Modi dunkel.
+verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml` und
+`lichter-slider-karte.yaml` (Alternativen zur Lichter-View), dazu die seit
+19.10.2026 archivierte `fenster-lichter-uebersicht-karte.yaml`. Sie bleiben
+in beiden Modi dunkel.
 
 ### Karten umstellen
 

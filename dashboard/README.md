@@ -59,13 +59,13 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`fenster-karte.yaml`](licht/fenster-karte.yaml) | karte | Fenster & Tueren – Status | button-card | – | aktiv |
 | [`fenster-lichter-karte.yaml`](licht/fenster-lichter-karte.yaml) | karte | Fenster & Lichter – Kachel | button-card | – | aktiv |
-| [`fenster-lichter-uebersicht-karte.yaml`](licht/fenster-lichter-uebersicht-karte.yaml) | karte | Fenster & Tueren, Lichter & Steckdosen – grosse Ansicht | bubble-card, button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`haustuer-ereignis-karte.yaml`](licht/haustuer-ereignis-karte.yaml) | karte | Haustuer-Ereignis | button-card | – | aktiv |
 | [`haustuer-lock-karte.yaml`](licht/haustuer-lock-karte.yaml) | karte | Haustuer-Schloss | button-card | – | aktiv |
 | [`lichter-glow-karte.yaml`](licht/lichter-glow-karte.yaml) | karte | Lichter – Variante Glow-Kacheln | button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-mushroom-karte.yaml`](licht/lichter-mushroom-karte.yaml) | karte | Lichter & Steckdosen – Variante Mushroom | button-card, card-mod, mushroom-entity-card, mushroom-light-card | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-raum-karte.yaml`](licht/lichter-raum-karte.yaml) | karte | Lichter – Variante Raum-Karten | button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-slider-karte.yaml`](licht/lichter-slider-karte.yaml) | karte | Lichter & Steckdosen – Variante Slider | button-card, card-mod, slider-button-card | `*_mac`, `kind_1/kind_2` | aktiv |
+| [`fenster-lichter-uebersicht-karte.yaml`](licht/archiv/fenster-lichter-uebersicht-karte.yaml) | karte | Fenster & Tueren, Lichter & Steckdosen – grosse Ansicht | bubble-card, button-card, card-mod | `*_mac`, `kind_1/kind_2` | archiv |
 
 ## hausgeraete
 
