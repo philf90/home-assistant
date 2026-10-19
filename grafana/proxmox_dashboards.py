@@ -37,9 +37,16 @@ API = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_API}"}
 
 # Statusstufen der Owlet-Palette (design/palette.yaml, DESIGN.md): ok, Hinweis,
 # erhoeht, kritisch. Grafanas Farbnamen ("green", "red", ...) sind nicht erlaubt;
-# ci/check_grafana.py prueft das.
-GREEN, YELLOW, ORANGE, RED = "#a6d49e", "#e6b566", "#e7936e", "#f0736a"
-BLUE = "#7fb3d5"
+# ci/check_grafana.py prueft das. Grafana gibt Hex-Werte in beiden Themes
+# unveraendert aus, deshalb Mitteltoene, die auf hellem (#ffffff) und dunklem
+# (#181b1f) Panelgrund je etwa 4,15:1 halten.
+GREEN, YELLOW, ORANGE, RED = "#508a47", "#a57301", "#c75e2a", "#cc5750"
+BLUE = "#3d83ad"
+# Farbige Tabellenzellen: heller Zellgrund, Grafana setzt darauf dunkle Schrift
+# (ab YIQ-Helligkeit 180), in beiden Themes mindestens 8,2:1. Farbige Schrift
+# in Tabellen hielte in einem der Themes keine 4,5:1.
+CELL_GREEN, CELL_YELLOW, CELL_RED = "#a6d49e", "#e6b566", "#ffa198"
+CELL = {"type": "color-background", "mode": "basic"}
 
 
 class Layout:
@@ -236,7 +243,7 @@ def bargauge(title, targets, lay, w=8, h=8, unit="percent", dec=1, th=None, desc
             "orientation": "horizontal",
             "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
             "showUnfilled": True,
-            "valueMode": "color",
+            "valueMode": "text",
         },
     }
 
@@ -286,7 +293,7 @@ def gauge_cell(th=None):
         "decimals": 1,
         "max": 100,
         "min": 0,
-        "custom.cellOptions": {"type": "gauge", "mode": "gradient"},
+        "custom.cellOptions": {"type": "gauge", "mode": "gradient", "valueDisplayMode": "text"},
         "thresholds": th or TH_USAGE,
     }
 
@@ -648,9 +655,9 @@ from(bucket: "${bucket}")
             ov("Netz aus", {"unit": "bytes"}),
             ov("Uptime", {"unit": "s", "decimals": 0}),
             ov("Status", {"mappings": [{"type": "value", "options": {
-                "running": {"color": GREEN, "index": 0, "text": "running"},
-                "stopped": {"color": "text", "index": 1, "text": "stopped"}}}],
-                "custom.cellOptions": {"type": "color-text"}}),
+                "running": {"color": CELL_GREEN, "index": 0, "text": "running"},
+                "stopped": {"color": "transparent", "index": 1, "text": "stopped"}}}],
+                "custom.cellOptions": CELL}),
         ]))
 
     panels.append(timeseries(
@@ -723,8 +730,8 @@ from(bucket: "${bucket}")
         transforms=[{"id": "organize", "options": {"excludeByName": {
             "_start": True, "_stop": True, "result": True, "table": True}}}],
         overrides=[ov("Alter", {"unit": "s", "decimals": 0, "thresholds": thresholds(
-            [(GREEN, None), (YELLOW, 60), (RED, 300)]),
-            "custom.cellOptions": {"type": "color-text"}})]))
+            [(CELL_GREEN, None), (CELL_YELLOW, 60), (CELL_RED, 300)]),
+            "custom.cellOptions": CELL})]))
 
     panels.append(textpanel("Lesehilfe", VE_NOTES, lay, w=12, h=9))
 
@@ -946,8 +953,8 @@ from(bucket: "${bucket_pbs}")
             ov("Frei", {"unit": "bytes"}),
             ov("Gesamt", {"unit": "bytes"}),
             ov("Belegt", {"unit": "bytes"}),
-            ov("Defekte Chunks", {"thresholds": thresholds([(GREEN, None), (RED, 1)]),
-                                  "custom.cellOptions": {"type": "color-text"}}),
+            ov("Defekte Chunks", {"thresholds": thresholds([(CELL_GREEN, None), (CELL_RED, 1)]),
+                                  "custom.cellOptions": CELL}),
         ]))
 
     # ---- Backup-Jobs ----------------------------------------------------
@@ -972,10 +979,10 @@ from(bucket: "${bucket_pbs}")
         overrides=[
             ov("Dauer", {"unit": "s", "decimals": 0}),
             ov("Status", {"mappings": [{"type": "value", "options": {
-                "OK": {"color": GREEN, "index": 0}}},
+                "OK": {"color": CELL_GREEN, "index": 0}}},
                 {"type": "special", "options": {"match": "empty", "result": {
-                    "color": "text", "index": 1, "text": "läuft"}}}],
-                "custom.cellOptions": {"type": "color-text"}}),
+                    "color": "transparent", "index": 1, "text": "läuft"}}}],
+                "custom.cellOptions": CELL}),
         ]))
 
     panels.append(table(
@@ -999,11 +1006,11 @@ from(bucket: "${bucket_pbs}")
             ov("Größe logisch", {"unit": "bytes"}),
             ov("Verifikation", {"mappings": [
                 {"type": "value", "options": {
-                    "ok": {"color": GREEN, "index": 0},
-                    "failed": {"color": RED, "index": 1}}},
+                    "ok": {"color": CELL_GREEN, "index": 0},
+                    "failed": {"color": CELL_RED, "index": 1}}},
                 {"type": "special", "options": {"match": "empty", "result": {
-                    "color": YELLOW, "index": 2, "text": "nie geprüft"}}}],
-                "custom.cellOptions": {"type": "color-text"}}),
+                    "color": CELL_YELLOW, "index": 2, "text": "nie geprüft"}}}],
+                "custom.cellOptions": CELL}),
         ]))
 
     panels.append(table(
@@ -1021,7 +1028,8 @@ from(bucket: "${bucket_pbs}")
         overrides=[
             ov("Dauer (lastNotNull)", {"unit": "s", "decimals": 0,
                                        "custom.cellOptions": {"type": "gauge",
-                                                              "mode": "gradient"}}),
+                                                              "mode": "gradient",
+                                                              "valueDisplayMode": "text"}}),
             ov("Dauer (max)", {"unit": "s", "decimals": 0}),
             ov("Dauer (mean)", {"unit": "s", "decimals": 0}),
         ]))
@@ -1130,8 +1138,8 @@ from(bucket: "${bucket_pbs}")
         transforms=[{"id": "organize", "options": {"excludeByName": {
             "_start": True, "_stop": True, "result": True, "table": True}}}],
         overrides=[ov("Alter", {"unit": "s", "decimals": 0, "thresholds": thresholds(
-            [(GREEN, None), (YELLOW, 60), (RED, 300)]),
-            "custom.cellOptions": {"type": "color-text"}})]))
+            [(CELL_GREEN, None), (CELL_YELLOW, 60), (CELL_RED, 300)]),
+            "custom.cellOptions": CELL})]))
 
     panels.append(textpanel("Grenzen dieses Dashboards", PBS_NOTES, lay, w=12, h=9))
 
