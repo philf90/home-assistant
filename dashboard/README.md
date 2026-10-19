@@ -104,6 +104,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`autos-karte-v4.yaml`](fahrzeuge/autos-karte-v4.yaml) | karte | Autos v4 – mit Animationen | button-card, card-mod | `kennzeichen`, `fin_*` | aktiv |
 | [`autos-passat-konfig.yaml`](fahrzeuge/autos-passat-konfig.yaml) | konfig | Passat – kombinierte Fenster- und Tueren-Sensoren | – | `kennzeichen`, `passat_*_kombiniert` | aktiv |
 | [`autos-templates.yaml`](fahrzeuge/autos-templates.yaml) | templates | Auto-Animation – button-card-Template owlet_auto_fx | – | – | aktiv |
+| [`tanken-karte.yaml`](fahrzeuge/tanken-karte.yaml) | karte | Tanken – guenstigster Diesel in der Naehe | button-card | – | aktiv |
+| [`tanken-templates.yaml`](fahrzeuge/tanken-templates.yaml) | templates | Tanken – Spritpreise aus Tankerkoenig, Bibliothek und Popup | apexcharts-card, button-card, card-mod | `tankstelle_<n>` | aktiv |
 | [`autos-animation.html`](fahrzeuge/entwuerfe/autos-animation.html) | entwurf | Auto-View: Animationen – Entwurf und Datenlage | – | `kennzeichen`, `fin_*` | Entwurf zu `autos-karte-v4.yaml`, `autos-templates.yaml` |
 | [`autos-karten-v2.html`](fahrzeuge/entwuerfe/autos-karten-v2.html) | entwurf | Auto-Karten v2 – Entwurf | – | `kennzeichen`, `fin_*` | Entwurf zu `autos-karte-v2.yaml` |
 | [`autos-karte-v2.yaml`](fahrzeuge/archiv/autos-karte-v2.yaml) | karte | Autos v2 – Volkswagen Connect (volkswagencarnet) | button-card, card-mod | `kennzeichen`, `fin_*` | archiv, ersetzt durch `autos-karte-v3.yaml` |

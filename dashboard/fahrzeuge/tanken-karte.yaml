@@ -1,0 +1,154 @@
+# ============================================================================
+# Tanken – guenstigster Diesel in der Naehe
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       fahrzeuge
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     owlet_tanken_popup (tanken-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Tanken (Owlet-Karte) fuer die Auto-View, unter den beiden Autos.
+#
+# Beide Autos fahren Diesel, deshalb steht Diesel gross:
+#   Kopf     Icon-Kachel Amber (wie die Tank-Kachel der Autos), "Tanken",
+#            rechts "n von 4 geoeffnet"
+#   Hero     guenstigster Diesel unter den geoeffneten Tankstellen, gruen
+#            getoent; darunter die Tankstelle und der Abstand zur teuersten
+#            geoeffneten (untereinander, weil nebeneinander auf dem Handy
+#            umbricht)
+#   Liste    die uebrigen Tankstellen nach Diesel-Preis, mit Aufschlag zum
+#            guenstigsten. Geschlossene rutschen ans Ende, Name und Preis in
+#            Sekundaer-Grau, kein Aufschlag.
+#   Chips    Super E10 und Super, jeweils der guenstigste geoeffnete Preis
+# Ist keine Tankstelle geoeffnet, ist der Hero neutral und nennt das.
+#
+# Tippen: Popup mit allen Sorten und dem Diesel-Verlauf (owlet_tanken_popup).
+# Tankstellen, Entity-IDs und Anzeigenamen stehen im Template
+# owlet_tankstellen in tanken-templates.yaml, nicht hier.
+#
+# Farben nur aus vorhandenen Rollen (DESIGN.md): Gruen = guenstigster Preis,
+# Amber = Tank wie in autos-karte-v4.yaml. Entwurf mit Daten der Woche
+# 12.-19.10.2026: Artefakt "Spritpreise in der Auto-View" (nicht im Repo).
+#
+# Voraussetzung: custom:button-card (v7) und browser_mod (HACS), die
+# Templates aus tanken-templates.yaml, Integration Tankerkoenig.
+type: custom:button-card
+template: owlet_tanken_popup
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+  grid:
+    - grid-template-areas: '"body"'
+    - grid-template-columns: minmax(0, 1fr)
+  custom_fields:
+    # button-card setzt auf jedes Feld .ellipsis (nowrap, overflow hidden);
+    # zuruecksetzen, damit lange Zeilen umbrechen
+    body:
+      - width: 100%
+      - min-width: 0
+      - white-space: normal
+custom_fields:
+  body: |
+    [[[
+      const tk = variables.tk, ts = variables.tankstellen || [];
+      const TEXT  = 'var(--owlet-text, #f2f5f8)';
+      const LABEL = 'var(--owlet-label, #b4c0cf)';
+      const SEK   = 'var(--owlet-text-sekundaer, #8794a5)';
+      const GRUEN = 'var(--owlet-gruen, #a6d49e)';
+      const AMBER = 'var(--owlet-amber, #e6b566)';
+      const UK    = 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
+      const UKR   = 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+      const NK    = 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))';
+      const tint  = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+      const esc = (s) => String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const diesel = tk.liste(states, ts, 'diesel');
+      const best = tk.bester(diesel);
+      const offenMitPreis = diesel.filter((e) => Number.isFinite(e.p) && e.offen !== false);
+      const teuerster = offenMitPreis.length ? offenMitPreis[offenMitPreis.length - 1].p : NaN;
+      const nOffen = ts.filter((t) => tk.offen(states, t.status) === true).length;
+
+      // ---- Kopf ----
+      // ohne geoeffnete Tankstelle Label-Grau: Sekundaer-Grau auf der eigenen
+      // Toenung kaeme dunkel nur auf 4,38:1
+      const pillC = nOffen ? GRUEN : LABEL;
+      const kopf = `
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${tint(AMBER, 16)};border:1px solid ${tint(AMBER, 24)};">
+            <ha-icon icon="mdi:gas-station" style="--mdc-icon-size:23px;width:23px;height:23px;display:flex;color:${AMBER};"></ha-icon>
+          </div>
+          <div style="min-width:0;">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">Tanken</div>
+            <div style="font-size:13px;color:${SEK};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Diesel · ${ts.length} Tankstellen</div>
+          </div>
+          <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:11px;white-space:nowrap;color:${pillC};background:${tint(pillC, 12)};border:1px solid ${tint(pillC, 24)};">
+            <span style="width:7px;height:7px;border-radius:50%;background:${pillC};"></span>${nOffen} von ${ts.length} geöffnet
+          </span>
+        </div>`;
+
+      // ---- Hero: guenstigster geoeffneter Diesel ----
+      let hero;
+      if (best) {
+        const spanne = teuerster - best.p;
+        const zusatz = offenMitPreis.length > 1 && spanne >= 0.005
+          ? ` · ${tk.euro(spanne)} € unter dem teuersten`
+          : '';
+        const zustand = best.offen === true ? 'geöffnet' : 'Status unbekannt';
+        hero = `
+          <div style="border-radius:16px;padding:14px 16px;background:${tint(GRUEN, 12)};border:1px solid ${tint(GRUEN, 24)};">
+            <div style="font-size:12px;font-weight:600;color:${LABEL};">Günstigster Diesel</div>
+            <div style="font-size:36px;font-weight:800;letter-spacing:-0.03em;line-height:1;margin-top:4px;color:${TEXT};font-variant-numeric:tabular-nums;">${tk.fmt(best.p)}<span style="font-size:16px;font-weight:600;color:${LABEL};margin-left:4px;letter-spacing:0;">€/l</span></div>
+            <div style="font-size:14px;font-weight:700;color:${TEXT};margin-top:8px;">${esc(best.name)}<span style="display:block;font-size:12px;font-weight:600;color:${LABEL};margin-top:2px;">${zustand}${zusatz}</span></div>
+          </div>`;
+      } else {
+        hero = `
+          <div style="border-radius:16px;padding:14px 16px;background:${UK};border:1px solid ${UKR};">
+            <div style="font-size:14px;font-weight:700;color:${TEXT};">Keine Tankstelle geöffnet</div>
+            <div style="font-size:12px;color:${SEK};margin-top:2px;">Ohne geöffnete Tankstelle gibt es keinen aktuellen Diesel-Preis.</div>
+          </div>`;
+      }
+
+      // ---- Liste der uebrigen Tankstellen ----
+      const zeile = (e) => {
+        const zu = e.offen === false;
+        const status = zu ? 'geschlossen' : (e.offen === true ? 'geöffnet' : 'Status unbekannt');
+        const punkt = e.offen === true ? GRUEN : SEK;
+        const auf = !zu && best && Number.isFinite(e.p) ? '+' + tk.euro(e.p - best.p) : '';
+        return `
+          <div style="display:grid;grid-template-columns:minmax(0, 1fr) auto auto;align-items:center;gap:10px;padding:10px 13px;border-radius:14px;background:${UK};border:1px solid ${UKR};">
+            <div style="min-width:0;">
+              <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${zu ? SEK : TEXT};">${esc(e.name)}</div>
+              <div style="font-size:12px;color:${SEK};display:flex;align-items:center;gap:5px;margin-top:1px;"><span style="width:6px;height:6px;border-radius:50%;background:${punkt};flex:none;"></span>${status}</div>
+            </div>
+            <div style="font-size:17px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;color:${zu ? SEK : TEXT};">${tk.fmt(e.p)}</div>
+            <div style="font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:8px;min-width:52px;box-sizing:border-box;text-align:center;font-variant-numeric:tabular-nums;color:${LABEL};background:${auf ? NK : 'transparent'};">${auf}</div>
+          </div>`;
+      };
+      const rest = diesel.filter((e) => e !== best);
+      const liste = rest.length
+        ? `<div style="display:flex;flex-direction:column;gap:8px;">${rest.map(zeile).join('')}</div>`
+        : '';
+
+      // ---- Chips: Super E10 und Super ----
+      const chip = (n, k) => {
+        const b = tk.bester(tk.liste(states, ts, k));
+        return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:11px;background:${UK};border:1px solid ${UKR};color:${LABEL};font-size:12.5px;font-weight:600;white-space:nowrap;">${n} <b style="color:${TEXT};font-weight:700;font-variant-numeric:tabular-nums;">${b ? 'ab ' + tk.fmt(b.p) : '–'}</b></span>`;
+      };
+      const chips = `<div style="display:flex;flex-wrap:wrap;gap:6px;">${chip('Super E10', 'e10')}${chip('Super', 'super')}</div>`;
+
+      return `
+        <div style="display:flex;flex-direction:column;gap:14px;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+          ${kopf}${hero}${liste}${chips}
+        </div>`;
+    ]]]

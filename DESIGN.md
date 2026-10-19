@@ -306,7 +306,12 @@ Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
 `geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
 Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
 (`autos-karte-v4.yaml` mit dem Template `owlet_auto_fx` in
-`autos-templates.yaml`), die Garten-View (`garten-karte.yaml`) und die
+`autos-templates.yaml`, dazu seit 19.10.2026 die Spritpreise in
+`tanken-karte.yaml` und `tanken-templates.yaml`: Grün für den günstigsten
+Preis, Amber für das Tank-Symbol wie in der Tank-Kachel, Diagrammserien
+Blau, Violett, Türkis und Limette per card-mod-CSS; gerendert mit den
+Theme-Werten liegt der kleinste Textkontrast hell bei 4,81:1, dunkel bei
+4,85:1), die Garten-View (`garten-karte.yaml`) und die
 Pflanzen-View (`pflanzen-view.yaml` mit dem Template `owlet_pflanze` in
 `pflanzen-templates.yaml`; das Popup-Diagramm färbt wie die Monatsbilanz
 per card-mod-CSS) und die neu gebaute Kamera-View (`kameras-view.yaml` mit
