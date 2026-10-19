@@ -15,7 +15,7 @@ Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 | Bereich | Geprüft | Anmerkung |
 |---|---|---|
 | Karten und Views (`*.yaml`, `*.js` außerhalb von `ci/` und `design/`) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
-| Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
+| Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`, Heatmap-`fill`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
 | Entwurfsseiten (`entwuerfe/*.html`) | nein | Mockups, keine Karten |
 | Dashboards in der Instanz | nein | werden in der HA-Oberfläche bearbeitet; die CI sieht sie nicht |
 
@@ -209,11 +209,11 @@ Schrift (4,5:1).
 |---|---|---|
 | Schwellwerte ok / Hinweis / erhöht / kritisch | `#508a47` / `#a57301` / `#c75e2a` / `#cc5750` | mindestens 4,14 / 4,15:1 |
 | Autarkie ab 85 % (oberste Stufe) | `#1e8d65` Mint | 4,16 / 4,16:1 |
-| Netzbezug, Netzbezugsleistung, Grenzlinien | `#cc5750` | 4,16 / 4,15:1 |
+| Netzbezug, Netzbezugsleistung, Grenzlinien, Verteilung und Lastprofil der Netzleistung | `#cc5750` | 4,16 / 4,15:1 |
 | PV | `#997801` | 4,17 / 4,15:1 |
-| Hausverbrauch, Annotationen | `#3d83ad` | 4,16 / 4,15:1 |
-| Gas | `#a57301` | 4,16 / 4,16:1 |
-| Kosten | `#8f6db7` | 4,17 / 4,15:1 |
+| Hausverbrauch, Verbrauch je Gerät, Annotationen | `#3d83ad` | 4,16 / 4,15:1 |
+| Gas, Gasverbrauch je Tag | `#a57301` | 4,16 / 4,16:1 |
+| Kosten, Exemplare der Heatmap | `#8f6db7` | 4,17 / 4,15:1 |
 | Zählerstände | `text` (Theme-Textfarbe) | – |
 
 - **Kleine Schrift nie in Statusfarbe.** Statusspalten in Tabellen stehen als
@@ -231,10 +231,13 @@ Schrift (4,5:1).
   YIQ-Helligkeit, nahe der Grenze 180 reicht das nicht (geschätzt 1,7:1). Die
   Spalte „Verbrauch“ der Energie-Detailtabelle steht deshalb ohne Farbe; die
   Größe zeigt der Balken in „Anteil“.
-- Grafanas eigene Verläufe (`continuous-GrYlRd`, `continuous-YlRd`, `Turbo`)
-  und die Reihenfarben `palette-classic` schalten mit dem Theme um, sind aber
-  keine Owlet-Farben und halten hell nicht überall 3:1 (Gelb `#F2CC0C` auf
-  `#ffffff` 1,57:1), siehe „Noch offen“.
+- **Keine Grafana-Verläufe** (`continuous-GrYlRd`, `continuous-YlRd`,
+  `Turbo`): Ihr Gelb hält hell auf `#ffffff` nur 1,57:1. Histogramm und
+  Balken stehen in einer festen Rollenfarbe, die Heatmap im Modus `opacity`
+  mit `fill` in der Rollenfarbe (das stärkste Feld 4,15:1, schwächere Felder
+  heller; den Wert zeigt Legende und Tooltip).
+- Balken und Flächen mit Deckkraft unter 1 (`fillOpacity`) haben immer eine
+  Linie in voller Farbe (`lineWidth` ab 1); sie trägt den Kontrast.
 
 Die Proxmox-Dashboards entstehen aus `grafana/proxmox_dashboards.py`; Farben
 dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` und
@@ -515,12 +518,14 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Grafana-Verläufe im hellen Theme:** Balken und Flächen in Grafanas
-  eigenem Gelb (`#F2CC0C`, 1,57:1 auf `#ffffff`) in „Verteilung der
-  Netzleistung“, „Verbrauch je Gerät“ (beide `continuous-GrYlRd`) und
-  „Gasverbrauch je Tag“ (`continuous-YlRd`); die Heatmap „Lastprofil“
-  (`Turbo`) ist nicht gemessen. Dunkel halten die Verläufe mindestens
-  4,84:1.
+- **Grafana-Reihenfarben `palette-classic`** (Zeitreihen der
+  Proxmox-Dashboards, im Energie-Dashboard Reihen ohne eigene Farbe):
+  Grafana schaltet sie mit dem Theme um, sie halten aber nicht überall 3:1.
+  Hell auf `#ffffff`: Reihe 2 `#E0B400` 1,96:1, Reihe 4 `#FF780A` 2,64:1,
+  Reihe 8 `#CC9D00` 2,50:1; dunkel auf `#181b1f`: Reihe 9 `#1F60C4` 2,90:1,
+  Reihe 11 `#C4162A` 2,88:1, Reihe 12 `#8F3BB8` 2,87:1. Eine eigene
+  Reihenfolge aus Mitteltönen wäre die Lösung; offen ist, welche Reihe welche
+  Farbe bekommt.
 
 ## Animierte Hintergründe
 

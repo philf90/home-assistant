@@ -14,9 +14,10 @@ Geprueft wird, was den Import in eine fremde Grafana-Instanz brechen wuerde:
 5. Jede referenzierte Datasource-Variable ist unter "templating" definiert.
 6. Keine "__inputs"/"__requires"-Reste aus dem "Export for sharing"-Dialog --
    die verlangen beim Import eine manuelle Zuordnung.
-7. Farben ("color", "fixedColor", "iconColor") stammen aus der Owlet-Palette
-   (design/palette.yaml). Grafanas Farbnamen wie "green" oder "dark-red" sehen
-   je nach Grafana-Theme anders aus; erlaubt sind nur "text" und "transparent".
+7. Farben ("color", "fixedColor", "iconColor", bei der Heatmap auch "fill" im
+   Farbobjekt) stammen aus der Owlet-Palette (design/palette.yaml). Grafanas
+   Farbnamen wie "green" oder "dark-red" sehen je nach Grafana-Theme anders
+   aus; erlaubt sind nur "text" und "transparent".
 
 Aufruf: python ci/check_grafana.py [datei ...]
 Ohne Argumente werden alle Dashboards geprueft (Art "grafana" aus
@@ -38,6 +39,9 @@ REQUIRED_KEYS = ("uid", "title", "schemaVersion", "panels")
 VARIABLE_RE = re.compile(r"^\$\{?(\w+)\}?$")
 
 FARB_SCHLUESSEL = ("color", "fixedColor", "iconColor")
+# "fill" ist nur im Farbobjekt der Heatmap eine Farbe (options.color mit
+# "mode"); sonst z. B. Linienstil ("lineStyle": {"fill": "dash"}).
+HEATMAP_MODI = ("opacity", "scheme")
 GRAFANA_FARBEN_ERLAUBT = {"text", "transparent"}
 
 # Panel-Typen ohne Datenabfrage -- die brauchen keine Datasource.
@@ -77,7 +81,8 @@ def collect_colors(node, where: str = "Dashboard"):
         if "type" in node and "title" in node:
             where = f"Panel '{node.get('title') or node.get('type')}'"
         for key, value in node.items():
-            if key in FARB_SCHLUESSEL and isinstance(value, str):
+            ist_fill = key == "fill" and node.get("mode") in HEATMAP_MODI
+            if (key in FARB_SCHLUESSEL or ist_fill) and isinstance(value, str):
                 yield where, value
             else:
                 yield from collect_colors(value, where)
