@@ -101,7 +101,10 @@ grauer Text für „aus“ oder „keine Daten“, steht deshalb immer in `#8794
 Färbt eine Variable Text und Icon zugleich, bekommt sie `#8794a5`.
 
 Weiß kommt nur mit Deckkraft vor (`rgba(255,255,255,…)`); deckend ist das
-Text-Weiß `#f2f5f8`.
+Text-Weiß `#f2f5f8`. Einzige Ausnahme: Schrift auf Vereinsrot `#e30613` ist
+deckend `#ffffff` (4,88:1; `#f2f5f8` hielte dort nur 4,46:1). Die Palette
+führt das unter `deckend_auf`, `ci/check_palette.py` erlaubt deckendes Weiß
+nur in einer Zeile, in der auch Vereinsrot steht.
 
 ### Status
 
@@ -325,7 +328,7 @@ verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`,
   Petrol +4,7°, Sonnengelb +4,6°.
 - **Navy statt Weiß:** Ränder, Innenflächen und Schatten entstehen aus
   `#171d29` mit Deckkraft, so wie dunkel aus Weiß mit Deckkraft. Weiß ist nur
-  als erhöhte Fläche (Popups) deckend erlaubt.
+  als erhöhte Fläche (Popups) und als Schrift auf Vereinsrot deckend erlaubt.
 - Zustände färben Icon, Wert und Kachel, nie die ganze Karte.
 - **Identitätshüllen bleiben dunkel:** Owlet-Karte (Night Violet) und
   Vereinshülle im Fußball-View behalten in beiden Modi Hülle und Farben.
@@ -448,7 +451,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
 | Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `owlet-amber` bzw. `owlet-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
-| Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,46:1 (knapp unter 4,5:1; mit Weiß wären es 4,88:1) |
+| Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, auf Vereinsrot in Weiß `#ffffff`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,88:1 (mit `#f2f5f8` wären es 4,46:1) |
 
 **DWD-Karte** (`meteoalarm-karte.yaml`): Die Integration liefert eigene
 Farben, nicht die Palettenwerte (Stufe 1 beobachtet als `#ffeb3b`). Deshalb
