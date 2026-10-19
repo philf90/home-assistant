@@ -237,8 +237,8 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml`,
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-karte.yaml`)
-und von der Lichter-View `fenster-karte.yaml` und `lichter-raum-karte.yaml`
-(erste gefüllte Kachel mit `owlet-fuellung-rand-amber` und
+und die Lichter-View mit ihren beiden Karten `fenster-karte.yaml` und
+`lichter-raum-karte.yaml` (erste gefüllte Kachel mit `owlet-fuellung-rand-amber` und
 `owlet-leuchten-amber`), von der Energie-View die Templates
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
 `energie-zaehler-karte.yaml`, `energie-solarbank-pv-karte.yaml` und
@@ -269,8 +269,15 @@ Kartenausschnitt mit Legende bleibt mit Flugradar-Gelb in beiden Modi dunkel.
 Ebenso die Fußball-View (`fussball-view.yaml` mit `fussball-templates.yaml`);
 ihre Vereinskarte setzt in der Hülle die Owlet-Variablen auf die dunklen
 Werte und bleibt so wie die Owlet-Karte als Identitätshülle dunkel.
-Die übrigen Karten tragen noch die festen dunklen Werte und werden
-schrittweise umgestellt; bis dahin bleiben sie in beiden Modi dunkel.
+
+Damit ist das ganze Dashboard umgestellt. Geprüft am 19.10.2026 an der
+Live-Konfiguration (alle 17 Views, Templates und die Ressource
+`unifi-netzplan-card.js`): Jede feste Farbe ist dort dunkler Rückfall in
+`var()`, ein Zweig über `owlet-dunkel-anteil` oder eine der Ausnahmen unten.
+Feste dunkle Werte tragen nur noch Kartenvarianten, die das Dashboard nicht
+verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`,
+`lichter-slider-karte.yaml` und `fenster-lichter-uebersicht-karte.yaml`
+(Alternativen zur Lichter-View). Sie bleiben in beiden Modi dunkel.
 
 ### Karten umstellen
 
@@ -440,6 +447,8 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | Flugradar-Gelb `#f2c94c` | nur auf dunklem Kartengrund | 1,45:1 |
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
+| Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `owlet-amber` bzw. `owlet-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
+| Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,46:1 (knapp unter 4,5:1; mit Weiß wären es 4,88:1) |
 
 **DWD-Karte** (`meteoalarm-karte.yaml`): Die Integration liefert eigene
 Farben, nicht die Palettenwerte (Stufe 1 beobachtet als `#ffeb3b`). Deshalb
@@ -462,13 +471,12 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Animationen in Fußball und Flugradar** (`fussball-templates.yaml`,
-  `flugradar-templates.yaml`) sind noch dunkel und werden mit ihrer View
-  umgestellt.
+- **Diagramm-Tooltips:** Alle apexcharts-Karten setzen `tooltip.theme:
+  dark`; der Tooltip bleibt im hellen Modus dunkel (lesbar, aber nicht im
+  Stil des hellen Modus). Umstellen oder als Ausnahme festhalten ist noch
+  zu entscheiden.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
-- **Gedämpfte Kacheln** (`opacity: 0.55`): kleine Schrift fällt auf 2,27:1
-  hell und 2,58:1 dunkel. Besser über Muted-Icon und Sekundärtext dämpfen.
 - **Schon vor der Umstellung zu schwach, dunkel:** das Datum in der
   Müllkarte (4,03:1) und die Icons in den Kacheln der Wetter-Karte im
   schlechtesten Fall (alle Wolken übereinander, 2,60:1 bei Sekundär-Grau,
