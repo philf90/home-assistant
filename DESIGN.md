@@ -15,7 +15,7 @@ Pull Request und lokal per pre-commit (siehe [`ci/README.md`](ci/README.md)).
 | Bereich | Geprüft | Anmerkung |
 |---|---|---|
 | Karten und Views (`*.yaml`, `*.js` außerhalb von `ci/` und `design/`) | ja | Hex, `rgb()`, `rgba()` mit festen Zahlen |
-| Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
+| Grafana (`grafana/*.json`) | ja | `color`, `fixedColor`, `iconColor`, Heatmap-`fill`; Grafana-Farbnamen außer `text` und `transparent` sind nicht erlaubt |
 | Entwurfsseiten (`entwuerfe/*.html`) | nein | Mockups, keine Karten |
 | Dashboards in der Instanz | nein | werden in der HA-Oberfläche bearbeitet; die CI sieht sie nicht |
 
@@ -194,22 +194,66 @@ mit Deckkraft sowie Textfarben mit Deckkraft.
 
 ### Grafana
 
-Gleiche Rollen wie in den Karten, als Hex-Wert statt Grafana-Farbname:
+Gleiche Rollen wie in den Karten, als Hex-Wert statt Grafana-Farbname. Grafana
+kennt keine Theme-Variablen und gibt Hex-Werte im hellen und im dunklen Theme
+unverändert aus (`getColorByName` in `createVisualizationColors.ts`). Die
+Pastelltöne der Karten hielten auf dem hellen Panelgrund `#ffffff` nur
+1,68–2,85:1. Deshalb nimmt Grafana einen **Mittelton** je Rolle: OKLCH-Farbton
+des dunklen Werts, Chroma ×1,3 (höchstens 0,15), Helligkeit so, dass er auf
+`#ffffff` und auf dem dunklen Panelgrund `#181b1f` gleich viel Kontrast hat.
+Mehr als etwa 4,15:1 in beiden Themes geht mit einem Wert nicht; das reicht
+für Linien, Balken, Gauges und die großen Stat-Werte (3:1), nicht für kleine
+Schrift (4,5:1).
 
-| Verwendung | Farbe |
-|---|---|
-| Schwellwerte ok / Hinweis / erhöht / kritisch | `#a6d49e` / `#e6b566` / `#e7936e` / `#f0736a` |
-| Autarkie ab 85 % (oberste Stufe) | `#89d2b0` Mint |
-| Netzbezug, Netzbezugsleistung | `#f0736a` |
-| PV | `#e6c15a` |
-| Hausverbrauch, Annotationen | `#7fb3d5` |
-| Gas | `#e6b566` |
-| Kosten | `#b399d4` |
-| Zählerstände | `text` (Theme-Textfarbe) |
+| Verwendung | Farbe | Kontrast hell / dunkel |
+|---|---|---|
+| Schwellwerte ok / Hinweis / erhöht / kritisch | `#508a47` / `#a57301` / `#c75e2a` / `#cc5750` | mindestens 4,14 / 4,15:1 |
+| Autarkie ab 85 % (oberste Stufe) | `#1e8d65` Mint | 4,16 / 4,16:1 |
+| Netzbezug, Netzbezugsleistung, Grenzlinien, Verteilung und Lastprofil der Netzleistung | `#cc5750` | 4,16 / 4,15:1 |
+| PV | `#997801` | 4,17 / 4,15:1 |
+| Hausverbrauch, Verbrauch je Gerät, Annotationen | `#3d83ad` | 4,16 / 4,15:1 |
+| Gas, Gasverbrauch je Tag | `#a57301` | 4,16 / 4,16:1 |
+| Kosten, Exemplare der Heatmap | `#8f6db7` | 4,17 / 4,15:1 |
+| Zählerstände | `text` (Theme-Textfarbe) | – |
+
+- **Kleine Schrift nie in Statusfarbe.** Statusspalten in Tabellen stehen als
+  Zellgrund (`color-background`, Modus `basic`) in `#a6d49e` / `#e6b566` /
+  `#ffa198`; Grafana setzt darauf ab YIQ-Helligkeit 180 dunkle Schrift
+  `rgb(32,34,38)` (`getTextColorForAlphaBackground`), in beiden Themes
+  mindestens 8,20:1. Neutrale Zustände („stopped“, „läuft“) nehmen
+  `transparent`, dann gilt die Theme-Schrift. Gauge-Zellen und
+  Balken-Gauges zeigen den Wert in Textfarbe (`valueDisplayMode` bzw.
+  `valueMode` = `text`), der Balken trägt die Farbe.
+- Die Stufen unterscheiden sich im Mittelton nur im Farbton (ΔE OKLab
+  ok/Hinweis 12,5, Hinweis/erhöht 8,4, erhöht/kritisch 4,8); deshalb stehen
+  sie nie allein, daneben immer Wert oder Statuswort.
+- Keine Grafana-Verläufe als Zellgrund: Grafana wählt die Schrift nach
+  YIQ-Helligkeit, nahe der Grenze 180 reicht das nicht (geschätzt 1,7:1). Die
+  Spalte „Verbrauch“ der Energie-Detailtabelle steht deshalb ohne Farbe; die
+  Größe zeigt der Balken in „Anteil“.
+- **Keine Grafana-Verläufe** (`continuous-GrYlRd`, `continuous-YlRd`,
+  `Turbo`): Ihr Gelb hält hell auf `#ffffff` nur 1,57:1. Histogramm und
+  Balken stehen in einer festen Rollenfarbe, die Heatmap im Modus `opacity`
+  mit `fill` in der Rollenfarbe (das stärkste Feld 4,15:1, schwächere Felder
+  heller; den Wert zeigt Legende und Tooltip).
+- Balken und Flächen mit Deckkraft unter 1 (`fillOpacity`) haben immer eine
+  Linie in voller Farbe (`lineWidth` ab 1); sie trägt den Kontrast.
+- **Reihenfarben:** Reihen mit festem Namen bekommen ihre Rolle als Mittelton
+  per Override: Hauptgröße (CPU, belegter RAM, Lesen, Empfang, Load 1 min)
+  `#3d83ad`, Warten auf IO und Schreiben `#a57301`, Cache, Senden und
+  Load 5 min `#8f6db7`, freier RAM und Load 15 min `#508a47`, Grenzen
+  gestrichelt `#cc5750`. Kleinster Abstand zweier Reihen im selben Panel
+  ΔE 11,7 (Blau/Violett). Reihen, die erst aus den Daten entstehen (je Gast,
+  je Datastore, je Gerät), nehmen `palette-colorblind` statt
+  `palette-classic`: Grafana (ab 13.0) behält davon je Theme nur Farben mit
+  mindestens 3:1 zum Panelgrund, hell 5 (ab 3,06:1, darunter Schwarz),
+  dunkel 8 (ab 3,33:1, darunter Weiß); `palette-classic` fiel hell bis
+  1,96:1. Grafana vor 13.0 kennt den Modus nicht und zeigt dann alle Reihen
+  in der Schwellwertfarbe.
 
 Die Proxmox-Dashboards entstehen aus `grafana/proxmox_dashboards.py`; Farben
-dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` setzen und
-das JSON neu erzeugen.
+dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` und
+`CELL_GREEN`, `CELL_YELLOW`, `CELL_RED` setzen und das JSON neu erzeugen.
 
 ### Sonderfarben
 
@@ -483,11 +527,6 @@ gilt hell über den Schalter:
   3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
-
-### Noch offen
-
-- **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
-  nicht gemessen.
 
 ## Animierte Hintergründe
 
