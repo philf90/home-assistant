@@ -323,8 +323,11 @@ decluttering_templates:
           tap_action:
             action: navigate
             navigation_path: /dashboard-home/hausgerate
-        # "More" oeffnet ein Owlet-Raster-Menue via browser_mod.popup, darunter
-        # den Schalter fuer die Darstellung (System, Hell, Dunkel).
+        # "More" oeffnet ein Owlet-Raster-Menue via browser_mod.popup, gegliedert
+        # in Bereiche mit Ueberschrift: Zuhause, Garten, Freizeit, Technik,
+        # Verwaltung und Darstellung (System, Hell, Dunkel). Seit 19.10.2026 auch
+        # mit Garten und System, die vorher nur ueber die obere Leiste bzw. gar
+        # nicht ueber die Navigation erreichbar waren.
         # Aufruf als Browser-Call (fire-dom-event): Das Popup oeffnet nur im
         # aktuellen Browser. Als call-service ohne browser_id oeffnete browser_mod
         # es laut Doku auf allen registrierten Browsern.
@@ -350,9 +353,34 @@ decluttering_templates:
                   --primary-text-color: var(--owlet-text, #f2f5f8);
                   --secondary-text-color: var(--owlet-text-sekundaer, #8794a5);
                   --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+                  --vertical-stack-card-gap: 6px;
+                  --grid-card-gap: 6px;
                 content:
                   type: vertical-stack
                   cards:
+                    # Ueberschrift je Bereich: klein, Versalien, Label-Grau (wie die
+                    # Abschnittskoepfe der Autokarte, dort Sekundaer-Grau; im Popup auf der
+                    # Huelle ist Label-Grau kraeftiger). Keine Aktion, nur Text.
+                    - type: custom:button-card
+                      name: Zuhause
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: &menu_kopf
+                        card:
+                          - padding: 2px 4px 0
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                        grid:
+                          - grid-template-areas: '"n"'
+                        name:
+                          - justify-self: start
+                          - font-size: 11px
+                          - font-weight: 700
+                          - letter-spacing: 0.07em
+                          - text-transform: uppercase
+                          - color: 'var(--owlet-label, #b4c0cf)'
                     - type: grid
                       columns: 3
                       square: false
@@ -360,11 +388,12 @@ decluttering_templates:
                         - type: custom:button-card
                           icon: mdi:cctv
                           name: Kamera
+                          variables: { farbe: 'var(--owlet-blau, #7fb3d5)' }
                           tap_action: { action: navigate, navigation_path: /dashboard-home/kamera }
                           styles: &menu_tile
                             card:
-                              - padding: 14px 8px 12px
-                              - border-radius: 16px
+                              - padding: 9px 6px 8px
+                              - border-radius: 14px
                               - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
                               - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
                               - box-shadow: none
@@ -373,56 +402,71 @@ decluttering_templates:
                               - grid-template-rows: min-content min-content
                               - justify-items: center
                             img_cell:
-                              - width: 42px
-                              - height: 42px
-                              - border-radius: 13px
-                              - background: 'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)'
-                              - border: '1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)'
-                              - margin-bottom: 9px
+                              - width: 34px
+                              - height: 34px
+                              - border-radius: 11px
+                              # Farbe je Bereich ueber variables.farbe (var(--owlet-...)); ohne Farbe neutral
+                              - background: "[[[ return variables.farbe ? 'color-mix(in srgb, ' + variables.farbe + ' 12%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]"
+                              - border: "[[[ return variables.farbe ? '1px solid color-mix(in srgb, ' + variables.farbe + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]"
+                              - margin-bottom: 6px
                             icon:
-                              - width: 22px
-                              - height: 22px
-                              - color: 'var(--owlet-gruen, #a6d49e)'
+                              - width: 19px
+                              - height: 19px
+                              - color: "[[[ return variables.farbe || 'var(--owlet-label, #b4c0cf)'; ]]]"
                               # Grundlinie aus: als inline-flex sitzt das Icon sonst ~0,6 px zu tief
                               - --ha-icon-display: block
                               # Glyphe mittig: variables.glyph ist die Mitte der Glyphe im 24er-Raster
                               # relativ zu (12, 12), gemessen an @mdi/js 7.4.47; verschoben wird um den
-                              # Gegenwert, umgerechnet auf 22 px (nur ab 0,4 Einheiten eingetragen)
-                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 22 / 24}px, ${-g[1] * 22 / 24}px)`; ]]]'
+                              # Gegenwert, umgerechnet auf 19 px (nur ab 0,4 Einheiten eingetragen)
+                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 19 / 24}px, ${-g[1] * 19 / 24}px)`; ]]]'
                             name:
-                              - font-size: 12.5px
+                              - font-size: 12px
                               - font-weight: 600
                               - color: 'var(--owlet-text, #f2f5f8)'
                         - type: custom:button-card
-                          icon: mdi:flower
-                          name: Pflanzen
-                          variables: { glyph: [0, -0.5] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/pflanzen }
+                          icon: mdi:car
+                          name: Auto
+                          variables: { farbe: 'var(--owlet-blau, #7fb3d5)', glyph: [0, 1] }
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/auto }
                           styles: *menu_tile
                         - type: custom:button-card
                           icon: mdi:weather-partly-cloudy
                           name: Wetter
-                          variables: { glyph: [-0.47, 0] }
+                          variables: { farbe: 'var(--owlet-blau, #7fb3d5)', glyph: [-0.47, 0] }
                           tap_action: { action: navigate, navigation_path: /dashboard-home/wetter }
                           styles: *menu_tile
+                    - type: custom:button-card
+                      name: Garten
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: *menu_kopf
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
                         - type: custom:button-card
-                          icon: mdi:car
-                          name: Auto
-                          variables: { glyph: [0, 1] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/auto }
+                          icon: mdi:grass
+                          name: Garten
+                          variables: { farbe: 'var(--owlet-limette, #bdd27f)' }
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/garten }
                           styles: *menu_tile
                         - type: custom:button-card
-                          icon: mdi:home-automation
-                          name: Homematic IP
-                          variables: { glyph: [0, -0.5] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/homematic-ip }
+                          icon: mdi:flower
+                          name: Pflanzen
+                          variables: { farbe: 'var(--owlet-limette, #bdd27f)', glyph: [0, -0.5] }
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/pflanzen }
                           styles: *menu_tile
-                        - type: custom:button-card
-                          icon: mdi:router-network
-                          name: Netzwerk
-                          variables: { glyph: [0, 4] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/netzwerk }
-                          styles: *menu_tile
+                    - type: custom:button-card
+                      name: Freizeit
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: *menu_kopf
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
                         # Gesundheit: nur fuer einen Benutzer sichtbar (wie die View selbst)
                         - type: conditional
                           conditions:
@@ -433,23 +477,63 @@ decluttering_templates:
                             type: custom:button-card
                             icon: mdi:heart-pulse
                             name: Gesundheit
+                            variables: { farbe: 'var(--owlet-rose, #e6a0c4)' }
                             tap_action: { action: navigate, navigation_path: /dashboard-home/gesundheit }
                             styles: *menu_tile
                         - type: custom:button-card
                           icon: mdi:soccer
                           name: Fußball
+                          variables: { farbe: 'var(--owlet-rose, #e6a0c4)' }
                           tap_action: { action: navigate, navigation_path: /dashboard-home/fussball }
                           styles: *menu_tile
                         - type: custom:button-card
                           icon: mdi:airplane
                           name: Flüge
-                          variables: { glyph: [0.47, 0] }
+                          variables: { farbe: 'var(--owlet-rose, #e6a0c4)', glyph: [0.47, 0] }
                           tap_action: { action: navigate, navigation_path: /dashboard-home/fluege }
+                          styles: *menu_tile
+                    - type: custom:button-card
+                      name: Technik
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: *menu_kopf
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          icon: mdi:home-automation
+                          name: Homematic IP
+                          variables: { farbe: 'var(--owlet-violett, #b399d4)', glyph: [0, -0.5] }
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/homematic-ip }
+                          styles: *menu_tile
+                        - type: custom:button-card
+                          icon: mdi:router-network
+                          name: Netzwerk
+                          variables: { farbe: 'var(--owlet-violett, #b399d4)', glyph: [0, 4] }
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/netzwerk }
                           styles: *menu_tile
                         - type: custom:button-card
                           icon: mdi:zigbee
                           name: Zigbee
+                          variables: { farbe: 'var(--owlet-violett, #b399d4)' }
                           tap_action: { action: navigate, navigation_path: /45df7312_zigbee2mqtt/ingress }
+                          styles: *menu_tile
+                    - type: custom:button-card
+                      name: Verwaltung
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: *menu_kopf
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          icon: mdi:server
+                          name: System
+                          tap_action: { action: navigate, navigation_path: /dashboard-home/system }
                           styles: *menu_tile
                         - type: custom:button-card
                           icon: mdi:cog
@@ -473,8 +557,8 @@ decluttering_templates:
                               text: Home Assistant neustarten?
                           styles:
                             card:
-                              - padding: 14px 8px 12px
-                              - border-radius: 16px
+                              - padding: 9px 6px 8px
+                              - border-radius: 14px
                               - background: 'color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent)'
                               - border: '1px solid color-mix(in srgb, var(--owlet-rot, #f0736a) 24%, transparent)'
                               - box-shadow: none
@@ -483,23 +567,29 @@ decluttering_templates:
                               - grid-template-rows: min-content min-content
                               - justify-items: center
                             img_cell:
-                              - width: 42px
-                              - height: 42px
-                              - border-radius: 13px
+                              - width: 34px
+                              - height: 34px
+                              - border-radius: 11px
                               - background: 'color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent)'
                               - border: '1px solid color-mix(in srgb, var(--owlet-rot, #f0736a) 24%, transparent)'
-                              - margin-bottom: 9px
+                              - margin-bottom: 6px
                             icon:
-                              - width: 22px
-                              - height: 22px
+                              - width: 19px
+                              - height: 19px
                               - color: 'var(--owlet-rot, #f0736a)'
                               # wie menu_tile: Grundlinie aus, Glyphe mittig (variables.glyph)
                               - --ha-icon-display: block
-                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 22 / 24}px, ${-g[1] * 22 / 24}px)`; ]]]'
+                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 19 / 24}px, ${-g[1] * 19 / 24}px)`; ]]]'
                             name:
-                              - font-size: 12.5px
+                              - font-size: 12px
                               - font-weight: 600
                               - color: 'var(--owlet-text, #f2f5f8)'
+                    - type: custom:button-card
+                      name: Darstellung
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles: *menu_kopf
                     - type: grid
                       columns: 3
                       square: false
@@ -525,7 +615,7 @@ decluttering_templates:
                                   - service: browser_mod.close_popup
                           styles: &theme_tile
                             card:
-                              - padding: 10px 8px
+                              - padding: 8px 8px
                               - border-radius: 14px
                               - box-shadow: none
                               - background: |
@@ -550,7 +640,7 @@ decluttering_templates:
                                   [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';
                                       return m === variables.modus ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-label, #b4c0cf)'; ]]]
                             name:
-                              - font-size: 12.5px
+                              - font-size: 12px
                               - font-weight: 600
                               - color: |
                                   [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';

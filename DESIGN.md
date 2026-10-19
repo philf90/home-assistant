@@ -177,6 +177,14 @@ Text ist. Rote Schrift auf roter Tönung erreicht als 13,5-px-Schrift nur
 Einspeisung bekommt in neuen Karten Mint statt Grün, damit „Energie fließt
 raus“ nicht wie „Zustand in Ordnung“ aussieht.
 
+Das More-Menü der Navigationsleiste färbt seine Kacheln je Bereich, nicht je
+Ziel: Zuhause Blau, Garten Limette, Freizeit Rosé, Technik Violett, Verwaltung
+neutral (Label-Grau auf `owlet-neutral-kachel`). Für Fußball und Flüge gibt es
+keine eigene Bereichsfarbe; Rosé steht dort für den ganzen Bereich Freizeit.
+Neustart bleibt als einzige Kachel rot. Kamera und Pflanzen sehen im Menü
+deshalb anders aus als in der oberen Navigation. Die Farbe setzt jede Kachel
+über `variables.farbe`.
+
 ### Tönungen
 
 Getönte Akzentfarben nutzen nur diese Deckkraft-Stufen:
