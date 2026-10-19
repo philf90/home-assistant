@@ -227,8 +227,14 @@ Schrift (4,5:1).
 - Die Stufen unterscheiden sich im Mittelton nur im Farbton (ΔE OKLab
   ok/Hinweis 12,5, Hinweis/erhöht 8,4, erhöht/kritisch 4,8); deshalb stehen
   sie nie allein, daneben immer Wert oder Statuswort.
-- Grafanas eigene Verläufe (`continuous-GrYlRd`, `Turbo`) und die Reihenfarben
-  `palette-classic` schalten mit dem Theme selbst um und bleiben.
+- Keine Grafana-Verläufe als Zellgrund: Grafana wählt die Schrift nach
+  YIQ-Helligkeit, nahe der Grenze 180 reicht das nicht (geschätzt 1,7:1). Die
+  Spalte „Verbrauch“ der Energie-Detailtabelle steht deshalb ohne Farbe; die
+  Größe zeigt der Balken in „Anteil“.
+- Grafanas eigene Verläufe (`continuous-GrYlRd`, `continuous-YlRd`, `Turbo`)
+  und die Reihenfarben `palette-classic` schalten mit dem Theme um, sind aber
+  keine Owlet-Farben und halten hell nicht überall 3:1 (Gelb `#F2CC0C` auf
+  `#ffffff` 1,57:1), siehe „Noch offen“.
 
 Die Proxmox-Dashboards entstehen aus `grafana/proxmox_dashboards.py`; Farben
 dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` und
@@ -506,6 +512,15 @@ gilt hell über den Schalter:
   3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
+
+### Noch offen
+
+- **Grafana-Verläufe im hellen Theme:** Balken und Flächen in Grafanas
+  eigenem Gelb (`#F2CC0C`, 1,57:1 auf `#ffffff`) in „Verteilung der
+  Netzleistung“, „Verbrauch je Gerät“ (beide `continuous-GrYlRd`) und
+  „Gasverbrauch je Tag“ (`continuous-YlRd`); die Heatmap „Lastprofil“
+  (`Turbo`) ist nicht gemessen. Dunkel halten die Verläufe mindestens
+  4,84:1.
 
 ## Animierte Hintergründe
 
