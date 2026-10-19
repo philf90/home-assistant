@@ -99,6 +99,10 @@ der Karte darunter.
 `#6e7988` erreicht für normale Schrift nicht die 4,5:1 aus WCAG AA. Text, auch
 grauer Text für „aus“ oder „keine Daten“, steht deshalb immer in `#8794a5`.
 Färbt eine Variable Text und Icon zugleich, bekommt sie `#8794a5`.
+Auf einer getönten Fläche (Tönung 0,12) hält `#8794a5` dunkel keine 4,5:1
+mehr (3,94–4,36:1 über allen Akzenten); kleine Schrift steht dort in
+`#b4c0cf` (`owlet-label`), etwa Datum und „Tage“ im Hero der Müllkarte
+(dunkel mindestens 6,58:1, hell 7,57:1).
 
 Weiß kommt nur mit Deckkraft vor (`rgba(255,255,255,…)`); deckend ist das
 Text-Weiß `#f2f5f8`. Einzige Ausnahme: Schrift auf Vereinsrot `#e30613` ist
@@ -484,11 +488,6 @@ gilt hell über den Schalter:
 
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
-- **Schon vor der Umstellung zu schwach, dunkel:** das Datum in der
-  Müllkarte (4,03:1) und die Icons in den Kacheln der Wetter-Karte im
-  schlechtesten Fall (alle Wolken übereinander, 2,60:1 bei Sekundär-Grau,
-  9 Kombinationen aus Szene und Kachelfarbe unter 3:1). Hell halten sie
-  dank Schutzgrund 0,70 mindestens 3,06:1.
 
 ## Animierte Hintergründe
 
@@ -542,9 +541,14 @@ sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlic
   übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
   der Schrift gedämpft: im Banner die ganze Wetterspalte rechts (Icon,
   Temperatur, Datum) auf 45 %, in den Kacheln der Wetter-Karte über einen
-  Schutzgrund in Hüllenfarbe (`owlet-huelle-unten`), dunkel 0,62, hell 0,70
-  (Animation dort zu 38 % bzw. 30 % sichtbar; hell halten so auch die Icons
-  3:1, gerechnet in jeder Kombination aus Szene und Kachelfarbe).
+  Schutzgrund in Hüllenfarbe (`owlet-huelle-unten`), 0,70 in beiden Modi,
+  in der Icon-Kachel zusätzlich 0,50 (Animation in der Kachel zu 30 %, in
+  der Icon-Kachel zu 15 % sichtbar). Gerechnet in jeder Kombination aus
+  Szene und Kachelfarbe, Blitz und Unwetter-Schein in voller Stärke: Icon
+  mindestens 3,42:1 dunkel und 3,66:1 hell (vorher mit 0,62 dunkel und ohne
+  Schutzgrund in der Icon-Kachel 2,49:1, Sekundär-Grau bei Unwetter),
+  Beschriftung 4,88:1 bzw. 6,14:1 (vorher dunkel 4,45:1). In Chromium
+  nachgemessen.
 - Icon und große Schrift auf animiertem Grund halten 3:1. Im Banner standen
   sie bis zur Ruhezone rechts auf der vollen Szene und fielen dunkel in
   6 von 16 Szenen darunter (Unwetter 1,72:1); mit Ruhezone mindestens
