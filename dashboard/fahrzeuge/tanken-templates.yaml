@@ -26,7 +26,9 @@
 #
 # Tankstellen (variables.tankstellen):
 #   name     Anzeigename. Frei waehlbar: HA bildet den Geraetenamen aus Marke
-#            und Adresse, ohne Marke steht dort "None ...".
+#            und Adresse, ohne Marke steht dort "None ...". Bei zwei
+#            Tankstellen derselben Marke Marke und Ort, den Ort liefert die
+#            Integration im Attribut city.
 #   diesel, super, e10   Preis-Sensoren der Integration (EUR/l, 3 Stellen)
 #   status   binary_sensor "..._status", on = geoeffnet
 #   Die Diesel-Sensoren stehen ein zweites Mal in der Diagramm-Serie des
@@ -45,6 +47,8 @@
 #   tk.fmt(p)           "2,15<sup>9</sup>": dritte Stelle hochgestellt wie an
 #       der Preistafel; ohne Preis "–".
 #   tk.euro(d)          "0,05" (zwei Stellen, Komma)
+#   tk.drueck(ev), tk.waehle(ev, sorte)   Handler der Sorten-Chips in
+#       tanken-karte.yaml (Umschalten der Ansicht, Erklaerung dort)
 # Ein Preis gilt nur, wenn der Zustand eine Zahl > 0 ist. Ausserhalb der
 # Oeffnungszeiten meldet die Integration bei manchen Tankstellen keinen
 # Preis (Sensor unavailable); dann steht "–".
@@ -89,7 +93,7 @@ button_card_templates:
           status: binary_sensor.tankstelle_4_status
       tk: |
         [[[
-          const VERSION = 1, alt = window.__owletTk;
+          const VERSION = 2, alt = window.__owletTk;
           if (alt && alt.version === VERSION) return alt;
           const preis = (st, id) => {
             const s = id ? st[id] : null;
@@ -113,7 +117,31 @@ button_card_templates:
             .map((t) => ({ name: t.name, p: preis(st, t[sorte]), offen: offen(st, t.status) }))
             .sort((a, b) => (rang(a) - rang(b)) || ((Number.isFinite(a.p) ? a.p : 0) - (Number.isFinite(b.p) ? b.p : 0)));
           const bester = (l) => l.find((e) => Number.isFinite(e.p) && e.offen !== false) || null;
-          window.__owletTk = { version: VERSION, preis, offen, fmt, euro, liste, bester };
+          // Sortenwahl in tanken-karte.yaml: Chips rufen drueck() bei touchstart
+          // und waehle() bei touchend und click auf. stopPropagation haelt das
+          // Ereignis von der Karte fern, die sonst das Popup oeffnet;
+          // preventDefault auf touchend verhindert den doppelten Aufruf durch
+          // das nachfolgende click. Mehr als 10 px Weg gilt als Wischen.
+          let tx = 0, ty = 0;
+          const drueck = (ev) => {
+            const t = ev.touches && ev.touches[0];
+            if (t) { tx = t.clientX; ty = t.clientY; }
+          };
+          const waehle = (ev, sorte) => {
+            ev.stopPropagation();
+            if (ev.type === 'touchend') {
+              const t = ev.changedTouches && ev.changedTouches[0];
+              if (t && Math.hypot(t.clientX - tx, t.clientY - ty) > 10) return;
+              if (ev.cancelable) ev.preventDefault();
+            }
+            window.__owletTkSorte = sorte;
+            const box = ev.currentTarget && ev.currentTarget.closest('[data-tk-wahl]');
+            if (!box) return;
+            box.querySelectorAll('[data-tk-sorte]').forEach((el) => {
+              el.style.display = el.getAttribute('data-tk-sorte') === sorte ? '' : 'none';
+            });
+          };
+          window.__owletTk = { version: VERSION, preis, offen, fmt, euro, liste, bester, drueck, waehle };
           return window.__owletTk;
         ]]]
   owlet_tanken_popup:
