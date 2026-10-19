@@ -1,6 +1,6 @@
 ---
 name: platzhalter-einsetzen
-description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, weather.wohnort, sensor.warnregion_*, Tankstellen (tankstelle_<n>), Kennzeichen, unique_id, Seriennummern/MAC/FIN/IEEE/Vornamen in Entity-IDs, Benutzer-IDs) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
+description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, weather.wohnort, sensor.warnregion_*, Tankstellen (tankstelle_<n>), Verbandsgemeinde (VG Wohnort), Kennzeichen, unique_id, Seriennummern/MAC/FIN/IEEE/Vornamen in Entity-IDs, Benutzer-IDs) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
 ---
 
 # Platzhalter einsetzen
@@ -29,7 +29,7 @@ wiederholt sie nicht.
 1. **Platzhalter in der Zieldatei finden.** Die Zeile `Platzhalter:` im
    Kopfblock der Datei lesen und die Datei mit den Mustern aus
    `design/platzhalter.yaml` durchsuchen, z. B.:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|[Tt]ankstelle[ _][1-4]' <datei>`
+   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|[Tt]ankstelle[ _][1-4]|VG Wohnort' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
