@@ -44,7 +44,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`temperaturen-karte-v2.yaml`](klima/temperaturen-karte-v2.yaml) | karte | Temperaturen v2 – Raumliste mit 24-h-Sparkline | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
 | [`warnlage-templates.yaml`](klima/warnlage-templates.yaml) | templates | Warnlage – Popups fuer DWD-Warnungen und Pollenflug | button-card | `sensor.warnregion_*` | aktiv |
-| [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind, Sonne und Vorhersage | button-card, card-mod, weather-forecast-card | `weather.wohnort` | aktiv |
+| [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind und Sonne | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template owlet_wetter_fx | – | – | aktiv |
 | [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card, weather-forecast-card | `sensor.warnregion_*`, `weather.wohnort` | aktiv |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
