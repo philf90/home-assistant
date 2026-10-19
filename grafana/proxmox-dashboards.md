@@ -1,6 +1,7 @@
 # Grafana-Dashboards: Proxmox VE und Proxmox Backup Server
 
-Zwei importfertige Dashboards für **Grafana OSS**:
+Zwei importfertige Dashboards für **Grafana OSS** ab 13.0 (Reihen ohne feste Farbe nutzen
+die Palette „Color blind safe“, ältere Versionen zeigen sie einfarbig):
 
 | Datei | UID | Datenquellen |
 |---|---|---|

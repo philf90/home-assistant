@@ -41,7 +41,12 @@ API = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_API}"}
 # unveraendert aus, deshalb Mitteltoene, die auf hellem (#ffffff) und dunklem
 # (#181b1f) Panelgrund je etwa 4,15:1 halten.
 GREEN, YELLOW, ORANGE, RED = "#508a47", "#a57301", "#c75e2a", "#cc5750"
-BLUE = "#3d83ad"
+BLUE, PURPLE = "#3d83ad", "#8f6db7"
+# Reihen ohne eigene Farbe: Grafanas Farbenblind-Palette (ab Grafana 13). Sie
+# laesst je Theme nur Farben mit mindestens 3:1 zum Panelgrund zu; Grafanas
+# "palette-classic" faellt hell bis 1,96:1. Feste Reihen bekommen ueber
+# "reihen" ihre Rollenfarbe.
+REIHEN_MODUS = "palette-colorblind"
 # Farbige Tabellenzellen: heller Zellgrund, Grafana setzt darauf dunkle Schrift
 # (ab YIQ-Helligkeit 180), in beiden Themes mindestens 8,2:1. Farbige Schrift
 # in Tabellen hielte in einem der Themes keine 4,5:1.
@@ -173,7 +178,9 @@ def filter_eq(field, value, include=True):
 
 def timeseries(title, targets, lay, w=8, h=8, unit="none", dec=None, desc="",
                fill=10, stack=False, mx=None, mn=0, legend_calcs=None,
-               overrides=None, points=False):
+               overrides=None, points=False, reihen=None):
+    farben = [ov(name, {"color": {"mode": "fixed", "fixedColor": farbe}})
+              for name, farbe in (reihen or {}).items()]
     return {
         "id": nid(),
         "type": "timeseries",
@@ -188,7 +195,7 @@ def timeseries(title, targets, lay, w=8, h=8, unit="none", dec=None, desc="",
                 "decimals": dec,
                 "min": mn,
                 "max": mx,
-                "color": {"mode": "palette-classic"},
+                "color": {"mode": REIHEN_MODUS},
                 "custom": {
                     "drawStyle": "line",
                     "lineInterpolation": "linear",
@@ -203,7 +210,7 @@ def timeseries(title, targets, lay, w=8, h=8, unit="none", dec=None, desc="",
                 "thresholds": TH_OK,
                 "mappings": [],
             },
-            "overrides": overrides or [],
+            "overrides": farben + (overrides or []),
         },
         "options": {
             "legend": {
@@ -424,6 +431,7 @@ from(bucket: "${bucket}")
   |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=12, h=9, unit="percent", dec=2, fill=15,
+        reihen={"cpu": BLUE, "wait": YELLOW},
         desc="cpu und wait sind die einzigen Verhältniszahlen in cpustat. Für eine "
              "Aufschlüsselung nach user/system/iowait müssten die Zähler über "
              "difference() gegen total normalisiert werden."))
@@ -441,6 +449,7 @@ from(bucket: "${bucket}")
        "Gäste + Dienste": r.memused - r.arcsize,
        "ZFS ARC": r.arcsize }))
 ''')], lay, w=12, h=9, unit="bytes", stack=True, fill=40,
+        reihen={"Gäste + Dienste": BLUE, "ZFS ARC": PURPLE},
         desc="Der ARC ist Cache und wird bei Bedarf sofort freigegeben – deshalb "
              "eine eigene Stapelfläche und nicht Teil von 'belegt'."))
 
@@ -464,6 +473,7 @@ from(bucket: "${bucket}")
   |> map(fn: (r) => ({ _time: r._time, "CPU-Threads": r._value }))
 ''', "B"),
         ], lay, w=8, h=9, dec=2, fill=0,
+        reihen={"avg1": BLUE, "avg5": PURPLE, "avg15": GREEN},
         desc="Die Thread-Zahl kommt aus cpustat.cpus und wandert damit automatisch "
              "mit, wenn du CPUs umbaust. Load oberhalb dieser Linie heißt: Prozesse "
              "warten tatsächlich auf CPU-Zeit.",
@@ -484,6 +494,7 @@ from(bucket: "${bucket}")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=8, h=9, unit="Bps", fill=15,
+        reihen={"receive": BLUE, "transmit": PURPLE},
         desc="Der Interface-Filter ist Pflicht: Der Node meldet neben dem Uplink auch "
              "vmbr0, die VLANs und je Gast tap*/fwbr*/fwln*/fwpr*. Ohne Filter wird "
              "derselbe Verkehr mehrfach summiert."))
@@ -498,6 +509,7 @@ from(bucket: "${bucket}")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=8, h=9, unit="bytes", fill=15,
+        reihen={"arcsize": PURPLE},
         desc="Liegt arcsize dauerhaft an arcmax, ist der ARC gedeckelt und kann nicht "
              "wachsen. Das ist eine Konfigurationsentscheidung, keine Auslastung.",
         overrides=[ov("arcmax", {
@@ -551,6 +563,7 @@ from(bucket: "${bucket}")
   |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=8, h=9, unit="bytes", fill=15,
+        reihen={"used": BLUE},
         desc="blocks = Gesamtgröße, used = belegt. Die su_*- und user_*-Varianten "
              "sind identisch, solange keine Root-Reserve gesetzt ist.",
         overrides=[ov("blocks", {
@@ -1047,6 +1060,7 @@ from(bucket: "${bucket_pbs}")
   |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=8, h=8, unit="percent", dec=2, fill=15,
+        reihen={"cpu": BLUE, "iowait_percent": YELLOW},
         desc="Nicht iowait nehmen – das ist ein kumulativer Zähler. Die auswertbare "
              "Prozentzahl heißt iowait_percent. Steigt sie stärker als cpu, limitiert "
              "die Platte und eine schnellere CPU bringt nichts."))
@@ -1060,6 +1074,7 @@ from(bucket: "${bucket_pbs}")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=8, h=8, unit="bytes", fill=15,
+        reihen={"memused": BLUE, "memavailable": GREEN},
         desc="PBS nutzt für Verifikation und GC viel Page-Cache. memused sieht dann "
              "hoch aus, obwohl der Speicher jederzeit freigegeben werden kann – "
              "memavailable ist die ehrlichere Zahl."))
@@ -1082,6 +1097,7 @@ from(bucket: "${bucket_pbs}")
   |> map(fn: (r) => ({ _time: r._time, "CPU-Threads": r._value }))
 ''', "B"),
         ], lay, w=8, h=8, dec=2, fill=0,
+        reihen={"avg1": BLUE, "avg5": PURPLE, "avg15": GREEN},
         desc="Die Thread-Zahl heißt bei PBS cpu_count, bei PVE cpus. Wer Panels "
              "zwischen den Dashboards kopiert, läuft genau hier auf.",
         overrides=[ov("CPU-Threads", {
@@ -1100,6 +1116,7 @@ from(bucket: "${bucket_pbs}")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=12, h=8, unit="Bps", fill=15,
+        reihen={"read_bytes": BLUE, "write_bytes": YELLOW},
         desc="Der datastore-Filter ist Pflicht: blockstat liegt zweimal vor, mit und "
              "ohne datastore-Tag. Liegen Datastore und Wurzeldateisystem auf demselben "
              "Gerät, sind beide Serien identisch und würden doppelt gezeichnet."))
@@ -1114,6 +1131,7 @@ from(bucket: "${bucket_pbs}")
   |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
   |> keep(columns: ["_time", "_value", "_field"])
 ''')], lay, w=12, h=8, unit="Bps", fill=15,
+        reihen={"receive": BLUE, "send": PURPLE},
         desc="Das Feld heißt bei PBS send, nicht transmit. Ein Backup-Ziel empfängt "
              "viel und sendet wenig – kippt das Verhältnis, läuft vermutlich ein "
              "Restore oder ein Sync-Job."))

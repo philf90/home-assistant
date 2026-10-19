@@ -5,7 +5,9 @@ Home Assistant aus einer **InfluxDB-2**-Datenquelle auswertet. Es deckt Strom (N
 PV, Autarkie, Kosten), die zehn gemessenen Einzelverbraucher und Gas ab. Wasser ist
 bewusst nicht enthalten.
 
-Alle verwendeten Panel-Typen sind in **Grafana OSS (kostenlos)** enthalten.
+Alle verwendeten Panel-Typen sind in **Grafana OSS (kostenlos)** enthalten. Ab Grafana 13.0:
+Reihen ohne feste Farbe nutzen die Farbpalette „Color blind safe“ (`palette-colorblind`),
+ältere Versionen zeigen sie einfarbig (DESIGN.md, Abschnitt „Grafana“).
 
 ## Voraussetzung
 

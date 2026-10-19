@@ -238,6 +238,18 @@ Schrift (4,5:1).
   heller; den Wert zeigt Legende und Tooltip).
 - Balken und Flächen mit Deckkraft unter 1 (`fillOpacity`) haben immer eine
   Linie in voller Farbe (`lineWidth` ab 1); sie trägt den Kontrast.
+- **Reihenfarben:** Reihen mit festem Namen bekommen ihre Rolle als Mittelton
+  per Override: Hauptgröße (CPU, belegter RAM, Lesen, Empfang, Load 1 min)
+  `#3d83ad`, Warten auf IO und Schreiben `#a57301`, Cache, Senden und
+  Load 5 min `#8f6db7`, freier RAM und Load 15 min `#508a47`, Grenzen
+  gestrichelt `#cc5750`. Kleinster Abstand zweier Reihen im selben Panel
+  ΔE 11,7 (Blau/Violett). Reihen, die erst aus den Daten entstehen (je Gast,
+  je Datastore, je Gerät), nehmen `palette-colorblind` statt
+  `palette-classic`: Grafana (ab 13.0) behält davon je Theme nur Farben mit
+  mindestens 3:1 zum Panelgrund, hell 5 (ab 3,06:1, darunter Schwarz),
+  dunkel 8 (ab 3,33:1, darunter Weiß); `palette-classic` fiel hell bis
+  1,96:1. Grafana vor 13.0 kennt den Modus nicht und zeigt dann alle Reihen
+  in der Schwellwertfarbe.
 
 Die Proxmox-Dashboards entstehen aus `grafana/proxmox_dashboards.py`; Farben
 dort über die Konstanten `GREEN`, `YELLOW`, `ORANGE`, `RED`, `BLUE` und
@@ -515,17 +527,6 @@ gilt hell über den Schalter:
   3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
-
-### Noch offen
-
-- **Grafana-Reihenfarben `palette-classic`** (Zeitreihen der
-  Proxmox-Dashboards, im Energie-Dashboard Reihen ohne eigene Farbe):
-  Grafana schaltet sie mit dem Theme um, sie halten aber nicht überall 3:1.
-  Hell auf `#ffffff`: Reihe 2 `#E0B400` 1,96:1, Reihe 4 `#FF780A` 2,64:1,
-  Reihe 8 `#CC9D00` 2,50:1; dunkel auf `#181b1f`: Reihe 9 `#1F60C4` 2,90:1,
-  Reihe 11 `#C4162A` 2,88:1, Reihe 12 `#8F3BB8` 2,87:1. Eine eigene
-  Reihenfolge aus Mitteltönen wäre die Lösung; offen ist, welche Reihe welche
-  Farbe bekommt.
 
 ## Animierte Hintergründe
 
