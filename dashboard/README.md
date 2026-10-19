@@ -45,6 +45,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
 | [`wetter-karte.yaml`](klima/wetter-karte.yaml) | karte | Wetter – animierte Szene, Kennzahlen, Vorhersage | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template owlet_wetter_fx | – | – | aktiv |
+| [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card, weather-forecast-card | `sensor.warnregion_*`, `weather.wohnort` | aktiv |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
 | [`temperaturen-karte.yaml`](klima/archiv/temperaturen-karte.yaml) | karte | Raum-Temperaturen v1 | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | archiv, ersetzt durch `temperaturen-karte-v2.yaml` |
 | [`thermostate-karte-v2.yaml`](klima/archiv/thermostate-karte-v2.yaml) | karte | Thermostate v2 – radiale Soll-Regler | button-card, card-mod | – | archiv, ersetzt durch `thermostate-karte-v3.yaml` |
