@@ -4,27 +4,26 @@
 # Art:           view
 # Bereich:       klima
 # Status:        aktiv
-# Karten:        button-card, card-mod, decluttering-card, weather-forecast-card
+# Karten:        button-card, card-mod, decluttering-card
 # Templates:     floating_navbar (navigation-templates.yaml),
 #                owlet_dwd_popup (warnlage-templates.yaml),
 #                owlet_pollen_popup (warnlage-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
-# Platzhalter:   sensor.warnregion_*, weather.wohnort
+# Platzhalter:   sensor.warnregion_*
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Wetter – komplette Ansicht (View) im Owlet-Stil
 #
 # Vorher stand hier nur die Wetter- und die Wind-Karte; Warnungen und Pollen
-# gab es nur auf Home, die Vorhersage nur im Test-View. Die View fasst jetzt
-# alles zusammen, was die Instanz zum Wetter liefert.
+# gab es nur auf Home. Die View zeigt jetzt Messwerte der Station, Warnlage
+# und Pollen in einer Spalte, ohne Vorhersage-Diagramm.
 #
 #   Section 1  Top-Navigation · Wetter (wetter-karte-v2.yaml: Bedingung,
-#              sechs Kacheln, Wetter- und Windanimation)
-#   Section 2  Niederschlag & Temperatur (Diagramm, 7 Tage) ·
-#              Warnlage & Pollen · DWD-Warnung (meteoalarm-karte.yaml) ·
-#              Pollenflug (pollenflug-karte.yaml)
-#   Section 3  schwebende Navbar
+#              sechs Kacheln, Wetter- und Windanimation) · Warnlage &
+#              Pollen · DWD-Warnung (meteoalarm-karte.yaml) · Pollenflug
+#              (pollenflug-karte.yaml)
+#   Section 2  schwebende Navbar
 #
 # Warnlage & Pollen steht immer da: zwei Kacheln mit der DWD-Warnstufe bzw.
 # Vorabinformation und der hoechsten Pollenbelastung. Tippen oeffnet das
@@ -36,10 +35,8 @@
 # amber, ab Stufe 3 rot, keine Warnung gruen; die Icon-Kachel im Kopf folgt
 # der Warnlage.
 #
-# Das Diagramm (weather-forecast-card) bekommt die Owlet-Huelle ueber
-# card-mod am vertical-stack (wie energie-monatsbilanz-karte.yaml). Die
-# Temperaturlinie ist einfarbig (use_color_thresholds: false), weil die
-# Schwellenfarben der Karte nicht aus der Palette stammen.
+# Warnlage & Pollen bekommt die Owlet-Huelle ueber card-mod am
+# vertical-stack (wie energie-monatsbilanz-karte.yaml).
 #
 # Einbindung (YAML-Dashboard):
 #   views:
@@ -48,7 +45,6 @@
 #   meteoalarm-karte.yaml und pollenflug-karte.yaml im selben Ordner ablegen.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
-#                + Weather Forecast Card (troinine/ha-weather-forecast-card)
 #                + browser_mod (alle via HACS), Integrationen
 #                DWD-Wetterwarnungen (dwd_weather_warnings) und DWD
 #                Pollenflug (HACS, Region 101), Templates aus
@@ -66,12 +62,10 @@ sections:
       - type: custom:decluttering-card
         template: top_navigation
       - !include wetter-karte-v2.yaml
-  - type: grid
-    cards:
-      # =================== NIEDERSCHLAG & TEMPERATUR ===================
+      # =================== WARNLAGE & POLLEN ===================
       - type: vertical-stack
         card_mod:
-          style: &huelle |
+          style: |
             #root {
               background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
               border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
@@ -82,18 +76,28 @@ sections:
             }
         cards:
           - type: custom:button-card
-            icon: mdi:weather-pouring
-            name: Niederschlag & Temperatur
-            label: 7 Tage · Vorhersage
+            icon: '[[[ return variables.warnstufe > 0 || variables.vorwarnstufe > 0 ? "mdi:alert-outline" : "mdi:shield-check-outline"; ]]]'
+            name: Warnlage & Pollen
+            label: Tippen für Details
             show_icon: true
             show_name: true
             show_label: true
             show_state: false
             tap_action:
               action: none
+            triggers_update:
+              - sensor.warnregion_aktuelle_warnstufe
+              - sensor.warnregion_vorwarnstufe
             variables:
-              accent: 'var(--owlet-blau, #7fb3d5)'
-            styles: &kopf
+              warnstufe: '[[[ return parseInt(states["sensor.warnregion_aktuelle_warnstufe"]?.state) || 0; ]]]'
+              vorwarnstufe: '[[[ return parseInt(states["sensor.warnregion_vorwarnstufe"]?.state) || 0; ]]]'
+              accent: |
+                [[[
+                  if (variables.warnstufe >= 3) return 'var(--owlet-rot, #f0736a)';
+                  if (variables.warnstufe > 0 || variables.vorwarnstufe > 0) return 'var(--owlet-amber, #e6b566)';
+                  return 'var(--owlet-gruen, #a6d49e)';
+                ]]]
+            styles:
               card:
                 - background: none
                 - box-shadow: none
@@ -129,53 +133,6 @@ sections:
                 - font-size: 12.5px
                 - margin-top: 2px
                 - color: 'var(--owlet-text-sekundaer, #8794a5)'
-          - type: custom:weather-forecast-card
-            entity: weather.wohnort
-            show_current: false
-            show_forecast: true
-            default_forecast: daily
-            forecast_types: daily
-            forecast:
-              mode: chart
-              daily_slots: 7
-              default_chart_attribute: temperature_and_precipitation
-              use_color_thresholds: false
-            card_mod:
-              style: |
-                ha-card {
-                  background: none !important;
-                  border: none !important;
-                  box-shadow: none !important;
-                  margin: 0 !important;
-                }
-      # =================== WARNLAGE & POLLEN ===================
-      - type: vertical-stack
-        card_mod:
-          style: *huelle
-        cards:
-          - type: custom:button-card
-            icon: '[[[ return variables.warnstufe > 0 || variables.vorwarnstufe > 0 ? "mdi:alert-outline" : "mdi:shield-check-outline"; ]]]'
-            name: Warnlage & Pollen
-            label: Tippen für Details
-            show_icon: true
-            show_name: true
-            show_label: true
-            show_state: false
-            tap_action:
-              action: none
-            triggers_update:
-              - sensor.warnregion_aktuelle_warnstufe
-              - sensor.warnregion_vorwarnstufe
-            variables:
-              warnstufe: '[[[ return parseInt(states["sensor.warnregion_aktuelle_warnstufe"]?.state) || 0; ]]]'
-              vorwarnstufe: '[[[ return parseInt(states["sensor.warnregion_vorwarnstufe"]?.state) || 0; ]]]'
-              accent: |
-                [[[
-                  if (variables.warnstufe >= 3) return 'var(--owlet-rot, #f0736a)';
-                  if (variables.warnstufe > 0 || variables.vorwarnstufe > 0) return 'var(--owlet-amber, #e6b566)';
-                  return 'var(--owlet-gruen, #a6d49e)';
-                ]]]
-            styles: *kopf
           - type: grid
             columns: 2
             square: false
