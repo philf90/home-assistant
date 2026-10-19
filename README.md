@@ -170,13 +170,11 @@ daraus und aus den Kopfblöcken erzeugt.
 | `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `fenster-lichter-uebersicht-karte.yaml`, `homematic-view.yaml`, `kameras-view.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `temperaturen-karte.yaml` |
 | `weather.wohnort` | Wetter-Entity des Wohnorts (Vorhersage, Bedingung fürs Icon) | Einstellungen → Geräte & Dienste → Deutscher Wetterdienst (HACS, `dwd_weather`) → Station → Entität `weather.*` | `welcome-banner-karte.yaml`, `wetter-karte.yaml` |
 | `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml` |
+| `benutzer_id_1`, `benutzer_id_2` | ID eines Home-Assistant-Benutzers in `visible:` (View) und `condition: user` (Karte); `1` und `2` trennen zwei Benutzer. Unersetzt sind die betroffenen Views und Karten für niemanden sichtbar | View- bzw. Karteneditor → *Sichtbarkeit* → Benutzer auswählen, Home Assistant setzt die ID selbst ein | `gesundheit-view.yaml`, `kameras-view.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `netzwerk-view.yaml`; in `archiv/`: `kameras-karte.yaml` |
 <!-- platzhalter:end -->
 
-Nicht anonymisiert, aber an die eigene Instanz gebunden: die Benutzer-IDs in
-`visible:` und `condition: user` (`gesundheit-view.yaml`, `navbar-karte.yaml`,
-`navigation-templates.yaml`, `kameras-view.yaml`). Am einfachsten
-im Karteneditor unter *Sichtbarkeit* den Benutzer neu auswählen.
-Ebenso die Entitäten in `unifi-netzplan-karte.yaml`: die `device_tracker` der
+Nicht anonymisiert, aber an die eigene Instanz gebunden: die Entitäten in
+`unifi-netzplan-karte.yaml`, also die `device_tracker` der
 eigenen UniFi-Geräte und die Sensoren von UniFi WAN, deren IDs Host und Site
 der Konsole enthalten (`…_192_168_1_1_default_…`).
 In `unifi-unas-pro-karte.yaml` hängen die IDs am Gerätenamen des UNAS
