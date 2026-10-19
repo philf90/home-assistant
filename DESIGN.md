@@ -529,6 +529,15 @@ gilt hell über den Schalter:
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
 
+**Pollenflug** (`pollenflug-karte.yaml`, Popup `owlet_pollen_popup` in
+`warnlage-templates.yaml`): in Chromium mit allen Stufen (gering, mittel,
+hoch, keine, keine Daten) gemessen, 49 Elemente je Modus. Schrift in der
+Stufenfarbe auf ihrer Tönung 0,12 mindestens 4,57:1 hell und 4,63:1 dunkel
+(„hoch“ im Popup, Chip im hellsten Teil des Blockverlaufs bei langer
+DWD-Beschreibung), Icons mindestens 4,61:1. „keine“ und „keine Daten“ im
+Popup stehen auf der neutralen Kachel in Label-Grau; in Sekundär-Grau fielen
+sie dort dunkel auf 4,35:1 (jetzt 7,28:1, hell 8,49:1).
+
 ## Animierte Hintergründe
 
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
