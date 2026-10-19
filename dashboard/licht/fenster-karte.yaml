@@ -4,338 +4,233 @@
 # Art:           karte
 # Bereich:       licht
 # Status:        aktiv
-# Karten:        button-card, card-mod
+# Karten:        button-card
 # Templates:     keine
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   keine
 # ============================================================================
-# Fenster & Tueren (Status) im Design der ueberarbeiteten Owlet-Smart-Sock-
-# Karte. Eigenstaendige Karte (aus der grossen Uebersicht isoliert).
+# Fenster & Tueren (Status) im Owlet-Stil, eine button-card.
 #
-# Ausklappbare Sektion (input_boolean.fenster_turen_expanded bleibt erhalten):
-# Kopfzeile mit Status-Badge ("Alles zu" / "N offen") + Ausklapp-Pfeil; Tap
-# auf den Kopf klappt auf/zu. Darunter 2-spaltiges Status-Raster:
-# offen = rot, zu = gruen; Fenster-/Tuer-Icon je nach kind + Zustand.
-# Tap auf eine Kachel -> more-info.
+# Aufbau:
+#   Kopf     Icon-Kachel, Titel, darunter "15 von 17 geschlossen", rechts
+#            Badge ("N offen" rot, "N unbekannt" amber, "Alles zu" gruen)
+#            und der Ausklapp-Pfeil. Tipp auf den Kopf klappt die
+#            geschlossenen auf und zu.
+#   Offen    immer sichtbar: je offenes Fenster / jede offene Tuer eine
+#            einzeilige Zeile, rot getoent, rechts "seit 14:32 · 2 Std.";
+#            am laengsten offen zuerst. Kontakte ohne gueltigen Zustand
+#            (unavailable, unknown) stehen amber darunter, weil sie offen
+#            sein koennten.
+#   Zu       im Ausklappbereich, 2-spaltiges Raster schlanker Kacheln:
+#            gruenes Symbol ohne eigene Kachel, Name.
+# Tipp auf einen Kontakt: more-info.
 #
-# Gemeinsame Optik/Logik ueber YAML-Anker: &head_styles, &win_* .
+# Aufgeklappt oder nicht merkt sich nur der Browser (window.__owletFensterAuf);
+# nach dem Laden der Seite ist der Bereich zu. Bis 19.10.2026 schaltete der
+# Kopf input_boolean.fenster_turen_expanded; der Helfer blieb dadurch auf
+# allen Geraeten offen. fenster-lichter-uebersicht-karte.yaml nutzt ihn weiter.
 #
-# Voraussetzung: custom:button-card + card-mod (HACS).
-type: vertical-stack
-card_mod:
-  style: |
-    #root {
-      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
-      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
-      border-radius: 22px !important;
-      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
-      padding: 16px 18px !important;
-      gap: 12px !important;
-    }
-cards:
-  - type: custom:button-card
-    entity: input_boolean.fenster_turen_expanded
-    icon: mdi:door-open
-    name: Fenster & Türen
-    show_icon: true
-    show_name: true
-    show_state: false
-    triggers_update: all
-    tap_action:
-      action: toggle
-    custom_fields:
-      badge: |
-        [[[
-          const s=states['sensor.summe_offene_fenster_turen'];
-          const n= s?parseInt(parseFloat(s.state))||0:0;
-          const open=n>0;
-          const c=open?'var(--owlet-rot, #f0736a)':'var(--owlet-gruen, #a6d49e)';
-          const bg=open?'color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent)':'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)';
-          const bd=open?'color-mix(in srgb, var(--owlet-rot, #f0736a) 24%, transparent)':'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)';
-          const txt=open?(n===1?'1 offen':n+' offen'):'Alles zu';
-          const ico = open
-            ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16v.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'
-            : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-          return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:${bg};border:1px solid ${bd};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${ico}${txt}</span>`;
-        ]]]
-      chev: |
-        [[[
-          const e=(typeof entity!=='undefined')?entity:null;
-          const up = e && e.state==='on';
-          return `<span style="display:inline-flex;transform:rotate(${up?180:0}deg);transition:transform .2s;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" style="color:var(--owlet-text-sekundaer, #8794a5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>`;
-        ]]]
-    styles: &head_styles
-      card:
-        - background: none
-        - box-shadow: none
-        - border: none
-        - padding: 2px 2px 4px
-      grid:
-        - grid-template-areas: '"i n badge chev"'
-        - grid-template-columns: min-content 1fr min-content min-content
-      img_cell:
-        - width: 44px
-        - height: 44px
-        - border-radius: 13px
-        - margin-right: 14px
-        - align-self: center
-        - background: 'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)'
-        - border: '1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)'
-      icon:
-        - width: 23px
-        - height: 23px
-        - color: 'var(--owlet-gruen, #a6d49e)'
-      name:
-        - justify-self: start
-        - align-self: center
-        - font-size: 17px
-        - font-weight: 700
-        - letter-spacing: -0.02em
-        - color: 'var(--owlet-text, #f2f5f8)'
-      custom_fields:
-        badge:
-          - justify-self: end
-          - align-self: center
-        chev:
-          - justify-self: end
-          - align-self: center
-          - margin-left: 10px
-  - type: conditional
-    conditions:
-      - entity: input_boolean.fenster_turen_expanded
-        state: "on"
-    card:
-      type: grid
-      columns: 2
-      square: false
-      cards:
-        - type: custom:button-card
-          entity: binary_sensor.tur_windfang
-          name: Tür Windfang
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: door }
-          icon: &win_icon |
-            [[[
-              const e=(typeof entity!=='undefined')?entity:null;
-              const open = e && e.state==='on';
-              const kind = variables.kind||'window';
-              if(kind==='door') return open?'mdi:door-open':'mdi:door-closed';
-              return open?'mdi:window-open':'mdi:window-closed';
-            ]]]
-          custom_fields:
-            st: &win_dot |
-              [[[
-                const e=(typeof entity!=='undefined')?entity:null;
-                const open=e&&e.state==='on';
-                const c=open?'var(--owlet-rot, #f0736a)':'var(--owlet-gruen, #a6d49e)';
-                return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>`;
-              ]]]
-          styles: &win_styles
-            card:
-              - border-radius: 14px
-              - padding: 10px 12px
-              - box-shadow: none
-              - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
-              - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
-            grid:
-              - grid-template-columns: min-content 1fr min-content
-              - grid-template-areas: '"i n st"'
-            img_cell:
-              - width: 34px
-              - height: 34px
-              - border-radius: 10px
-              - margin-right: 11px
-              - align-self: center
-              - background: &win_bg |
-                  [[[
-                    const e=(typeof entity!=='undefined')?entity:null;
-                    return (e&&e.state==='on')?'color-mix(in srgb, var(--owlet-rot, #f0736a) 16%, transparent)':'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 16%, transparent)';
-                  ]]]
-              - border: &win_border |
-                  [[[
-                    const e=(typeof entity!=='undefined')?entity:null;
-                    return (e&&e.state==='on')?'1px solid color-mix(in srgb, var(--owlet-rot, #f0736a) 24%, transparent)':'1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)';
-                  ]]]
-            icon:
-              - width: 19px
-              - height: 19px
-              - color: &win_color |
-                  [[[
-                    const e=(typeof entity!=='undefined')?entity:null;
-                    return (e&&e.state==='on')?'var(--owlet-rot, #f0736a)':'var(--owlet-gruen, #a6d49e)';
-                  ]]]
-            name:
-              - justify-self: start
-              - align-self: center
-              - font-size: 13.5px
-              - font-weight: 600
-              - color: 'var(--owlet-text, #f2f5f8)'
-              - white-space: nowrap
-              - overflow: hidden
-              - text-overflow: ellipsis
-            custom_fields:
-              st:
-                - justify-self: end
-                - align-self: center
-        - type: custom:button-card
-          entity: binary_sensor.fenster_windfang
-          name: Windfang
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.haustur
-          name: Haustür
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: door }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.tur_keller
-          name: Keller
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: door }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_wohnzimmer_links
-          name: Wohnzimmer links
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_wohnzimmer_rechts
-          name: Wohnzimmer rechts
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_wohnzimmer_hof
-          name: Wohnzimmer Hof
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_kuche
-          name: Küche
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_garderobe
-          name: Garderobe
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_bad_unten_links
-          name: Bad unten links
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_bad_unten_rechts
-          name: Bad unten rechts
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_schlafzimmer_links
-          name: Schlafzimmer links
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_schlafzimmer_rechts
-          name: Schlafzimmer rechts
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_schlafzimmer_hof
-          name: Schlafzimmer Hof
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_buro
-          name: Kinderzimmer 2
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.balkontur
-          name: Balkontür
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: door }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
-        - type: custom:button-card
-          entity: binary_sensor.fenster_kinderzimmer
-          name: Kinderzimmer 1
-          show_icon: true
-          show_name: true
-          show_state: false
-          variables: { kind: window }
-          icon: *win_icon
-          custom_fields: { st: *win_dot }
-          styles: *win_styles
+# "seit": last_changed des Sensors. Nach einem Neustart von Home Assistant
+# setzen alle Sensoren last_changed auf den Startzeitpunkt (am 19.10.2026:
+# 15 der 17 Kontakte innerhalb von 0,2 s). Haben mindestens drei weitere
+# Kontakte ihren Zeitstempel innerhalb von 5 s, gilt er als Neustart und die
+# Zeile zeigt nur "offen". sensor.time laesst die Karte jede Minute neu
+# zeichnen, damit die Dauer nachzieht.
+#
+# Klicks: Die Karte selbst hat keine Aktion (kein Ripple). button-card setzt
+# dann ha-card.disabled mit pointer-events: none; das Feld body holt die
+# Klicks mit pointer-events: auto zurueck. Kopf und Kontakte
+# haben eigene touchend- und click-Handler (window.__owletFenster.tipp):
+# button-card unterdrueckt nach touchend den click (action-handler.ts), auf
+# dem Handy kaeme ein reiner onclick sonst nie an. Mehr als 10 px Weg gilt
+# als Wischen.
+#
+# Kontakte: variables.kontakte (name, entity, art: fenster | tuer).
+#
+# Voraussetzung: custom:button-card (v7), Integration "Time & Date"
+# (sensor.time).
+type: custom:button-card
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+show_ripple: false
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  kontakte:
+    - { name: Tür Windfang, entity: binary_sensor.tur_windfang, art: tuer }
+    - { name: Windfang, entity: binary_sensor.fenster_windfang, art: fenster }
+    - { name: Haustür, entity: binary_sensor.haustur, art: tuer }
+    - { name: Keller, entity: binary_sensor.tur_keller, art: tuer }
+    - { name: Wohnzimmer links, entity: binary_sensor.fenster_wohnzimmer_links, art: fenster }
+    - { name: Wohnzimmer rechts, entity: binary_sensor.fenster_wohnzimmer_rechts, art: fenster }
+    - { name: Wohnzimmer Hof, entity: binary_sensor.fenster_wohnzimmer_hof, art: fenster }
+    - { name: Küche, entity: binary_sensor.fenster_kuche, art: fenster }
+    - { name: Garderobe, entity: binary_sensor.fenster_garderobe, art: fenster }
+    - { name: Bad unten links, entity: binary_sensor.fenster_bad_unten_links, art: fenster }
+    - { name: Bad unten rechts, entity: binary_sensor.fenster_bad_unten_rechts, art: fenster }
+    - { name: Schlafzimmer links, entity: binary_sensor.fenster_schlafzimmer_links, art: fenster }
+    - { name: Schlafzimmer rechts, entity: binary_sensor.fenster_schlafzimmer_rechts, art: fenster }
+    - { name: Schlafzimmer Hof, entity: binary_sensor.fenster_schlafzimmer_hof, art: fenster }
+    - { name: Kinderzimmer 2, entity: binary_sensor.fenster_buro, art: fenster }
+    - { name: Balkontür, entity: binary_sensor.balkontur, art: tuer }
+    - { name: Kinderzimmer 1, entity: binary_sensor.fenster_kinderzimmer, art: fenster }
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+  grid:
+    - grid-template-areas: '"body"'
+    - grid-template-columns: minmax(0, 1fr)
+  custom_fields:
+    # button-card setzt auf jedes Feld .ellipsis (nowrap, overflow hidden);
+    # zuruecksetzen, damit lange Zeilen umbrechen
+    body:
+      - width: 100%
+      - min-width: 0
+      - white-space: normal
+      # Ohne Aktion setzt button-card ha-card.disabled (pointer-events: none,
+      # bc-styles.ts); der Inhalt braucht Klicks fuer Kopf und Kontakte
+      - pointer-events: auto
+custom_fields:
+  body: |
+    [[[
+      states['sensor.time']; // liest die Uhrzeit, damit button-card v7 jede Minute neu zeichnet
+      const TEXT  = 'var(--owlet-text, #f2f5f8)';
+      const LABEL = 'var(--owlet-label, #b4c0cf)';
+      const SEK   = 'var(--owlet-text-sekundaer, #8794a5)';
+      const GRUEN = 'var(--owlet-gruen, #a6d49e)';
+      const ROT   = 'var(--owlet-rot, #f0736a)';
+      const AMBER = 'var(--owlet-amber, #e6b566)';
+      const UK    = 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
+      const UKR   = 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+      const tint  = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+      const esc = (s) => String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Handler fuer Kopf und Kontakte (Erklaerung im Dateikopf)
+      const F = window.__owletFenster = window.__owletFenster || {};
+      F.drueck = (ev) => { const t = ev.touches && ev.touches[0]; if (t) { F.x = t.clientX; F.y = t.clientY; } };
+      F.tipp = (ev, was, id) => {
+        ev.stopPropagation();
+        if (ev.type === 'touchend') {
+          const t = ev.changedTouches && ev.changedTouches[0];
+          if (t && Math.hypot(t.clientX - (F.x || 0), t.clientY - (F.y || 0)) > 10) return;
+          if (ev.cancelable) ev.preventDefault();
+        }
+        const el = ev.currentTarget;
+        if (was === 'info') {
+          el.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: id }, bubbles: true, composed: true }));
+          return;
+        }
+        window.__owletFensterAuf = !window.__owletFensterAuf;
+        const box = el.closest('[data-fz]');
+        if (!box) return;
+        const zu = box.querySelector('[data-fz-zu]');
+        const pf = box.querySelector('[data-fz-pfeil]');
+        if (zu) zu.style.display = window.__owletFensterAuf ? '' : 'none';
+        if (pf) pf.style.transform = `rotate(${window.__owletFensterAuf ? 180 : 0}deg)`;
+      };
+      const klick = (was, id) => {
+        const h = `window.__owletFenster.tipp(event, '${was}', '${id || ''}')`;
+        return `ontouchstart="window.__owletFenster.drueck(event)" ontouchend="${h}" onclick="${h}"`;
+      };
+
+      // ---- Zustaende ----
+      const liste = (variables.kontakte || []).map((k) => {
+        const s = states[k.entity];
+        const st = s ? s.state : '';
+        const t = s ? Date.parse(s.last_changed) : NaN;
+        return { ...k, zustand: st === 'on' ? 'offen' : (st === 'off' ? 'zu' : 'unbekannt'), t };
+      });
+      // Neustart: mindestens drei weitere Kontakte mit Zeitstempel innerhalb von 5 s
+      const neustart = (e) => Number.isFinite(e.t)
+        && liste.filter((x) => x !== e && Number.isFinite(x.t) && Math.abs(x.t - e.t) < 5000).length >= 3;
+      const offen = liste.filter((e) => e.zustand === 'offen').sort((a, b) => (a.t || 0) - (b.t || 0));
+      const unklar = liste.filter((e) => e.zustand === 'unbekannt');
+      const zu = liste.filter((e) => e.zustand === 'zu');
+      const auf = !!window.__owletFensterAuf;
+
+      const p2 = (n) => String(n).padStart(2, '0');
+      const seit = (e) => {
+        if (!Number.isFinite(e.t) || neustart(e)) return 'offen';
+        const d = new Date(e.t), jetzt = new Date();
+        const uhr = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+        const tag = d.toDateString() === jetzt.toDateString()
+          ? uhr
+          : `${d.toLocaleDateString('de-DE', { weekday: 'short' })} ${uhr}`;
+        const min = Math.max(0, Math.floor((Date.now() - e.t) / 60000));
+        const h = Math.floor(min / 60), tg = Math.floor(h / 24);
+        const dauer = min < 1 ? 'gerade eben' : min < 60 ? `${min} Min.` : h < 24 ? `${h} Std.` : (tg === 1 ? '1 Tag' : `${tg} Tage`);
+        return `seit ${tag} · ${dauer}`;
+      };
+      const symbol = (e) => e.art === 'tuer'
+        ? (e.zustand === 'zu' ? 'mdi:door-closed' : 'mdi:door-open')
+        : (e.zustand === 'zu' ? 'mdi:window-closed' : 'mdi:window-open');
+      // margin:0 gegen "ha-icon { margin: auto }" aus button-card (bc-styles.ts):
+      // in einer Flex-Zeile verteilt margin auto den freien Platz um das Symbol
+      const ico = (e, c, g) => `<ha-icon icon="${symbol(e)}" style="flex:none;margin:0;--mdc-icon-size:${g}px;width:${g}px;height:${g}px;display:flex;color:${c};"></ha-icon>`;
+      const kachel = (e, c) => `<div style="flex:none;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${ico(e, c, 17)}</div>`;
+
+      // ---- Kopf ----
+      const n = offen.length, u = unklar.length;
+      const bc = n ? ROT : (u ? AMBER : GRUEN);
+      const btxt = n ? `${n} offen` : (u ? `${u} unbekannt` : 'Alles zu');
+      const bico = (n || u)
+        ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16v.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>'
+        : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+      const unter = zu.length === liste.length ? `Alle ${liste.length} geschlossen` : `${zu.length} von ${liste.length} geschlossen`;
+      const pfeil = zu.length
+        ? `<span data-fz-pfeil style="flex:none;display:inline-flex;transform:rotate(${auf ? 180 : 0}deg);transition:transform .2s;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" style="color:${SEK}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>`
+        : '';
+      const kopf = `
+        <div ${zu.length ? klick('klapp') : ''} style="display:flex;align-items:center;gap:10px;padding:2px 2px 0;${zu.length ? 'cursor:pointer;' : ''}">
+          <div style="flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${tint(GRUEN, 12)};border:1px solid ${tint(GRUEN, 24)};">
+            <ha-icon icon="mdi:door-open" style="--mdc-icon-size:23px;width:23px;height:23px;display:flex;color:${GRUEN};"></ha-icon>
+          </div>
+          <div style="min-width:0;flex:1;margin-left:4px;">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Fenster &amp; Türen</div>
+            <div style="font-size:13px;color:${SEK};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div>
+          </div>
+          <span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:${tint(bc, 12)};border:1px solid ${tint(bc, 24)};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${bico}${btxt}</span>
+          ${pfeil}
+        </div>`;
+
+      // ---- Offen und unbekannt: immer sichtbar, je eine Zeile ----
+      const zeile = (e) => {
+        const c = e.zustand === 'offen' ? ROT : AMBER;
+        const sub = e.zustand === 'offen' ? seit(e) : 'unbekannt';
+        return `
+          <div ${klick('info', e.entity)} style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:7px 10px 7px 8px;border-radius:12px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};">
+            ${kachel(e, c)}
+            <div style="min-width:0;flex:1;font-size:14px;font-weight:700;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.name)}</div>
+            <div style="flex:none;font-size:12px;font-weight:600;color:${LABEL};white-space:nowrap;">${sub}</div>
+          </div>`;
+      };
+      const oben = (n || u)
+        ? `<div style="display:flex;flex-direction:column;gap:6px;">${offen.concat(unklar).map(zeile).join('')}</div>`
+        : '';
+
+      // ---- Geschlossen: Ausklappbereich, 2-spaltiges Raster ----
+      const klein = (e) => `
+        <div ${klick('info', e.entity)} style="cursor:pointer;min-width:0;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:11px;background:${UK};border:1px solid ${UKR};">
+          ${ico(e, GRUEN, 16)}
+          <div style="min-width:0;flex:1;font-size:13px;font-weight:600;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(e.name)}</div>
+        </div>`;
+      const unten = zu.length
+        ? `<div data-fz-zu style="${auf ? '' : 'display:none;'}"><div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:6px;">${zu.map(klein).join('')}</div></div>`
+        : '';
+
+      return `
+        <div data-fz style="display:flex;flex-direction:column;gap:12px;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+          ${kopf}${oben}${unten}
+        </div>`;
+    ]]]

@@ -57,7 +57,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`fenster-karte.yaml`](licht/fenster-karte.yaml) | karte | Fenster & Tueren – Status | button-card, card-mod | – | aktiv |
+| [`fenster-karte.yaml`](licht/fenster-karte.yaml) | karte | Fenster & Tueren – Status | button-card | – | aktiv |
 | [`fenster-lichter-karte.yaml`](licht/fenster-lichter-karte.yaml) | karte | Fenster & Lichter – Kachel | button-card | – | aktiv |
 | [`fenster-lichter-uebersicht-karte.yaml`](licht/fenster-lichter-uebersicht-karte.yaml) | karte | Fenster & Tueren, Lichter & Steckdosen – grosse Ansicht | bubble-card, button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`haustuer-ereignis-karte.yaml`](licht/haustuer-ereignis-karte.yaml) | karte | Haustuer-Ereignis | button-card | – | aktiv |
