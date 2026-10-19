@@ -64,7 +64,7 @@ Datei erklärt den Unterschied.
   `apexcharts-card`, `auto-entities`, `bubble-card`, `decluttering-card`, `expander-card`,
   `flower-card`, `homematicip-system-health-card`, `mushroom` (entity,
   light), `navbar-card`, `power-flow-card-plus`, `sankey-chart`,
-  `slider-button-card`, `trash-card`, `uptime-card`, `webrtc-camera`
+  `slider-button-card`, `trash-card`, `uptime-card`, `weather-forecast-card`, `webrtc-camera`
 - die Integrationen der jeweiligen Geräte (z. B. Home Connect, UniFi,
   Homematic IP, VW Group Connect, Flightradar24)
 - optional für den UniFi-Netzplan: die Integration
