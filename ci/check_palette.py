@@ -9,7 +9,8 @@ Geprueft wird:
 2. Jede Farbangabe in den Karten -- #rgb, #rgba, #rrggbb, #rrggbbaa, rgb() und
    rgba() mit festen Zahlen -- steht in der Palette. Deckkraft ist bei jeder
    Palettenfarbe erlaubt. Farben unter "nur_mit_deckkraft" (Weiss) duerfen
-   nicht deckend vorkommen.
+   nicht deckend vorkommen, ausser als Schrift auf einer Farbe aus ihrem
+   "deckend_auf": Steht eine davon in derselben Zeile, ist der Wert erlaubt.
 
 3. Der helle Modus: "hell_farben" (Format, keine Dublette mit der dunklen
    Palette, jeder Wert von einer Variable genutzt) und "theme" (jede Variable
@@ -94,6 +95,31 @@ def lade_palette() -> tuple[dict[str, str], set[str], set[str], list[str]]:
             farben[hexwert] = str(e.get("name"))
 
     return farben, vorschlag, nur_deckkraft, fehler
+
+
+def lade_deckend_auf(farben: dict[str, str]) -> tuple[dict[str, set[str]], list[str]]:
+    """Liefert {weiss: {erlaubte Grundfarben}} aus nur_mit_deckkraft[].deckend_auf.
+
+    Getrennt von lade_palette(), damit check_grafana.py die Ausnahme nicht erbt.
+    """
+    fehler: list[str] = []
+    daten = yaml.safe_load(PALETTE_FILE.read_text(encoding="utf-8"))
+    erlaubt: dict[str, set[str]] = {}
+    for i, e in enumerate(daten.get("nur_mit_deckkraft") or []):
+        if not isinstance(e, dict) or "deckend_auf" not in e:
+            continue
+        ort = f"nur_mit_deckkraft[{i}].deckend_auf"
+        werte = e["deckend_auf"]
+        if not isinstance(werte, list) or not werte:
+            fehler.append(f"{ort}: Liste von #rrggbb-Werten erwartet")
+            continue
+        for w in werte:
+            w = str(w).lower()
+            if not HEX_RE.match(w) or w not in farben:
+                fehler.append(f"{ort}: '{w}' ist kein Wert der Palette")
+            else:
+                erlaubt.setdefault(str(e.get("hex", "")).lower(), set()).add(w)
+    return erlaubt, fehler
 
 
 VARIABLE_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -267,9 +293,11 @@ def pruefe_datei(
     nur_deckkraft: set[str],
     hell: dict[str, str] | None = None,
     ist_theme: bool = False,
+    deckend_auf: dict[str, set[str]] | None = None,
 ) -> list[str]:
     fehler: list[str] = []
     hell = hell or {}
+    deckend_auf = deckend_auf or {}
     name = pfad.relative_to(REPO_ROOT) if pfad.is_relative_to(REPO_ROOT) else pfad
     if ist_theme:
         # Im Theme stehen beide Modi; Weiss ist dort als erhoehte Flaeche
@@ -277,6 +305,7 @@ def pruefe_datei(
         farben = {**farben, **hell}
         nur_deckkraft = set()
     for nr, zeile in enumerate(pfad.read_text(encoding="utf-8").splitlines(), start=1):
+        in_zeile = {zu_hex(t)[0] for m in (FARBE_HEX, FARBE_RGB) for t in m.finditer(zeile)}
         for muster in (FARBE_HEX, FARBE_RGB):
             for treffer in muster.finditer(zeile):
                 hexwert, alpha = zu_hex(treffer)
@@ -291,7 +320,11 @@ def pruefe_datei(
                         f"{name}:{nr}: {text} steht nicht in design/palette.yaml "
                         f"(naechster Palettenwert: {naechster(hexwert, vorschlag)})"
                     )
-                elif hexwert in nur_deckkraft and alpha >= 1:
+                elif (
+                    hexwert in nur_deckkraft
+                    and alpha >= 1
+                    and not deckend_auf.get(hexwert, set()) & in_zeile
+                ):
                     fehler.append(
                         f"{name}:{nr}: {text} -- {farben[hexwert]} nur mit Deckkraft < 1 erlaubt, "
                         f"deckend stattdessen #f2f5f8"
@@ -303,6 +336,8 @@ def main(argv: list[str]) -> int:
     farben, vorschlag, nur_deckkraft, fehler = lade_palette()
     hell, theme, fehler_hell = lade_hell(farben, nur_deckkraft)
     fehler.extend(fehler_hell)
+    deckend_auf, fehler_deckend = lade_deckend_auf(farben)
+    fehler.extend(fehler_deckend)
     if fehler:
         print("design/palette.yaml ist fehlerhaft:")
         for f in fehler:
@@ -320,7 +355,9 @@ def main(argv: list[str]) -> int:
     theme_pfad = (REPO_ROOT / theme["datei"]).resolve()
     for pfad in dateien:
         fehler.extend(
-            pruefe_datei(pfad, farben, vorschlag, nur_deckkraft, hell, pfad == theme_pfad)
+            pruefe_datei(
+                pfad, farben, vorschlag, nur_deckkraft, hell, pfad == theme_pfad, deckend_auf
+            )
         )
 
     if fehler:
