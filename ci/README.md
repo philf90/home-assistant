@@ -155,8 +155,8 @@ python -m compileall -q grafana/ ci/
 Jedes Skript nimmt optional einzelne Dateien als Argument:
 
 ```bash
-node ci/check-js-templates.js dashboard/klima/wetter-karte.yaml
-python ci/check_yaml.py dashboard/klima/wetter-karte.yaml
+node ci/check-js-templates.js dashboard/klima/wetter-karte-v2.yaml
+python ci/check_yaml.py dashboard/klima/wetter-karte-v2.yaml
 ```
 
 Mit [pre-commit](https://pre-commit.com/) laufen dieselben Pruefungen

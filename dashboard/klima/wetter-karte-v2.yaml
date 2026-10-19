@@ -1,0 +1,254 @@
+# ============================================================================
+# Wetter v2 – eine Karte mit Wetter, Wind, Sonne und Vorhersage
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       klima
+# Status:        aktiv
+# Karten:        button-card, card-mod, weather-forecast-card
+# Templates:     owlet_wetter_fx (wetter-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   weather.wohnort
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Loest wetter-karte.yaml ab (zwei Karten "Wetter" und "Wind"). Jetzt eine
+# Owlet-Karte:
+#
+#   Kopf         Icon-Kachel und Untertitel nach der Bedingung
+#                ("Bewoelkt · Regen an der Station")
+#   Raster       sechs Kacheln: Temperatur, Luftfeuchtigkeit, Niederschlag,
+#                Wind, Helligkeit, Sonne (naechster Auf- oder Untergang);
+#                ab etwa 470 px Kartenbreite drei, sonst zwei Spalten
+#   Vorhersage   weather-forecast-card (7 Tage, Tippen wechselt zu
+#                stuendlich) als eingebettete Karte im Feld "vorhersage"
+#
+# Animation: beide Szenen aus owlet_wetter_fx uebereinander -- die
+# Wetterszene (Wolken, Regen, Gewitter, Sonne nach der DWD-Bedingung, Regen
+# der Station hat Vorrang) und darueber die Windschlieren der frueheren
+# Wind-Karte nach Beaufort-Stufe und Windrichtung. Beide liegen im Feld "fx"
+# hinter dem Inhalt; aendert sich nur ein Messwert, laeuft die Animation
+# weiter (siehe wetter-templates.yaml).
+#
+# Farben wie in wetter-karte.yaml: Temperatur in Stufen nach den
+# DWD-Kenntagen (DESIGN.md "Temperaturstufen"), Feuchte blau, Niederschlag
+# blau bei Regen und gruen bei trocken, Wind tuerkis, Sonne sonnengelb,
+# Helligkeit wolkengrau. Kachel-Beschriftungen in Label-Grau; jede Kachel
+# und die Vorhersage haben einen Schutzgrund in Huellenfarbe (0,70, in der
+# Icon-Kachel zusaetzlich 0,50), damit Schrift 4,5:1 und Icons 3:1 halten
+# (DESIGN.md, "Animierte Hintergruende").
+#
+# Tippen: jede Kachel oeffnet die more-info ihrer Entitaet, der Rest der
+# Karte die der Wetter-Entitaet. Die Vorhersage schaltet per Tippen zwischen
+# Tagen und Stunden um.
+#
+# Voraussetzung: custom:button-card, card-mod und Weather Forecast Card
+# (troinine/ha-weather-forecast-card, alle via HACS), Template
+# owlet_wetter_fx, Wetterstation (HmIP-SWO-PR), Template-Sensoren
+# sensor.windrichtung, sensor.windstarke_aktuell, sensor.regen_aktuell,
+# sensor.regenmenge und der Statistik-Helfer
+# sensor.garten_wetterstation_pro_windgeschwindigkeit_mittel_10_min
+# (Einrichtung siehe archiv/wetter-karte.yaml).
+type: custom:button-card
+template: owlet_wetter_fx
+entity: weather.wohnort
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+tap_action:
+  action: more-info
+variables:
+  wind_mittel: sensor.garten_wetterstation_pro_windgeschwindigkeit_mittel_10_min
+  stufe: '[[[ return variables.wx.bft(states[variables.wind_mittel]?.state) ]]]'
+  wxr: '[[[ return variables.wx.richtung(states["sensor.windrichtung"]?.state, variables.stufe) ]]]'
+triggers_update:
+  - weather.wohnort
+  - sun.sun
+  - sensor.wetterstation_pro_temperatur
+  - sensor.wetterstation_pro_luftfeuchtigkeit
+  - sensor.wetterstation_pro_windgeschwindigkeit
+  - sensor.wetterstation_pro_beleuchtungsstarke
+  - binary_sensor.wetterstation_pro_regen
+  - sensor.regenmenge
+  - sensor.regen_aktuell
+  - sensor.windrichtung
+  - sensor.windstarke_aktuell
+  - sensor.garten_wetterstation_pro_windgeschwindigkeit_mittel_10_min
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - overflow: hidden
+    - isolation: isolate
+    - --wx-dunkel: var(--owlet-dunkel-anteil, 100%)
+    - --wx-dir: '[[[ return String(variables.wxr.dir) ]]]'
+    - --wx-tilt: '[[[ return variables.wxr.tilt + "deg" ]]]'
+    - --wx-rain: '[[[ return variables.wxr.rain + "deg" ]]]'
+  grid:
+    - grid-template-areas: '"body" "vorhersage"'
+    - grid-template-columns: minmax(0, 1fr)
+  custom_fields:
+    fx:
+      - position: absolute
+      - inset: 0
+      - z-index: 0
+      - pointer-events: none
+    body:
+      - position: relative
+      - z-index: 1
+      - width: 100%
+      - min-width: 0
+    vorhersage:
+      - position: relative
+      - z-index: 1
+      - margin-top: 10px
+      - padding: 4px 2px
+      - border-radius: 16px
+      - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - background: 'color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 70%, transparent)'
+      - min-width: 0
+      - overflow: hidden
+custom_fields:
+  fx: |
+    [[[
+      // Wetterszene und Windschlieren uebereinander. Gleicher Zustand ->
+      // gleicher Text -> die Animation laeuft weiter.
+      const w = states['weather.wohnort'];
+      const rb = states['binary_sensor.wetterstation_pro_regen'];
+      const cond = variables.wx.effCond(w ? w.state : '', !!rb && rb.state === 'on');
+      return variables.wx.wetter(cond, variables.stufe) + variables.wx.wind(variables.stufe);
+    ]]]
+  vorhersage:
+    card:
+      type: custom:weather-forecast-card
+      entity: weather.wohnort
+      show_current: false
+      show_forecast: true
+      default_forecast: daily
+      forecast_types: both
+      forecast:
+        mode: simple
+        daily_slots: 7
+        extra_attribute: precipitation_probability
+        show_sun_times: true
+        scroll_to_selected: true
+      forecast_action:
+        tap_action:
+          action: toggle-forecast
+      card_mod:
+        style: |
+          ha-card {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+          }
+  body: |
+    [[[
+      const green='var(--owlet-gruen, #a6d49e)', value='var(--owlet-text, #f2f5f8)', muted='var(--owlet-text-sekundaer, #8794a5)', amber='var(--owlet-amber, #e6b566)', red='var(--owlet-rot, #f0736a)', blue='var(--owlet-blau, #7fb3d5)', teal='var(--owlet-tuerkis, #7fd0d5)';
+      const indigo='var(--owlet-indigo, #8ea2e6)', cloud='var(--owlet-wolkengrau, #cdd6e0)', sun='var(--owlet-sonnengelb, #e6c15a)';
+      // Beschriftung und Einheiten hellgrau: halten auf animiertem Grund 4,5:1
+      const label='var(--owlet-label, #b4c0cf)';
+      const tint=(c,p)=>`color-mix(in srgb, ${c} ${p}%, transparent)`;
+      const S=(id)=>states[id];
+      const num=(id)=>{const e=S(id);const v=e?parseFloat(e.state):NaN;return isNaN(v)?NaN:v;};
+      const fmt=(v,d)=>isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+      const unit=(u)=>`<span style="font-size:12px;color:${label};font-weight:600;margin-left:3px;">${u}</span>`;
+      const svg=(inner,c)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:20px;height:20px;">${inner}</svg>`;
+
+      const iSun=(c)=>svg('<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>',c);
+      const iThermo=(c)=>svg('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path d="M12 9.2v5.2"/><circle cx="12" cy="17.4" r="1.7" fill="currentColor" stroke="none"/>',c);
+      const iDrop=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/>',c);
+      const iDropOff=(c)=>svg('<path d="M12 3.5c3 3.6 5 6.2 5 8.6a5 5 0 0 1-10 0c0-2.4 2-5 5-8.6Z"/><path d="M4 4l16 16"/>',c);
+      const iRain=(c)=>svg('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>',c);
+      const iCloud=(c)=>svg('<path d="M7 18h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 9.4 3.8 3.8 0 0 0 7 18Z"/>',c);
+      const iMoon=(c)=>svg('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>',c);
+      const iSnow=(c)=>svg('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>',c);
+      const iBolt=(c)=>svg('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>',c);
+      const iFog=(c)=>svg('<path d="M5 9h14M4 13h16M6 17h12"/>',c);
+      const iWind=(c)=>svg('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h9a2.5 2.5 0 1 1-2.5 2.5"/>',c);
+      const iHell=(c)=>svg('<circle cx="12" cy="12" r="3"/><path d="M12 4v1.5M12 18.5V20M4 12h1.5M18.5 12H20M6.3 6.3l1 1M16.7 16.7l1 1M17.7 6.3l-1 1M7.3 16.7l-1 1"/>',c);
+      const iRise=(c)=>svg('<path d="M4 18h16M7 14a5 5 0 0 1 10 0"/><path d="M12 3v5M9.5 5.5 12 3l2.5 2.5"/>',c);
+      const iSet=(c)=>svg('<path d="M4 18h16M7 14a5 5 0 0 1 10 0"/><path d="M12 8V3M9.5 5.5 12 8l2.5-2.5"/>',c);
+
+      // Kachel -> more-info der eigenen Entitaet (Event "hass-more-info",
+      // bubbles + composed); stopPropagation verhindert das tap_action der
+      // Gesamtkarte und die Hold-Erkennung.
+      const tap=(id)=>id?` onclick="event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"`:'';
+
+      // Schutzgrund in Huellenfarbe unter der Toenung (0,70, Icon-Kachel 0,50)
+      const cell=(iconFn, valueHtml, text, accent, entityId)=>`
+        <div${tap(entityId)} style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:linear-gradient(${tint(accent,12)},${tint(accent,12)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 70%, transparent);border:1px solid ${tint(accent,24)};min-width:0;${entityId?'cursor:pointer;':''}">
+          <div style="flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(${tint(accent,16)},${tint(accent,16)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 50%, transparent);border:1px solid ${tint(accent,24)};">${iconFn(accent)}</div>
+          <div style="min-width:0;">
+            <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
+            <div style="font-size:12px;color:${label};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+          </div>
+        </div>`;
+
+      // ---- Bedingung (Kopf) ----
+      const w=S('weather.wohnort');
+      const cond=w?w.state:'';
+      const condMap={
+        'sunny':['Sonnig',iSun,sun],'clear-night':['Klar',iMoon,indigo],
+        'partlycloudy':['Teils bewölkt',iSun,sun],'cloudy':['Bewölkt',iCloud,cloud],
+        'fog':['Nebel',iFog,cloud],'rainy':['Regnerisch',iRain,blue],'pouring':['Starkregen',iRain,blue],
+        'lightning':['Gewitter',iBolt,amber],'lightning-rainy':['Gewitter',iBolt,amber],
+        'snowy':['Schnee',iSnow,teal],'snowy-rainy':['Schneeregen',iSnow,teal],'hail':['Hagel',iSnow,teal],
+        'windy':['Windig',iCloud,cloud],'windy-variant':['Windig',iCloud,cloud],'exceptional':['Unwetter',iBolt,red]
+      };
+      const cInfo=condMap[cond]||[(cond||'–'),iCloud,muted];
+      const rb=S('binary_sensor.wetterstation_pro_regen');
+      const raining=!!rb&&rb.state==='on';
+      const sub=`${cInfo[0]} · ${raining?'Regen an der Station':'trocken an der Station'}`;
+
+      // ---- Temperatur: Stufen nach den DWD-Kenntagen ----
+      const t=Math.round(num('sensor.wetterstation_pro_temperatur')*10)/10;
+      const tColor=isNaN(t)?muted:t>=30?red:t>=25?amber:t<0?blue:cloud;
+
+      // ---- Luftfeuchte: Info-Wert in Blau ----
+      const hum=num('sensor.wetterstation_pro_luftfeuchtigkeit');
+
+      // ---- Niederschlag: Menge, Beschriftung nach Station ----
+      const rm=num('sensor.regenmenge');
+      const rmE=S('sensor.regen_aktuell');
+      const rmText=raining?(rmE?rmE.state:'Regen'):'Trocken';
+      const rColor=(raining||rm>0)?blue:green;
+
+      // ---- Wind: Geschwindigkeit, Richtung + Staerke als Beschriftung ----
+      const dirMap={N:'Nord',NNE:'Nord-Nordost',NE:'Nordost',ENE:'Ost-Nordost',E:'Ost',ESE:'Ost-Südost',SE:'Südost',SSE:'Süd-Südost',S:'Süd',SSW:'Süd-Südwest',SW:'Südwest',WSW:'West-Südwest',W:'West',WNW:'West-Nordwest',NW:'Nordwest',NNW:'Nord-Nordwest'};
+      const dirRaw=(S('sensor.windrichtung')||{}).state||'';
+      const dirName=dirMap[dirRaw.toUpperCase()]||(dirRaw&&dirRaw!=='unavailable'&&dirRaw!=='unknown'?dirRaw:'');
+      const stE=S('sensor.windstarke_aktuell');
+      const windText=[dirName,stE?stE.state:''].filter(Boolean).join(' · ')||'Wind';
+
+      // ---- Helligkeit ----
+      const lx=num('sensor.wetterstation_pro_beleuchtungsstarke');
+
+      // ---- Sonne: naechstes Ereignis ----
+      const su=S('sun.sun');
+      const oben=!!su&&su.state==='above_horizon';
+      const tsun=su?new Date(su.attributes[oben?'next_setting':'next_rising']):null;
+      const sunVal=tsun&&!isNaN(tsun)?tsun.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
+
+      return `
+        <div style="width:100%;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+            <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(${tint(cInfo[2],16)},${tint(cInfo[2],16)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 50%, transparent);border:1px solid ${tint(cInfo[2],24)};">${cInfo[1](cInfo[2])}</div>
+            <div style="min-width:0;">
+              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Wetter</div>
+              <div style="font-size:12.5px;color:${label};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:10px;">
+            ${cell(iThermo, fmt(t,1)+unit('°C'), 'Temperatur', tColor, 'sensor.wetterstation_pro_temperatur')}
+            ${cell(iDrop, fmt(hum,0)+unit('%'), 'Luftfeuchtigkeit', isNaN(hum)?muted:blue, 'sensor.wetterstation_pro_luftfeuchtigkeit')}
+            ${cell(raining?iRain:iDropOff, fmt(isNaN(rm)?0:rm,1)+unit('l/m²'), rmText, rColor, 'sensor.regenmenge')}
+            ${cell(iWind, fmt(num('sensor.wetterstation_pro_windgeschwindigkeit'),1)+unit('km/h'), windText, teal, 'sensor.wetterstation_pro_windgeschwindigkeit')}
+            ${cell(iHell, (isNaN(lx)?'–':Math.round(lx).toLocaleString('de-DE'))+unit('lx'), 'Helligkeit', cloud, 'sensor.wetterstation_pro_beleuchtungsstarke')}
+            ${cell(oben?iSet:iRise, sunVal+unit('Uhr'), oben?'Sonnenuntergang':'Sonnenaufgang', sun, 'sun.sun')}
+          </div>
+        </div>`;
+    ]]]

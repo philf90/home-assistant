@@ -6,6 +6,8 @@
 # Status:        aktiv
 # Karten:        button-card, card-mod, decluttering-card, weather-forecast-card
 # Templates:     floating_navbar (navigation-templates.yaml),
+#                owlet_dwd_popup (warnlage-templates.yaml),
+#                owlet_pollen_popup (warnlage-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
 # Platzhalter:   sensor.warnregion_*, weather.wohnort
@@ -17,38 +19,42 @@
 # gab es nur auf Home, die Vorhersage nur im Test-View. Die View fasst jetzt
 # alles zusammen, was die Instanz zum Wetter liefert.
 #
-#   Section 1  Top-Navigation · Wetter + Wind (wetter-karte.yaml) ·
-#              Vorhersage (7 Tage, Tippen schaltet auf stuendlich)
+#   Section 1  Top-Navigation · Wetter (wetter-karte-v2.yaml: Bedingung,
+#              sechs Kacheln, 7-Tage-Vorhersage, Wetter- und
+#              Windanimation)
 #   Section 2  Niederschlag & Temperatur (Diagramm, 7 Tage) ·
 #              Warnlage & Pollen · DWD-Warnung (meteoalarm-karte.yaml) ·
 #              Pollenflug (pollenflug-karte.yaml)
 #   Section 3  schwebende Navbar
 #
-# Warnlage & Pollen steht immer da und fasst beide Themen in zwei Kacheln
-# zusammen: DWD-Warnstufe bzw. Vorabinformation und die hoechste
-# Pollenbelastung. Die beiden Detailkarten darunter blenden sich weiter selbst
-# aus, solange keine Warnung bzw. keine Belastung vorliegt. Stufenfarben wie in
-# pollenflug-karte.yaml: gering gruen, mittel amber, hoch rot; Warnung amber,
-# ab Stufe 3 rot. Jede Kachel oeffnet die more-info ihres Sensors.
+# Warnlage & Pollen steht immer da: zwei Kacheln mit der DWD-Warnstufe bzw.
+# Vorabinformation und der hoechsten Pollenbelastung. Tippen oeffnet das
+# jeweilige Popup (owlet_dwd_popup, owlet_pollen_popup aus
+# warnlage-templates.yaml), langes Druecken die more-info. Die beiden
+# Detailkarten darunter blenden sich weiter selbst aus, solange keine
+# Warnung bzw. keine Belastung vorliegt. Farben: Pollen wie
+# pollenflug-karte.yaml (gering gruen, mittel amber, hoch rot), Warnung
+# amber, ab Stufe 3 rot, keine Warnung gruen; die Icon-Kachel im Kopf folgt
+# der Warnlage.
 #
-# Die Vorhersagekarten (weather-forecast-card) bekommen die Owlet-Huelle
-# ueber card-mod am vertical-stack (wie energie-monatsbilanz-karte.yaml); die
-# Karte selbst steht ohne eigenen Grund darin. Die Temperaturlinie im
-# Diagramm ist einfarbig (use_color_thresholds: false), weil die
+# Das Diagramm (weather-forecast-card) bekommt die Owlet-Huelle ueber
+# card-mod am vertical-stack (wie energie-monatsbilanz-karte.yaml). Die
+# Temperaturlinie ist einfarbig (use_color_thresholds: false), weil die
 # Schwellenfarben der Karte nicht aus der Palette stammen.
 #
 # Einbindung (YAML-Dashboard):
 #   views:
 #     - !include dashboard/klima/wetter-view.yaml
-#   Die Includes unten sind relativ zu dieser Datei: wetter-karte.yaml,
+#   Die Includes unten sind relativ zu dieser Datei: wetter-karte-v2.yaml,
 #   meteoalarm-karte.yaml und pollenflug-karte.yaml im selben Ordner ablegen.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
-#                + Weather Forecast Card (troinine/ha-weather-forecast-card,
-#                alle via HACS), Integrationen DWD-Wetterwarnungen
-#                (dwd_weather_warnings) und DWD Pollenflug (HACS, Region
-#                101), Templates aus navigation-templates.yaml und
-#                wetter-templates.yaml.
+#                + Weather Forecast Card (troinine/ha-weather-forecast-card)
+#                + browser_mod (alle via HACS), Integrationen
+#                DWD-Wetterwarnungen (dwd_weather_warnings) und DWD
+#                Pollenflug (HACS, Region 101), Templates aus
+#                navigation-templates.yaml, wetter-templates.yaml und
+#                warnlage-templates.yaml.
 title: Wetter
 path: wetter
 icon: flat-ui:weather
@@ -60,8 +66,10 @@ sections:
     cards:
       - type: custom:decluttering-card
         template: top_navigation
-      - !include wetter-karte.yaml
-      # =================== VORHERSAGE ===================
+      - !include wetter-karte-v2.yaml
+  - type: grid
+    cards:
+      # =================== NIEDERSCHLAG & TEMPERATUR ===================
       - type: vertical-stack
         card_mod:
           style: &huelle |
@@ -75,9 +83,9 @@ sections:
             }
         cards:
           - type: custom:button-card
-            icon: mdi:calendar-week
-            name: Vorhersage
-            label: 7 Tage · Tippen wechselt zu stündlich
+            icon: mdi:weather-pouring
+            name: Niederschlag & Temperatur
+            label: 7 Tage · Vorhersage
             show_icon: true
             show_name: true
             show_label: true
@@ -85,7 +93,7 @@ sections:
             tap_action:
               action: none
             variables:
-              accent: 'var(--owlet-wolkengrau, #cdd6e0)'
+              accent: 'var(--owlet-blau, #7fb3d5)'
             styles: &kopf
               card:
                 - background: none
@@ -127,49 +135,6 @@ sections:
             show_current: false
             show_forecast: true
             default_forecast: daily
-            forecast_types: both
-            forecast:
-              mode: simple
-              daily_slots: 7
-              extra_attribute: precipitation_probability
-              show_sun_times: true
-              scroll_to_selected: true
-            forecast_action:
-              tap_action:
-                action: toggle-forecast
-            card_mod:
-              style: &ohne_grund |
-                ha-card {
-                  background: none !important;
-                  border: none !important;
-                  box-shadow: none !important;
-                  margin: 0 !important;
-                }
-  - type: grid
-    cards:
-      # =================== NIEDERSCHLAG & TEMPERATUR ===================
-      - type: vertical-stack
-        card_mod:
-          style: *huelle
-        cards:
-          - type: custom:button-card
-            icon: mdi:weather-pouring
-            name: Niederschlag & Temperatur
-            label: 7 Tage · Vorhersage
-            show_icon: true
-            show_name: true
-            show_label: true
-            show_state: false
-            tap_action:
-              action: none
-            variables:
-              accent: 'var(--owlet-blau, #7fb3d5)'
-            styles: *kopf
-          - type: custom:weather-forecast-card
-            entity: weather.wohnort
-            show_current: false
-            show_forecast: true
-            default_forecast: daily
             forecast_types: daily
             forecast:
               mode: chart
@@ -177,109 +142,168 @@ sections:
               default_chart_attribute: temperature_and_precipitation
               use_color_thresholds: false
             card_mod:
-              style: *ohne_grund
+              style: |
+                ha-card {
+                  background: none !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  margin: 0 !important;
+                }
       # =================== WARNLAGE & POLLEN ===================
-      - type: custom:button-card
-        show_name: false
-        show_state: false
-        show_icon: false
-        show_label: false
-        tap_action:
-          action: none
-        triggers_update:
-          - sensor.warnregion_aktuelle_warnstufe
-          - sensor.warnregion_vorwarnstufe
-          - sensor.pollenflug_graeser_101
-          - sensor.pollenflug_ambrosia_101
-          - sensor.pollenflug_beifuss_101
-          - sensor.pollenflug_birke_101
-          - sensor.pollenflug_erle_101
-          - sensor.pollenflug_esche_101
-          - sensor.pollenflug_hasel_101
-          - sensor.pollenflug_roggen_101
-        variables:
-          warnung: sensor.warnregion_aktuelle_warnstufe
-          vorwarnung: sensor.warnregion_vorwarnstufe
-          pollen:
-            - {name: Gräser, entity: sensor.pollenflug_graeser_101}
-            - {name: Ambrosia, entity: sensor.pollenflug_ambrosia_101}
-            - {name: Beifuß, entity: sensor.pollenflug_beifuss_101}
-            - {name: Birke, entity: sensor.pollenflug_birke_101}
-            - {name: Erle, entity: sensor.pollenflug_erle_101}
-            - {name: Esche, entity: sensor.pollenflug_esche_101}
-            - {name: Hasel, entity: sensor.pollenflug_hasel_101}
-            - {name: Roggen, entity: sensor.pollenflug_roggen_101}
-        styles:
-          card:
-            - padding: 16px 18px
-            - border-radius: 22px
-            - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
-            - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
-            - box-shadow: '0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))'
-          grid:
-            - grid-template-areas: '"body"'
-          custom_fields:
-            body:
-              - width: 100%
-        custom_fields:
-          body: |
-            [[[
-              const green = 'var(--owlet-gruen, #a6d49e)';
-              const amber = 'var(--owlet-amber, #e6b566)';
-              const red = 'var(--owlet-rot, #f0736a)';
-              const value = 'var(--owlet-text, #f2f5f8)';
-              const muted = 'var(--owlet-text-sekundaer, #8794a5)';
-              const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
-              const zahl = (id) => { const s = states[id]; const v = s ? parseFloat(s.state) : NaN; return isNaN(v) ? NaN : v; };
-              const svg = (inner, c) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;">${inner}</svg>`;
-              const iSchild = (c) => svg('<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>', c);
-              const iWarn = (c) => svg('<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>', c);
-              const iPollen = (c) => svg('<circle cx="12" cy="14" r="2.1"/><circle cx="12" cy="9.4" r="2.1"/><circle cx="15.9" cy="11.7" r="2.1"/><circle cx="14.6" cy="16.3" r="2.1"/><circle cx="9.4" cy="16.3" r="2.1"/><circle cx="8.1" cy="11.7" r="2.1"/>', c);
-              // Jede Kachel oeffnet die more-info ihres Sensors (wie in wetter-karte.yaml)
-              const tap = (id) => id ? ` onclick="event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"` : '';
-              const cell = (iconFn, wert, text, accent, id) => `
-                <div${tap(id)} style="display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:16px;background:${tint(accent, 12)};border:1px solid ${tint(accent, 24)};min-width:0;${id ? 'cursor:pointer;' : ''}">
-                  <div style="flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:${tint(accent, 16)};border:1px solid ${tint(accent, 24)};">${iconFn(accent)}</div>
-                  <div style="min-width:0;">
-                    <div style="font-size:16px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
-                    <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
-                  </div>
-                </div>`;
-
-              // ---- DWD: aktuelle Warnstufe vor Vorabinformation ----
-              const w = zahl(variables.warnung), vw = zahl(variables.vorwarnung);
-              let warn;
-              if (isNaN(w)) warn = [iWarn, 'Keine Daten', 'DWD-Warnung', muted, variables.warnung];
-              else if (w > 0) warn = [iWarn, `Warnung Stufe ${w}`, 'DWD · Details unten', w >= 3 ? red : amber, variables.warnung];
-              else if (vw > 0) warn = [iWarn, `Vorabinformation Stufe ${vw}`, 'DWD · noch keine Warnung', amber, variables.vorwarnung];
-              else warn = [iSchild, 'Keine Warnung', 'DWD · auch keine Vorabinformation', green, variables.warnung];
-
-              // ---- Pollen: hoechste Belastung, Stufen wie pollenflug-karte.yaml ----
-              let top = null;
-              (variables.pollen || []).forEach((p) => {
-                const v = zahl(p.entity);
-                if (!isNaN(v) && v > 0 && (!top || v > top.v)) top = { name: p.name, v: v, entity: p.entity };
-              });
-              let pol;
-              if (!top) pol = [iPollen, 'Keine Belastung', `Pollenflug · ${(variables.pollen || []).length} Arten`, green, (variables.pollen || [])[0] ? variables.pollen[0].entity : null];
-              else {
-                const n = parseInt(top.v);
-                const stufe = n <= 1 ? ['Gering', green] : n <= 2 ? ['Mittel', amber] : ['Hoch', red];
-                pol = [iPollen, `${stufe[0]} · ${top.name}`, 'Pollenflug · Details unten', stufe[1], top.entity];
-              }
-
-              return `
-                <div style="width:100%;color:${value};text-align:left;">
-                  <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                    <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${tint(warn[3], 16)};border:1px solid ${tint(warn[3], 24)};">${iSchild(warn[3])}</div>
-                    <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Warnlage &amp; Pollen</div>
-                  </div>
-                  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:10px;">
-                    ${cell(...warn)}
-                    ${cell(...pol)}
-                  </div>
-                </div>`;
-            ]]]
+      - type: vertical-stack
+        card_mod:
+          style: *huelle
+        cards:
+          - type: custom:button-card
+            icon: '[[[ return variables.warnstufe > 0 || variables.vorwarnstufe > 0 ? "mdi:alert-outline" : "mdi:shield-check-outline"; ]]]'
+            name: Warnlage & Pollen
+            label: Tippen für Details
+            show_icon: true
+            show_name: true
+            show_label: true
+            show_state: false
+            tap_action:
+              action: none
+            triggers_update:
+              - sensor.warnregion_aktuelle_warnstufe
+              - sensor.warnregion_vorwarnstufe
+            variables:
+              warnstufe: '[[[ return parseInt(states["sensor.warnregion_aktuelle_warnstufe"]?.state) || 0; ]]]'
+              vorwarnstufe: '[[[ return parseInt(states["sensor.warnregion_vorwarnstufe"]?.state) || 0; ]]]'
+              accent: |
+                [[[
+                  if (variables.warnstufe >= 3) return 'var(--owlet-rot, #f0736a)';
+                  if (variables.warnstufe > 0 || variables.vorwarnstufe > 0) return 'var(--owlet-amber, #e6b566)';
+                  return 'var(--owlet-gruen, #a6d49e)';
+                ]]]
+            styles: *kopf
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              # ---- DWD: aktuelle Warnstufe vor Vorabinformation ----
+              - type: custom:button-card
+                template: owlet_dwd_popup
+                entity: sensor.warnregion_aktuelle_warnstufe
+                triggers_update:
+                  - sensor.warnregion_aktuelle_warnstufe
+                  - sensor.warnregion_vorwarnstufe
+                show_name: false
+                show_state: false
+                show_icon: false
+                show_label: false
+                styles: &kachel
+                  card:
+                    - padding: 0
+                    - background: none
+                    - border: none
+                    - box-shadow: none
+                    - overflow: visible
+                  grid:
+                    - grid-template-areas: '"body"'
+                    - grid-template-columns: minmax(0, 1fr)
+                  custom_fields:
+                    body:
+                      - width: 100%
+                      - min-width: 0
+                custom_fields:
+                  body: |
+                    [[[
+                      const green = 'var(--owlet-gruen, #a6d49e)', amber = 'var(--owlet-amber, #e6b566)', red = 'var(--owlet-rot, #f0736a)';
+                      const value = 'var(--owlet-text, #f2f5f8)', muted = 'var(--owlet-text-sekundaer, #8794a5)';
+                      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+                      const svg = (inner, c) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;">${inner}</svg>`;
+                      const iSchild = (c) => svg('<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>', c);
+                      const iWarn = (c) => svg('<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>', c);
+                      const s = states['sensor.warnregion_aktuelle_warnstufe'];
+                      const v = states['sensor.warnregion_vorwarnstufe'];
+                      const w = s ? parseInt(s.state) : NaN, vw = v ? parseInt(v.state) : NaN;
+                      const name1 = (x) => x && x.attributes ? (x.attributes.warning_1_name || (x.attributes.warning_1 || {}).event || '') : '';
+                      const anzahl = s && s.attributes ? (parseInt(s.attributes.warning_count) || 0) : 0;
+                      // DWD schreibt Schluesselwoerter gross ("SCHWERES GEWITTER mit ORKANBOEN") -> "Schweres Gewitter mit Orkanboen"
+                      const cap = (t) => String(t || '').split(' ').map((x) => (x.length > 1 && x === x.toUpperCase() && /[A-ZÄÖÜ]/.test(x)) ? x.charAt(0) + x.slice(1).toLowerCase() : x).join(' ');
+                      let k;
+                      if (isNaN(w)) k = [iWarn, 'Keine Daten', 'DWD-Warnung', muted];
+                      else if (w > 0) k = [iWarn, `Stufe ${w}${anzahl > 1 ? ` · ${anzahl} Warnungen` : ''}`, cap(name1(s)) || 'DWD-Warnung', w >= 3 ? red : amber];
+                      else if (vw > 0) k = [iWarn, `Vorabinfo Stufe ${vw}`, cap(name1(v)) || 'DWD-Vorabinformation', amber];
+                      else k = [iSchild, 'Keine Warnung', 'DWD-Wetterwarnung', green];
+                      const [icon, wert, text, c] = k;
+                      return `
+                        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
+                          <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${icon(c)}</div>
+                          <div style="min-width:0;text-align:left;">
+                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
+                            <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+                          </div>
+                        </div>`;
+                    ]]]
+              # ---- Pollen: hoechste Belastung heute, Stufen wie pollenflug-karte.yaml ----
+              - type: custom:button-card
+                template: owlet_pollen_popup
+                entity: sensor.pollenflug_graeser_101
+                triggers_update:
+                  - sensor.pollenflug_graeser_101
+                  - sensor.pollenflug_ambrosia_101
+                  - sensor.pollenflug_beifuss_101
+                  - sensor.pollenflug_birke_101
+                  - sensor.pollenflug_erle_101
+                  - sensor.pollenflug_esche_101
+                  - sensor.pollenflug_hasel_101
+                  - sensor.pollenflug_roggen_101
+                show_name: false
+                show_state: false
+                show_icon: false
+                show_label: false
+                variables:
+                  pollen:
+                    - {name: Gräser, entity: sensor.pollenflug_graeser_101}
+                    - {name: Ambrosia, entity: sensor.pollenflug_ambrosia_101}
+                    - {name: Beifuß, entity: sensor.pollenflug_beifuss_101}
+                    - {name: Birke, entity: sensor.pollenflug_birke_101}
+                    - {name: Erle, entity: sensor.pollenflug_erle_101}
+                    - {name: Esche, entity: sensor.pollenflug_esche_101}
+                    - {name: Hasel, entity: sensor.pollenflug_hasel_101}
+                    - {name: Roggen, entity: sensor.pollenflug_roggen_101}
+                styles: *kachel
+                custom_fields:
+                  body: |
+                    [[[
+                      const green = 'var(--owlet-gruen, #a6d49e)', amber = 'var(--owlet-amber, #e6b566)', red = 'var(--owlet-rot, #f0736a)';
+                      const value = 'var(--owlet-text, #f2f5f8)', muted = 'var(--owlet-text-sekundaer, #8794a5)';
+                      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+                      const icon = (c) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;"><circle cx="12" cy="14" r="2.1"/><circle cx="12" cy="9.4" r="2.1"/><circle cx="15.9" cy="11.7" r="2.1"/><circle cx="14.6" cy="16.3" r="2.1"/><circle cx="9.4" cy="16.3" r="2.1"/><circle cx="8.1" cy="11.7" r="2.1"/></svg>`;
+                      const liste = variables.pollen || [];
+                      let top = null, aktiv = 0, morgen = 0;
+                      liste.forEach((p) => {
+                        const s = states[p.entity];
+                        const v = s ? parseFloat(s.state) : NaN;
+                        const m = s && s.attributes ? parseFloat(s.attributes.state_tomorrow) : NaN;
+                        if (!isNaN(m) && m > morgen) morgen = m;
+                        if (isNaN(v) || v <= 0) return;
+                        aktiv++;
+                        if (!top || v > top.v) top = { name: p.name, v: v };
+                      });
+                      let wert, text, c;
+                      if (!top) {
+                        wert = 'Keine Belastung';
+                        text = morgen > 0 ? 'Morgen beginnt Pollenflug' : `Pollenflug · ${liste.length} Arten`;
+                        c = morgen > 0 ? amber : green;
+                      } else {
+                        const n = parseInt(top.v);
+                        const st = n <= 1 ? ['Gering', green] : n <= 2 ? ['Mittel', amber] : ['Hoch', red];
+                        wert = `${st[0]} · ${top.name}`;
+                        text = aktiv > 1 ? `${aktiv} Arten mit Belastung` : 'Pollenflug heute';
+                        c = st[1];
+                      }
+                      return `
+                        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
+                          <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${icon(c)}</div>
+                          <div style="min-width:0;text-align:left;">
+                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
+                            <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+                          </div>
+                        </div>`;
+                    ]]]
       - !include meteoalarm-karte.yaml
       - !include pollenflug-karte.yaml
   - type: grid
