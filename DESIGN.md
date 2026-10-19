@@ -312,6 +312,14 @@ verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`,
   Schwarz für Abdunklung und Schatten) bleiben als Hex-Wert stehen.
 - `color-mix` braucht einen aktuellen Browser (Chrome/WebView 111,
   Safari 16.2, Firefox 113).
+- **Diagramme (apexcharts-card):** Farben unter `series` und `apex_config`
+  bleiben die dunklen; card-mod-CSS färbt nach Modus, weil das Diagramm bei
+  einem Themewechsel nicht neu zeichnet. Das gilt auch für die Tooltips:
+  Haupt- und Achsen-Tooltip stehen wie Popups auf `owlet-flaeche-erhoeht`
+  mit `owlet-text` und Rand `owlet-unterkachel-rand` (hell Weiß mit
+  `#171d29`, dunkel `#222b3c` statt des ApexCharts-Dunkels), der Punkt je
+  Serie (`.apexcharts-tooltip-series-group-N`) in der Variable der
+  Serienfarbe.
 
 ### Grundprinzip
 
@@ -474,10 +482,6 @@ gilt hell über den Schalter:
 
 ### Noch offen
 
-- **Diagramm-Tooltips:** Alle apexcharts-Karten setzen `tooltip.theme:
-  dark`; der Tooltip bleibt im hellen Modus dunkel (lesbar, aber nicht im
-  Stil des hellen Modus). Umstellen oder als Ausnahme festhalten ist noch
-  zu entscheiden.
 - **Grafana** hat ein eigenes helles Theme; die Schwellwertfarben sind dort
   nicht gemessen.
 - **Schon vor der Umstellung zu schwach, dunkel:** das Datum in der
