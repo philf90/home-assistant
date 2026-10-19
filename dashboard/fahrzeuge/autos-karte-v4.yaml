@@ -5,7 +5,8 @@
 # Bereich:       fahrzeuge
 # Status:        aktiv
 # Karten:        button-card, card-mod
-# Templates:     owlet_auto_fx (autos-templates.yaml)
+# Templates:     owlet_auto_fx (autos-templates.yaml),
+#                owlet_tanken_popup (tanken-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   kennzeichen, fin_*
 #                (vor dem Einfuegen ersetzen, siehe README.md)
@@ -104,7 +105,9 @@
 #
 # Aufbau je Fahrzeug: Kopf (Kennzeichen + Modell), Fahrzeugbild, Sicherheits-
 # leiste (Tuer- und Kofferraumverriegelung), acht Status-Chips, sechs Kennzahl-
-# Kacheln, zwei Fahrten-Bloecke, Aktualisieren-Leiste und Datenstand-Zeile.
+# Kacheln, unter 150 km Reichweite der Tank-Hinweis (guenstigster offener
+# Diesel, seit 19.10.2026), zwei Fahrten-Bloecke, Aktualisieren-Leiste und
+# Datenstand-Zeile.
 #
 # Bewusst nur more-info statt Fernbedienung: vag_connect bietet ohnehin keine
 # Verriegelung an. Einzige aktive Aktion ist "Daten aktualisieren" -- ein
@@ -117,7 +120,9 @@
 # Entfallen: &frame (Bildstil je Fahrzeug), &name_level, &name_date.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS), das Template
-# owlet_auto_fx und sensor.time (Integration "Time & Date").
+# owlet_auto_fx, sensor.time (Integration "Time & Date") und fuer den
+# Tank-Hinweis die Templates aus tanken-templates.yaml (Tankerkoenig,
+# browser_mod).
 type: vertical-stack
 cards:
   # ================================ PASSAT ================================
@@ -726,6 +731,51 @@ cards:
             variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
             label: *lbl_val
             styles: *tile_styles
+      # ---- Tank-Hinweis: guenstigster Diesel, nur unter 150 km ----
+      # 150 km = tank_koralle_km aus owlet_auto_fx, ab dort zeigt die Tank-
+      # Kachel "bald tanken". Die conditional-Karte liest keine Template-
+      # Variablen, die Grenze steht deshalb hier fest. Tankstellen und Preise
+      # aus owlet_tankstellen (tanken-templates.yaml); Tippen oeffnet das
+      # Popup "Tankstellen".
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.garage_volkswagen_fin_passat_reichweite
+            below: 150
+        card: &tank_hinweis
+          type: custom:button-card
+          template: owlet_tanken_popup
+          show_name: false
+          show_state: false
+          show_icon: false
+          show_label: false
+          styles:
+            card:
+              - padding: 9px 12px
+              - border-radius: 14px
+              - box-shadow: none
+              - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+              - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+            grid:
+              - grid-template-areas: '"body"'
+              - grid-template-columns: minmax(0, 1fr)
+            custom_fields:
+              body:
+                - width: 100%
+                - min-width: 0
+                - white-space: normal
+          custom_fields:
+            body: |
+              [[[
+                const tk = variables.tk;
+                const b = tk.bester(tk.liste(states, variables.tankstellen, 'diesel'));
+                const punkt = b && b.offen === true ? 'var(--owlet-gruen, #a6d49e)' : 'var(--owlet-text-sekundaer, #8794a5)';
+                const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const text = b
+                  ? `Diesel ab <b style="color:var(--owlet-text, #f2f5f8);font-weight:700;font-variant-numeric:tabular-nums;">${tk.fmt(b.p)} €</b> bei ${esc(b.name)}, ${b.offen === true ? 'geöffnet' : 'Status unbekannt'}`
+                  : 'Keine Tankstelle geöffnet';
+                return `<div style="display:flex;align-items:center;gap:10px;text-align:left;font-size:12.5px;font-weight:600;line-height:1.3;color:var(--owlet-label, #b4c0cf);"><span style="width:7px;height:7px;border-radius:50%;background:${punkt};flex:none;"></span><span>${text}</span></div>`;
+              ]]]
       # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
       # Ohne Label im Kopf: den Startkilometerstand legt vag_connect zwar im
       # Register an, die Entitaet existiert aber nicht.
@@ -1400,6 +1450,13 @@ cards:
             variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
             label: *lbl_val
             styles: *tile_styles
+      # ---- Tank-Hinweis wie beim Passat ----
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.garage_volkswagen_fin_touran_reichweite
+            below: 150
+        card: *tank_hinweis
       # ---- Letzte Fahrt (Kurzzeitspeicher: seit Start) ----
       - type: custom:button-card
         icon: mdi:map-marker-path
