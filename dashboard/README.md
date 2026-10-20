@@ -146,6 +146,14 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`fussball-templates.yaml`](fussball/fussball-templates.yaml) | templates | Fussball – button-card-Templates | – | – | aktiv |
 | [`fussball-view.yaml`](fussball/fussball-view.yaml) | view | Fussball – komplette Ansicht | bubble-card, button-card, card-mod, decluttering-card | `notify.mobile_app_iphone` | aktiv |
 
+## sicherheit
+
+| Datei | Art | Titel | Karten | Platzhalter | Status |
+|---|---|---|---|---|---|
+| [`sicherheit-templates.yaml`](sicherheit/sicherheit-templates.yaml) | templates | Sicherheit – button-card-Templates | – | `person.bewohner`, `*_seriennr`, `kind_1/kind_2` | aktiv |
+| [`sicherheit-view.yaml`](sicherheit/sicherheit-view.yaml) | view | Sicherheit – komplette Ansicht | button-card, card-mod, decluttering-card | – | aktiv |
+| [`wachmodus-konfig.yaml`](sicherheit/wachmodus-konfig.yaml) | konfig | Sicherheit – Wachmodus und Meldungen (Helfer, Automationen) | – | `person.bewohner`, `notify.mobile_app_iphone`, `*_seriennr` | aktiv |
+
 ## sonstiges
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |

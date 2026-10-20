@@ -171,18 +171,18 @@ Text ist. Rote Schrift auf roter Tönung erreicht als 13,5-px-Schrift nur
 | `#8794a5` Grau | Auto |
 | `#e6c15a` Sonnengelb | PV und Solar |
 | `#89d2b0` Mint | Einspeisung, Autarkie, Eigenverbrauch |
-| `#8ea2e6` Indigo | Nacht, Schlaf, Abwesenheits- und Urlaubsmodus, Szenen |
+| `#8ea2e6` Indigo | Nacht, Schlaf, Abwesenheits- und Urlaubsmodus (auch Wachmodus der Sicherheits-View), Szenen |
 | `#e6a0c4` Rosé | Personen und Gesundheit |
 
 Einspeisung bekommt in neuen Karten Mint statt Grün, damit „Energie fließt
 raus“ nicht wie „Zustand in Ordnung“ aussieht.
 
 Das More-Menü der Navigationsleiste färbt seine Kacheln je Bereich, nicht je
-Ziel: Zuhause Blau, Garten Limette, Freizeit Rosé, Technik Violett, Verwaltung
+Ziel: Zuhause Blau, Draußen Limette, Freizeit Rosé, Technik Violett, Verwaltung
 neutral (Label-Grau auf `owlet-neutral-kachel`). Für Fußball und Flüge gibt es
 keine eigene Bereichsfarbe; Rosé steht dort für den ganzen Bereich Freizeit.
-Neustart bleibt als einzige Kachel rot. Kamera und Pflanzen sehen im Menü
-deshalb anders aus als in der oberen Navigation. Die Farbe setzt jede Kachel
+Neustart bleibt als einzige Kachel rot. Kamera, Pflanzen und Wetter sehen im
+Menü deshalb anders aus als in der oberen Navigation. Die Farbe setzt jede Kachel
 über `variables.farbe`.
 
 ### Tönungen
