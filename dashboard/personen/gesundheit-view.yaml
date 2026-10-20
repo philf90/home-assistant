@@ -16,7 +16,8 @@
 # Apple-Health-Daten aus der Companion App (Geraet "iPhone",
 # Sensoren sensor.iphone_*), aufgeteilt in sechs Owlet-Huellen:
 #   - Aktivitaet heute: drei Ringe (Bewegung / Training / Schritte) gegen die
-#     Ziel-Helfer, Badge "x / 3 Ziele", Distanz, Stockwerke, Schritte 7 Tage
+#     Ziel-Helfer, Badge "x / 3 Ziele", Distanz (dahinter die Schritte),
+#     Stockwerke, Schritte 7 Tage
 #   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
 #     (Naechte ohne Uhr bleiben leer, siehe "NAECHTE OHNE UHR" unten)
@@ -258,11 +259,19 @@ sections:
         name: Gehen + Laufen
         label: |
           [[[
+            // Distanz, dahinter die Schritte von heute (Sensor ohne Ziel, nur Anzeige).
+            // Beide Teile als Flex-Zellen: passt die Zeile nicht, rutschen die Schritte
+            // ohne Trennzeichen in eine zweite Zeile (schmale Kachel am Telefon).
             const e=(typeof entity!=='undefined')?entity:null;
             const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
             const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
-            return `${n}<span style="font-size:0.55em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+            const s=parseFloat(states['sensor.iphone_health_steps']?.state);
+            const klein='font-size:0.55em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;';
+            const schritte=isNaN(s)?'':`<span style="${klein}white-space:nowrap;">${Math.round(s).toLocaleString('de-DE')} Schritte</span>`;
+            return `<span style="display:inline-flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;"><span style="white-space:nowrap;">${n}<span style="${klein}margin-left:3px;">${variables.unit||''}</span></span>${schritte}</span>`;
           ]]]
+        triggers_update:
+        - sensor.iphone_health_steps
         show_icon: true
         show_name: true
         show_label: true
