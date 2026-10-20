@@ -24,9 +24,12 @@
 #       (damit das automatische Abschliessen der Haustuer mitzaehlt) Meldung
 #       mit allem, was noch offen ist. Aus, sobald jemand heimkommt.
 #   automation "Sicherheit: Meldungen im Wachmodus"
-#       Tuer oder Fenster geoeffnet, Zugang am Door Hub (gewaehrt oder
-#       verweigert), Haustuer aufgeschlossen (nicht doppelt, wenn der Door Hub
-#       in der Minute davor einen Zugang gemeldet hat), Keypad gesperrt.
+#       Tuer oder Fenster geoeffnet, Keypad gesperrt.
+#   automation "Sicherheit: Haustuer-Zugang im Wachmodus"
+#       Zugang am Door Hub (gewaehrt oder verweigert), Haustuer aufgeschlossen
+#       (nicht doppelt, wenn der Door Hub in der Minute davor einen Zugang
+#       gemeldet hat). Eigene Automation mit 30 s Sperre: der Door Hub meldet
+#       jeden Zugang zweimal (1 ms Abstand), die Gesichtserkennung oft mehrmals.
 #   automation "Sicherheit: Person an Aussenkamera"
 #       Personenerkennung an Haustuer, Hof, Garage und Pool mit Kamerabild,
 #       hoechstens eine Meldung je Minute. Die Kamera "Trampolin" fehlt, weil
@@ -182,9 +185,9 @@ automation:
     alias: "Sicherheit: Meldungen im Wachmodus"
     description: >-
       Sicherheits-View: meldet bei aktivem Wachmodus geoeffnete Tueren und
-      Fenster, Zugaenge am Door Hub, das Aufschliessen der Haustuer und die
-      Sperre des Keypads. Jede Art hat einen eigenen Schalter
-      (input_boolean.sicherheit_meldung_oeffnung, _zugang, _keypad).
+      Fenster und die Sperre des Keypads. Jede Art hat einen eigenen Schalter
+      (input_boolean.sicherheit_meldung_oeffnung, _keypad). Zugang am Door Hub
+      und Schloss: Automation "Sicherheit: Haustuer-Zugang im Wachmodus".
     mode: queued
     max: 20
     variables:
@@ -219,22 +222,6 @@ automation:
         options:
           behavior: each
         id: oeffnung
-      - trigger: event.received
-        target:
-          entity_id: event.haustur_door_hub_zugang
-        options:
-          event_type:
-            - access_granted
-            - access_denied
-        id: zugang
-      - trigger: state
-        entity_id: lock.haustur_schloss
-        from: locked
-        to:
-          - unlocked
-          - open
-          - opening
-        id: schloss
       - trigger: state
         entity_id:
           - binary_sensor.hmip_wkp_seriennr_vorubergehend_gesperrt
@@ -267,40 +254,6 @@ automation:
                       interruption-level: time-sensitive
           - conditions:
               - condition: trigger
-                id: zugang
-              - condition: state
-                entity_id: input_boolean.sicherheit_meldung_zugang
-                state: "on"
-            sequence:
-              - variables:
-                  art: "{{ state_attr('event.haustur_door_hub_zugang', 'event_type') }}"
-                  wer: "{{ state_attr('event.haustur_door_hub_zugang', 'actor') or '' }}"
-                  wie: >-
-                    {% set a = state_attr('event.haustur_door_hub_zugang', 'authentication') or '' %}{{ {'FACE': 'Gesicht', 'NFC': 'Karte', 'PIN_CODE': 'PIN', 'MOBILE_TAP': 'App', 'MOBILE_BUTTON': 'App', 'QR_CODE': 'QR-Code', 'REMOTE_THROUGH_UAH': 'aus der Ferne'}.get(a, a) }}
-              - action: notify.mobile_app_iphone
-                data:
-                  title: "{{ 'Zugang verweigert' if art == 'access_denied' else 'Zugang gewährt' }} · Haustür"
-                  message: "{{ ([wer, wie] | select | join(' · ')) or 'ohne Angabe' }} · {{ now().strftime('%H:%M') }} Uhr"
-                  data: *push
-          - conditions:
-              - condition: trigger
-                id: schloss
-              - condition: state
-                entity_id: input_boolean.sicherheit_meldung_zugang
-                state: "on"
-              # Alter des letzten Door-Hub-Ereignisses (Zeitstempel als Zustand);
-              # dafuer gibt es keine native Bedingung
-              - condition: template
-                value_template: >-
-                  {% set z = states('event.haustur_door_hub_zugang') %}{{ z in ['unknown', 'unavailable'] or (now() - as_datetime(z)).total_seconds() > 60 }}
-            sequence:
-              - action: notify.mobile_app_iphone
-                data:
-                  title: Haustür aufgeschlossen
-                  message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
-                  data: *push
-          - conditions:
-              - condition: trigger
                 id: keypad
               - condition: state
                 entity_id: input_boolean.sicherheit_meldung_keypad
@@ -311,6 +264,88 @@ automation:
                   title: Keypad gesperrt
                   message: "{{ 'Dauerhaft' if 'dauerhaft' in trigger.entity_id else 'Vorübergehend' }} gesperrt nach falschen Codes · {{ now().strftime('%H:%M') }} Uhr"
                   data: *push
+
+  - id: sicherheit_hausturzugang_im_wachmodus
+    alias: "Sicherheit: Haustür-Zugang im Wachmodus"
+    description: >-
+      Sicherheits-View: meldet bei aktivem Wachmodus Zugaenge am Door Hub
+      (gewaehrt oder verweigert) und das Aufschliessen der Haustuer. Hoechstens
+      eine Meldung je 30 s (mode single + Pause), weil der Door Hub jeden Zugang
+      doppelt meldet. Schalter: input_boolean.sicherheit_meldung_zugang.
+    mode: single
+    max_exceeded: silent
+    variables:
+      ziel: /dashboard-home/sicherheit
+    triggers:
+      - trigger: event.received
+        target:
+          entity_id: event.haustur_door_hub_zugang
+        options:
+          event_type:
+            - access_granted
+            - access_denied
+        id: zugang
+      # Das Schloss (HmIP-DLD) laeuft ueber "unlocking"/"locking", deshalb kein
+      # from: locked; Neustarts (unavailable -> unlocked) zaehlen nicht
+      - trigger: state
+        entity_id: lock.haustur_schloss
+        to:
+          - unlocked
+          - open
+        not_from:
+          - unavailable
+          - unknown
+          - unlocked
+          - open
+        id: schloss
+    conditions:
+      - condition: state
+        entity_id: input_boolean.wachmodus
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.sicherheit_meldung_zugang
+        state: "on"
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: zugang
+            sequence:
+              - variables:
+                  art: "{{ state_attr('event.haustur_door_hub_zugang', 'event_type') }}"
+                  wer: "{{ state_attr('event.haustur_door_hub_zugang', 'actor') or '' }}"
+                  wie: >-
+                    {% set a = state_attr('event.haustur_door_hub_zugang', 'authentication') or '' %}{{ {'FACE': 'Gesicht', 'NFC': 'Karte', 'PIN_CODE': 'PIN', 'MOBILE_TAP': 'App', 'MOBILE_BUTTON': 'App', 'QR_CODE': 'QR-Code', 'REMOTE_THROUGH_UAH': 'aus der Ferne'}.get(a, a) }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "{{ 'Zugang verweigert' if art == 'access_denied' else 'Zugang gewährt' }} · Haustür"
+                  message: "{{ ([wer, wie] | select | join(' · ')) or 'ohne Angabe' }} · {{ now().strftime('%H:%M') }} Uhr"
+                  data:
+                    url: "{{ ziel }}"
+                    clickAction: "{{ ziel }}"
+                    group: sicherheit
+                    push:
+                      interruption-level: time-sensitive
+          - conditions:
+              - condition: trigger
+                id: schloss
+              # Alter des letzten Door-Hub-Ereignisses (Zeitstempel als Zustand);
+              # dafuer gibt es keine native Bedingung
+              - condition: template
+                value_template: >-
+                  {% set z = states('event.haustur_door_hub_zugang') %}{{ z in ['unknown', 'unavailable'] or (now() - as_datetime(z)).total_seconds() > 60 }}
+            sequence:
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Haustür aufgeschlossen
+                  message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
+                  data:
+                    url: "{{ ziel }}"
+                    clickAction: "{{ ziel }}"
+                    group: sicherheit
+                    push:
+                      interruption-level: time-sensitive
+      - delay: "00:00:30"
 
   - id: sicherheit_person_an_aussenkamera
     alias: "Sicherheit: Person an Außenkamera"

@@ -50,6 +50,8 @@
 # ebenso aus dem Verlauf (letzter Wechsel auf "on"), nicht aus last_changed.
 #
 # Ausrichtung: button-card zentriert Felder; die Inhalte setzen text-align: left.
+# Icons: --ha-icon-display: block und Verschiebung um die gemessene Glyphenmitte
+# (sh.glyphe), sonst sitzen sie in ihren Kacheln sichtbar daneben.
 #
 # Klickbarkeit und Touch wie in flugradar-templates.yaml: button-card setzt bei
 # Karten ohne Aktion pointer-events: none ("disabled"); Felder mit Knoepfen
@@ -69,7 +71,7 @@ button_card_templates:
       sh: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 2, vorher = window.__owletSicherheit;
+          const VERSION = 3, vorher = window.__owletSicherheit;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -227,7 +229,13 @@ button_card_templates:
           sh.farbe = stufe => stufe === 'alarm' ? ROT : stufe === 'hinweis' ? AMBER : GRUEN;
 
           // ---------- Bausteine ----------
-          sh.icon = (icon, c, px) => `<ha-icon icon="${icon}" style="--mdc-icon-size:${px}px;width:${px}px;height:${px}px;margin:0;display:block;color:${c};"></ha-icon>`;
+          // Icons mittig: --ha-icon-display: block, sonst setzt ha-svg-icon die Glyphe als
+          // inline-flex mit vertical-align: middle in eine Textzeile (sitzt dann zu tief).
+          // GLYPHE: Mitte der Glyphe im 24er-Raster relativ zu (12, 12), gemessen an
+          // @mdi/js 7.4.47 (nur ab 0,4 Einheiten); verschoben wird um den Gegenwert.
+          const GLYPHE = { 'mdi:alarm-light': [0, -0.5], 'mdi:backup-restore': [-1.5, 0], 'mdi:bell-ring-outline': [0, 0.5], 'mdi:door-closed-lock': [-0.5, -0.5], 'mdi:lock': [0, -0.5], 'mdi:microphone-outline': [0, -0.5], 'mdi:shield-off-outline': [-1, 0], 'mdi:window-open-variant': [0, 0.5] };
+          sh.glyphe = (icon, px) => { const g = GLYPHE[icon] || [0, 0]; return `translate(${-g[0] * px / 24}px, ${-g[1] * px / 24}px)`; };
+          sh.icon = (icon, c, px) => `<ha-icon icon="${icon}" style="--mdc-icon-size:${px}px;--ha-icon-display:block;width:${px}px;height:${px}px;margin:0;display:block;flex:none;color:${c};transform:${sh.glyphe(icon, px)};"></ha-icon>`;
           sh.kachel = (icon, c, px, r, ip) => `<span style="width:${px}px;height:${px}px;border-radius:${r}px;flex:none;display:grid;place-items:center;background:${c ? `color-mix(in srgb, ${c} 16%, transparent)` : NK};border:1px solid ${c ? `color-mix(in srgb, ${c} 24%, transparent)` : UKR};">${sh.icon(icon, c || LABEL, ip)}</span>`;
           // Rot ist die kritische Stufe und gefuellt (DESIGN.md: rote Schrift auf roter
           // Toenung bleibt unter 4,5:1); Fuellung und Schrift wie temperaturen-karte-v2.yaml
@@ -412,6 +420,10 @@ button_card_templates:
                 const s = x.s !== undefined ? x.s : x.state, a = x.a || x.attributes || {}, t = Date.parse(s);
                 if (!Number.isFinite(t) || t <= Date.now() - 86400000 || gesehen.has(s)) return;
                 gesehen.add(s);
+                // Der Door Hub meldet jeden Zugang doppelt (1 ms Abstand), die Gesichtserkennung
+                // oft mehrmals in wenigen Sekunden: gleiche Art und Person binnen 60 s zaehlt einmal.
+                const z = ev.filter(e => e.typ === 'zugang').pop();
+                if (z && z.art === a.event_type && z.wer === a.actor && t - z.t < 60000) return;
                 ev.push({ t, typ: 'zugang', art: a.event_type, wer: a.actor, wie: a.authentication });
               });
               let vorher = null;
@@ -591,6 +603,8 @@ button_card_templates:
       - height: 23px
       - color: '[[[ return variables.sh.kopfWert(variables.abschnitt, "farbe") || "var(--owlet-blau, #7fb3d5)"; ]]]'
       - --ha-icon-display: block
+      # Glyphe mittig wie im More-Menue (Werte in sh.glyphe, gemessen an @mdi/js 7.4.47)
+      - transform: '[[[ return variables.sh.glyphe((this._config && this._config.icon) || "", 23); ]]]'
       name:
       - justify-self: start
       - align-self: end
