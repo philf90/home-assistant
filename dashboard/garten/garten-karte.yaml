@@ -53,7 +53,10 @@
 #                       Station, Regenpause (Blau) mit der Uhrzeit, ab der er
 #                       wieder maeht. Der A2 meldet die Regenpause als
 #                       "pausiert wegen Fehler" mit Code 56 (Info); die Karte
-#                       zeigt sie deshalb nicht rot.
+#                       zeigt sie deshalb nicht rot. Der Geraetecode bleibt
+#                       stehen, bis ein neuer kommt; ein Hinweis aus dem Code
+#                       verschwindet deshalb beim naechsten Zustandswechsel,
+#                       die Regenpause zur gemeldeten Uhrzeit.
 #   Verschleiss         Messer, Stationsbuerste, Wartung: Rest in % und
 #                       Stunden; Gruen ab 30 %, Amber ab 10 %, darunter Rot
 #   Regenschutz         Schalter; Halten oeffnet die Wartezeit nach Regen
@@ -1106,34 +1109,44 @@ cards:
                 if(d.toDateString()===morgen.toDateString()) return `morgen ${hm}`;
                 return `${d.toLocaleDateString('de-DE',{weekday:'short'})} ${hm}`;
               };
-              // farbe und status (Text) der Kachel, hinweise: Liste von
-              // {farbe, icon, titel, text}, schwerster zuerst. Der Code bleibt
-              // stehen, bis der Maeher einen neuen meldet; Infos zeigt die
-              // Karte deshalb nur, solange er weder maeht noch angedockt ist.
+              // farbe, statusFarbe und status (Text) der Kachel, hinweise: Liste
+              // von {farbe, icon, titel, text}, schwerster zuerst.
+              // Der Geraetecode ist ein Ereignis: Die Integration uebernimmt nur
+              // neue Codes und setzt ihn nie zurueck. Er zaehlt deshalb nur,
+              // wenn er hoechstens 60 s vor dem letzten Zustandswechsel des
+              // Maehers kam (gemessen liegen beide 0,1-0,3 s auseinander).
+              // Wechselt der Zustand (zurueck zur Station, maeht wieder),
+              // verschwindet der Hinweis. Die Regenpause gilt bis zu der Zeit,
+              // die der Maeher gemeldet hat, nicht waehrend des Maehens.
               const lage=(st,v,e)=>{
                 const ms=e?e.state:'';
                 const s=st[v.status_id], c=st[v.code_id], r=st[v.regen_id];
                 const code=c?parseInt(c.state,10):NaN;
                 const typ=(c&&c.attributes.type)||'';
                 const txt=isNaN(code)?'':(CODES[code]||c.attributes.description||`Code ${code}`);
+                const seit=e?new Date(e.last_changed).getTime():NaN;
+                const frisch=!isNaN(code)&&!isNaN(seit)&&new Date(c.last_changed).getTime()>=seit-60000;
                 const ende=r?new Date(r.state):null;
                 const regenZeit=!!ende&&!isNaN(ende)&&ende>Date.now();
-                const regen=ms!=='mowing'&&(regenZeit||REGEN.includes(code));
+                const regen=ms!=='mowing'&&(regenZeit||(frisch&&REGEN.includes(code)));
                 const unterwegs=ms!=='mowing'&&ms!=='docked';
+                const info=frisch&&unterwegs&&INFOS.includes(code);
                 const h=[];
-                if(typ==='error'&&ms!=='mowing') h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:`Fehler ${code}`, text:txt});
-                else if(ms==='error'&&!regen&&!(unterwegs&&INFOS.includes(code))) h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:'Fehler', text:'Gerätecode noch nicht gemeldet, Details in der Dreamehome-App'});
-                if(typ==='warning') h.push({farbe:AMBER, icon:'mdi:alert-outline', titel:`Warnung ${code}`, text:txt});
-                if(unterwegs&&INFOS.includes(code)) h.push(FROST.includes(code)
+                if(ms==='error'&&frisch&&typ==='error') h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:`Fehler ${code}`, text:txt});
+                else if(ms==='error'&&!regen&&!info) h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:'Fehler',
+                  text: typ==='error' ? `zuletzt gemeldet ${code} um ${zeit(new Date(c.last_changed))}: ${txt}` : 'Ursache nicht gemeldet, Details in der Dreamehome-App'});
+                if(frisch&&typ==='warning') h.push({farbe:AMBER, icon:'mdi:alert-outline', titel:`Warnung ${code}`, text:txt});
+                if(info) h.push(FROST.includes(code)
                   ? {farbe:BLAU, icon:'mdi:snowflake', titel:'Frostschutz', text:txt}
                   : {farbe:AMBER, icon:'mdi:information-outline', titel:`Hinweis ${code}`, text:txt});
-                if(regen) h.push({farbe:BLAU, icon:'mdi:weather-pouring', titel:'Regenschutz', text:regenZeit?`mäht wieder ab ${zeit(ende)}`:(REGEN.includes(code)?txt:'')});
+                if(regen) h.push({farbe:BLAU, icon:'mdi:weather-pouring', titel:'Regenschutz', text:regenZeit?`mäht wieder ab ${zeit(ende)}`:txt});
                 const fehler=h.length&&h[0].farbe===ROT;
-                const status= fehler ? 'Angehalten' : regen ? 'Regenpause' : ((s&&STATUS[s.state])||MAEHER[ms]||ms||'–');
-                const farbe= h.length ? h[0].farbe : ms==='mowing'||ms==='docked' ? GRUEN : ms==='returning' ? BLAU : ms==='paused' ? AMBER : GRAU;
-                // Das Statuswort traegt die Farbe seiner Ursache: "Regenpause"
-                // bleibt blau, auch wenn ein schwererer Hinweis die Kachel faerbt.
-                const statusFarbe= fehler ? ROT : regen ? BLAU : farbe;
+                const pause=regen&&ms!=='docked';
+                const zustand= ms==='mowing'||ms==='docked' ? GRUEN : ms==='returning' ? BLAU : ms==='paused' ? AMBER : ms==='error' ? ROT : GRAU;
+                const status= fehler ? 'Angehalten' : pause ? 'Regenpause' : ((s&&STATUS[s.state])||MAEHER[ms]||ms||'–');
+                const schwer=h.find(x=>x.farbe===ROT||x.farbe===AMBER);
+                const farbe= schwer ? schwer.farbe : pause ? BLAU : zustand;
+                const statusFarbe= fehler ? ROT : pause ? BLAU : zustand;
                 return {farbe, statusFarbe, status, hinweise:h};
               };
               // Fortschritt in % (Zahl) oder null, nur waehrend des Maehens
