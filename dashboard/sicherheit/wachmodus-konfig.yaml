@@ -45,6 +45,9 @@
 #     "Temporaer gesperrt" und "Permanent gesperrt" sind in der Integration
 #     standardmaessig deaktiviert und muessen aktiviert sein
 #   - Tuer- und Fensterkontakte, Kameras: Listen in den Triggern
+#   - namen: eigene Namen fuer Kontakte, deren Anzeigename in Home Assistant
+#     nicht in die Meldung passt (sonst gilt der Anzeigename); in beiden
+#     Automationen gleich halten
 #
 # Einbinden als Paket in configuration.yaml:
 #   homeassistant:
@@ -85,7 +88,8 @@ automation:
     description: >-
       Sicherheits-View: schaltet input_boolean.wachmodus an, sobald niemand mehr
       zuhause ist, und aus, sobald jemand heimkommt. Beim Einschalten nennt die
-      Meldung, was noch offen ist. Schalter der Meldung:
+      Meldung, was noch offen ist (30 s Wartezeit, damit das automatische
+      Abschliessen der Haustuer mitgezaehlt wird). Schalter der Meldung:
       input_boolean.sicherheit_meldung_wachmodus.
     mode: queued
     max: 5
@@ -112,6 +116,9 @@ automation:
         - binary_sensor.fenster_bad_unten_rechts
         - binary_sensor.fenster_windfang
         - binary_sensor.fenster_garderobe
+      namen:
+        binary_sensor.fenster_kinderzimmer: Kinderzimmer 1
+        binary_sensor.fenster_buro: Kinderzimmer 2
     triggers:
       - trigger: zone.left
         target:
@@ -148,7 +155,8 @@ automation:
                 state: "on"
               - delay: "00:00:30"
               - variables:
-                  offen: "{{ kontakte | select('is_state', 'on') | map('state_attr', 'friendly_name') | list }}"
+                  offen: >-
+                    {% set ns = namespace(l=[]) %}{% for e in kontakte | select('is_state', 'on') %}{% set ns.l = ns.l + [namen.get(e) or state_attr(e, 'friendly_name')] %}{% endfor %}{{ ns.l }}
                   schloss: "{{ states('lock.haustur_schloss') }}"
               - action: notify.mobile_app_iphone
                 data:
@@ -192,6 +200,9 @@ automation:
     max: 20
     variables:
       ziel: /dashboard-home/sicherheit
+      namen:
+        binary_sensor.fenster_kinderzimmer: Kinderzimmer 1
+        binary_sensor.fenster_buro: Kinderzimmer 2
     triggers:
       - trigger: door.opened
         target:
@@ -244,7 +255,7 @@ automation:
             sequence:
               - action: notify.mobile_app_iphone
                 data:
-                  title: "{{ state_attr(trigger.entity_id, 'friendly_name') }} geöffnet"
+                  title: "{{ namen.get(trigger.entity_id) or state_attr(trigger.entity_id, 'friendly_name') }} geöffnet"
                   message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
                   data: &push
                     url: "{{ ziel }}"
