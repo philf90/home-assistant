@@ -17,7 +17,8 @@
 # Aktiv-Zustand (an/offen/maeht) faerbt Icon + Kachel:
 #   Pumpen -> gruen (accent_on #a6d49e), Wasser/Ventile -> blau (#7fb3d5).
 #   Die Einstellungen tragen das Lime der Kategorie Garten (#bdd27f).
-# Tap = Toggle (Schalter/Ventile); Maehroboter und Eingabefelder -> more-info.
+# Tap = Toggle (Schalter/Ventile/Regenschutz); Maehroboter, Verschleiss und
+# Eingabefelder -> more-info.
 #
 # Heller Modus: Farben ueber die owlet-Variablen, Toenungen per color-mix.
 # Wasserringe (Blau 0,5) und Glow der Pumpe (Gruen 0,5) in der Stufe
@@ -41,6 +42,22 @@
 #                       "Meldung am Ende"; Hinweis, mit welcher Laufzeit der
 #                       naechste Start laeuft
 #
+# Maehroboter (Dreame A2, Integration antondaubert/dreame-mower):
+#   Lawn Solo           Status aus dem Statussensor, waehrend des Maehens
+#                       Fortschritt in % mit Balken und Flaeche; Akku und
+#                       Schnitthoehe (bei Einstellungen je Zone die Spanne der
+#                       Zonen). Hinweise unter der Zeile, schwerster zuerst:
+#                       Fehler (Rot) und Warnung (Amber) mit Geraetecode im
+#                       Klartext, Infos wie "Akku schwach, faehrt zur Station"
+#                       (Amber, Frost Blau) nur ausserhalb von Maehen und
+#                       Station, Regenpause (Blau) mit der Uhrzeit, ab der er
+#                       wieder maeht. Der A2 meldet die Regenpause als
+#                       "pausiert wegen Fehler" mit Code 56 (Info); die Karte
+#                       zeigt sie deshalb nicht rot.
+#   Verschleiss         Messer, Stationsbuerste, Wartung: Rest in % und
+#                       Stunden; Gruen ab 30 %, Amber ab 10 %, darunter Rot
+#   Regenschutz         Schalter; Halten oeffnet die Wartezeit nach Regen
+#
 # button-card v7 ignoriert triggers_update: Neu gezeichnet wird, wenn sich
 # eine Entity aendert, die ein Template liest. Die Timer-Zeilen lesen deshalb
 # sensor.time, damit die Restminuten jede Minute weiterzaehlen.
@@ -49,8 +66,10 @@
 # &acc_icon, &acc_bg, &acc_border; Bewaesserung &bw_extra (Ringe, Glow,
 # Balken-Animation, reduzierte Bewegung), &bw_tm, &bw_bar, &bw_zone_sub,
 # &bw_styles_timed; Einstellungen &bw_val, &bw_set_row, &bw_step_card,
-# &bw_minus_color, &bw_plus_color. Aktiv-Farbe je Kachel ueber
-# variables.accent_on, Timer je Kachel ueber variables.timers.
+# &bw_minus_color, &bw_plus_color; Schalter-Pille &sw_pille, &sw_zeile
+# ("Meldung am Ende", "Regenschutz"). Aktiv-Farbe je Kachel ueber
+# variables.accent_on, Timer je Kachel ueber variables.timers. Maehroboter:
+# Zustandslogik in variables.mw der Hauptkachel (lage, fortschritt).
 #
 # Voraussetzungen:
 #   - custom:button-card (v7) + card-mod (HACS), sensor.time
@@ -78,6 +97,12 @@
 #           Tippen oeffnet /dashboard-home/garten
 #       "Bewaesserung: Abbruch bei Regen"  Regensensor meldet Naesse, ein
 #           Ventil offen -> alle Ventile zu
+#   - Maehroboter: antondaubert/dreame-mower (HACS, geprueft mit v1.10.1),
+#     Geraet "Lawn Solo" im Bereich Garten. Genutzt: lawn_mower, Sensoren
+#     Status, Geraetecode, Batterie, Maeh Fortschritt, Klingen- und
+#     Buerstenverschleiss, Wartungszustand, "Maehen wird nach Regenschutz
+#     fortgesetzt", number Schnitthoehe, switch Regenschutz, select Wartezeit
+#     nach Regen. Andere Geraetenamen oder Bereiche aendern die Entity-IDs.
 type: vertical-stack
 cards:
   # ================================ POOL ================================
@@ -905,12 +930,12 @@ cards:
           action: more-info
         custom_fields:
           sub: Push ans iPhone, wenn alles aus ist
-          sw: |
+          sw: &sw_pille |
             [[[
               const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
               return `<span style="position:relative;display:block;box-sizing:border-box;width:42px;height:24px;border-radius:12px;background:${an?'color-mix(in srgb, color-mix(in srgb, var(--owlet-limette, #bdd27f) 50%, transparent) var(--owlet-dunkel-anteil, 100%), var(--owlet-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05)))'};border:1px solid ${an?'color-mix(in srgb, color-mix(in srgb, var(--owlet-limette, #bdd27f) 50%, transparent) var(--owlet-dunkel-anteil, 100%), var(--owlet-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.08) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};"><span style="position:absolute;top:2px;left:${an?20:2}px;width:18px;height:18px;border-radius:50%;background:${an?'#f2f5f8':'var(--owlet-text-sekundaer, #8794a5)'};transition:left 0.15s ease;"></span></span>`;
             ]]]
-        styles:
+        styles: &sw_zeile
           card:
             - border-radius: 16px
             - padding: 12px 14px
@@ -1014,15 +1039,111 @@ cards:
         tap_action:
           action: none
         styles: *header_styles
+      # Hauptkachel: Status, Akku, Schnitthoehe, Fortschritt und Hinweise
+      # (Fehler, Warnung, Info, Regenpause). Die Zustandslogik steht einmal in
+      # variables.mw; die Felder rufen sie mit states, variables und entity auf.
       - type: custom:button-card
-        entity: lawn_mower.a2
+        entity: lawn_mower.garten_lawn_solo
         icon: mdi:robot-mower
         name: Lawn Solo
         show_icon: true
         show_name: true
         show_state: false
-        variables: { battery_entity: sensor.a2_battery_level }
-        triggers_update: all
+        tap_action:
+          action: more-info
+        variables:
+          status_id: sensor.garten_lawn_solo_status
+          code_id: sensor.garten_lawn_solo_geratecode
+          regen_id: sensor.garten_lawn_solo_mahen_wird_nach_regenschutz_fortgesetzt
+          akku_id: sensor.garten_lawn_solo_batterie
+          fortschritt_id: sensor.garten_lawn_solo_mah_fortschritt
+          hoehe_id: number.garten_lawn_solo_schnitthohe
+          mw: |
+            [[[
+              const GRUEN='var(--owlet-gruen, #a6d49e)', BLAU='var(--owlet-blau, #7fb3d5)', AMBER='var(--owlet-amber, #e6b566)', ROT='var(--owlet-rot, #f0736a)', GRAU='var(--owlet-text-sekundaer, #8794a5)';
+              // Geraetecodes (2:2) des A2 (dreame.mower.g2408) aus der
+              // Codetabelle der Integration (v1.10.1): Fehler, Warnungen und
+              // die Infos, die erklaeren, warum er nicht maeht. Andere Codes:
+              // englische Beschreibung der Integration.
+              const CODES={
+                1:'Roboter gekippt', 2:'Festgefahren, kann nicht weiter', 3:'Durchfahrt zur Station zu schmal',
+                4:'Linkes Antriebsrad gestört', 5:'Rechtes Antriebsrad gestört', 6:'Hubmotor gestört',
+                7:'Messerscheibe dreht sich nicht', 8:'Seitenmotor gestört', 9:'Stoßfänger gestört',
+                10:'Ladefehler', 11:'Akku zu heiß', 12:'LiDAR verdeckt', 13:'LiDAR überhitzt (ohne Karte)',
+                14:'LiDAR überhitzt (mit Karte)', 15:'LiDAR überhitzt', 16:'LiDAR verschmutzt', 17:'LiDAR gestört',
+                18:'Außerhalb der Kartengrenzen', 19:'Orientierung verloren', 20:'Sensorfehler',
+                21:'Steckt in einer Sperrzone fest', 22:'Außerhalb der Kartengrenzen', 23:'Not-Aus gedrückt',
+                24:'Akku leer, schaltet ab', 25:'Kartendatei beschädigt', 26:'Zu weit vom Kartenbereich entfernt',
+                27:'Person erkannt oder Positionierung fehlgeschlagen', 28:'Messer stark abgenutzt, bald ersetzen',
+                29:'Stationsbürste stark abgenutzt, bald ersetzen', 30:'Wartung fällig',
+                31:'Rückkehr zum Laden fehlgeschlagen', 32:'Andocken fehlgeschlagen',
+                33:'Positionierung fehlgeschlagen (mit Karte)', 34:'Positionierung fehlgeschlagen (ohne Karte)',
+                35:'Positionierung gestört', 36:'Auftrag konnte nicht starten', 37:'Durchfahrt blockiert',
+                38:'LiDAR verschmutzt', 39:'Kamera verschmutzt', 40:'Kamera gestört', 41:'Kamera verdeckt',
+                42:'Akku warm', 43:'Laden pausiert, Akku zu kalt', 44:'Automatische Grenzerstellung braucht Hilfe',
+                45:'Automatische Seitenerstellung braucht Hilfe', 54:'Akku schwach, fährt zur Station',
+                55:'Zeitplan wegen schwachem Akku ausgesetzt', 56:'Pause wegen Regen',
+                57:'Zeitplan wegen Regen unterbrochen', 58:'Zeitplan wegen Regen ausgesetzt',
+                59:'Frost, fährt zur Station', 60:'Zeitplan wegen Frost ausgesetzt',
+                71:'Fährt nach Leerlauf zur Station', 72:'Fährt nach langer Pause zur Station',
+                73:'Obere Abdeckung offen', 76:'Wartungspunkt nicht erreichbar, Auftrag beendet',
+                77:'Fehler auf dem Weg zum Wartungspunkt, Auftrag beendet',
+                78:'Zu dunkel, fährt zur Station', 80:'LiDAR kühlt ab'
+              };
+              const REGEN=[56,57,58], FROST=[59,60], INFOS=[54,55,59,60,71,72,76,77,78,80];
+              const STATUS={
+                no_status:'Kein Status', mowing:'Mäht', standby:'Bereit', paused:'Pausiert',
+                paused_due_to_errors:'Angehalten', returning_to_station_to_charge:'Fährt zur Station',
+                charging:'Lädt', mapping:'Kartiert', charging_complete:'Geladen', updating:'Firmware-Update',
+                charging_paused_high_temperature:'Laden pausiert, Akku zu warm',
+                charging_paused_low_temperature:'Laden pausiert, Akku zu kalt', maintenance_paused:'Am Wartungspunkt'
+              };
+              const MAEHER={ mowing:'Mäht', docked:'Angedockt', returning:'Fährt zurück', paused:'Pausiert', error:'Angehalten' };
+              const zeit=(d)=>{
+                const hm=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+                const heute=new Date(), morgen=new Date(Date.now()+86400000);
+                if(d.toDateString()===heute.toDateString()) return hm;
+                if(d.toDateString()===morgen.toDateString()) return `morgen ${hm}`;
+                return `${d.toLocaleDateString('de-DE',{weekday:'short'})} ${hm}`;
+              };
+              // farbe und status (Text) der Kachel, hinweise: Liste von
+              // {farbe, icon, titel, text}, schwerster zuerst. Der Code bleibt
+              // stehen, bis der Maeher einen neuen meldet; Infos zeigt die
+              // Karte deshalb nur, solange er weder maeht noch angedockt ist.
+              const lage=(st,v,e)=>{
+                const ms=e?e.state:'';
+                const s=st[v.status_id], c=st[v.code_id], r=st[v.regen_id];
+                const code=c?parseInt(c.state,10):NaN;
+                const typ=(c&&c.attributes.type)||'';
+                const txt=isNaN(code)?'':(CODES[code]||c.attributes.description||`Code ${code}`);
+                const ende=r?new Date(r.state):null;
+                const regenZeit=!!ende&&!isNaN(ende)&&ende>Date.now();
+                const regen=ms!=='mowing'&&(regenZeit||REGEN.includes(code));
+                const unterwegs=ms!=='mowing'&&ms!=='docked';
+                const h=[];
+                if(typ==='error'&&ms!=='mowing') h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:`Fehler ${code}`, text:txt});
+                else if(ms==='error'&&!regen&&!(unterwegs&&INFOS.includes(code))) h.push({farbe:ROT, icon:'mdi:alert-circle-outline', titel:'Fehler', text:'Gerätecode noch nicht gemeldet, Details in der Dreamehome-App'});
+                if(typ==='warning') h.push({farbe:AMBER, icon:'mdi:alert-outline', titel:`Warnung ${code}`, text:txt});
+                if(unterwegs&&INFOS.includes(code)) h.push(FROST.includes(code)
+                  ? {farbe:BLAU, icon:'mdi:snowflake', titel:'Frostschutz', text:txt}
+                  : {farbe:AMBER, icon:'mdi:information-outline', titel:`Hinweis ${code}`, text:txt});
+                if(regen) h.push({farbe:BLAU, icon:'mdi:weather-pouring', titel:'Regenschutz', text:regenZeit?`mäht wieder ab ${zeit(ende)}`:(REGEN.includes(code)?txt:'')});
+                const fehler=h.length&&h[0].farbe===ROT;
+                const status= fehler ? 'Angehalten' : regen ? 'Regenpause' : ((s&&STATUS[s.state])||MAEHER[ms]||ms||'–');
+                const farbe= h.length ? h[0].farbe : ms==='mowing'||ms==='docked' ? GRUEN : ms==='returning' ? BLAU : ms==='paused' ? AMBER : GRAU;
+                // Das Statuswort traegt die Farbe seiner Ursache: "Regenpause"
+                // bleibt blau, auch wenn ein schwererer Hinweis die Kachel faerbt.
+                const statusFarbe= fehler ? ROT : regen ? BLAU : farbe;
+                return {farbe, statusFarbe, status, hinweise:h};
+              };
+              // Fortschritt in % (Zahl) oder null, nur waehrend des Maehens
+              const fortschritt=(st,v,e)=>{
+                const p=st[v.fortschritt_id];
+                const n=p?parseFloat(p.state):NaN;
+                return (e&&e.state==='mowing'&&!isNaN(n)) ? Math.max(0,Math.min(100,n)) : null;
+              };
+              return { lage, fortschritt, GRAU };
+            ]]]
         state:
           - value: mowing
             spin: true
@@ -1031,23 +1152,60 @@ cards:
         custom_fields:
           status: |
             [[[
-              const m={ mowing:'Mäht', docked:'Angedockt', returning:'Fährt zurück', paused:'Pausiert', error:'Fehler', idle:'Bereit' };
+              states['sensor.time']; // liest die Uhrzeit, damit button-card v7 jede Minute neu zeichnet
               const e=(typeof entity!=='undefined')?entity:null;
-              return e?(m[e.state]||e.state):'';
+              const l=variables.mw.lage(states,variables,e);
+              const p=variables.mw.fortschritt(states,variables,e);
+              return `<span style="color:${l.statusFarbe};font-weight:600">${l.status}</span>${p!==null?` · ${p.toFixed(0)} %`:''}`;
             ]]]
-          battery: |
+          info: |
             [[[
-              const b=states[variables.battery_entity];
-              if(!b||b.state==='unavailable') return '';
-              const level=parseFloat(b.state)||0;
-              let icon,color;
-              if(level>=90){icon='mdi:battery';color='var(--owlet-gruen, #a6d49e)';}
-              else if(level>=70){icon='mdi:battery-80';color='var(--owlet-gruen, #a6d49e)';}
-              else if(level>=50){icon='mdi:battery-60';color='var(--owlet-gruen, #a6d49e)';}
-              else if(level>=30){icon='mdi:battery-40';color='var(--owlet-amber, #e6b566)';}
-              else if(level>=10){icon='mdi:battery-20';color='var(--owlet-rot, #f0736a)';}
-              else {icon='mdi:battery-alert';color='var(--owlet-rot, #f0736a)';}
-              return `<span style="display:inline-flex;align-items:center;gap:5px;color:${color};"><ha-icon icon="${icon}" style="--mdc-icon-size:16px;"></ha-icon><span style="color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;">${level.toFixed(0)} %</span></span>`;
+              const e=(typeof entity!=='undefined')?entity:null;
+              const teile=[];
+              const b=states[variables.akku_id];
+              const level=b?parseFloat(b.state):NaN;
+              if(!isNaN(level)){
+                let icon,color;
+                if(level>=90){icon='mdi:battery';color='var(--owlet-gruen, #a6d49e)';}
+                else if(level>=70){icon='mdi:battery-80';color='var(--owlet-gruen, #a6d49e)';}
+                else if(level>=50){icon='mdi:battery-60';color='var(--owlet-gruen, #a6d49e)';}
+                else if(level>=30){icon='mdi:battery-40';color='var(--owlet-amber, #e6b566)';}
+                else if(level>=10){icon='mdi:battery-20';color='var(--owlet-rot, #f0736a)';}
+                else {icon='mdi:battery-alert';color='var(--owlet-rot, #f0736a)';}
+                teile.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><ha-icon icon="${icon}" style="--mdc-icon-size:16px;color:${color};"></ha-icon><span style="font-weight:600;">${level.toFixed(0)} %</span></span>`);
+              }
+              // Schnitthoehe: bei Einstellungen je Zone die Spanne der Zonen
+              // der aktuellen Karte, sonst der Wert der Karte.
+              const a=e?e.attributes:{};
+              const f=(v)=>String(v).replace('.',',');
+              let hoehe='';
+              if(a.mowing_preference_mode==='per_zone'&&Array.isArray(a.zones)&&a.zone_cutting_heights){
+                const h=a.zones.map(z=>parseFloat(a.zone_cutting_heights[String(z.id)])).filter(x=>!isNaN(x));
+                if(h.length){const lo=Math.min(...h), hi=Math.max(...h); hoehe= lo===hi?`${f(lo)} cm`:`${f(lo)}–${f(hi)} cm`;}
+              }
+              if(!hoehe){const n=states[variables.hoehe_id]; const v=n?parseFloat(n.state):NaN; if(!isNaN(v)) hoehe=`${f(v)} cm`;}
+              if(hoehe) teile.push(`Schnitt ${hoehe}`);
+              const p=states[variables.fortschritt_id];
+              if(variables.mw.fortschritt(states,variables,e)!==null&&p&&p.attributes.current_area_sqm!=null&&p.attributes.total_area_sqm){
+                teile.push(`${Math.round(p.attributes.current_area_sqm)} von ${Math.round(p.attributes.total_area_sqm)} m²`);
+              }
+              return teile.join('<span style="opacity:0.6"> · </span>');
+            ]]]
+          bar: |
+            [[[
+              const e=(typeof entity!=='undefined')?entity:null;
+              const p=variables.mw.fortschritt(states,variables,e);
+              if(p===null) return '';
+              return `<i style="display:block;height:100%;border-radius:2px;background:var(--owlet-gruen, #a6d49e);width:${p.toFixed(1)}%;transition:width 0.6s ease"></i>`;
+            ]]]
+          # Hinweis-Pille: Toenung 0,12 / Rand 0,24 der Farbe, Icon in der
+          # Farbe, Titel in owlet-text, Text in owlet-label. Rote Schrift auf
+          # roter Toenung hielte dunkel nur 4,37:1 (DESIGN.md).
+          hinweis: |
+            [[[
+              states['sensor.time']; // liest die Uhrzeit, damit button-card v7 jede Minute neu zeichnet
+              const e=(typeof entity!=='undefined')?entity:null;
+              return variables.mw.lage(states,variables,e).hinweise.map(h=>`<div style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;padding:8px 11px;border-radius:12px;background:color-mix(in srgb, ${h.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${h.farbe} 24%, transparent);"><ha-icon icon="${h.icon}" style="--mdc-icon-size:16px;width:16px;height:16px;display:flex;flex:none;margin-top:1px;color:${h.farbe};"></ha-icon><span style="line-height:1.3;"><b style="color:var(--owlet-text, #f2f5f8);">${h.titel}</b>${h.text?` · ${h.text}`:''}</span></div>`).join('');
             ]]]
         styles:
           card:
@@ -1057,9 +1215,9 @@ cards:
             - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
             - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
           grid:
-            - grid-template-columns: min-content 1fr
-            - grid-template-areas: '"i n" "i status" "i battery"'
-            - grid-template-rows: min-content min-content min-content
+            - grid-template-columns: min-content minmax(0, 1fr)
+            - grid-template-areas: '"i n" "i status" "i info" "bar bar" "hinweis hinweis"'
+            - grid-template-rows: min-content min-content min-content min-content min-content
           img_cell:
             - width: 46px
             - height: 46px
@@ -1068,23 +1226,13 @@ cards:
             - align-self: center
             - background: |
                 [[[
-                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
-                  let c='var(--owlet-text-sekundaer, #8794a5)';
-                  if(s==='mowing'||s==='docked') c='var(--owlet-gruen, #a6d49e)';
-                  else if(s==='returning') c='var(--owlet-blau, #7fb3d5)';
-                  else if(s==='paused') c='var(--owlet-amber, #e6b566)';
-                  else if(s==='error') c='var(--owlet-rot, #f0736a)';
-                  return 'color-mix(in srgb, '+c+' 16%, transparent)';
+                  const l=variables.mw.lage(states,variables,(typeof entity!=='undefined')?entity:null);
+                  return l.farbe===variables.mw.GRAU ? 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))' : 'color-mix(in srgb, '+l.farbe+' 16%, transparent)';
                 ]]]
             - border: |
                 [[[
-                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
-                  let c='var(--owlet-text-sekundaer, #8794a5)';
-                  if(s==='mowing'||s==='docked') c='var(--owlet-gruen, #a6d49e)';
-                  else if(s==='returning') c='var(--owlet-blau, #7fb3d5)';
-                  else if(s==='paused') c='var(--owlet-amber, #e6b566)';
-                  else if(s==='error') c='var(--owlet-rot, #f0736a)';
-                  return '1px solid color-mix(in srgb, '+c+' 24%, transparent)';
+                  const l=variables.mw.lage(states,variables,(typeof entity!=='undefined')?entity:null);
+                  return l.farbe===variables.mw.GRAU ? '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))' : '1px solid color-mix(in srgb, '+l.farbe+' 24%, transparent)';
                 ]]]
           icon:
             - width: 26px
@@ -1092,12 +1240,7 @@ cards:
             - --ha-icon-display: block
             - color: |
                 [[[
-                  const s=(typeof entity!=='undefined'&&entity)?entity.state:'';
-                  if(s==='mowing'||s==='docked') return 'var(--owlet-gruen, #a6d49e)';
-                  if(s==='returning') return 'var(--owlet-blau, #7fb3d5)';
-                  if(s==='paused') return 'var(--owlet-amber, #e6b566)';
-                  if(s==='error') return 'var(--owlet-rot, #f0736a)';
-                  return 'var(--owlet-text-sekundaer, #8794a5)';
+                  return variables.mw.lage(states,variables,(typeof entity!=='undefined')?entity:null).farbe;
                 ]]]
           name:
             - justify-self: start
@@ -1113,8 +1256,152 @@ cards:
               - font-size: 12.5px
               - color: 'var(--owlet-text-sekundaer, #8794a5)'
               - padding-top: 2px
-            battery:
+              - font-variant-numeric: tabular-nums
+            info:
               - justify-self: start
               - align-self: start
               - font-size: 12px
+              - color: 'var(--owlet-text-sekundaer, #8794a5)'
               - padding-top: 3px
+              - white-space: nowrap
+              - overflow: hidden
+              - text-overflow: ellipsis
+              - max-width: 100%
+            bar:
+              - justify-self: stretch
+              - height: 3px
+              - margin-top: 11px
+              - border-radius: 2px
+              - background: 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'
+              - overflow: hidden
+              - display: |
+                  [[[
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    return variables.mw.fortschritt(states,variables,e)!==null ? 'block' : 'none';
+                  ]]]
+            hinweis:
+              - justify-self: stretch
+              - text-align: left
+              - font-size: 12.5px
+              - color: 'var(--owlet-label, #b4c0cf)'
+              - white-space: normal
+              - margin-top: 5px
+              - display: |
+                  [[[
+                    states['sensor.time'];
+                    const e=(typeof entity!=='undefined')?entity:null;
+                    return variables.mw.lage(states,variables,e).hinweise.length ? 'block' : 'none';
+                  ]]]
+      # Verschleiss: Restlebensdauer in % und Reststunden je Teil. Gruen ab
+      # 30 %, Amber ab 10 %, darunter Rot; die Icon-Kachel zeigt das
+      # schlechteste Teil. Tippen oeffnet die Messer-Entitaet (Reset dort
+      # ueber die Buttons "... zuruecksetzen" des Geraets).
+      - type: custom:button-card
+        entity: sensor.garten_lawn_solo_klingenverschleiss
+        name: Verschleiß
+        icon: mdi:wrench-clock
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: more-info
+        variables:
+          teile:
+            - { id: sensor.garten_lawn_solo_klingenverschleiss, name: Messer }
+            - { id: sensor.garten_lawn_solo_burstenverschleiss, name: Stationsbürste }
+            - { id: sensor.garten_lawn_solo_wartungszustand, name: Wartung }
+          stufe: |
+            [[[
+              return (v)=> isNaN(v) ? 'var(--owlet-text-sekundaer, #8794a5)' : v<10 ? 'var(--owlet-rot, #f0736a)' : v<30 ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-gruen, #a6d49e)';
+            ]]]
+        custom_fields:
+          rows: |
+            [[[
+              return (variables.teile||[]).map(t=>{
+                const s=states[t.id];
+                const v=s?parseFloat(s.state):NaN;
+                const h=s?parseFloat(s.attributes.remaining_hours):NaN;
+                const farbe=variables.stufe(v);
+                const pct=isNaN(v)?0:Math.max(0,Math.min(100,v));
+                const wert=isNaN(v)?'–':`${v.toFixed(0)} %${isNaN(h)?'':` · ${Math.round(h)} h`}`;
+                return `<div style="display:grid;grid-template-columns:96px minmax(0,1fr) 78px;align-items:center;column-gap:10px;margin-top:5px;"><span style="color:var(--owlet-label, #b4c0cf);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span><span style="display:block;height:4px;border-radius:2px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><i style="display:block;height:100%;border-radius:2px;background:${farbe};width:${pct.toFixed(1)}%"></i></span><span style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">${wert}</span></div>`;
+              }).join('');
+            ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+            - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+          grid:
+            - grid-template-columns: min-content minmax(0, 1fr)
+            - grid-template-areas: '"i n" "i rows"'
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 13px
+            - align-self: center
+            - background: |
+                [[[
+                  const min=Math.min(...(variables.teile||[]).map(t=>{const s=states[t.id];const v=s?parseFloat(s.state):NaN;return isNaN(v)?Infinity:v;}));
+                  return isFinite(min) ? 'color-mix(in srgb, '+variables.stufe(min)+' 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))';
+                ]]]
+            - border: |
+                [[[
+                  const min=Math.min(...(variables.teile||[]).map(t=>{const s=states[t.id];const v=s?parseFloat(s.state):NaN;return isNaN(v)?Infinity:v;}));
+                  return isFinite(min) ? '1px solid color-mix(in srgb, '+variables.stufe(min)+' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+                ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - --ha-icon-display: block
+            - color: |
+                [[[
+                  const min=Math.min(...(variables.teile||[]).map(t=>{const s=states[t.id];const v=s?parseFloat(s.state):NaN;return isNaN(v)?Infinity:v;}));
+                  return isFinite(min) ? variables.stufe(min) : 'var(--owlet-text-sekundaer, #8794a5)';
+                ]]]
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 14.5px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: 'var(--owlet-text, #f2f5f8)'
+          custom_fields:
+            rows:
+              - justify-self: stretch
+              - align-self: start
+              - font-size: 12.5px
+              - color: 'var(--owlet-text-sekundaer, #8794a5)'
+              - margin-top: 1px
+      # Regenschutz: Pille wie "Meldung am Ende" (&sw_pille, &sw_zeile).
+      # Tippen schaltet, Halten oeffnet die Wartezeit nach Regen.
+      - type: custom:button-card
+        entity: switch.garten_lawn_solo_regenschutz
+        name: Regenschutz
+        icon: |
+          [[[ return (entity && entity.state === 'on') ? 'mdi:umbrella-outline' : 'mdi:umbrella-closed-outline'; ]]]
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+          entity: select.garten_lawn_solo_wartezeit_nach_regen
+        variables:
+          wartezeit_id: select.garten_lawn_solo_wartezeit_nach_regen
+        custom_fields:
+          sub: |
+            [[[
+              if(!(entity && entity.state === 'on')) return 'Aus, mäht auch bei Regen';
+              const w=states[variables.wartezeit_id];
+              const s=w?w.state:'';
+              if(s==="Don't mow after rain") return 'Hält bei Regen an, mäht danach nicht weiter';
+              return /^\d+ h$/.test(s) ? `Hält bei Regen an, mäht ${s} danach weiter` : 'Hält bei Regen an';
+            ]]]
+          sw: *sw_pille
+        styles: *sw_zeile
