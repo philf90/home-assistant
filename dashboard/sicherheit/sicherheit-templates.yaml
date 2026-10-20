@@ -45,7 +45,11 @@
 # Verlauf "Zutritt": history/history_during_period fuer Door-Hub-Ereignis und
 # Schloss der letzten 24 h (mit Attributen, nur diese zwei Entitaeten). Das
 # Ergebnis liegt in window.__owletSicherheit.verlaufCache und wird direkt in
-# [data-sh-verlauf] eingesetzt, sobald es da ist.
+# [data-sh-verlauf] eingesetzt, sobald es da ist. Doppelte Eintraege (HA schreibt
+# ein Ereignis nach Neustarts erneut) fallen weg. "Zuletzt Person erkannt" kommt
+# ebenso aus dem Verlauf (letzter Wechsel auf "on"), nicht aus last_changed.
+#
+# Ausrichtung: button-card zentriert Felder; die Inhalte setzen text-align: left.
 #
 # Klickbarkeit und Touch wie in flugradar-templates.yaml: button-card setzt bei
 # Karten ohne Aktion pointer-events: none ("disabled"); Felder mit Knoepfen
@@ -65,7 +69,7 @@ button_card_templates:
       sh: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 1, vorher = window.__owletSicherheit;
+          const VERSION = 2, vorher = window.__owletSicherheit;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -240,7 +244,7 @@ button_card_templates:
               <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${c || TEXT};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.66em;color:${SEK};font-weight:600;"> ${u}</span></div>
               ${unter ? `<div style="font-size:11.5px;font-weight:600;color:${SEK};white-space:normal;margin-top:1px;">${unter}</div>` : ''}</div>`;
           sh.raster = inhalt => `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${inhalt}</div>`;
-          sh.block = inhalt => `<div ${sh.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:10px;">${inhalt}</div>`;
+          sh.block = inhalt => `<div ${sh.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:10px;">${inhalt}</div>`;
 
           // ---------- Bedienung ----------
           sh.dienst = (domain, service, data) => sh.hass.callService(domain, service, data).catch(e => console.warn('Sicherheit:', e));
@@ -323,7 +327,7 @@ button_card_templates:
                 <span style="font-size:14px;font-weight:700;">${an ? 'Wachmodus ausschalten' : 'Wachmodus einschalten'}</span>
                 <span style="font-size:11.5px;font-weight:600;opacity:0.8;">· halten</span></span></div>`;
             const fuss = `<div style="font-size:12px;color:${SEK};display:flex;align-items:flex-start;gap:6px;">${sh.icon('mdi:information-outline', SEK, 14)}<span>Schaltet sich selbst an, wenn niemand zuhause ist, und aus, sobald jemand heimkommt.</span></div>`;
-            return `<div style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">${kopf}${liste}${pruef}${knopf}${fuss}</div>`;
+            return `<div style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:12px;">${kopf}${liste}${pruef}${knopf}${fuss}</div>`;
           };
 
           // ---------- Abschnitte: Kopfzeile ----------
@@ -371,7 +375,7 @@ button_card_templates:
           sh.teil = {};
           sh.teil.zutritt = karte => {
             const sz = sh.z(CFG.schloss);
-            const schloss = sh.wert('Haustür', sz === 'locked' ? 'Verriegelt' : sz === 'jammed' ? 'Blockiert' : sh.weg(CFG.schloss) ? '–' : 'Offen', '',
+            const schloss = sh.wert('Haustür', sz === 'locked' ? 'Verriegelt' : sz === 'jammed' ? 'Blockiert' : sh.weg(CFG.schloss) ? '–' : 'Aufgeschlossen', '',
               'seit ' + sh.wann(sh.zeit(CFG.schloss)) + (sh.an(CFG.schlossBatterie) ? ' · Batterie schwach' : ''),
               sz === 'locked' ? GRUEN : sz === 'jammed' ? ROT : AMBER);
             const kp = sh.keypadGesperrt(), codes = CFG.keypad.codes.filter(e => sh.an(e)).length;
@@ -394,21 +398,29 @@ button_card_templates:
               type: 'history/history_during_period',
               start_time: new Date(Date.now() - 86400000).toISOString(),
               entity_ids: [CFG.zugang, CFG.schloss],
-              include_start_time_state: false,
+              include_start_time_state: true,
               significant_changes_only: false,
               minimal_response: false,
               no_attributes: false,
             }).then(r => {
               if (C.k !== k) return;
-              const ev = [];
+              // Doppelte vermeiden: HA schreibt dasselbe Ereignis nach einem Neustart oder einer
+              // Attributaenderung erneut (gleicher Zeitstempel als Zustand); beim Schloss zaehlen
+              // nur echte Wechsel, nicht der Startzustand und nicht "unavailable" dazwischen.
+              const ev = [], gesehen = new Set();
               ((r && r[CFG.zugang]) || []).forEach(x => {
                 const s = x.s !== undefined ? x.s : x.state, a = x.a || x.attributes || {}, t = Date.parse(s);
-                if (Number.isFinite(t) && t > Date.now() - 86400000) ev.push({ t, typ: 'zugang', art: a.event_type, wer: a.actor, wie: a.authentication });
+                if (!Number.isFinite(t) || t <= Date.now() - 86400000 || gesehen.has(s)) return;
+                gesehen.add(s);
+                ev.push({ t, typ: 'zugang', art: a.event_type, wer: a.actor, wie: a.authentication });
               });
-              ((r && r[CFG.schloss]) || []).forEach(x => {
+              let vorher = null;
+              ((r && r[CFG.schloss]) || []).forEach((x, i) => {
                 const s = x.s !== undefined ? x.s : x.state, z = x.lc || x.lu;
                 const t = typeof z === 'number' ? z * 1000 : Date.parse(x.last_changed || x.last_updated);
-                if (['locked', 'unlocked', 'open', 'jammed'].includes(s) && Number.isFinite(t)) ev.push({ t, typ: 'schloss', s });
+                if (!['locked', 'unlocked', 'open', 'jammed'].includes(s)) return;
+                if (i > 0 && vorher !== null && s !== vorher && Number.isFinite(t)) ev.push({ t, typ: 'schloss', s });
+                vorher = s;
               });
               C.daten = ev.sort((x, y) => y.t - x.t).slice(0, 6);
               C.laeuft = false;
@@ -453,15 +465,57 @@ button_card_templates:
               + sh.zeile('mdi:microphone-outline', hoert.length ? ROT : SEK, hoert.length ? 'Kamera hört einen Melder' : 'Kameras hören mit',
                 hoert.length ? hoert.map(h => `${sh.esc(h.name)} (${h.art})`).join(', ') : orte.map(sh.esc).join(', ') + ' · Rauch- und CO-Melder am Ton');
           };
-          sh.teil.kameras = () => {
+          // Zuletzt erkannte Person: letzter Wechsel auf "on" in den letzten 24 h. last_changed
+          // taugt nicht, weil ein Neuverbinden von Protect alle Sensoren gleichzeitig neu setzt.
+          sh.personCache = {};
+          sh.personSchluessel = () => CFG.kameras.filter(k => k.person).map(k => { const s = sh.s(k.person); return s ? s.last_changed : ''; }).join('|');
+          sh.personHolen = karte => {
+            const k = sh.personSchluessel(), C = sh.personCache;
+            if (C.k === k && (C.daten || C.laeuft)) return;
+            const ws = (karte && karte._hass) || sh.hass;
+            if (!ws || typeof ws.callWS !== 'function') return;
+            const mit = CFG.kameras.filter(x => x.person);
+            C.k = k; C.laeuft = true;
+            ws.callWS({
+              type: 'history/history_during_period',
+              start_time: new Date(Date.now() - 86400000).toISOString(),
+              entity_ids: mit.map(x => x.person),
+              include_start_time_state: false,
+              significant_changes_only: false,
+              minimal_response: true,
+              no_attributes: true,
+            }).then(r => {
+              if (C.k !== k) return;
+              const d = [];
+              mit.forEach(x => {
+                let t = null;
+                ((r && r[x.person]) || []).forEach(e => {
+                  const s = e.s !== undefined ? e.s : e.state, z = e.lc || e.lu;
+                  const tt = typeof z === 'number' ? z * 1000 : Date.parse(e.last_changed || e.last_updated);
+                  if (s === 'on' && Number.isFinite(tt)) t = tt;
+                });
+                if (t) d.push({ name: x.name, t });
+              });
+              C.daten = d.sort((a, b) => b.t - a.t);
+              C.laeuft = false;
+              const root = karte && karte.shadowRoot, el = root && root.querySelector('[data-sh-personen]');
+              if (el) el.innerHTML = sh.personenHtml();
+            }).catch(() => { C.laeuft = false; C.k = ''; });
+          };
+          sh.personenHtml = () => {
+            const C = sh.personCache, jetzt = CFG.kameras.filter(x => x.person && sh.an(x.person)).map(x => ({ name: x.name, jetzt: true }));
+            const liste = [...jetzt, ...(C.daten || []).filter(x => !jetzt.some(j => j.name === x.name))].slice(0, 4);
+            if (!liste.length) return sh.hinweisText(C.daten ? 'Keine Person in den letzten 24 Stunden' : C.laeuft ? 'Lädt …' : 'Kein Verlauf');
+            return liste.map(x => `<div style="display:flex;gap:10px;font-size:12.5px;padding:3px 2px;align-items:center;"><span style="width:44px;flex:none;color:${SEK};font-variant-numeric:tabular-nums;">${x.jetzt ? 'jetzt' : sh.wann(x.t)}</span><span style="width:7px;height:7px;border-radius:50%;flex:none;background:${x.jetzt ? AMBER : SEK};"></span><span style="color:${TEXT};">${sh.esc(x.name)}</span></div>`).join('');
+          };
+          sh.teil.kameras = karte => {
             const on = CFG.kameras.filter(k => !sh.weg(k.kamera)).length;
-            const p = CFG.kameras.filter(k => k.person && !sh.weg(k.person)).map(k => ({ name: k.name, jetzt: sh.an(k.person), t: sh.zeit(k.person) }))
-              .filter(x => Number.isFinite(x.t)).sort((x, y) => (y.jetzt - x.jetzt) || (y.t - x.t)).slice(0, 4);
+            sh.personHolen(karte);
             const paket = sh.an(CFG.paket), pz = Date.parse(String(sh.z(CFG.paketZeit) || '').replace(' ', 'T'));
             const off = sh.offline();
             return sh.raster(sh.wert('Online', on, `von ${CFG.kameras.length}`, off.length ? 'offline · ' + off.map(k => sh.esc(k.name)).join(', ') : '', off.length ? AMBER : GRUEN)
                 + sh.wert('Paket', paket ? 'Vor der Tür' : 'Keins', '', Number.isFinite(pz) ? (paket ? 'seit ' : 'zuletzt ') + sh.wann(pz) : '', paket ? AMBER : ''))
-              + `<div>${sh.titel('Zuletzt Person erkannt')}<div style="margin-top:4px;">${p.length ? p.map(x => `<div style="display:flex;gap:10px;font-size:12.5px;padding:3px 2px;align-items:center;"><span style="width:44px;flex:none;color:${SEK};font-variant-numeric:tabular-nums;">${x.jetzt ? 'jetzt' : sh.wann(x.t)}</span><span style="width:7px;height:7px;border-radius:50%;flex:none;background:${x.jetzt ? AMBER : SEK};"></span><span style="color:${TEXT};">${sh.esc(x.name)}</span></div>`).join('') : sh.hinweisText('Keine Erkennung')}</div></div>`;
+              + `<div>${sh.titel('Zuletzt Person erkannt')}<div data-sh-personen style="margin-top:4px;">${sh.personenHtml()}</div></div>`;
           };
           sh.teil.system = () => {
             const b = sh.backupZeit(), alt = !b || Date.now() - b > 2 * 86400000, naechst = Date.parse(sh.z(CFG.backupNaechstes));
