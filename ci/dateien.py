@@ -53,6 +53,7 @@ BEREICHE = (
     "personen",
     "flugradar",
     "fussball",
+    "sicherheit",
     "sonstiges",
 )
 

@@ -1,0 +1,614 @@
+# ============================================================================
+# Sicherheit – button-card-Templates
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       sicherheit
+# Status:        aktiv
+# Karten:        keine
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   person.bewohner, *_seriennr, kind_1/kind_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Gemeinsame Bibliothek fuer die Sicherheits-View (sicherheit-view.yaml) und
+# die Sicherheitskarte der Home-View (sicherheit-karte.yaml).
+#
+# Aufbau:
+#   sicherheit_daten    Bibliothek (variables.sh) mit Statuslogik und
+#                       Darstellung; die Entitaeten stehen oben im Block
+#                       KONFIGURATION
+#   sicherheit_wache    Karte "Sicherheit": Gesamtstatus, Hinweise, Abwesend-
+#                       Check und Knopf fuer den Wachmodus (gedrueckt halten)
+#   sicherheit_kopf     Kopfzeile eines Abschnitts (variables.abschnitt)
+#   sicherheit_inhalt   Inhalt eines Abschnitts (variables.abschnitt)
+#   Abschnitte: zutritt, oeffnungen, rauch, kameras, system, meldungen
+#
+# Gesamtstatus (sh.lage):
+#   Alarm    Rauchalarm, Einbruchalarm eines Rauchmelders, Kamera hoert einen
+#            Rauch- oder CO-Melder, Schloss blockiert
+#   Hinweis  Haustuer nicht verriegelt, wenn niemand zuhause ist oder nachts
+#            (22-6 Uhr); offene Tueren und Fenster und Wachmodus aus, wenn
+#            niemand zuhause ist; Keypad gesperrt; Zugang verweigert in der
+#            letzten Stunde; Batterie schwach; Kamera offline; letztes Backup
+#            aelter als 2 Tage
+#   In Ordnung  sonst
+# Offene Fenster bei Anwesenheit sind kein Hinweis; sie stehen nur in der
+# Liste "Vor dem Gehen".
+#
+# Wachmodus: input_boolean.wachmodus. Er schaltet sich ueber die Automation
+# "Sicherheit: Wachmodus nach Anwesenheit" selbst und steuert nur die
+# Meldungen (wachmodus-konfig.yaml); eine Alarmanlage loest er nicht aus.
+# Der Knopf schaltet erst nach 0,8 s Gedrueckthalten, damit ein versehentlicher
+# Tipp nichts aendert.
+#
+# Verlauf "Zutritt": history/history_during_period fuer Door-Hub-Ereignis und
+# Schloss der letzten 24 h (mit Attributen, nur diese zwei Entitaeten). Das
+# Ergebnis liegt in window.__owletSicherheit.verlaufCache und wird direkt in
+# [data-sh-verlauf] eingesetzt, sobald es da ist.
+#
+# Klickbarkeit und Touch wie in flugradar-templates.yaml: button-card setzt bei
+# Karten ohne Aktion pointer-events: none ("disabled"); Felder mit Knoepfen
+# setzen pointer-events: auto. Knoepfe halten touchstart/-end, click und
+# pointerdown selbst an (kein Ausloesen der Karte, keine haengende Welle).
+#
+# Update-sicher: window.__owletSicherheit traegt eine VERSION; eine hoehere
+# Version ersetzt nach einem Dashboard-Update das alte Objekt der offenen Seite.
+#
+# Voraussetzung: custom:button-card (v7), Helfer und Automationen aus
+#                wachmodus-konfig.yaml, Integrationen Homematic(IP) Local,
+#                UniFi Protect, UniFi Access (Door Hub), UniFi Network, Backup.
+# ============================================================================
+button_card_templates:
+  sicherheit_daten:
+    variables:
+      sh: |
+        [[[
+          // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
+          const VERSION = 1, vorher = window.__owletSicherheit;
+          if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
+
+          // ---------- KONFIGURATION ----------
+          const CFG = {
+            wache: 'input_boolean.wachmodus',
+            personen: ['person.bewohner_1', 'person.bewohner_2'],
+            schloss: 'lock.haustur_schloss',
+            schlossBlockiert: 'binary_sensor.haustur_schloss_blockiert',
+            schlossBatterie: 'binary_sensor.haustur_schloss_batterie',
+            zugang: 'event.haustur_door_hub_zugang',
+            keypad: {
+              voruebergehend: 'binary_sensor.hmip_wkp_seriennr_vorubergehend_gesperrt',
+              dauerhaft: 'binary_sensor.hmip_wkp_seriennr_dauerhaft_gesperrt',
+              batterie: 'binary_sensor.hmip_wkp_seriennr_batterie',
+              codes: [1, 2, 3, 4, 5, 6, 7, 8].map(n => 'binary_sensor.hmip_wkp_seriennr_benutzerautorisierung_' + n),
+            },
+            kontakte: [
+              { name: 'Haustür', entity: 'binary_sensor.haustur', art: 'tuer' },
+              { name: 'Windfang', entity: 'binary_sensor.tur_windfang', art: 'tuer' },
+              { name: 'Keller', entity: 'binary_sensor.tur_keller', art: 'tuer' },
+              { name: 'Balkontür', entity: 'binary_sensor.balkontur', art: 'tuer' },
+              { name: 'Windfang', entity: 'binary_sensor.fenster_windfang', art: 'fenster' },
+              { name: 'Wohnzimmer links', entity: 'binary_sensor.fenster_wohnzimmer_links', art: 'fenster' },
+              { name: 'Wohnzimmer rechts', entity: 'binary_sensor.fenster_wohnzimmer_rechts', art: 'fenster' },
+              { name: 'Wohnzimmer Hof', entity: 'binary_sensor.fenster_wohnzimmer_hof', art: 'fenster' },
+              { name: 'Küche', entity: 'binary_sensor.fenster_kuche', art: 'fenster' },
+              { name: 'Garderobe', entity: 'binary_sensor.fenster_garderobe', art: 'fenster' },
+              { name: 'Bad unten links', entity: 'binary_sensor.fenster_bad_unten_links', art: 'fenster' },
+              { name: 'Bad unten rechts', entity: 'binary_sensor.fenster_bad_unten_rechts', art: 'fenster' },
+              { name: 'Schlafzimmer links', entity: 'binary_sensor.fenster_schlafzimmer_links', art: 'fenster' },
+              { name: 'Schlafzimmer rechts', entity: 'binary_sensor.fenster_schlafzimmer_rechts', art: 'fenster' },
+              { name: 'Schlafzimmer Hof', entity: 'binary_sensor.fenster_schlafzimmer_hof', art: 'fenster' },
+              { name: 'Kinderzimmer 1', entity: 'binary_sensor.fenster_kinderzimmer', art: 'fenster' },
+              { name: 'Kinderzimmer 2', entity: 'binary_sensor.fenster_buro', art: 'fenster' },
+            ],
+            rauchmelder: [
+              { name: 'Wohnzimmer', alarm: 'binary_sensor.rauchmelder_wohnzimmer_rauchalarm', status: 'sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus', batterie: 'binary_sensor.rauchmelder_wohnzimmer_batterie' },
+              { name: 'Schlafzimmer', alarm: 'binary_sensor.rauchmelder_schlafzimmer_rauchalarm', status: 'sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus', batterie: 'binary_sensor.rauchmelder_schlafzimmer_batterie' },
+              { name: 'Kinderzimmer 1', alarm: 'binary_sensor.rauchmelder_kind_1_rauchalarm', status: 'sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus', batterie: 'binary_sensor.hmip_swsd_2_seriennr_batterie' },
+              { name: 'Kinderzimmer 2', alarm: 'binary_sensor.rauchmelder_buro_rauchalarm', status: 'sensor.rauchmelder_buro_rauchmelder_alarmstatus', batterie: 'binary_sensor.rauchmelder_buro_batterie' },
+            ],
+            // Audioerkennung der Kameras (hoert einen piependen Rauch- oder CO-Melder)
+            hoerer: [
+              { name: 'Haustür', entity: 'binary_sensor.haustur_smoke_alarm_detected', art: 'Rauch' },
+              { name: 'Haustür', entity: 'binary_sensor.haustur_co_alarm_detected', art: 'CO' },
+              { name: 'Kinderzimmer 1', entity: 'binary_sensor.kinderzimmer_smoke_alarm_detected', art: 'Rauch' },
+              { name: 'Kinderzimmer 2', entity: 'binary_sensor.kind_2_rauchalarm_erkannt', art: 'Rauch' },
+              { name: 'Pool', entity: 'binary_sensor.pool_rauchalarm_erkannt', art: 'Rauch' },
+              { name: 'Pool', entity: 'binary_sensor.pool_co_alarm_erkannt', art: 'CO' },
+            ],
+            kameras: [
+              { name: 'Haustür', kamera: 'camera.haustur_high_resolution_channel', person: 'binary_sensor.haustur_person_detected' },
+              { name: 'Zugang', kamera: 'camera.door_05b8_entry_high_resolution_channel' },
+              { name: 'Hof', kamera: 'camera.hof_high_resolution_channel', person: 'binary_sensor.hof_person_detected' },
+              { name: 'Garage', kamera: 'camera.garage_high_resolution_channel', person: 'binary_sensor.garage_person_detected' },
+              { name: 'Trampolin', kamera: 'camera.g5_bullet_high_resolution_channel' },
+              { name: 'Pool', kamera: 'camera.g5_bullet_high_resolution_channel_2', person: 'binary_sensor.pool_person_erkannt' },
+              { name: 'Kinderzimmer 1', kamera: 'camera.kinderzimmer_high_resolution_channel', person: 'binary_sensor.kinderzimmer_person_detected' },
+              { name: 'Kinderzimmer 2', kamera: 'camera.g4_instant_high_resolution_channel', person: 'binary_sensor.kind_2_person_erkannt' },
+            ],
+            paket: 'input_boolean.paket_vor_der_tur',
+            paketZeit: 'input_datetime.paket_erkannt_um',
+            backup: 'sensor.backup_letztes_erfolgreiches_automatisches_backup',
+            backupNaechstes: 'sensor.backup_nachstes_geplantes_automatisches_backup',
+            internet: 'binary_sensor.unifi_wan_192_168_1_1_default_unifi_wan_internet',
+            meldungen: [
+              ['input_boolean.sicherheit_meldung_wachmodus', 'Wachmodus an und aus', 'beim Gehen mit allem, was noch offen ist'],
+              ['input_boolean.sicherheit_meldung_oeffnung', 'Türen und Fenster', 'jede Tür und jedes Fenster, das geöffnet wird'],
+              ['input_boolean.sicherheit_meldung_zugang', 'Haustür-Zugang und Schloss', 'Zugang gewährt oder verweigert, Schloss aufgeschlossen'],
+              ['input_boolean.sicherheit_meldung_keypad', 'Keypad gesperrt', 'nach falschen Codes'],
+              ['input_boolean.sicherheit_meldung_person', 'Person an Außenkamera', 'Haustür, Hof, Garage, Pool · mit Bild, höchstens 1 je Minute'],
+            ],
+          };
+
+          const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
+          const F = 'font-family:' + SANS + ';';
+          const GRUEN = 'var(--owlet-gruen, #a6d49e)', AMBER = 'var(--owlet-amber, #e6b566)', ROT = 'var(--owlet-rot, #f0736a)';
+          const BLAU = 'var(--owlet-blau, #7fb3d5)', INDIGO = 'var(--owlet-indigo, #8ea2e6)';
+          const TEXT = 'var(--owlet-text, #f2f5f8)', LABEL = 'var(--owlet-label, #b4c0cf)', SEK = 'var(--owlet-text-sekundaer, #8794a5)';
+          const NK = 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))', UK = 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
+          const UKR = 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))', RAND = 'var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))';
+          const sh = { version: VERSION, hass, CFG, F, verlaufCache: {} };
+
+          // ---------- Daten ----------
+          sh.s = id => sh.hass && sh.hass.states ? sh.hass.states[id] : undefined;
+          sh.z = id => { const s = sh.s(id); return s ? s.state : undefined; };
+          sh.an = id => sh.z(id) === 'on';
+          sh.weg = id => [undefined, 'unavailable', 'unknown'].includes(sh.z(id));
+          sh.zeit = id => { const s = sh.s(id); return s ? Date.parse(s.last_changed) : NaN; };
+          sh.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+          sh.zuhause = () => CFG.personen.filter(p => sh.z(p) === 'home');
+          sh.nacht = () => { const h = new Date().getHours(); return h >= 22 || h < 6; };
+          sh.offen = art => CFG.kontakte.filter(k => (!art || k.art === art) && sh.an(k.entity));
+          sh.verriegelt = () => sh.z(CFG.schloss) === 'locked';
+          sh.rauchAlarm = () => CFG.rauchmelder.filter(r => sh.an(r.alarm) || ['primary_alarm', 'secondary_alarm'].includes(sh.z(r.status)));
+          sh.einbruch = () => CFG.rauchmelder.some(r => sh.z(r.status) === 'intrusion_alarm');
+          sh.hoertAlarm = () => CFG.hoerer.filter(h => sh.an(h.entity));
+          sh.hoererAktiv = () => CFG.hoerer.filter(h => !sh.weg(h.entity));
+          sh.keypadGesperrt = () => sh.an(CFG.keypad.dauerhaft) ? 'dauerhaft' : sh.an(CFG.keypad.voruebergehend) ? 'vorübergehend' : '';
+          sh.batterien = () => [
+            ...(sh.an(CFG.schlossBatterie) ? ['Schloss'] : []),
+            ...(sh.an(CFG.keypad.batterie) ? ['Keypad'] : []),
+            ...CFG.rauchmelder.filter(r => sh.an(r.batterie)).map(r => 'Rauchmelder ' + r.name),
+          ];
+          sh.offline = () => CFG.kameras.filter(k => sh.weg(k.kamera));
+          sh.zugangLetzt = () => {
+            const s = sh.s(CFG.zugang), t = s ? Date.parse(s.state) : NaN;
+            return Number.isFinite(t) ? { t, art: s.attributes.event_type, wer: s.attributes.actor, wie: s.attributes.authentication } : null;
+          };
+          sh.verweigert = () => { const z = sh.zugangLetzt(); return z && z.art === 'access_denied' && Date.now() - z.t < 3600000 ? z : null; };
+          sh.backupZeit = () => { const t = Date.parse(sh.z(CFG.backup)); return Number.isFinite(t) ? t : null; };
+
+          // ---------- Zeit ----------
+          const p2 = n => String(n).padStart(2, '0');
+          sh.uhr = t => { const d = new Date(t); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+          sh.wann = t => {
+            if (!Number.isFinite(t)) return '–';
+            const d = new Date(t), jetzt = new Date();
+            const tage = Math.round((new Date(jetzt.toDateString()) - new Date(d.toDateString())) / 86400000);
+            if (tage === 0) return sh.uhr(t);
+            if (tage === -1) return 'morgen ' + sh.uhr(t);
+            if (tage === 1) return 'gestern ' + sh.uhr(t);
+            if (tage > 1 && tage < 7) return d.toLocaleDateString('de-DE', { weekday: 'short' }) + ' ' + sh.uhr(t);
+            return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
+          };
+          const WIE = { FACE: 'Gesicht', NFC: 'Karte', PIN_CODE: 'PIN', MOBILE_TAP: 'App', MOBILE_BUTTON: 'App', QR_CODE: 'QR-Code', REMOTE_THROUGH_UAH: 'aus der Ferne' };
+          sh.wie = a => WIE[a] || a || '';
+
+          // ---------- Gesamtstatus ----------
+          sh.lage = () => {
+            const alarm = [], hinweis = [];
+            const rauch = sh.rauchAlarm();
+            if (rauch.length) alarm.push('Rauchalarm · ' + rauch.map(r => r.name).join(', '));
+            if (sh.einbruch()) alarm.push('Einbruchalarm der Rauchmelder');
+            const hoert = sh.hoertAlarm();
+            if (hoert.length) alarm.push('Kamera hört Melder · ' + hoert.map(h => `${h.name} (${h.art})`).join(', '));
+            if (sh.an(CFG.schlossBlockiert)) alarm.push('Haustür-Schloss blockiert');
+            const niemand = sh.zuhause().length === 0;
+            if (!sh.verriegelt() && (niemand || sh.nacht())) hinweis.push('Haustür nicht verriegelt');
+            const offen = sh.offen();
+            if (niemand && offen.length) hinweis.push((offen.length === 1 ? '1 offen · ' : `${offen.length} offen · `) + offen.map(k => k.name).join(', '));
+            if (niemand && !sh.an(CFG.wache)) hinweis.push('Wachmodus aus, obwohl niemand zuhause ist');
+            const kp = sh.keypadGesperrt();
+            if (kp) hinweis.push(`Keypad ${kp} gesperrt`);
+            const vw = sh.verweigert();
+            if (vw) hinweis.push(`Zugang verweigert um ${sh.uhr(vw.t)}`);
+            const bat = sh.batterien();
+            if (bat.length) hinweis.push('Batterie schwach · ' + bat.join(', '));
+            const off = sh.offline();
+            if (off.length) hinweis.push('Kamera offline · ' + off.map(k => k.name).join(', '));
+            const b = sh.backupZeit();
+            if (!b || Date.now() - b > 2 * 86400000) hinweis.push('Letztes Backup älter als 2 Tage');
+            return { stufe: alarm.length ? 'alarm' : hinweis.length ? 'hinweis' : 'ok', alarm, hinweis };
+          };
+          sh.farbe = stufe => stufe === 'alarm' ? ROT : stufe === 'hinweis' ? AMBER : GRUEN;
+
+          // ---------- Bausteine ----------
+          sh.icon = (icon, c, px) => `<ha-icon icon="${icon}" style="--mdc-icon-size:${px}px;width:${px}px;height:${px}px;margin:0;display:block;color:${c};"></ha-icon>`;
+          sh.kachel = (icon, c, px, r, ip) => `<span style="width:${px}px;height:${px}px;border-radius:${r}px;flex:none;display:grid;place-items:center;background:${c ? `color-mix(in srgb, ${c} 16%, transparent)` : NK};border:1px solid ${c ? `color-mix(in srgb, ${c} 24%, transparent)` : UKR};">${sh.icon(icon, c || LABEL, ip)}</span>`;
+          // Rot ist die kritische Stufe und gefuellt (DESIGN.md: rote Schrift auf roter
+          // Toenung bleibt unter 4,5:1); Fuellung und Schrift wie temperaturen-karte-v2.yaml
+          const VOLL = "background:#f0736a;border:1px solid var(--owlet-fuellung-rand-rot, rgba(240, 115, 106, 0.5));color:#3d1512;box-shadow:0 0 14px -3px var(--owlet-leuchten-rot, rgba(240, 115, 106, 0.5));";
+          sh.pille = (c, t) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;${c === ROT ? VOLL : `color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`}font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c === ROT ? '#3d1512' : c};${c === ROT ? '' : `box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);`}"></span>${t}</span>`;
+          sh.chip = (c, t) => `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap;${c === ROT ? VOLL : `color:${c || LABEL};background:${c ? `color-mix(in srgb, ${c} 12%, transparent)` : NK};border:1px solid ${c ? `color-mix(in srgb, ${c} 24%, transparent)` : UKR};`}">${t}</span>`;
+          sh.titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:${LABEL};padding:2px 2px 0;">${t}</div>`;
+          sh.hinweisText = t => `<div style="${F}color:${SEK};font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
+          sh.zeile = (icon, c, titel, text) => `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 2px;border-top:1px solid ${RAND};">
+              <span style="flex:none;margin-top:1px;">${sh.icon(icon, c, 19)}</span>
+              <div style="min-width:0;"><div style="font-size:13px;font-weight:600;color:${TEXT};">${titel}</div>${text ? `<div style="font-size:12px;color:${SEK};white-space:normal;">${text}</div>` : ''}</div></div>`;
+          sh.wert = (k, v, u, unter, c) => `<div style="background:${UK};border:1px solid ${UKR};border-radius:14px;padding:9px 11px;min-width:0;">
+              <div style="font-size:11px;font-weight:600;color:${SEK};">${k}</div>
+              <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${c || TEXT};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v}<span style="font-size:0.66em;color:${SEK};font-weight:600;"> ${u}</span></div>
+              ${unter ? `<div style="font-size:11.5px;font-weight:600;color:${SEK};white-space:normal;margin-top:1px;">${unter}</div>` : ''}</div>`;
+          sh.raster = inhalt => `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">${inhalt}</div>`;
+          sh.block = inhalt => `<div ${sh.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:10px;">${inhalt}</div>`;
+
+          // ---------- Bedienung ----------
+          sh.dienst = (domain, service, data) => sh.hass.callService(domain, service, data).catch(e => console.warn('Sicherheit:', e));
+          sh.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()" onpointerdown="event.stopPropagation()"';
+          // Antippen wie in flugradar-templates.yaml (touchend nur bei echtem Tipp)
+          sh.tipp = (e, aktion) => {
+            e.stopPropagation();
+            if (e.type === 'touchstart') { const t = e.touches && e.touches[0]; sh._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null; return; }
+            if (e.type === 'touchend') {
+              const t = e.changedTouches && e.changedTouches[0], st = sh._tipp;
+              sh._tipp = null;
+              if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+              if (e.cancelable) e.preventDefault();
+              sh._tippZeit = Date.now();
+              if (aktion) aktion();
+              return;
+            }
+            if (e.type === 'click') { e.preventDefault(); if (Date.now() - (sh._tippZeit || 0) < 700) return; if (aktion) aktion(); }
+          };
+          sh.tippAttr = js => `onpointerdown="event.stopPropagation()" ontouchstart="window.__owletSicherheit.tipp(event)" ontouchend="window.__owletSicherheit.tipp(event,()=>{${js}})" onclick="window.__owletSicherheit.tipp(event,()=>{${js}})"`;
+          // Gedrueckt halten (0,8 s): Balken laeuft, Loslassen vorher bricht ab
+          sh.druck = (el, e) => {
+            e.stopPropagation();
+            if (el.__sh) return;
+            const bar = el.querySelector('[data-sh-fort]');
+            if (bar) { bar.style.transition = 'width 0.8s linear'; bar.style.width = '100%'; }
+            el.__sh = setTimeout(() => {
+              el.__sh = null;
+              sh.dienst('input_boolean', el.dataset.shDienst, { entity_id: CFG.wache });
+              if (navigator.vibrate) navigator.vibrate(30);
+            }, 800);
+          };
+          sh.los = (el, e) => {
+            if (e) e.stopPropagation();
+            if (el.__sh) { clearTimeout(el.__sh); el.__sh = null; }
+            const bar = el.querySelector('[data-sh-fort]');
+            if (bar) { bar.style.transition = 'width 0.15s ease-out'; bar.style.width = '0'; }
+          };
+          sh.halteAttr = 'onpointerdown="window.__owletSicherheit.druck(this,event)" onpointerup="window.__owletSicherheit.los(this,event)" onpointerleave="window.__owletSicherheit.los(this,event)" onpointercancel="window.__owletSicherheit.los(this,event)" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation();if(event.cancelable)event.preventDefault()" onclick="event.stopPropagation()" oncontextmenu="event.preventDefault()"';
+
+          // ---------- Karte "Sicherheit" (Kopf der View und Home-Karte) ----------
+          sh.anwesend = () => {
+            const n = sh.zuhause().length, alle = CFG.personen.length;
+            return n === 0 ? 'Niemand zuhause' : n === alle ? 'Alle zuhause' : `${n} von ${alle} zuhause`;
+          };
+          sh.wacheText = () => sh.an(CFG.wache) ? `Wachmodus an seit ${sh.wann(sh.zeit(CFG.wache))}` : 'Wachmodus aus';
+          sh.pruefung = () => {
+            const tueren = CFG.kontakte.filter(k => k.art === 'tuer'), fenster = CFG.kontakte.filter(k => k.art === 'fenster');
+            const ot = sh.offen('tuer'), of = sh.offen('fenster');
+            const rm = CFG.rauchmelder.filter(r => !sh.weg(r.alarm) && !sh.an(r.batterie) && !sh.an(r.alarm));
+            const kam = CFG.kameras.filter(k => !sh.weg(k.kamera));
+            const sz = sh.z(CFG.schloss);
+            return [
+              { ok: sz === 'locked', titel: 'Haustür verriegelt', text: sz === 'locked' ? 'seit ' + sh.wann(sh.zeit(CFG.schloss)) : sz === 'jammed' ? 'blockiert' : sh.weg(CFG.schloss) ? 'Schloss nicht erreichbar' : 'aufgeschlossen seit ' + sh.wann(sh.zeit(CFG.schloss)) },
+              { ok: !ot.length, titel: 'Türen zu', text: ot.length ? 'offen · ' + ot.map(k => k.name).join(', ') : `alle ${tueren.length}` },
+              { ok: !of.length, titel: 'Fenster zu', text: of.length ? 'offen · ' + of.map(k => k.name).join(', ') : `alle ${fenster.length}` },
+              { ok: rm.length === CFG.rauchmelder.length, titel: 'Rauchmelder bereit', text: `${rm.length} von ${CFG.rauchmelder.length}` },
+              { ok: kam.length === CFG.kameras.length, titel: 'Kameras online', text: `${kam.length} von ${CFG.kameras.length}` },
+            ];
+          };
+          sh.wache = () => {
+            const l = sh.lage(), c = sh.farbe(l.stufe), an = sh.an(CFG.wache);
+            const icon = l.stufe === 'alarm' ? 'mdi:shield-alert' : l.stufe === 'hinweis' ? 'mdi:shield-alert-outline' : an ? 'mdi:shield-lock' : 'mdi:shield-check';
+            const n = l.hinweis.length;
+            const pill = l.stufe === 'alarm' ? 'Alarm' : l.stufe === 'hinweis' ? (n === 1 ? '1 Hinweis' : `${n} Hinweise`) : 'In Ordnung';
+            const kopf = `<div style="display:grid;grid-template-columns:min-content minmax(0,1fr) min-content;align-items:center;gap:0 14px;">
+                ${sh.kachel(icon, c, 44, 13, 23)}
+                <div style="min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">Sicherheit</div>
+                <div style="font-size:12.5px;color:${SEK};white-space:normal;">${sh.anwesend()} · <span style="white-space:nowrap;color:${an ? INDIGO : SEK};font-weight:${an ? 600 : 400};">${sh.wacheText()}</span></div></div>
+                ${sh.pille(c, pill)}</div>`;
+            const punkte = [...l.alarm.map(t => [ROT, t]), ...l.hinweis.map(t => [AMBER, t])];
+            const liste = punkte.length ? `<div style="display:flex;flex-direction:column;gap:6px;">${punkte.map(([pc, t]) => `<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${pc} 12%, transparent);border:1px solid color-mix(in srgb, ${pc} 24%, transparent);">
+                <span style="flex:none;">${sh.icon('mdi:alert-circle', pc, 18)}</span><span style="font-size:13px;font-weight:600;color:${TEXT};white-space:normal;">${sh.esc(t)}</span></div>`).join('')}</div>` : '';
+            const pr = sh.pruefung();
+            const pruef = `<div>${sh.titel(an ? 'Zustand' : 'Vor dem Gehen')}<div style="margin-top:4px;">${pr.map(p => sh.zeile(p.ok ? 'mdi:check-circle' : 'mdi:alert-circle', p.ok ? GRUEN : AMBER, p.titel, sh.esc(p.text))).join('')}</div></div>`;
+            const bc = an ? LABEL : INDIGO;
+            const knopf = `<div role="button" tabindex="0" data-sh-dienst="${an ? 'turn_off' : 'turn_on'}" ${sh.halteAttr} style="position:relative;overflow:hidden;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;border-radius:14px;padding:11px 12px;display:flex;align-items:center;justify-content:center;gap:8px;color:${bc};background:${an ? NK : `color-mix(in srgb, ${INDIGO} 16%, transparent)`};border:1px solid ${an ? UKR : `color-mix(in srgb, ${INDIGO} 24%, transparent)`};">
+                <span data-sh-fort style="position:absolute;left:0;top:0;bottom:0;width:0;background:color-mix(in srgb, ${bc} 18%, transparent);pointer-events:none;"></span>
+                <span style="position:relative;display:flex;align-items:center;gap:8px;pointer-events:none;">${sh.icon(an ? 'mdi:shield-off-outline' : 'mdi:shield-lock', bc, 18)}
+                <span style="font-size:14px;font-weight:700;">${an ? 'Wachmodus ausschalten' : 'Wachmodus einschalten'}</span>
+                <span style="font-size:11.5px;font-weight:600;opacity:0.8;">· halten</span></span></div>`;
+            const fuss = `<div style="font-size:12px;color:${SEK};display:flex;align-items:flex-start;gap:6px;">${sh.icon('mdi:information-outline', SEK, 14)}<span>Schaltet sich selbst an, wenn niemand zuhause ist, und aus, sobald jemand heimkommt.</span></div>`;
+            return `<div style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">${kopf}${liste}${pruef}${knopf}${fuss}</div>`;
+          };
+
+          // ---------- Abschnitte: Kopfzeile ----------
+          sh.kopf = {
+            zutritt: () => {
+              const sz = sh.z(CFG.schloss), z = sh.zugangLetzt();
+              const c = sz === 'jammed' || sh.an(CFG.schlossBlockiert) ? ROT : sz === 'locked' ? GRUEN : AMBER;
+              return { farbe: c, unter: z ? `Letzter Zugang ${sh.wann(z.t)}` : 'Haustür, Door Hub, Keypad',
+                badge: sh.pille(c, sz === 'locked' ? 'Verriegelt' : sz === 'jammed' ? 'Blockiert' : sh.weg(CFG.schloss) ? 'Nicht erreichbar' : 'Aufgeschlossen') };
+            },
+            oeffnungen: () => {
+              const o = sh.offen(), niemand = sh.zuhause().length === 0;
+              const c = !o.length ? GRUEN : niemand ? AMBER : BLAU;
+              return { farbe: c, unter: `${CFG.kontakte.filter(k => k.art === 'tuer').length} Türen, ${CFG.kontakte.filter(k => k.art === 'fenster').length} Fenster`,
+                badge: sh.pille(o.length ? (niemand ? AMBER : LABEL) : GRUEN, o.length ? `${o.length} offen` : 'Alles zu') };
+            },
+            rauch: () => {
+              const alarm = sh.rauchAlarm().length || sh.einbruch() || sh.hoertAlarm().length;
+              const bat = CFG.rauchmelder.filter(r => sh.an(r.batterie)).length;
+              const c = alarm ? ROT : bat ? AMBER : GRUEN;
+              return { farbe: c, unter: `${CFG.rauchmelder.length} Rauchmelder, ${sh.hoererAktiv().length} Kameras hören mit`,
+                badge: sh.pille(c, alarm ? 'Alarm' : bat ? 'Batterie' : 'Bereit') };
+            },
+            kameras: () => {
+              const off = sh.offline().length, c = off ? AMBER : GRUEN;
+              return { farbe: c, unter: 'Personen, Paket, Verbindung', badge: sh.pille(c, off ? `${off} offline` : 'Alle online') };
+            },
+            system: () => {
+              const b = sh.backupZeit(), alt = !b || Date.now() - b > 2 * 86400000, net = sh.an(CFG.internet);
+              const c = !net || alt ? AMBER : GRUEN;
+              return { farbe: c, unter: 'Backup, Updates, Internet', badge: sh.pille(c, !net ? 'Offline' : alt ? 'Backup alt' : 'In Ordnung') };
+            },
+            meldungen: () => {
+              const n = CFG.meldungen.filter(([e]) => sh.an(e)).length;
+              return { farbe: BLAU, unter: 'Push aufs iPhone, nur im Wachmodus', badge: sh.pille(n ? BLAU : SEK, `${n} von ${CFG.meldungen.length} an`) };
+            },
+          };
+          sh.kopfWert = (a, k) => { try { return (sh.kopf[a] ? sh.kopf[a]() : {})[k] || ''; } catch (e) { return k === 'unter' ? 'Fehler: ' + sh.esc(e.message) : ''; } };
+
+          // ---------- Abschnitte: Inhalt ----------
+          sh.inhalt = (a, karte) => {
+            try { return sh.block(sh.teil[a] ? sh.teil[a](karte) : ''); }
+            catch (e) { return sh.block(sh.hinweisText('Fehler: ' + sh.esc(e.message))); }
+          };
+          sh.teil = {};
+          sh.teil.zutritt = karte => {
+            const sz = sh.z(CFG.schloss);
+            const schloss = sh.wert('Haustür', sz === 'locked' ? 'Verriegelt' : sz === 'jammed' ? 'Blockiert' : sh.weg(CFG.schloss) ? '–' : 'Offen', '',
+              'seit ' + sh.wann(sh.zeit(CFG.schloss)) + (sh.an(CFG.schlossBatterie) ? ' · Batterie schwach' : ''),
+              sz === 'locked' ? GRUEN : sz === 'jammed' ? ROT : AMBER);
+            const kp = sh.keypadGesperrt(), codes = CFG.keypad.codes.filter(e => sh.an(e)).length;
+            const keypad = sh.wert('Keypad', kp ? 'Gesperrt' : 'Bereit', '', `${codes} Codes aktiv${kp ? ' · ' + kp : ''}${sh.an(CFG.keypad.batterie) ? ' · Batterie schwach' : ''}`, kp ? AMBER : GRUEN);
+            const knopf = sz !== 'locked' && !sh.weg(CFG.schloss)
+              ? `<div role="button" tabindex="0" ${sh.tippAttr(`window.__owletSicherheit.dienst('lock','lock',{entity_id:'${CFG.schloss}'})`)} style="cursor:pointer;border-radius:13px;padding:10px;display:flex;align-items:center;justify-content:center;gap:8px;color:${GRUEN};background:color-mix(in srgb, ${GRUEN} 16%, transparent);border:1px solid color-mix(in srgb, ${GRUEN} 24%, transparent);">${sh.icon('mdi:lock', GRUEN, 18)}<span style="font-size:13.5px;font-weight:700;">Haustür verriegeln</span></div>` : '';
+            sh.verlauf(karte);
+            const v = sh.verlaufHtml();
+            return sh.raster(schloss + keypad) + knopf + `<div>${sh.titel('Letzte 24 Stunden')}<div data-sh-verlauf style="margin-top:4px;">${v}</div></div>`;
+          };
+          // Verlauf: Door-Hub-Ereignisse und Schloss der letzten 24 h
+          sh.verlaufSchluessel = () => [CFG.zugang, CFG.schloss].map(e => { const s = sh.s(e); return s ? s.last_changed : ''; }).join('|');
+          sh.verlauf = karte => {
+            const k = sh.verlaufSchluessel(), C = sh.verlaufCache;
+            if (C.k === k && (C.daten || C.laeuft)) return;
+            const ws = (karte && karte._hass) || sh.hass;
+            if (!ws || typeof ws.callWS !== 'function') return;
+            C.k = k; C.laeuft = true;
+            ws.callWS({
+              type: 'history/history_during_period',
+              start_time: new Date(Date.now() - 86400000).toISOString(),
+              entity_ids: [CFG.zugang, CFG.schloss],
+              include_start_time_state: false,
+              significant_changes_only: false,
+              minimal_response: false,
+              no_attributes: false,
+            }).then(r => {
+              if (C.k !== k) return;
+              const ev = [];
+              ((r && r[CFG.zugang]) || []).forEach(x => {
+                const s = x.s !== undefined ? x.s : x.state, a = x.a || x.attributes || {}, t = Date.parse(s);
+                if (Number.isFinite(t) && t > Date.now() - 86400000) ev.push({ t, typ: 'zugang', art: a.event_type, wer: a.actor, wie: a.authentication });
+              });
+              ((r && r[CFG.schloss]) || []).forEach(x => {
+                const s = x.s !== undefined ? x.s : x.state, z = x.lc || x.lu;
+                const t = typeof z === 'number' ? z * 1000 : Date.parse(x.last_changed || x.last_updated);
+                if (['locked', 'unlocked', 'open', 'jammed'].includes(s) && Number.isFinite(t)) ev.push({ t, typ: 'schloss', s });
+              });
+              C.daten = ev.sort((x, y) => y.t - x.t).slice(0, 6);
+              C.laeuft = false;
+              const root = karte && karte.shadowRoot, el = root && root.querySelector('[data-sh-verlauf]');
+              if (el) el.innerHTML = sh.verlaufHtml();
+            }).catch(() => { C.laeuft = false; C.k = ''; });
+          };
+          sh.verlaufHtml = () => {
+            const C = sh.verlaufCache;
+            if (!C.daten) return sh.hinweisText(C.laeuft ? 'Lädt …' : 'Kein Verlauf');
+            if (!C.daten.length) return sh.hinweisText('Keine Zugänge in den letzten 24 Stunden');
+            return C.daten.map(e => {
+              let c = SEK, t;
+              if (e.typ === 'zugang') { c = e.art === 'access_denied' ? AMBER : GRUEN; t = (e.art === 'access_denied' ? 'Zugang verweigert' : 'Zugang gewährt') + [e.wer, sh.wie(e.wie)].filter(Boolean).map(x => ' · ' + sh.esc(x)).join(''); }
+              else t = { locked: 'Schloss verriegelt', unlocked: 'Schloss aufgeschlossen', open: 'Tür geöffnet (Schloss)', jammed: 'Schloss blockiert' }[e.s];
+              return `<div style="display:flex;gap:10px;font-size:12.5px;padding:3px 2px;align-items:center;"><span style="width:44px;flex:none;color:${SEK};font-variant-numeric:tabular-nums;">${sh.wann(e.t)}</span><span style="width:7px;height:7px;border-radius:50%;flex:none;background:${c};"></span><span style="color:${TEXT};min-width:0;">${t}</span></div>`;
+            }).join('');
+          };
+          sh.teil.oeffnungen = () => {
+            const niemand = sh.zuhause().length === 0;
+            const feld = (art, titel) => {
+              const alle = CFG.kontakte.filter(k => k.art === art), o = alle.filter(k => sh.an(k.entity)), weg = alle.filter(k => sh.weg(k.entity));
+              const chips = o.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">${o.map(k => sh.chip(niemand ? AMBER : '', sh.esc(k.name))).join('')}</div>` : '';
+              return `<div style="background:${UK};border:1px solid ${UKR};border-radius:14px;padding:9px 11px;min-width:0;">
+                  <div style="font-size:11px;font-weight:600;color:${SEK};">${titel}</div>
+                  <div style="font-size:17px;font-weight:700;color:${o.length ? (niemand ? AMBER : TEXT) : GRUEN};font-variant-numeric:tabular-nums;">${o.length ? o.length : 'Alle zu'}<span style="font-size:0.66em;color:${SEK};font-weight:600;">${o.length ? ` von ${alle.length} offen` : ''}</span></div>
+                  ${weg.length ? `<div style="font-size:11.5px;font-weight:600;color:${AMBER};">${weg.length} nicht erreichbar</div>` : ''}${chips}</div>`;
+            };
+            return sh.raster(feld('tuer', 'Türen') + feld('fenster', 'Fenster'))
+              + (niemand ? '' : sh.hinweisText('Bei Anwesenheit nur zur Info. Ist niemand zuhause, wird jede offene Tür und jedes offene Fenster zum Hinweis.'));
+          };
+          sh.teil.rauch = () => {
+            const chips = CFG.rauchmelder.map(r => {
+              const alarm = sh.an(r.alarm) || ['primary_alarm', 'secondary_alarm'].includes(sh.z(r.status));
+              const c = alarm ? ROT : sh.weg(r.alarm) ? '' : sh.an(r.batterie) ? AMBER : GRUEN;
+              return sh.chip(c, sh.esc(r.name) + (alarm ? ' · Alarm' : sh.weg(r.alarm) ? ' · nicht erreichbar' : sh.an(r.batterie) ? ' · Batterie' : ''));
+            }).join('');
+            const aktiv = sh.hoererAktiv(), hoert = sh.hoertAlarm();
+            const orte = [...new Set(aktiv.map(h => h.name))];
+            return `<div style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>`
+              + (sh.einbruch() ? sh.zeile('mdi:alarm-light', ROT, 'Einbruchalarm', 'Die Rauchmelder melden einen Einbruchalarm.') : '')
+              + sh.zeile('mdi:microphone-outline', hoert.length ? ROT : SEK, hoert.length ? 'Kamera hört einen Melder' : 'Kameras hören mit',
+                hoert.length ? hoert.map(h => `${sh.esc(h.name)} (${h.art})`).join(', ') : orte.map(sh.esc).join(', ') + ' · Rauch- und CO-Melder am Ton');
+          };
+          sh.teil.kameras = () => {
+            const on = CFG.kameras.filter(k => !sh.weg(k.kamera)).length;
+            const p = CFG.kameras.filter(k => k.person && !sh.weg(k.person)).map(k => ({ name: k.name, jetzt: sh.an(k.person), t: sh.zeit(k.person) }))
+              .filter(x => Number.isFinite(x.t)).sort((x, y) => (y.jetzt - x.jetzt) || (y.t - x.t)).slice(0, 4);
+            const paket = sh.an(CFG.paket), pz = Date.parse(String(sh.z(CFG.paketZeit) || '').replace(' ', 'T'));
+            const off = sh.offline();
+            return sh.raster(sh.wert('Online', on, `von ${CFG.kameras.length}`, off.length ? 'offline · ' + off.map(k => sh.esc(k.name)).join(', ') : '', off.length ? AMBER : GRUEN)
+                + sh.wert('Paket', paket ? 'Vor der Tür' : 'Keins', '', Number.isFinite(pz) ? (paket ? 'seit ' : 'zuletzt ') + sh.wann(pz) : '', paket ? AMBER : ''))
+              + `<div>${sh.titel('Zuletzt Person erkannt')}<div style="margin-top:4px;">${p.length ? p.map(x => `<div style="display:flex;gap:10px;font-size:12.5px;padding:3px 2px;align-items:center;"><span style="width:44px;flex:none;color:${SEK};font-variant-numeric:tabular-nums;">${x.jetzt ? 'jetzt' : sh.wann(x.t)}</span><span style="width:7px;height:7px;border-radius:50%;flex:none;background:${x.jetzt ? AMBER : SEK};"></span><span style="color:${TEXT};">${sh.esc(x.name)}</span></div>`).join('') : sh.hinweisText('Keine Erkennung')}</div></div>`;
+          };
+          sh.teil.system = () => {
+            const b = sh.backupZeit(), alt = !b || Date.now() - b > 2 * 86400000, naechst = Date.parse(sh.z(CFG.backupNaechstes));
+            const upd = Object.keys(sh.hass.states).filter(k => k.startsWith('update.') && sh.z(k) === 'on');
+            const net = sh.an(CFG.internet);
+            const namen = upd.slice(0, 3).map(k => sh.esc(((sh.s(k).attributes || {}).friendly_name || k).replace(/ (Update|Firmware)$/i, ''))).join(', ');
+            return sh.raster(sh.wert('Backup', b ? sh.wann(b) : '–', '', Number.isFinite(naechst) ? 'nächstes ' + sh.wann(naechst) : '', alt ? AMBER : GRUEN)
+              + sh.wert('Internet', net ? 'Verbunden' : 'Getrennt', '', '', net ? GRUEN : AMBER))
+              + sh.zeile(upd.length ? 'mdi:update' : 'mdi:check-circle', upd.length ? BLAU : GRUEN, upd.length ? (upd.length === 1 ? '1 Update verfügbar' : `${upd.length} Updates verfügbar`) : 'Alles aktuell', namen + (upd.length > 3 ? ` und ${upd.length - 3} weitere` : ''));
+          };
+          // Schalter wie flugradar-templates.yaml (fr.schalter)
+          sh.schalter = (eid, titel, text) => {
+            const an = sh.an(eid);
+            return `<div role="switch" tabindex="0" aria-checked="${an}" ${sh.tippAttr(`window.__owletSicherheit.dienst('input_boolean','toggle',{entity_id:'${eid}'})`)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__owletSicherheit.dienst('input_boolean','toggle',{entity_id:'${eid}'})}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid ${RAND};">
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:${an ? TEXT : LABEL};">${titel}</div>
+                  <div style="font-size:12px;color:${SEK};">${text}</div>
+                </div>
+                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? `color-mix(in srgb, ${BLAU} 45%, transparent)` : 'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};border:1px solid ${an ? `color-mix(in srgb, ${BLAU} 50%, transparent)` : UKR};">
+                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? 'color-mix(in srgb, var(--owlet-text, #f2f5f8) var(--owlet-dunkel-anteil, 100%), var(--owlet-flaeche-erhoeht, #222b3c))' : SEK};"></span>
+                </span>
+              </div>`;
+          };
+          sh.teil.meldungen = () => `<div style="display:flex;flex-direction:column;">${CFG.meldungen.map(([e, t, x]) => sh.weg(e) ? sh.hinweisText(`${e} fehlt`) : sh.schalter(e, t, x)).join('')}</div>`;
+
+          window.__owletSicherheit = sh;
+          return sh;
+        ]]]
+
+  sicherheit_wache:
+    template: sicherheit_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    show_ripple: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+      - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+      - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+      - cursor: default
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - width: 100%
+        - pointer-events: auto
+    custom_fields:
+      inhalt: |
+        [[[ return variables.sh.wache(); ]]]
+
+  sicherheit_kopf:
+    template: sicherheit_daten
+    show_icon: true
+    show_name: true
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      icon:
+      - width: 23px
+      - height: 23px
+      - color: '[[[ return variables.sh.kopfWert(variables.abschnitt, "farbe") || "var(--owlet-blau, #7fb3d5)"; ]]]'
+      - --ha-icon-display: block
+      name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 17px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: 'var(--owlet-text, #f2f5f8)'
+      - max-width: 100%
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 6px
+      - cursor: default
+      custom_fields:
+        unter:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - line-height: 1.35
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
+        - margin-top: 1px
+        - text-align: left
+        - white-space: normal
+        - max-width: 100%
+        badge:
+        - justify-self: end
+        - align-self: center
+        - margin-left: 10px
+      grid:
+      - grid-template-areas: '"i n badge" "i unter badge"'
+      - grid-template-columns: min-content minmax(0, 1fr) min-content
+      - grid-template-rows: min-content min-content
+      img_cell:
+      - width: 44px
+      - height: 44px
+      - border-radius: 13px
+      - margin-right: 14px
+      - align-self: center
+      - background: '[[[ return "color-mix(in srgb, " + (variables.sh.kopfWert(variables.abschnitt, "farbe") || "var(--owlet-blau, #7fb3d5)") + " 16%, transparent)"; ]]]'
+      - border: '[[[ return "1px solid color-mix(in srgb, " + (variables.sh.kopfWert(variables.abschnitt, "farbe") || "var(--owlet-blau, #7fb3d5)") + " 24%, transparent)"; ]]]'
+    custom_fields:
+      unter: |
+        [[[ return variables.sh.kopfWert(variables.abschnitt, 'unter'); ]]]
+      badge: |
+        [[[ return variables.sh.kopfWert(variables.abschnitt, 'badge'); ]]]
+
+  sicherheit_inhalt:
+    template: sicherheit_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    show_ripple: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 0
+      - cursor: default
+      custom_fields:
+        inhalt:
+        - width: 100%
+        - pointer-events: auto
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+    custom_fields:
+      inhalt: |
+        [[[ return variables.sh.inhalt(variables.abschnitt, this); ]]]

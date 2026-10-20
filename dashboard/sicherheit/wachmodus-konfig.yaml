@@ -1,0 +1,370 @@
+# ============================================================================
+# Sicherheit – Wachmodus und Meldungen (Helfer, Automationen)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       sicherheit
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder Helfer in der UI anlegen und die Automationen einzeln
+#                im YAML-Editor der UI einfuegen)
+# Platzhalter:   person.bewohner, notify.mobile_app_iphone, *_seriennr
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Wachmodus: Home Assistant meldet bei Abwesenheit mehr als sonst. Er ist keine
+# Alarmanlage und loest keine Sirene aus; die Alarme in UniFi Protect laufen
+# unabhaengig davon weiter.
+#
+# Inhalt:
+#   input_boolean.wachmodus                  an, solange niemand zuhause ist
+#                                            (Knopf in der Sicherheitskarte)
+#   input_boolean.sicherheit_meldung_*       Schalter je Meldung (Karte
+#                                            "Meldungen" in sicherheit-view.yaml)
+#   automation "Sicherheit: Wachmodus nach Anwesenheit"
+#       an, sobald die letzte Person die Zone Zuhause verlaesst; nach 30 s
+#       (damit das automatische Abschliessen der Haustuer mitzaehlt) Meldung
+#       mit allem, was noch offen ist. Aus, sobald jemand heimkommt.
+#   automation "Sicherheit: Meldungen im Wachmodus"
+#       Tuer oder Fenster geoeffnet, Zugang am Door Hub (gewaehrt oder
+#       verweigert), Haustuer aufgeschlossen (nicht doppelt, wenn der Door Hub
+#       in der Minute davor einen Zugang gemeldet hat), Keypad gesperrt.
+#   automation "Sicherheit: Person an Aussenkamera"
+#       Personenerkennung an Haustuer, Hof, Garage und Pool mit Kamerabild,
+#       hoechstens eine Meldung je Minute. Die Kamera "Trampolin" fehlt, weil
+#       dort die Personenerkennung in Protect aus ist.
+#   Alle Meldungen gehen an notify.mobile_app_iphone, Gruppe "sicherheit",
+#   iOS "time-sensitive" (durchbricht Fokus, nicht aber "Nicht stoeren" ohne
+#   Freigabe); Tippen oeffnet /dashboard-home/sicherheit.
+#
+# Anpassen:
+#   - person.bewohner_1, person.bewohner_2: eigene Personen (Platzhalter)
+#   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter)
+#   - binary_sensor.hmip_wkp_seriennr_*: Keypad HmIP-WKP (Platzhalter);
+#     "Temporaer gesperrt" und "Permanent gesperrt" sind in der Integration
+#     standardmaessig deaktiviert und muessen aktiviert sein
+#   - Tuer- und Fensterkontakte, Kameras: Listen in den Triggern
+#
+# Einbinden als Paket in configuration.yaml:
+#   homeassistant:
+#     packages:
+#       wachmodus: !include wachmodus-konfig.yaml
+# Danach Eingabe-Booleans und Automationen neu laden (Werkzeuge -> YAML).
+# Gibt es Helfer oder Automationen mit denselben IDs schon aus der UI, diese
+# vorher loeschen, sonst kommt jede Meldung doppelt.
+#
+# Voraussetzung: Home Assistant 2026.7 oder neuer (Trigger zone.left,
+#                door.opened, window.opened, event.received), Companion App,
+#                Integrationen Homematic(IP) Local, UniFi Protect, UniFi
+#                Access.
+
+input_boolean:
+  wachmodus:
+    name: Wachmodus
+    icon: mdi:shield-home
+  sicherheit_meldung_wachmodus:
+    name: "Sicherheit: Meldung Wachmodus an/aus"
+    icon: mdi:shield-home-outline
+  sicherheit_meldung_oeffnung:
+    name: "Sicherheit: Meldung Türen und Fenster"
+    icon: mdi:window-open-variant
+  sicherheit_meldung_zugang:
+    name: "Sicherheit: Meldung Haustür-Zugang und Schloss"
+    icon: mdi:door-closed-lock
+  sicherheit_meldung_keypad:
+    name: "Sicherheit: Meldung Keypad gesperrt"
+    icon: mdi:dialpad
+  sicherheit_meldung_person:
+    name: "Sicherheit: Meldung Person an Außenkamera"
+    icon: mdi:cctv
+
+automation:
+  - id: sicherheit_wachmodus_nach_anwesenheit
+    alias: "Sicherheit: Wachmodus nach Anwesenheit"
+    description: >-
+      Sicherheits-View: schaltet input_boolean.wachmodus an, sobald niemand mehr
+      zuhause ist, und aus, sobald jemand heimkommt. Beim Einschalten nennt die
+      Meldung, was noch offen ist. Schalter der Meldung:
+      input_boolean.sicherheit_meldung_wachmodus.
+    mode: queued
+    max: 5
+    variables:
+      ziel: /dashboard-home/sicherheit
+      personen:
+        - person.bewohner_1
+        - person.bewohner_2
+      kontakte:
+        - binary_sensor.haustur
+        - binary_sensor.tur_windfang
+        - binary_sensor.tur_keller
+        - binary_sensor.balkontur
+        - binary_sensor.fenster_kuche
+        - binary_sensor.fenster_wohnzimmer_links
+        - binary_sensor.fenster_wohnzimmer_rechts
+        - binary_sensor.fenster_wohnzimmer_hof
+        - binary_sensor.fenster_buro
+        - binary_sensor.fenster_schlafzimmer_links
+        - binary_sensor.fenster_schlafzimmer_rechts
+        - binary_sensor.fenster_schlafzimmer_hof
+        - binary_sensor.fenster_kinderzimmer
+        - binary_sensor.fenster_bad_unten_links
+        - binary_sensor.fenster_bad_unten_rechts
+        - binary_sensor.fenster_windfang
+        - binary_sensor.fenster_garderobe
+    triggers:
+      - trigger: zone.left
+        target:
+          entity_id:
+            - person.bewohner_1
+            - person.bewohner_2
+        options:
+          zone: zone.home
+          behavior: all
+        id: weg
+      - trigger: zone.entered
+        target:
+          entity_id:
+            - person.bewohner_1
+            - person.bewohner_2
+        options:
+          zone: zone.home
+          behavior: first
+        id: da
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: weg
+              - condition: state
+                entity_id: input_boolean.wachmodus
+                state: "off"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.wachmodus
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_wachmodus
+                state: "on"
+              - delay: "00:00:30"
+              - variables:
+                  offen: "{{ kontakte | select('is_state', 'on') | map('state_attr', 'friendly_name') | list }}"
+                  schloss: "{{ states('lock.haustur_schloss') }}"
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Wachmodus an
+                  message: >-
+                    {% set t = [] %}{% if schloss != 'locked' %}{% set t = t + ['Haustür nicht verriegelt'] %}{% endif %}{% if offen | count > 0 %}{% set t = t + ['offen: ' ~ (offen | join(', '))] %}{% endif %}Niemand zuhause. {{ (t | join(' · ')) if t else 'Alles zu und verriegelt.' }}
+                  data:
+                    url: "{{ ziel }}"
+                    clickAction: "{{ ziel }}"
+                    group: sicherheit
+          - conditions:
+              - condition: trigger
+                id: da
+              - condition: state
+                entity_id: input_boolean.wachmodus
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.wachmodus
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_wachmodus
+                state: "on"
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Wachmodus aus
+                  message: "{{ personen | select('is_state', 'home') | map('state_attr', 'friendly_name') | join(' und ') or 'Jemand' }} ist zuhause."
+                  data:
+                    url: "{{ ziel }}"
+                    clickAction: "{{ ziel }}"
+                    group: sicherheit
+
+  - id: sicherheit_meldungen_im_wachmodus
+    alias: "Sicherheit: Meldungen im Wachmodus"
+    description: >-
+      Sicherheits-View: meldet bei aktivem Wachmodus geoeffnete Tueren und
+      Fenster, Zugaenge am Door Hub, das Aufschliessen der Haustuer und die
+      Sperre des Keypads. Jede Art hat einen eigenen Schalter
+      (input_boolean.sicherheit_meldung_oeffnung, _zugang, _keypad).
+    mode: queued
+    max: 20
+    variables:
+      ziel: /dashboard-home/sicherheit
+    triggers:
+      - trigger: door.opened
+        target:
+          entity_id:
+            - binary_sensor.haustur
+            - binary_sensor.tur_windfang
+            - binary_sensor.tur_keller
+            - binary_sensor.balkontur
+        options:
+          behavior: each
+        id: oeffnung
+      - trigger: window.opened
+        target:
+          entity_id:
+            - binary_sensor.fenster_kuche
+            - binary_sensor.fenster_wohnzimmer_links
+            - binary_sensor.fenster_wohnzimmer_rechts
+            - binary_sensor.fenster_wohnzimmer_hof
+            - binary_sensor.fenster_buro
+            - binary_sensor.fenster_schlafzimmer_links
+            - binary_sensor.fenster_schlafzimmer_rechts
+            - binary_sensor.fenster_schlafzimmer_hof
+            - binary_sensor.fenster_kinderzimmer
+            - binary_sensor.fenster_bad_unten_links
+            - binary_sensor.fenster_bad_unten_rechts
+            - binary_sensor.fenster_windfang
+            - binary_sensor.fenster_garderobe
+        options:
+          behavior: each
+        id: oeffnung
+      - trigger: event.received
+        target:
+          entity_id: event.haustur_door_hub_zugang
+        options:
+          event_type:
+            - access_granted
+            - access_denied
+        id: zugang
+      - trigger: state
+        entity_id: lock.haustur_schloss
+        from: locked
+        to:
+          - unlocked
+          - open
+          - opening
+        id: schloss
+      - trigger: state
+        entity_id:
+          - binary_sensor.hmip_wkp_seriennr_vorubergehend_gesperrt
+          - binary_sensor.hmip_wkp_seriennr_dauerhaft_gesperrt
+        from: "off"
+        to: "on"
+        id: keypad
+    conditions:
+      - condition: state
+        entity_id: input_boolean.wachmodus
+        state: "on"
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: oeffnung
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_oeffnung
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "{{ state_attr(trigger.entity_id, 'friendly_name') }} geöffnet"
+                  message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
+                  data: &push
+                    url: "{{ ziel }}"
+                    clickAction: "{{ ziel }}"
+                    group: sicherheit
+                    push:
+                      interruption-level: time-sensitive
+          - conditions:
+              - condition: trigger
+                id: zugang
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_zugang
+                state: "on"
+            sequence:
+              - variables:
+                  art: "{{ state_attr('event.haustur_door_hub_zugang', 'event_type') }}"
+                  wer: "{{ state_attr('event.haustur_door_hub_zugang', 'actor') or '' }}"
+                  wie: >-
+                    {% set a = state_attr('event.haustur_door_hub_zugang', 'authentication') or '' %}{{ {'FACE': 'Gesicht', 'NFC': 'Karte', 'PIN_CODE': 'PIN', 'MOBILE_TAP': 'App', 'MOBILE_BUTTON': 'App', 'QR_CODE': 'QR-Code', 'REMOTE_THROUGH_UAH': 'aus der Ferne'}.get(a, a) }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "{{ 'Zugang verweigert' if art == 'access_denied' else 'Zugang gewährt' }} · Haustür"
+                  message: "{{ ([wer, wie] | select | join(' · ')) or 'ohne Angabe' }} · {{ now().strftime('%H:%M') }} Uhr"
+                  data: *push
+          - conditions:
+              - condition: trigger
+                id: schloss
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_zugang
+                state: "on"
+              # Alter des letzten Door-Hub-Ereignisses (Zeitstempel als Zustand);
+              # dafuer gibt es keine native Bedingung
+              - condition: template
+                value_template: >-
+                  {% set z = states('event.haustur_door_hub_zugang') %}{{ z in ['unknown', 'unavailable'] or (now() - as_datetime(z)).total_seconds() > 60 }}
+            sequence:
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Haustür aufgeschlossen
+                  message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
+                  data: *push
+          - conditions:
+              - condition: trigger
+                id: keypad
+              - condition: state
+                entity_id: input_boolean.sicherheit_meldung_keypad
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Keypad gesperrt
+                  message: "{{ 'Dauerhaft' if 'dauerhaft' in trigger.entity_id else 'Vorübergehend' }} gesperrt nach falschen Codes · {{ now().strftime('%H:%M') }} Uhr"
+                  data: *push
+
+  - id: sicherheit_person_an_aussenkamera
+    alias: "Sicherheit: Person an Außenkamera"
+    description: >-
+      Sicherheits-View: meldet bei aktivem Wachmodus eine erkannte Person an
+      den Aussenkameras mit Kamerabild, hoechstens eine Meldung je Minute.
+      Schalter: input_boolean.sicherheit_meldung_person.
+    mode: single
+    max_exceeded: silent
+    variables:
+      ziel: /dashboard-home/sicherheit
+    # id = Kamera, deren Bild die Meldung zeigt
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.haustur_person_detected
+        from: "off"
+        to: "on"
+        id: camera.haustur_high_resolution_channel
+      - trigger: state
+        entity_id: binary_sensor.hof_person_detected
+        from: "off"
+        to: "on"
+        id: camera.hof_high_resolution_channel
+      - trigger: state
+        entity_id: binary_sensor.garage_person_detected
+        from: "off"
+        to: "on"
+        id: camera.garage_high_resolution_channel
+      - trigger: state
+        entity_id: binary_sensor.pool_person_erkannt
+        from: "off"
+        to: "on"
+        id: camera.g5_bullet_high_resolution_channel_2
+    conditions:
+      - condition: state
+        entity_id: input_boolean.wachmodus
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.sicherheit_meldung_person
+        state: "on"
+    actions:
+      - variables:
+          kamera: "{{ trigger.id }}"
+          ort: "{{ (state_attr(trigger.id, 'friendly_name') or 'Kamera') | replace(' High resolution channel', '') }}"
+      - action: notify.mobile_app_iphone
+        data:
+          title: "Person erkannt · {{ ort }}"
+          message: "Wachmodus aktiv · {{ now().strftime('%H:%M') }} Uhr"
+          data:
+            image: "/api/camera_proxy/{{ kamera }}"
+            entity_id: "{{ kamera }}"
+            url: "{{ ziel }}"
+            clickAction: "{{ ziel }}"
+            group: sicherheit
+            push:
+              interruption-level: time-sensitive
+      - delay: "00:01:00"
