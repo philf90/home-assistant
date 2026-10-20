@@ -150,7 +150,6 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`sicherheit-karte.yaml`](sicherheit/sicherheit-karte.yaml) | karte | Sicherheit – Karte fuer die Home-View | button-card | – | aktiv |
 | [`sicherheit-templates.yaml`](sicherheit/sicherheit-templates.yaml) | templates | Sicherheit – button-card-Templates | – | `person.bewohner`, `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`sicherheit-view.yaml`](sicherheit/sicherheit-view.yaml) | view | Sicherheit – komplette Ansicht | button-card, card-mod, decluttering-card | – | aktiv |
 | [`wachmodus-konfig.yaml`](sicherheit/wachmodus-konfig.yaml) | konfig | Sicherheit – Wachmodus und Meldungen (Helfer, Automationen) | – | `person.bewohner`, `notify.mobile_app_iphone`, `*_seriennr` | aktiv |
