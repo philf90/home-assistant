@@ -29,7 +29,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `warnlage-templates.yaml`, `wetter-karte-v2.yaml`, `wetter-templates.yaml`, `wetter-view.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml`, `wetter-karte.yaml` | `wetter-animiert.html` |
 | [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | `fenster-lichter-uebersicht-karte.yaml` | – |
 | [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | `staubsauger-karte.yaml` | `hausgeraete.html` |
-| [`netzwerk/`](dashboard/netzwerk/) | `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml` | – |
+| [`netzwerk/`](dashboard/netzwerk/) | `docker-karte.yaml`, `docker-templates.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml` | – |
 | [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml`, `tanken-karte.yaml`, `tanken-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
 | [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
 | [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
@@ -116,6 +116,25 @@ Datei erklärt den Unterschied.
   voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
   von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
   anzeigen.
+- für die Docker-Karte (`docker-karte.yaml`): die Integration
+  [Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
+  (HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
+  [Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
+  Docker-Host. Home Assistant spricht nur mit der Arcane-API; der
+  Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
+  1. In Arcane unter *Settings → API keys* einen Schlüssel anlegen und der
+     Rolle dahinter (*Settings → Roles*) die Rechte geben. Anzeigen:
+     `environments:list`, `containers:list`, `projects:list`,
+     `images:list`, `volumes:list`, `networks:list`, `system:read`;
+     Steuern zusätzlich `containers:start`, `containers:stop`,
+     `containers:restart`, `projects:deploy`, `projects:down`,
+     `projects:restart`.
+  2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
+  3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
+     die Adresse, unter der Arcane direkt erreichbar ist (die Integration
+     folgt keinen Weiterleitungen), und den Schlüssel.
+
+  CPU und Arbeitsspeicher je Container liefert die Integration nicht.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
@@ -150,7 +169,7 @@ der View selbst zeigen auf Dateien im selben Ordner.
 oberster Ebene (neben `views:`) einfügen – `decluttering_templates:` aus
 `navigation-templates.yaml` und `pflanzen-templates.yaml`,
 `button_card_templates:` aus den
-Flugradar-, Fußball-, Wetter-, Hausgeräte- und Heizungs-Templates. Existiert der Block schon, nur die Einträge
+Flugradar-, Fußball-, Wetter-, Hausgeräte-, Heizungs- und Docker-Templates. Existiert der Block schon, nur die Einträge
 darunter ergänzen.
 
 **Template-Sensoren:** `autos-passat-konfig.yaml` gehört in die
