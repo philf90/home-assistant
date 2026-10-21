@@ -34,7 +34,13 @@
 #
 # Zeile:
 #   - Icon-Kachel nach Zustand: laeuft Gruen, ungesund und dead Rot,
-#     Neustart/Pause Amber, gestoppt neutral (gestoppt kann Absicht sein).
+#     Neustart/Pause und Healthcheck-Start Amber, gestoppt neutral
+#     (gestoppt kann Absicht sein).
+#   - Healthcheck-Start: Nach jedem Start, Neustart oder Update meldet Docker
+#     "(health: starting)", bis der erste Healthcheck durch ist (beobachtet
+#     am 21.10.2026: 29 s). Arcane setzt _healthy in dieser Zeit auf off. Die
+#     Zeile wertet das nicht als "ungesund", sondern zeigt Amber und
+#     "... · startet". Ungesund heisst: laeuft, _healthy off, kein Start.
 #   - Name ohne "Container "-Vorsatz und ohne Compose-Anhaengsel:
 #     "sonarr-sonarr-1" -> "sonarr", "docmost-db-1" -> "docmost-db".
 #   - Docker-Status auf Deutsch ("Up 2 weeks (healthy)" -> "laeuft seit
@@ -108,10 +114,12 @@ button_card_templates:
           const s = states['sensor.' + variables.basis + '_status'];
           return s ? s.state : '';
         ]]]
+      startet: |
+        [[[ return variables.zustand === 'running' && /\(health: starting\)/.test(variables.status); ]]]
       ungesund: |
         [[[
           const h = states['binary_sensor.' + variables.basis + '_healthy'];
-          return !!h && h.state === 'off';
+          return !!h && h.state === 'off' && variables.zustand === 'running' && !variables.startet;
         ]]]
       update: |
         [[[
@@ -121,7 +129,9 @@ button_card_templates:
       akzent: |
         [[[
           const z = variables.zustand;
-          if (z === 'running') return variables.ungesund ? 'var(--owlet-rot, #f0736a)' : 'var(--owlet-gruen, #a6d49e)';
+          if (z === 'running' && variables.ungesund) return 'var(--owlet-rot, #f0736a)';
+          if (z === 'running' && variables.startet) return 'var(--owlet-amber, #e6b566)';
+          if (z === 'running') return 'var(--owlet-gruen, #a6d49e)';
           if (z === 'restarting' || z === 'paused' || z === 'removing') return 'var(--owlet-amber, #e6b566)';
           if (z === 'dead') return 'var(--owlet-rot, #f0736a)';
           return '';
@@ -150,7 +160,8 @@ button_card_templates:
           let m = /^Up (.+?)(?: \((?:healthy|unhealthy|health: starting|Paused)\))?$/.exec(s);
           if (m) {
             if (z === 'paused') return 'pausiert';
-            return 'läuft seit ' + dauer(m[1]) + (/\(healthy\)/.test(s) ? ' · gesund' : '');
+            const zusatz = /\(healthy\)/.test(s) ? ' · gesund' : /\(health: starting\)/.test(s) ? ' · startet' : '';
+            return 'läuft seit ' + dauer(m[1]) + zusatz;
           }
           m = /^Exited \((\d+)\) (.+) ago$/.exec(s);
           if (m) return 'gestoppt vor ' + dauer(m[2]) + ' · Code ' + m[1];
@@ -162,7 +173,9 @@ button_card_templates:
     icon: |
       [[[
         const z = variables.zustand;
-        if (z === 'running') return variables.ungesund ? 'mdi:alert-circle-outline' : 'mdi:play-circle-outline';
+        if (z === 'running' && variables.ungesund) return 'mdi:alert-circle-outline';
+        if (z === 'running' && variables.startet) return 'mdi:progress-clock';
+        if (z === 'running') return 'mdi:play-circle-outline';
         if (z === 'paused') return 'mdi:pause-circle-outline';
         if (z === 'restarting' || z === 'removing') return 'mdi:restart';
         if (z === 'dead') return 'mdi:alert-circle-outline';
@@ -212,7 +225,7 @@ button_card_templates:
               - color: 'var(--owlet-amber, #e6b566)'
       info: |
         [[[
-          const farbe = variables.zustand === 'restarting' ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-text-sekundaer, #8794a5)';
+          const farbe = variables.zustand === 'restarting' || variables.startet ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-text-sekundaer, #8794a5)';
           return `<span style="font-size:12px;color:${farbe};">${variables.text}</span>`;
         ]]]
       neustart:

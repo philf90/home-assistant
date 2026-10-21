@@ -16,7 +16,8 @@
 #   Kopf       Docker · Umgebung · online/offline (binary_sensor ..._online)
 #   Kennzahlen Laufend x/y, Gestoppt, Updates, Ungesund. Getoent wird eine
 #              Kachel nur, wenn es etwas zu melden gibt: alle laufen Gruen,
-#              sonst Amber; Gestoppt und Updates ab 1 Amber, Ungesund ab 1
+#              sonst Amber; Gestoppt und Updates ab 1 Amber, Ungesund (ohne
+#              Healthcheck-Start, selbst gezaehlt) ab 1
 #              Rot. Antippen oeffnet den Sensor.
 #   Zeile      Projekte, Images (davon ungenutzt), Image-Speicher
 #   Braucht Aufmerksamkeit
@@ -217,7 +218,25 @@ cards:
         entity: sensor.local_docker_ungesunde_container
         name: Ungesund
         variables:
-          wert: *kpi_wert
+          # Selbst gezaehlt statt sensor.local_docker_ungesunde_container:
+          # Arcane zaehlt Container im Healthcheck-Start ("(health:
+          # starting)") als ungesund, z. B. 29 s nach jedem Update. Gezaehlt
+          # wird wie in der Zeile (docker-templates.yaml): laeuft, _healthy
+          # off, kein Start. Die Entity bleibt fuer Antippen und Neuzeichnen.
+          wert: |
+            [[[
+              let n = 0;
+              for (const id of Object.keys(states)) {
+                if (!/^binary_sensor\.container_.+_healthy$/.test(id) || states[id].state !== 'off') continue;
+                const b = id.slice('binary_sensor.'.length, -'_healthy'.length);
+                const z = states['sensor.' + b + '_zustand'];
+                const s = states['sensor.' + b + '_status'];
+                if (!z || z.state !== 'running') continue;
+                if (s && /\(health: starting\)/.test(s.state)) continue;
+                n++;
+              }
+              return String(n);
+            ]]]
           akzent: '[[[ return parseInt(variables.wert, 10) > 0 ? "var(--owlet-rot, #f0736a)" : ""; ]]]'
         label: *kpi_label
         show_icon: false
