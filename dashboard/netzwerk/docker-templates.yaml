@@ -39,7 +39,13 @@
 #     "sonarr-sonarr-1" -> "sonarr", "docmost-db-1" -> "docmost-db".
 #   - Docker-Status auf Deutsch ("Up 2 weeks (healthy)" -> "laeuft seit
 #     2 Wochen · gesund"); unbekannte Formen erscheinen unveraendert.
-#   - Pillen "Update" (Amber) und "ungesund" (Rot), Tönung 0,12 / Rand 0,24.
+#   - Pillen "ungesund" (Rot) und "Update" (Amber), Tönung 0,12 / Rand 0,24.
+#     "Update" ist eine eigene eingebettete button-card: Antippen oeffnet den
+#     Update-Dialog von HA (installierte und neue Version, "Installieren",
+#     Fortschritt). Installiert wird per Arcane-Redeploy; der API-Key
+#     braucht dafuer containers:redeploy. Waehrend der Installation steht
+#     "Update laeuft" in der Pille. Innenabstand 4 px / 9 px, damit die
+#     Pille als Tippziel mindestens 24 px hoch ist (WCAG 2.5.8).
 #   - Antippen oeffnet die Detailansicht des Zustand-Sensors (von dort ist
 #     das Geraet mit allen Entitaeten erreichbar). Bewusst nicht die des
 #     Schalters: deren Umschalter stoppt ohne Rueckfrage.
@@ -172,10 +178,38 @@ button_card_templates:
         [[[
           const pille = (txt, farbe) => `<span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:2px 7px;border-radius:8px;">${txt}</span>`;
           let h = `<span style="min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${variables.anzeige}</span>`;
-          if (variables.update) h += pille('Update', 'var(--owlet-amber, #e6b566)');
           if (variables.ungesund) h += pille('ungesund', 'var(--owlet-rot, #f0736a)');
           return `<div style="display:flex;align-items:center;gap:6px;min-width:0;">${h}</div>`;
         ]]]
+      upd:
+        card:
+          type: custom:button-card
+          entity: '[[[ return "update." + variables.basis + "_image_update"; ]]]'
+          name: |
+            [[[
+              const u = states['update.' + variables.basis + '_image_update'];
+              return u && u.attributes.in_progress ? 'Update läuft' : 'Update';
+            ]]]
+          show_icon: false
+          show_name: true
+          show_state: false
+          tap_action:
+            action: more-info
+          hold_action:
+            action: none
+          styles:
+            card:
+              - padding: 4px 9px
+              - border-radius: 8px
+              - box-shadow: none
+              - background: 'color-mix(in srgb, var(--owlet-amber, #e6b566) 12%, transparent)'
+              - border: '1px solid color-mix(in srgb, var(--owlet-amber, #e6b566) 24%, transparent)'
+            name:
+              - font-size: 11px
+              - font-weight: 700
+              - line-height: 1.4
+              - white-space: nowrap
+              - color: 'var(--owlet-amber, #e6b566)'
       info: |
         [[[
           const farbe = variables.zustand === 'restarting' ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-text-sekundaer, #8794a5)';
@@ -267,8 +301,11 @@ button_card_templates:
         - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
         - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
-        - grid-template-areas: '"i titel neustart schalter" "i info neustart schalter"'
-        - grid-template-columns: 36px minmax(0, 1fr) 40px 52px
+        # titel waechst bis zur Breite des Namens, upd (auto) bekommt zuerst
+        # die Breite der Pille und den Rest der Zeile; ohne Update ist upd
+        # ausgeblendet und 0 px breit. Lange Namen kuerzt titel mit "…".
+        - grid-template-areas: '"i titel upd neustart schalter" "i info info neustart schalter"'
+        - grid-template-columns: 36px minmax(0, max-content) auto 40px 52px
         - grid-template-rows: min-content min-content
         - column-gap: 12px
         - row-gap: 3px
@@ -305,6 +342,11 @@ button_card_templates:
           - white-space: nowrap
           - text-overflow: ellipsis
           - text-align: left
+        upd:
+          - display: '[[[ return variables.update ? "block" : "none"; ]]]'
+          - justify-self: start
+          - align-self: end
+          - margin-left: -6px
         neustart:
           - align-self: center
         schalter:
