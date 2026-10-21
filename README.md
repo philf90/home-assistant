@@ -99,6 +99,23 @@ Datei erklärt den Unterschied.
   lesend. Freigaben, Firmware-Updates, Speicherdurchsatz und Steuerung
   (Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
   Passwort); die Karte braucht davon nichts.
+- für die Claude-Nutzungskarte (`claude-nutzung-karte.yaml`): die Integration
+  [Claude Usage](https://github.com/trickv/hass-claude-usage)
+  (HACS-Standardkatalog). Sie liest die Limits eines Claude-Abos (Pro/Max):
+  Session (5 h), Woche über alle Modelle, Wochenlimits je Modell und
+  Extra-Nutzung, jeweils mit Auslastung in Prozent und Reset-Zeitpunkt.
+  Einrichtung: in HACS *Claude Usage* herunterladen, Home Assistant neu
+  starten, Einstellungen → Geräte & Dienste → Integration hinzufügen →
+  *Claude Usage*; der angezeigte Link öffnet die Anmeldung bei Anthropic,
+  danach den Code (Form `xxxx#yyyy`) in den Dialog einfügen. Der
+  Gerätename trägt Kontoname und Plan, deshalb stehen die Entity-IDs im
+  Repo als Platzhalter `sensor.claude_usage_konto_*`.
+  Die Integration fragt den inoffiziellen Endpunkt ab, den auch Claude Code
+  für `/usage` nutzt; Anthropic dokumentiert ihn nicht, eine offizielle
+  Schnittstelle für Abo-Limits gibt es nicht. Das Abfrageintervall bei den
+  voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
+  von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
+  anzeigen.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
