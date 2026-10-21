@@ -97,10 +97,12 @@ variables:
         const v = parseFloat(e.state);
         return isNaN(v) ? null : v;
       };
+      // resets_at kommt sekundengenau (z. B. 11:19:59.98); auf die volle
+      // Minute runden, sonst steht 13:19 statt 13:20 in der Karte
       const datum = (iso) => {
         if (!iso) return null;
         const d = new Date(iso);
-        return isNaN(d.getTime()) ? null : d;
+        return isNaN(d.getTime()) ? null : new Date(Math.round(d.getTime() / 60000) * 60000);
       };
       // Stufe nach Auslastung: Farbe, Stufenwort, Pille gefuellt?
       const stufe = (p) => {
@@ -223,13 +225,15 @@ custom_fields:
       // Fusszeile: Stand der letzten Aktualisierung
       const stand = session.last_updated ? new Date(session.last_updated) : null;
       const fuss = stand && !isNaN(stand.getTime())
-        ? `<div style="font-size:11.5px;color:${f.sek};text-align:right;padding:2px 2px 0;">Stand ${h.uhr(stand)} · Abfrage alle 5 min</div>`
+        ? `<div style="font-size:11.5px;line-height:1.25;color:${f.sek};text-align:right;padding:0 2px;">Stand ${h.uhr(stand)} · Abfrage alle 5 min</div>`
         : '';
-      return `<div style="display:grid;gap:8px;">${zeilen.join('')}</div>${fuss}`;
+      // Fusszeile im selben Raster wie die Zeilen: 8 px Abstand nach oben,
+      // unten schliesst der Innenabstand der Karte (10 px) an
+      return `<div style="display:grid;gap:8px;">${zeilen.join('')}${fuss}</div>`;
     ]]]
 styles:
   card:
-    - padding: 14px 16px 12px
+    - padding: 14px 16px 10px
     - border-radius: 22px
     - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
     - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
@@ -274,3 +278,5 @@ styles:
       - padding-top: 12px
       - justify-self: stretch
       - min-width: 0
+      # button-card zentriert custom_fields; Zeilentitel sollen links stehen
+      - text-align: left
