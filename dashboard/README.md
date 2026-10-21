@@ -82,6 +82,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`docker-karte.yaml`](netzwerk/docker-karte.yaml) | karte | Docker – Container eines Docker-Hosts ueber Arcane | auto-entities, button-card, card-mod, expander-card | – | aktiv |
+| [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Template owlet_docker_zeile | button-card | – | aktiv |
 | [`homematic-view.yaml`](netzwerk/homematic-view.yaml) | view | Homematic IP – komplette Ansicht | button-card, card-mod, decluttering-card | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`netzwerk-view.yaml`](netzwerk/netzwerk-view.yaml) | view | Netzwerk – komplette Ansicht | decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`system-karte.yaml`](netzwerk/system-karte.yaml) | karte | System – Home Assistant und Proxmox-VM | button-card, card-mod, uptime-card | – | aktiv |

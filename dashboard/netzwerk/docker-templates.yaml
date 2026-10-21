@@ -1,0 +1,366 @@
+# ============================================================================
+# Docker – button-card-Template owlet_docker_zeile
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Genutzt von docker-karte.yaml. Entwurf: Vorschau-Artefakt "Docker-Karte
+# Vorschau" (Oktober 2026).
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> den Eintrag unter
+#   "button_card_templates:" auf oberster Ebene ergaenzen (neben "views:";
+#   den Block gibt es schon, wenn andere Owlet-Templates drin sind).
+#
+# owlet_docker_zeile  Eine Zeile je Container. Entity ist der Start/Stop-
+#                     Schalter der Arcane-Integration (switch.container_<x>).
+#                     Daraus bildet das Template die Geschwister-Entitaeten:
+#                       sensor.container_<x>_zustand       Zustand (enum)
+#                       sensor.container_<x>_status        Docker-Status
+#                       binary_sensor.container_<x>_healthy  nur mit Healthcheck
+#                       update.container_<x>_image_update  Image-Update
+#                       button.container_<x>_neustarten     Neustart
+#                     Die Endungen _zustand und _neustarten stammen aus der
+#                     deutschen Uebersetzung der Integration (HA bildet die
+#                     Entity-ID aus dem Namen in der Sprache der Instanz). Auf
+#                     einer englischen Instanz heissen sie anders; dann die
+#                     Endungen unten anpassen.
+#
+# Zeile:
+#   - Icon-Kachel nach Zustand: laeuft Gruen, ungesund und dead Rot,
+#     Neustart/Pause und Healthcheck-Start Amber, gestoppt neutral
+#     (gestoppt kann Absicht sein).
+#   - Healthcheck-Start: Nach jedem Start, Neustart oder Update meldet Docker
+#     "(health: starting)", bis der erste Healthcheck durch ist (beobachtet
+#     am 21.10.2026: 29 s). Arcane setzt _healthy in dieser Zeit auf off. Die
+#     Zeile wertet das nicht als "ungesund", sondern zeigt Amber und
+#     "... · startet". Ungesund heisst: laeuft, _healthy off, kein Start.
+#   - Name ohne "Container "-Vorsatz und ohne Compose-Anhaengsel:
+#     "sonarr-sonarr-1" -> "sonarr", "docmost-db-1" -> "docmost-db".
+#   - Docker-Status auf Deutsch ("Up 2 weeks (healthy)" -> "laeuft seit
+#     2 Wochen · gesund"); unbekannte Formen erscheinen unveraendert.
+#   - Pillen "ungesund" (Rot) und "Update" (Amber), Tönung 0,12 / Rand 0,24.
+#     "Update" ist eine eigene eingebettete button-card: Antippen oeffnet den
+#     Update-Dialog von HA (installierte und neue Version, "Installieren",
+#     Fortschritt). Installiert wird per Arcane-Redeploy; der API-Key
+#     braucht dafuer containers:redeploy. Waehrend der Installation steht
+#     "Update laeuft" in der Pille. Innenabstand 4 px / 9 px, damit die
+#     Pille als Tippziel mindestens 24 px hoch ist (WCAG 2.5.8).
+#   - Antippen oeffnet die Detailansicht des Zustand-Sensors (von dort ist
+#     das Geraet mit allen Entitaeten erreichbar). Bewusst nicht die des
+#     Schalters: deren Umschalter stoppt ohne Rueckfrage.
+#   - Rechts Neustart und Start/Stop als eingebettete button-cards. Neustart
+#     und Stoppen fragen nach, Starten nicht. Ist die Steuerung in der
+#     Integration aus, sind Schalter und Button nicht verfuegbar und
+#     ausgegraut.
+#
+# Hinweise zu den Karten:
+#   - button-card wertet JS-Templates in eingebetteten Karten (custom_fields
+#     mit card:) im Kontext der aeusseren Karte aus (button-card docs,
+#     "Nested cards with JS templates"). Neustart und Schalter lesen ihren
+#     Zustand deshalb ueber die aeussere Karte: deren Entity ist der
+#     Schalter, den Neustart-Button liest sie ueber states[...]. Aendert sich
+#     die ausgewertete Konfiguration, gibt button-card sie per setConfig an
+#     die eingebettete Karte weiter (src/button-card.ts, _cardsConfig).
+#     Die Schreibweise mit vier Klammern (Auswertung in der eingebetteten
+#     Karte) kennt ci/check-js-templates.js nicht; sie wird nicht gebraucht.
+#   - button-card v7 erkennt die Entitaeten, die ein Template liest, selbst
+#     und zeichnet bei deren Aenderung neu; triggers_update ist dort ohne
+#     Wirkung.
+#   - button-card setzt bei ha-icon margin:auto und zentriert custom_fields;
+#     daher margin:0 und text-align:left.
+#
+# Kleine Schrift: Status und Titel in owlet-text-sekundaer (5,2:1), auf den
+# getoenten Pillen steht die Schrift in der Pillenfarbe (DESIGN.md, Tabelle
+# "Status und Akzente": hell mindestens 4,62:1 auf Toenung 0,12).
+#
+# Voraussetzung: custom:button-card (HACS, getestet wird mit v7.0.1),
+#                Integration Arcane (HACS, ProfessorQuantumUniverse/Arcane-HA,
+#                v0.5.2) mit Praefix im Geraetenamen (Optionen -> Entities,
+#                Standard), sodass die Entity-IDs mit container_ beginnen.
+# ============================================================================
+button_card_templates:
+  owlet_docker_zeile:
+    show_icon: true
+    show_name: false
+    show_state: false
+    show_label: false
+    variables:
+      basis: '[[[ return entity ? entity.entity_id.split(".")[1] : ""; ]]]'
+      anzeige: |
+        [[[
+          let n = String((entity && entity.attributes.friendly_name) || variables.basis)
+            .replace(/^Container /, '').replace(/-\d+$/, '');
+          const t = n.split('-');
+          if (t.length % 2 === 0) {
+            const h = t.length / 2;
+            if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+          }
+          return n;
+        ]]]
+      zustand: |
+        [[[
+          const z = states['sensor.' + variables.basis + '_zustand'];
+          return z ? z.state : 'unknown';
+        ]]]
+      status: |
+        [[[
+          const s = states['sensor.' + variables.basis + '_status'];
+          return s ? s.state : '';
+        ]]]
+      startet: |
+        [[[ return variables.zustand === 'running' && /\(health: starting\)/.test(variables.status); ]]]
+      ungesund: |
+        [[[
+          const h = states['binary_sensor.' + variables.basis + '_healthy'];
+          return !!h && h.state === 'off' && variables.zustand === 'running' && !variables.startet;
+        ]]]
+      update: |
+        [[[
+          const u = states['update.' + variables.basis + '_image_update'];
+          return !!u && u.state === 'on';
+        ]]]
+      akzent: |
+        [[[
+          const z = variables.zustand;
+          if (z === 'running' && variables.ungesund) return 'var(--owlet-rot, #f0736a)';
+          if (z === 'running' && variables.startet) return 'var(--owlet-amber, #e6b566)';
+          if (z === 'running') return 'var(--owlet-gruen, #a6d49e)';
+          if (z === 'restarting' || z === 'paused' || z === 'removing') return 'var(--owlet-amber, #e6b566)';
+          if (z === 'dead') return 'var(--owlet-rot, #f0736a)';
+          return '';
+        ]]]
+      text: |
+        [[[
+          const EINHEIT = {
+            second: ['Sekunde', 'Sekunden'], minute: ['Minute', 'Minuten'], hour: ['Stunde', 'Stunden'],
+            day: ['Tag', 'Tagen'], week: ['Woche', 'Wochen'], month: ['Monat', 'Monaten'], year: ['Jahr', 'Jahren']
+          };
+          const FEST = {
+            'Less than a second': 'weniger als einer Sekunde',
+            'About a minute': 'etwa einer Minute',
+            'About an hour': 'etwa einer Stunde'
+          };
+          const dauer = (d) => {
+            if (FEST[d]) return FEST[d];
+            const m = /^(\d+) (second|minute|hour|day|week|month|year)s?$/.exec(d);
+            if (!m) return d;
+            const n = parseInt(m[1], 10);
+            return n + ' ' + EINHEIT[m[2]][n === 1 ? 0 : 1];
+          };
+          const s = variables.status;
+          const z = variables.zustand;
+          if (z === 'unavailable' || z === 'unknown') return 'keine Daten';
+          let m = /^Up (.+?)(?: \((?:healthy|unhealthy|health: starting|Paused)\))?$/.exec(s);
+          if (m) {
+            if (z === 'paused') return 'pausiert';
+            const zusatz = /\(healthy\)/.test(s) ? ' · gesund' : /\(health: starting\)/.test(s) ? ' · startet' : '';
+            return 'läuft seit ' + dauer(m[1]) + zusatz;
+          }
+          m = /^Exited \((\d+)\) (.+) ago$/.exec(s);
+          if (m) return 'gestoppt vor ' + dauer(m[2]) + ' · Code ' + m[1];
+          if (z === 'restarting') return 'startet neu …';
+          if (z === 'created') return 'erstellt, nicht gestartet';
+          if (z === 'removing') return 'wird entfernt …';
+          return s;
+        ]]]
+    icon: |
+      [[[
+        const z = variables.zustand;
+        if (z === 'running' && variables.ungesund) return 'mdi:alert-circle-outline';
+        if (z === 'running' && variables.startet) return 'mdi:progress-clock';
+        if (z === 'running') return 'mdi:play-circle-outline';
+        if (z === 'paused') return 'mdi:pause-circle-outline';
+        if (z === 'restarting' || z === 'removing') return 'mdi:restart';
+        if (z === 'dead') return 'mdi:alert-circle-outline';
+        return 'mdi:stop-circle-outline';
+      ]]]
+    tap_action:
+      action: more-info
+      entity: '[[[ return "sensor." + variables.basis + "_zustand"; ]]]'
+    hold_action:
+      action: none
+    custom_fields:
+      titel: |
+        [[[
+          const pille = (txt, farbe) => `<span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:2px 7px;border-radius:8px;">${txt}</span>`;
+          let h = `<span style="min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${variables.anzeige}</span>`;
+          if (variables.ungesund) h += pille('ungesund', 'var(--owlet-rot, #f0736a)');
+          return `<div style="display:flex;align-items:center;gap:6px;min-width:0;">${h}</div>`;
+        ]]]
+      upd:
+        card:
+          type: custom:button-card
+          entity: '[[[ return "update." + variables.basis + "_image_update"; ]]]'
+          name: |
+            [[[
+              const u = states['update.' + variables.basis + '_image_update'];
+              return u && u.attributes.in_progress ? 'Update läuft' : 'Update';
+            ]]]
+          show_icon: false
+          show_name: true
+          show_state: false
+          tap_action:
+            action: more-info
+          hold_action:
+            action: none
+          styles:
+            card:
+              - padding: 4px 9px
+              - border-radius: 8px
+              - box-shadow: none
+              - background: 'color-mix(in srgb, var(--owlet-amber, #e6b566) 12%, transparent)'
+              - border: '1px solid color-mix(in srgb, var(--owlet-amber, #e6b566) 24%, transparent)'
+            name:
+              - font-size: 11px
+              - font-weight: 700
+              - line-height: 1.4
+              - white-space: nowrap
+              - color: 'var(--owlet-amber, #e6b566)'
+      info: |
+        [[[
+          const farbe = variables.zustand === 'restarting' || variables.startet ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-text-sekundaer, #8794a5)';
+          return `<span style="font-size:12px;color:${farbe};">${variables.text}</span>`;
+        ]]]
+      neustart:
+        card:
+          type: custom:button-card
+          entity: '[[[ return "button." + variables.basis + "_neustarten"; ]]]'
+          icon: mdi:restart
+          show_icon: true
+          show_name: false
+          show_state: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: '[[[ return "button." + variables.basis + "_neustarten"; ]]]'
+            confirmation:
+              text: '[[[ return variables.anzeige + " neu starten? Der Container ist dabei für einige Sekunden nicht erreichbar."; ]]]'
+          hold_action:
+            action: none
+          styles:
+            card:
+              - width: 40px
+              - height: 40px
+              - padding: 0
+              - border-radius: 12px
+              - box-shadow: none
+              - background: 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'
+              - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+              - opacity: |
+                  [[[
+                    const b = states['button.' + variables.basis + '_neustarten'];
+                    return b && b.state !== 'unavailable' ? 1 : 0.4;
+                  ]]]
+            icon:
+              - width: 18px
+              - height: 18px
+              - color: 'var(--owlet-label, #b4c0cf)'
+      schalter:
+        card:
+          type: custom:button-card
+          entity: '[[[ return entity.entity_id; ]]]'
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action: |
+            [[[
+              if (!entity || entity.state === 'unavailable') return { action: 'none' };
+              if (entity.state !== 'on') return { action: 'toggle' };
+              return {
+                action: 'toggle',
+                confirmation: { text: variables.anzeige + ' stoppen? Was darin läuft, ist danach nicht mehr erreichbar, bis du ihn wieder startest.' }
+              };
+            ]]]
+          hold_action:
+            action: none
+          custom_fields:
+            knopf: |
+              [[[
+                const an = entity && entity.state === 'on';
+                const weg = !entity || entity.state === 'unavailable';
+                const gruen = 'var(--owlet-gruen, #a6d49e)';
+                const spur = an
+                  ? `background:color-mix(in srgb, ${gruen} 24%, transparent);border:1px solid color-mix(in srgb, ${gruen} 50%, transparent);`
+                  : 'background:var(--owlet-aus, #3a4453);border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+                const punkt = an ? `left:18px;background:${gruen};` : 'left:2px;background:var(--owlet-muted, #6e7988);';
+                return `<span style="position:relative;display:block;width:40px;height:24px;box-sizing:border-box;border-radius:12px;opacity:${weg ? 0.4 : 1};transition:background .2s;${spur}"><span style="position:absolute;top:2px;width:18px;height:18px;border-radius:50%;transition:left .2s;${punkt}"></span></span>`;
+              ]]]
+          styles:
+            card:
+              - width: 52px
+              - height: 40px
+              - padding: 0
+              - background: none
+              - border: none
+              - box-shadow: none
+            grid:
+              - grid-template-areas: '"knopf"'
+              - grid-template-columns: 1fr
+              - justify-items: center
+              - align-items: center
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        # titel waechst bis zur Breite des Namens, upd (auto) bekommt zuerst
+        # die Breite der Pille und den Rest der Zeile; ohne Update ist upd
+        # ausgeblendet und 0 px breit. Lange Namen kuerzt titel mit "…".
+        - grid-template-areas: '"i titel upd neustart schalter" "i info info neustart schalter"'
+        - grid-template-columns: 36px minmax(0, max-content) auto 40px 52px
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: |
+            [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: '[[[ return variables.akzent || "var(--owlet-muted, #6e7988)"; ]]]'
+      custom_fields:
+        titel:
+          - justify-self: stretch
+          - align-self: end
+          - min-width: 0
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
+          - text-align: left
+        upd:
+          - display: '[[[ return variables.update ? "block" : "none"; ]]]'
+          - justify-self: start
+          - align-self: end
+          - margin-left: -6px
+        neustart:
+          - align-self: center
+        schalter:
+          - align-self: center
