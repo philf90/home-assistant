@@ -1,0 +1,134 @@
+# ============================================================================
+# Docker-Projekte – Compose-Projekte mit Start/Stop und Neustart
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        auto-entities, button-card, card-mod, expander-card
+# Templates:     owlet_docker_aufklapper (docker-templates.yaml),
+#                owlet_docker_kopf (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Kopf       Anzahl der Projekte, wie viele davon laufen
+#   Liste      die ersten acht Projekte, darunter zugeklappt der Rest. Jede
+#              Zeile ist owlet_docker_projekt (in der Jinja-Vorlage gesetzt):
+#              Zustand, laufende/alle Services, Neustart und Schalter
+#              (an = compose up, aus = compose down, beides mit Rueckfrage
+#              ausser Starten).
+#
+# Reihenfolge (Jinja-Vorlage): zuerst Projekte, die nicht laufen oder nur
+# teilweise, dann solche mit Image-Update, dann nach Zahl der Services
+# (mehr zuerst), darin alphabetisch. So steht ein Problem immer oben und
+# nie im zugeklappten Teil. Beide Listen nutzen dieselbe Vorlage (YAML-Anker
+# &projekte); auto-entities schneidet mit sort.count und sort.first.
+# Ausgabe als Python-Literal ({{ ... | list }}), nicht mit tojson
+# (Begruendung in docker-karte.yaml).
+#
+# Arcane-HA legt fuer Container ohne Compose-Projekt (hier dockge) kein
+# Projekt an; sie stehen nur in der Karte "Container nach Projekt".
+#
+# Voraussetzung: custom:button-card + custom:auto-entities
+#                + custom:expander-card + card-mod (HACS), Integration Arcane
+#                (HACS) mit Option Projekte und den Rechten projects:deploy,
+#                projects:down und projects:restart; Templates aus
+#                docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    entity: sensor.local_docker_projekte
+    icon: mdi:layers-triple-outline
+    name: Compose-Projekte
+    label: |
+      [[[
+        const g = entity ? parseInt(entity.state, 10) : NaN;
+        const l = states['sensor.local_docker_laufende_projekte'];
+        const n = l ? parseInt(l.state, 10) : NaN;
+        if (isNaN(g)) return 'keine Daten';
+        if (isNaN(n)) return g + ' Projekte';
+        return g + ' Projekte · ' + (n === g ? 'alle laufen' : n + ' von ' + g + ' laufen');
+      ]]]
+    tap_action:
+      action: more-info
+
+  - type: custom:auto-entities
+    card:
+      type: vertical-stack
+    card_param: cards
+    sort:
+      count: 8
+    filter:
+      template: &projekte |
+        {%- set ns = namespace(l=[]) -%}
+        {%- for s in integration_entities('arcane') | select('match', 'switch\\.project_') -%}
+          {%- set b = s.split('.')[1] -%}
+          {%- set z = states('sensor.' ~ b ~ '_status') -%}
+          {%- set rang = 0 if z not in ['running', 'unavailable', 'unknown']
+                else (1 if is_state('binary_sensor.' ~ b ~ '_update_verfugbar', 'on') else 2) -%}
+          {%- set ns.l = ns.l + [{
+                'e': {'entity': s, 'type': 'custom:button-card', 'template': 'owlet_docker_projekt'},
+                'rang': rang,
+                'dienste': 0 - (states('sensor.' ~ b ~ '_services') | int(0)),
+                'name': (state_attr(s, 'friendly_name') or s) | lower}] -%}
+        {%- endfor -%}
+        {{ ns.l | sort(attribute='rang,dienste,name') | map(attribute='e') | list }}
+
+  - type: custom:expander-card
+    expanded: false
+    clear: true
+    padding: '0'
+    child-padding: '0'
+    gap: 8px
+    title-card-padding: '0'
+    title-card:
+      type: custom:button-card
+      template: owlet_docker_aufklapper
+      name: Weitere Projekte
+      variables:
+        zahl: |
+          [[[
+            const s = states['sensor.local_docker_projekte'];
+            const n = s ? parseInt(s.state, 10) : NaN;
+            return isNaN(n) ? '' : Math.max(0, n - 8);
+          ]]]
+    cards:
+      - type: custom:auto-entities
+        card:
+          type: vertical-stack
+        card_param: cards
+        sort:
+          first: 8
+        filter:
+          template: *projekte
+    # Kopfzeile als Unterkachel, Pfeil gedaempft (wie docker-karte.yaml)
+    card_mod:
+      style: |
+        ha-card {
+          background: none !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .title-card-header {
+          background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));
+          border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));
+          border-radius: 14px;
+          min-height: 48px;
+          padding-right: 4px;
+        }
+        ha-card ha-icon,
+        ha-card .header {
+          color: var(--owlet-muted, #6e7988) !important;
+        }

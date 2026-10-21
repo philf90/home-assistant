@@ -1,0 +1,203 @@
+# ============================================================================
+# Docker-Speicher – Images, Volumes, Netzwerke und Aufraeumen
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        button-card, card-mod
+# Templates:     owlet_docker_kopf (docker-templates.yaml),
+#                owlet_docker_kpi (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Kopf       Image-Speicher in GB, Disk-Belegung des Hosts
+#   Kennzahlen Images (davon ungenutzt), Volumes (davon ungenutzt),
+#              Netzwerke. Ungetoent: viele Images sind kein Problem. Die
+#              Zahl ungenutzter Netzwerke meldet Arcane-HA nicht.
+#   Aufraeumen button.docker_ungenutztes_entfernen der Arcane-Integration
+#              (Option Prune Button "Alle ungenutzten Images, Netzwerke und
+#              Build Cache"). Arcane-HA ruft dafuer system/prune mit
+#              images: all, networks: unused, buildCache: unused auf;
+#              Container und Volumes entfernt der Button nie (button.py,
+#              api.py von Arcane-HA v0.5.2). Die Rueckfrage nennt die Zahl
+#              der ungenutzten Images. Ungenutzte Volumes bleiben; die nur in
+#              Arcane loeschen, nachdem geprueft ist, dass ihre Daten
+#              entbehrlich sind. Recht: system:prune.
+#
+# Die Entity-ID des Buttons beginnt mit dem Namen der Umgebung zum
+# Zeitpunkt seines Anlegens (hier docker_, die aelteren Sensoren mit
+# local_docker_; siehe docker-host-karte.yaml).
+#
+# Voraussetzung: custom:button-card + card-mod (HACS), Integration Arcane
+#                (HACS) mit Prune Button und dem Recht system:prune;
+#                Templates aus docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    entity: sensor.local_docker_image_speicher
+    icon: mdi:harddisk
+    name: Speicher & Aufräumen
+    label: |
+      [[[
+        const f = (id) => { const s = states[id]; const v = s ? parseFloat(s.state) : NaN; return isNaN(v) ? null : v.toLocaleString('de-DE', { maximumFractionDigits: 1 }); };
+        const img = f('sensor.local_docker_image_speicher');
+        const disk = f('sensor.docker_host_festplatte');
+        const teile = [];
+        if (img !== null) teile.push(img + ' GB Images');
+        if (disk !== null) teile.push('Disk ' + disk + ' % belegt');
+        return teile.length ? teile.join(' · ') : 'keine Daten';
+      ]]]
+    tap_action:
+      action: more-info
+
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      # Ohne Zusatzzeile ist die Netzwerk-Kachel niedriger; alle drei fuellen
+      # die Rasterzeile und beginnen oben (button-card zentriert sonst).
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_images
+        name: Images
+        styles: &kachel_hoehe
+          card:
+            - height: 100%
+            - align-items: flex-start
+        variables:
+          warn: ''
+          zusatz: |
+            [[[
+              const s = states['sensor.local_docker_ungenutzte_images'];
+              const n = s ? parseInt(s.state, 10) : NaN;
+              return isNaN(n) ? '' : n + ' ungenutzt';
+            ]]]
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_volumes
+        name: Volumes
+        variables:
+          warn: ''
+          zusatz: |
+            [[[
+              const s = states['sensor.local_docker_ungenutzte_volumes'];
+              const n = s ? parseInt(s.state, 10) : NaN;
+              return isNaN(n) ? '' : n + ' ungenutzt';
+            ]]]
+        styles: *kachel_hoehe
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_netzwerke
+        name: Netzwerke
+        variables:
+          warn: ''
+        styles: *kachel_hoehe
+
+  # ---- Aufraeumen; Rueckfrage nennt, was entfernt wird ----
+  - type: custom:button-card
+    entity: button.docker_ungenutztes_entfernen
+    icon: mdi:broom
+    show_icon: true
+    show_name: false
+    show_state: false
+    variables:
+      frei: |
+        [[[
+          const s = states['sensor.local_docker_ungenutzte_images'];
+          const n = s ? parseInt(s.state, 10) : NaN;
+          return isNaN(n) ? null : n;
+        ]]]
+      aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+    tap_action: |
+      [[[
+        if (!variables.aktiv) return { action: 'none' };
+        const img = variables.frei === null ? 'alle ungenutzten Images' : (variables.frei === 1 ? '1 ungenutztes Image' : variables.frei + ' ungenutzte Images');
+        return {
+          action: 'perform-action',
+          perform_action: 'button.press',
+          target: { entity_id: entity.entity_id },
+          confirmation: { text: 'Aufräumen? Entfernt werden ' + img + ', ungenutzte Netzwerke und der Build-Cache. Container und Volumes bleiben.' }
+        };
+      ]]]
+    hold_action:
+      action: none
+    custom_fields:
+      titel: >-
+        <span style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);">Ungenutztes aufräumen</span>
+      info: |
+        [[[
+          const sek = 'var(--owlet-text-sekundaer, #8794a5)';
+          if (!variables.aktiv) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+          let zuletzt = 'noch nie';
+          const d = new Date(entity.state);
+          if (!isNaN(d.getTime())) zuletzt = 'zuletzt ' + d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `<span style="font-size:12px;color:${sek};">Images, Netzwerke, Build-Cache · ${zuletzt}</span>`;
+        ]]]
+      knopf: |
+        [[[
+          const c = 'var(--owlet-amber, #e6b566)';
+          const an = variables.aktiv && variables.frei !== 0;
+          const stil = an
+            ? `color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`
+            : 'color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+          return `<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;opacity:${variables.aktiv ? 1 : 0.4};${stil}">Aufräumen</span>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel knopf" "i info knopf"'
+        - grid-template-columns: 36px minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: 'var(--owlet-label, #b4c0cf)'
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
+          - text-align: left
+        knopf:
+          - align-self: center
+          - overflow: visible

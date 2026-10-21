@@ -29,7 +29,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `warnlage-templates.yaml`, `wetter-karte-v2.yaml`, `wetter-templates.yaml`, `wetter-view.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml`, `wetter-karte.yaml` | `wetter-animiert.html` |
 | [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | `fenster-lichter-uebersicht-karte.yaml` | – |
 | [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | `staubsauger-karte.yaml` | `hausgeraete.html` |
-| [`netzwerk/`](dashboard/netzwerk/) | `docker-karte.yaml`, `docker-templates.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml` | – |
+| [`netzwerk/`](dashboard/netzwerk/) | `docker-container-karte.yaml`, `docker-ereignisse-karte.yaml`, `docker-host-karte.yaml`, `docker-karte.yaml`, `docker-konfig.yaml`, `docker-projekte-karte.yaml`, `docker-speicher-karte.yaml`, `docker-templates.yaml`, `docker-uebersicht-karte.yaml`, `docker-updates-karte.yaml`, `docker-verlauf-karte.yaml`, `docker-view.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml` | – |
 | [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml`, `tanken-karte.yaml`, `tanken-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
 | [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
 | [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
@@ -116,7 +116,8 @@ Datei erklärt den Unterschied.
   voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
   von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
   anzeigen.
-- für die Docker-Karte (`docker-karte.yaml`): die Integration
+- für die Docker-Karte (`docker-karte.yaml`) und die Docker-View
+  (`docker-view.yaml`): die Integration
   [Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
   (HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
   [Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
@@ -129,13 +130,24 @@ Datei erklärt den Unterschied.
      Steuern zusätzlich `containers:start`, `containers:stop`,
      `containers:restart`, `containers:redeploy` (Image-Updates
      installieren), `projects:deploy`, `projects:down`,
-     `projects:restart`.
+     `projects:restart`. Für die Docker-View außerdem `system:upgrade`
+     (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
+     aufräumen). Welche Rechte fehlen, zeigt die Integration unter
+     *Konfigurieren → Berechtigungen des API-Keys*.
   2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
   3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
      die Adresse, unter der Arcane direkt erreichbar ist (die Integration
      folgt keinen Weiterleitungen), und den Schlüssel.
+  4. Nur für die Docker-View: unter *Konfigurieren → Abfrage* „CPU, RAM
+     und Festplatte des Hosts“ einschalten und unter *Steuerung* den Prune
+     Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
+     stellen; die Diagnose-Sensoren
+     Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
+     aktivieren. Ereignisse, Absturzmeldung und „Alle aktualisieren“
+     kommen aus dem Paket `docker-konfig.yaml`.
 
-  CPU und Arbeitsspeicher je Container liefert die Integration nicht.
+  CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
+  für den ganzen Host.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
@@ -195,7 +207,7 @@ daraus und aus den Kopfblöcken erzeugt.
 |---|---|---|---|
 | `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-karte.yaml`, `sicherheit-templates.yaml`, `wachmodus-konfig.yaml`, `doku/karten-basemap-carto.md` |
 | `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-karte.yaml` |
-| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html`, `wachmodus-konfig.yaml` |
+| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `docker-konfig.yaml`, `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html`, `wachmodus-konfig.yaml` |
 | `<breite>`, `<laenge>` | Koordinaten von Zuhause | Entwicklerwerkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` |
 | `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage (in Grafana ohne `sensor.`) | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energiefluss.html`, `grafana/README.md`, `grafana/energie-dashboard.json`; in `archiv/`: `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml` |
 | `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`, `autos-passat-konfig.yaml`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` |
@@ -211,7 +223,7 @@ daraus und aus den Kopfblöcken erzeugt.
 | `sensor.claude_usage_konto_*` | Sensoren der HACS-Integration Claude Usage (`…_session_usage`, `…_weekly_reset_time`, `…_weekly_<modell>_limit_usage`); `konto` steht für Kontoname und Plan aus dem Gerätenamen (`claude_usage_<name>_<plan>`) | Einstellungen → Geräte & Dienste → Claude Usage → Gerät → Entitäten | `claude-nutzung-karte.yaml`, `claude-nutzung.html` |
 | `VG Wohnort` | Verbandsgemeinde im Titel der Abfuhrtermine (`Restmüll in VG Wohnort`); die trash-card ordnet die Termine über diesen Text den Tonnen zu | Kalender des Abfallentsorgers (`calendar.mull`) → Titel eines Termins, der Teil nach „in“ | `muellabfuhr-karte-v2.yaml`; in `archiv/`: `muellabfuhr-karte.yaml` |
 | `sensor.tankstelle_1_*` bis `sensor.tankstelle_4_*`, Name `Tankstelle 1` bis `Tankstelle 4` | Tankstelle aus der Tankerkönig-Integration. HA bildet die Entity-ID aus Marke und Adresse (`sensor.…_diesel`, `…_super`, `…_super_e10`, `binary_sensor.…_status`); der Anzeigename steht frei im Template | Einstellungen → Geräte & Dienste → Tankerkönig → Tankstelle → Entitäten | `tanken-templates.yaml` |
-| `benutzer_id_1`, `benutzer_id_2` | ID eines Home-Assistant-Benutzers in `visible:` (View) und `condition: user` (Karte); `1` und `2` trennen zwei Benutzer. Unersetzt sind die betroffenen Views und Karten für niemanden sichtbar | View- bzw. Karteneditor → *Sichtbarkeit* → Benutzer auswählen, Home Assistant setzt die ID selbst ein | `gesundheit-view.yaml`, `kameras-view.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `netzwerk-view.yaml`; in `archiv/`: `kameras-karte.yaml` |
+| `benutzer_id_1`, `benutzer_id_2` | ID eines Home-Assistant-Benutzers in `visible:` (View) und `condition: user` (Karte); `1` und `2` trennen zwei Benutzer. Unersetzt sind die betroffenen Views und Karten für niemanden sichtbar | View- bzw. Karteneditor → *Sichtbarkeit* → Benutzer auswählen, Home Assistant setzt die ID selbst ein | `docker-view.yaml`, `gesundheit-view.yaml`, `kameras-view.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `netzwerk-view.yaml`; in `archiv/`: `kameras-karte.yaml` |
 <!-- platzhalter:end -->
 
 Nicht anonymisiert, aber an die eigene Instanz gebunden: die Entitäten in

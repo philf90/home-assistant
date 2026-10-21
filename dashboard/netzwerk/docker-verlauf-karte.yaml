@@ -1,0 +1,222 @@
+# ============================================================================
+# Docker-Verlauf – Container und Image-Speicher ueber 7 Tage
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        apexcharts-card, button-card, card-mod
+# Templates:     owlet_docker_kopf (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Container       laufende (Gruen) und ungesunde (Rot) Container,
+#                   Mittelwert je 5 min aus der Langzeitstatistik
+#   Image-Speicher  belegter Platz der Images in GB, Mittelwert je Stunde
+#
+# Die Sensoren der Arcane-Integration haben state_class measurement; HA legt
+# dafuer selbst Statistiken an. Sie beginnen mit dem Einrichten der
+# Integration (hier am 21.10.2026); davor bleibt das Diagramm leer.
+#
+# "Ungesund" ist hier der Zaehler von Arcane. Er zaehlt Container im
+# Healthcheck-Start mit (nach jedem Start rund 30 s, siehe
+# docker-templates.yaml); im 5-Minuten-Mittel ergibt das eine kleine Spitze
+# von etwa 0,1. Ein Container, der wirklich ungesund ist, steht dort als 1.
+#
+# Farben je Modus ueber card_mod wie in unifi-verlauf-karte.yaml:
+# apexcharts-card zeichnet beim Wechsel zwischen hell und dunkel nicht neu,
+# die color-Werte in series gelten deshalb nur als Vorgabe.
+#
+# Voraussetzung: custom:button-card + custom:apexcharts-card + card-mod
+#                (HACS), Integration Arcane (HACS), Templates aus
+#                docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    icon: mdi:chart-line
+    name: Verlauf
+    label: 7 Tage · Langzeitstatistik
+
+  - type: custom:apexcharts-card
+    graph_span: 7d
+    header:
+      show: true
+      title: Container
+      show_states: false
+    apex_config:
+      chart:
+        background: transparent
+        fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+        foreColor: '#8794a5'
+        height: 160
+        toolbar:
+          show: false
+      dataLabels:
+        enabled: false
+      grid:
+        borderColor: rgba(255,255,255,0.06)
+        strokeDashArray: 3
+      legend:
+        show: true
+        fontSize: 11px
+        labels:
+          colors: '#8794a5'
+        markers:
+          size: 5
+          strokeWidth: 0
+      stroke:
+        curve: stepline
+        width: 2
+      tooltip:
+        theme: dark
+        x:
+          format: dd.MM. HH:mm
+      xaxis:
+        labels:
+          format: dd.MM.
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+          border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+        }
+        /* apexcharts-card 2.2.3 hat kein .card-header: Kopf ist #header, Titel #header__title */
+        #header { padding: 10px 12px 0 !important; }
+        #header__title { font-size: 13px !important; color: var(--owlet-label, #b4c0cf) !important; }
+        /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
+        .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+        /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
+           Serien nach Index, Legende nach rel = Index + 1 */
+        .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --nw-c: var(--owlet-gruen, #a6d49e); }
+        .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --nw-c: var(--owlet-rot, #f0736a); }
+        .apexcharts-line { stroke: var(--nw-c); }
+        .apexcharts-marker { fill: var(--nw-c); }
+        .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--owlet-text-sekundaer, #8794a5); }
+        .apexcharts-legend-text { color: var(--owlet-text-sekundaer, #8794a5) !important; }
+        .apexcharts-gridline { stroke: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
+        /* Tooltips folgen dem Modus wie Popups (erhoehte Flaeche); ApexCharts faerbt sie sonst fest dunkel (tooltip.theme) */
+        .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--owlet-flaeche-erhoeht, #222b3c) !important; color: var(--owlet-text, #f2f5f8) !important; border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important; }
+        .apexcharts-tooltip-title { background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--owlet-flaeche-erhoeht, #222b3c) !important; }
+        .apexcharts-xaxistooltip-top::before { border-top-color: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-top::after { border-top-color: var(--owlet-flaeche-erhoeht, #222b3c) !important; }
+        /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
+        .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--owlet-gruen, #a6d49e) !important; }
+        .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--owlet-rot, #f0736a) !important; }
+    yaxis:
+      - min: 0
+        decimals: 0
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 4
+    series:
+      - entity: sensor.local_docker_laufende_container
+        name: laufend
+        color: '#a6d49e'
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.local_docker_ungesunde_container
+        name: ungesund
+        color: '#f0736a'
+        statistics:
+          type: mean
+          period: 5minute
+
+  - type: custom:apexcharts-card
+    graph_span: 7d
+    header:
+      show: true
+      title: Image-Speicher
+      show_states: false
+    apex_config:
+      chart:
+        background: transparent
+        fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+        foreColor: '#8794a5'
+        height: 130
+        toolbar:
+          show: false
+      dataLabels:
+        enabled: false
+      grid:
+        borderColor: rgba(255,255,255,0.06)
+        strokeDashArray: 3
+      legend:
+        show: false
+        fontSize: 11px
+        labels:
+          colors: '#8794a5'
+        markers:
+          size: 5
+          strokeWidth: 0
+      stroke:
+        curve: smooth
+        width: 2
+      tooltip:
+        theme: dark
+        x:
+          format: dd.MM. HH:mm
+      xaxis:
+        labels:
+          format: dd.MM.
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+          border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+        }
+        /* apexcharts-card 2.2.3 hat kein .card-header: Kopf ist #header, Titel #header__title */
+        #header { padding: 10px 12px 0 !important; }
+        #header__title { font-size: 13px !important; color: var(--owlet-label, #b4c0cf) !important; }
+        /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
+        .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+        /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
+           Serien nach Index, Legende nach rel = Index + 1 */
+        .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --nw-c: var(--owlet-blau, #7fb3d5); }
+        .apexcharts-line { stroke: var(--nw-c); }
+        .apexcharts-marker { fill: var(--nw-c); }
+        .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--owlet-text-sekundaer, #8794a5); }
+        .apexcharts-legend-text { color: var(--owlet-text-sekundaer, #8794a5) !important; }
+        .apexcharts-gridline { stroke: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
+        /* Tooltips folgen dem Modus wie Popups (erhoehte Flaeche); ApexCharts faerbt sie sonst fest dunkel (tooltip.theme) */
+        .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--owlet-flaeche-erhoeht, #222b3c) !important; color: var(--owlet-text, #f2f5f8) !important; border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important; }
+        .apexcharts-tooltip-title { background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--owlet-flaeche-erhoeht, #222b3c) !important; }
+        .apexcharts-xaxistooltip-top::before { border-top-color: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+        .apexcharts-xaxistooltip-top::after { border-top-color: var(--owlet-flaeche-erhoeht, #222b3c) !important; }
+        /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
+        .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--owlet-blau, #7fb3d5) !important; }
+    yaxis:
+      - decimals: 1
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 3
+    series:
+      - entity: sensor.local_docker_image_speicher
+        name: Images
+        color: '#7fb3d5'
+        unit: GB
+        statistics:
+          type: mean
+          period: hour

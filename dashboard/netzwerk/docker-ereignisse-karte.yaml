@@ -1,0 +1,141 @@
+# ============================================================================
+# Docker-Ereignisse – Logbuch der Container und Push bei Absturz
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        button-card, card-mod
+# Templates:     owlet_docker_kopf (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Logbuch    48 Stunden, Eintraege an binary_sensor.local_docker_online.
+#              Die Automation "Docker: Ereignisse ins Logbuch" aus
+#              docker-konfig.yaml schreibt dort die Ereignisse der
+#              Arcane-Integration mit deutschem Text hin ("sonarr:
+#              abgestuerzt (Code 1)"); dazu kommen online/offline der
+#              Umgebung selbst. Arcane-HA meldet nur Wechsel zwischen zwei
+#              Abfragen; ein Container, der in weniger als einem
+#              Abfrageintervall abstuerzt und neu startet, erscheint nicht.
+#   Push       input_boolean.docker_meldung_absturz schaltet die Automation
+#              "Docker: Absturz melden" (Push bei Absturz oder OOM).
+#
+# Voraussetzung: custom:button-card + card-mod (HACS), Integration Arcane
+#                (HACS) mit Option Events, Paket docker-konfig.yaml (oder
+#                dieselben Objekte ueber die Oberflaeche), Templates aus
+#                docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    icon: mdi:timeline-text-outline
+    name: Ereignisse
+    label: Letzte 48 Stunden · aus dem Logbuch
+
+  - type: logbook
+    target:
+      entity_id: binary_sensor.local_docker_online
+    hours_to_show: 48
+    # nur der Name aus logbook.log ("sonarr"), ohne Entitaet der Umgebung
+    name_detail: none
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+          border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+          border-radius: 14px !important;
+          box-shadow: none !important;
+          --secondary-text-color: var(--owlet-text-sekundaer, #8794a5);
+          --primary-text-color: var(--owlet-text, #f2f5f8);
+        }
+
+  # ---- Push bei Absturz; Schalter wie in owlet_docker_zeile ----
+  - type: custom:button-card
+    entity: input_boolean.docker_meldung_absturz
+    icon: mdi:bell-alert-outline
+    show_icon: true
+    show_name: false
+    show_state: false
+    variables:
+      an: '[[[ return !!entity && entity.state === "on"; ]]]'
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: >-
+        <span style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);">Push bei Absturz oder OOM</span>
+      info: |
+        [[[
+          const txt = variables.an ? 'an · Exit-Code ungleich 0 und 143' : 'aus · Absturz steht nur im Logbuch';
+          return `<span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${txt}</span>`;
+        ]]]
+      knopf: |
+        [[[
+          const gruen = 'var(--owlet-gruen, #a6d49e)';
+          const spur = variables.an
+            ? `background:color-mix(in srgb, ${gruen} 24%, transparent);border:1px solid color-mix(in srgb, ${gruen} 50%, transparent);`
+            : 'background:var(--owlet-aus, #3a4453);border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+          const punkt = variables.an ? `left:18px;background:${gruen};` : 'left:2px;background:var(--owlet-muted, #6e7988);';
+          return `<span style="position:relative;display:block;width:40px;height:24px;box-sizing:border-box;border-radius:12px;transition:background .2s;${spur}"><span style="position:absolute;top:2px;width:18px;height:18px;border-radius:50%;transition:left .2s;${punkt}"></span></span>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel knopf" "i info knopf"'
+        - grid-template-columns: 36px minmax(0, 1fr) 52px
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: |
+            [[[ return variables.an ? 'color-mix(in srgb, var(--owlet-amber, #e6b566) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.an ? '1px solid color-mix(in srgb, var(--owlet-amber, #e6b566) 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: '[[[ return variables.an ? "var(--owlet-amber, #e6b566)" : "var(--owlet-muted, #6e7988)"; ]]]'
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
+          - text-align: left
+        knopf:
+          - justify-self: center
+          - align-self: center

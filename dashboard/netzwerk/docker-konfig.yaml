@@ -1,0 +1,172 @@
+# ============================================================================
+# Docker – Ereignisse, Absturzmeldung und Sammel-Update fuer die Docker-View
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       netzwerk
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+# Platzhalter:   notify.mobile_app_iphone
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Docker – Paket fuer die Docker-View (docker-view.yaml)
+#
+#   input_boolean.docker_meldung_absturz
+#       Schalter "Push bei Absturz oder OOM" in der Karte Ereignisse.
+#   automation "Docker: Ereignisse ins Logbuch"
+#       Schreibt die Ereignisse der Arcane-Integration mit deutschem Text ins
+#       Logbuch, angehaengt an binary_sensor.local_docker_online. Die Karte
+#       Ereignisse ist eine Logbuch-Karte auf diese Entitaet.
+#         arcane_container_state_changed   gestartet, gestoppt, abgestuerzt
+#         arcane_container_health_changed  nur healthy und unhealthy; den
+#                                          Healthcheck-Start ("starting")
+#                                          gibt es nach jedem Start
+#         arcane_project_state_changed     Projekt laeuft, teilweise, gestoppt
+#   automation "Docker: Absturz melden"
+#       Push, wenn ein Container abstuerzt. Arcane-HA setzt crashed, wenn
+#       ein laufender Container mit Exit-Code ungleich 0 endet, und
+#       oom_killed bei Code 137. Code 143 (SIGTERM) ist ein regulaerer Stopp
+#       und wird nicht gemeldet; ein Stopp, den Docker nach Ablauf der
+#       Wartezeit mit SIGKILL erzwingt, endet ebenfalls mit 137 und erscheint
+#       deshalb als OOM.
+#   script.docker_alle_updates_installieren
+#       "Alle aktualisieren" in der Karte Image-Updates: installiert die
+#       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
+#       (sein Neustart trennt die Verbindung kurz).
+#
+# Namen in Meldungen ohne Compose-Anhaengsel wie in der Karte
+# ("sonarr-sonarr-1" -> "sonarr").
+#
+# In der eigenen Instanz sind Helfer, Automationen und Skript ueber die
+# Oberflaeche angelegt (Inhalt identisch). Dieses Paket ist die Fassung zum
+# Nachbauen; nicht beides zugleich verwenden, sonst gibt es alles doppelt.
+#
+# Voraussetzung
+#   - Integration Arcane (HACS) mit Option Events an (Standard) und den
+#     API-Rechten containers:redeploy (Sammel-Update)
+#   - Companion App fuer die Push-Meldung
+#   - in configuration.yaml:
+#       homeassistant:
+#         packages:
+#           docker: !include docker-konfig.yaml
+
+input_boolean:
+  docker_meldung_absturz:
+    name: Docker Meldung Absturz
+    icon: mdi:bell-alert
+
+automation:
+  - id: docker_ereignisse_ins_logbuch
+    alias: "Docker: Ereignisse ins Logbuch"
+    description: >-
+      Docker-View, Karte Ereignisse: schreibt die Ereignisse der
+      Arcane-Integration ins Logbuch von binary_sensor.local_docker_online.
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: event
+        event_type: arcane_container_state_changed
+        id: zustand
+      - trigger: event
+        event_type: arcane_container_health_changed
+        event_data:
+          health: healthy
+        id: health
+      - trigger: event
+        event_type: arcane_container_health_changed
+        event_data:
+          health: unhealthy
+        id: health
+      - trigger: event
+        event_type: arcane_project_state_changed
+        id: projekt
+    conditions: []
+    variables:
+      name: >-
+        {%- set d = trigger.event.data -%}
+        {%- set roh = d.project if trigger.id == 'projekt' else d.container -%}
+        {%- set n = roh | regex_replace('-\d+$', '') -%}
+        {%- set t = n.split('-') -%}
+        {%- set h = (t | count) // 2 -%}
+        {{ t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n }}
+      meldung: >-
+        {%- set d = trigger.event.data -%}
+        {%- if trigger.id == 'zustand' -%}
+          {%- if d.oom_killed -%}abgestürzt: Speicher voll (OOM, Code 137)
+          {%- elif d.crashed and d.exit_code == 143 -%}beendet (SIGTERM, Code 143)
+          {%- elif d.crashed -%}abgestürzt (Code {{ d.exit_code }})
+          {%- elif d.state == 'running' -%}{{ 'neu gestartet' if d.previous_state == 'restarting' else 'gestartet' }}
+          {%- else -%}{{ {'exited': 'gestoppt', 'restarting': 'startet neu', 'paused': 'pausiert', 'removing': 'wird entfernt', 'created': 'angelegt', 'dead': 'ausgefallen (dead)'}.get(d.state, 'Zustand ' ~ d.state) }}
+          {%- endif -%}
+        {%- elif trigger.id == 'health' -%}
+          {{ 'Healthcheck bestanden' if d.health == 'healthy' else 'ungesund (Healthcheck fehlgeschlagen)' }}
+        {%- else -%}
+          {{ {'running': 'Projekt läuft', 'partially running': 'Projekt läuft nur teilweise', 'stopped': 'Projekt gestoppt'}.get(d.status, 'Projekt: ' ~ d.status) }}
+        {%- endif -%}
+    actions:
+      - action: logbook.log
+        data:
+          name: "{{ name }}"
+          message: "{{ meldung }}"
+          entity_id: binary_sensor.local_docker_online
+
+  - id: docker_absturz_melden
+    alias: "Docker: Absturz melden"
+    description: >-
+      Docker-View, Karte Ereignisse: Push bei Absturz oder OOM eines
+      Containers, solange input_boolean.docker_meldung_absturz an ist.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: event
+        event_type: arcane_container_state_changed
+        event_data:
+          crashed: true
+    conditions:
+      - condition: state
+        entity_id: input_boolean.docker_meldung_absturz
+        state: "on"
+      # Exit-Code steht nur in den Ereignisdaten; ohne native Bedingung dafuer
+      - condition: template
+        value_template: "{{ trigger.event.data.exit_code != 143 }}"
+    variables:
+      name: >-
+        {%- set n = trigger.event.data.container | regex_replace('-\d+$', '') -%}
+        {%- set t = n.split('-') -%}
+        {%- set h = (t | count) // 2 -%}
+        {{ t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n }}
+    actions:
+      - action: notify.mobile_app_iphone
+        data:
+          title: "Docker: {{ name }} abgestürzt"
+          message: >-
+            {{ 'Speicher voll (OOM, Exit-Code 137)' if trigger.event.data.oom_killed
+               else 'Exit-Code ' ~ trigger.event.data.exit_code }}
+            · {{ trigger.event.data.environment }}
+          data:
+            url: /dashboard-home/docker
+            clickAction: /dashboard-home/docker
+            group: docker
+
+script:
+  docker_alle_updates_installieren:
+    alias: "Docker: alle Image-Updates installieren"
+    description: >-
+      Docker-View, Karte Image-Updates: installiert die ausstehenden
+      Image-Updates nacheinander, den Arcane-Container zuletzt.
+    icon: mdi:package-up
+    mode: single
+    sequence:
+      - variables:
+          liste: >-
+            {%- set alle = integration_entities('arcane')
+                | select('match', 'update\.container_')
+                | select('is_state', 'on') | list -%}
+            {{ (alle | reject('eq', 'update.container_arcane_image_update') | list)
+               + (alle | select('eq', 'update.container_arcane_image_update') | list) }}
+      - repeat:
+          for_each: "{{ liste }}"
+          sequence:
+            - action: update.install
+              target:
+                entity_id: "{{ repeat.item }}"
+              continue_on_error: true
