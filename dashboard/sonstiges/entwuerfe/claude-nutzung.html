@@ -1,0 +1,248 @@
+<!--
+============================================================================
+Claude – Nutzungslimits, Entwurf hell und dunkel
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       sonstiges
+Status:        entwurf
+Gehoert-zu:    claude-nutzung-karte.yaml
+Platzhalter:   sensor.claude_usage_konto_*
+               (vor dem Einfuegen ersetzen, siehe README.md)
+============================================================================
+-->
+<title>Claude Nutzungslimits</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Aufbau: Kopf, dann die Karte zweimal nebeneinander, links im dunklen
+     und rechts im hellen Owlet-Theme, mit denselben Beispielwerten.
+     Darunter die Stufen mit Schwellen und Hinweise zur Datenquelle.
+     Die Karten rendern dieselbe Markup-Logik wie claude-nutzung-karte.yaml
+     ueber die Theme-Variablen; die Werte stehen in design/palette.yaml
+     (dunkel: farben, hell: hell_farben). Die Seite selbst folgt dem
+     Theme des Betrachters. */
+  :root {
+    --seite: #e6eaf0;
+    --seite-text: #171d29;
+    --seite-sek: #586475;
+    --seite-rand: rgba(23, 29, 41, 0.1);
+    --font: -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --seite: #171d29; --seite-text: #f2f5f8; --seite-sek: #8794a5;
+      --seite-rand: rgba(255, 255, 255, 0.08); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --seite: #171d29; --seite-text: #f2f5f8; --seite-sek: #8794a5;
+    --seite-rand: rgba(255, 255, 255, 0.08); color-scheme: dark;
+  }
+
+  /* Owlet-Theme je Karte: genau die Werte aus dem Theme owlet */
+  .mode-dark {
+    --owlet-huelle-oben: #1b2231; --owlet-huelle-unten: #171d29;
+    --owlet-huelle-rand: rgba(255, 255, 255, 0.05);
+    --owlet-schatten: rgba(0, 0, 0, 0.7);
+    --owlet-unterkachel: rgba(255, 255, 255, 0.028);
+    --owlet-unterkachel-rand: rgba(255, 255, 255, 0.06);
+    --owlet-neutral-kachel: rgba(255, 255, 255, 0.05);
+    --owlet-aus: #3a4453;
+    --owlet-text: #f2f5f8; --owlet-titel: #e7ecf3; --owlet-label: #b4c0cf;
+    --owlet-text-sekundaer: #8794a5;
+    --owlet-gruen: #a6d49e; --owlet-amber: #e6b566; --owlet-koralle: #e7936e;
+    --owlet-rot: #f0736a; --owlet-violett: #b399d4;
+    --seite-owlet: #171d29;
+    color-scheme: dark;
+  }
+  .mode-light {
+    --owlet-huelle-oben: #fafbfd; --owlet-huelle-unten: #f3f5f8;
+    --owlet-huelle-rand: rgba(23, 29, 41, 0.06);
+    --owlet-schatten: rgba(23, 29, 41, 0.3);
+    --owlet-unterkachel: rgba(23, 29, 41, 0.03);
+    --owlet-unterkachel-rand: rgba(23, 29, 41, 0.07);
+    --owlet-neutral-kachel: rgba(23, 29, 41, 0.05);
+    --owlet-aus: #b4c0cf;
+    --owlet-text: #171d29; --owlet-titel: #1b2231; --owlet-label: #3a4453;
+    --owlet-text-sekundaer: #586475;
+    --owlet-gruen: #38702e; --owlet-amber: #855c04; --owlet-koralle: #a94302;
+    --owlet-rot: #ae3c38; --owlet-violett: #76559c;
+    --seite-owlet: #e6eaf0;
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0; background: var(--seite); color: var(--seite-text);
+    font-family: var(--font); font-size: 14px; line-height: 1.45;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 40px;
+  }
+  main { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+  h1 { font-size: 22px; letter-spacing: -0.02em; margin: 0 0 4px; text-wrap: balance; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--seite-sek); margin: 0 0 10px; }
+  p { margin: 0; max-width: 68ch; }
+  .lead { color: var(--seite-sek); }
+
+  .vergleich { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .buehne {
+    background: var(--seite-owlet); border-radius: 28px; padding: 22px 20px 24px;
+    border: 1px solid var(--seite-rand); min-width: 0;
+  }
+  .buehne .titel {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+    color: var(--owlet-text-sekundaer); margin: 0 4px 12px;
+  }
+
+  /* --- Karte: Markup und Masse wie in claude-nutzung-karte.yaml --- */
+  .karte {
+    padding: 14px 16px 12px; border-radius: 22px;
+    border: 1px solid var(--owlet-huelle-rand);
+    background: linear-gradient(180deg, var(--owlet-huelle-oben) 0%, var(--owlet-huelle-unten) 55%);
+    box-shadow: 0 18px 44px -22px var(--owlet-schatten);
+    overflow: hidden; color: var(--owlet-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .kopf { display: grid; grid-template-columns: min-content minmax(0, 1fr) min-content; grid-template-areas: "i n b" "i l b"; align-items: center; }
+  .kachel {
+    grid-area: i; width: 44px; height: 44px; border-radius: 13px; margin-right: 14px;
+    background: color-mix(in srgb, var(--owlet-violett) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--owlet-violett) 24%, transparent);
+    display: grid; place-items: center; color: var(--owlet-violett);
+  }
+  .kachel svg { width: 23px; height: 23px; fill: currentColor; }
+  .name { grid-area: n; align-self: end; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+  .label { grid-area: l; align-self: start; font-size: 12.5px; color: var(--owlet-text-sekundaer); margin-top: 1px; }
+  .badge {
+    grid-area: b; display: inline-flex; align-items: center; gap: 6px; justify-self: end;
+    color: var(--owlet-gruen); background: color-mix(in srgb, var(--owlet-gruen) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--owlet-gruen) 24%, transparent);
+    font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 11px; white-space: nowrap;
+  }
+  .badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--owlet-gruen); box-shadow: 0 0 0 3px color-mix(in srgb, var(--owlet-gruen) 18%, transparent); }
+  .body { padding-top: 12px; display: grid; gap: 8px; }
+  .zeile {
+    background: var(--owlet-unterkachel); border: 1px solid var(--owlet-unterkachel-rand);
+    border-radius: 14px; padding: 10px 12px; display: grid;
+    grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; align-items: center;
+  }
+  .zeile .t { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zeile .w { display: flex; align-items: center; gap: 8px; justify-self: end; }
+  .zeile .pct { font-size: 16px; font-weight: 750; letter-spacing: -0.01em; }
+  .pille { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 8px; border-radius: 9px; white-space: nowrap; }
+  .spur { grid-column: 1 / -1; height: 6px; border-radius: 5px; background: var(--owlet-neutral-kachel); overflow: hidden; }
+  .spur div { height: 100%; border-radius: 5px; }
+  .fuss { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--owlet-text-sekundaer); }
+  .stand { font-size: 11.5px; color: var(--owlet-text-sekundaer); text-align: right; padding: 10px 2px 0; }
+
+  table { border-collapse: collapse; width: 100%; max-width: 680px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--seite-rand); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--seite-sek); font-weight: 700; }
+  td.farbe span { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -1px; margin-right: 8px; }
+  .hinweise { display: grid; gap: 8px; max-width: 72ch; color: var(--seite-sek); }
+  .hinweise b { color: var(--seite-text); font-weight: 650; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+  @media (prefers-reduced-motion: no-preference) { .spur div { transition: width 0.5s ease; } }
+</style>
+
+<main>
+  <header>
+    <h1>Claude – Nutzungslimits des Abos</h1>
+    <p class="lead">Entwurf der Karte <code>claude-nutzung-karte.yaml</code> im Owlet-Stil, links im dunklen, rechts im hellen Theme. Beide Karten zeigen dieselben Beispielwerte; die echten Werte liefert die HACS-Integration „Claude Usage“.</p>
+  </header>
+
+  <section class="vergleich" aria-label="Karte im dunklen und hellen Modus">
+    <div class="buehne mode-dark">
+      <p class="titel">Dunkler Modus · Beispielwerte</p>
+      <div class="karte" data-karte></div>
+    </div>
+    <div class="buehne mode-light">
+      <p class="titel">Heller Modus · Beispielwerte</p>
+      <div class="karte" data-karte></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stufen nach Auslastung</h2>
+    <table>
+      <thead><tr><th>Auslastung</th><th>Farbe</th><th>Pille</th></tr></thead>
+      <tbody>
+        <tr><td>unter 60 %</td><td class="farbe"><span style="background:#a6d49e"></span>Grün</td><td>keine</td></tr>
+        <tr><td>ab 60 %</td><td class="farbe"><span style="background:#e6b566"></span>Amber</td><td>„hoch“, getönt</td></tr>
+        <tr><td>ab 80 %</td><td class="farbe"><span style="background:#e7936e"></span>Koralle-Orange</td><td>„sehr hoch“, getönt (Koralle immer mit Text)</td></tr>
+        <tr><td>ab 95 %</td><td class="farbe"><span style="background:#f0736a"></span>Rot</td><td>„kritisch“, gefüllt mit Schrift #3d1512</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="hinweise">
+    <h2>Hinweise</h2>
+    <p><b>Zeilen.</b> Session (5 h) und Woche (alle Modelle) kommen aus festen Sensoren; die Modell-Zeilen entstehen aus jedem Sensor <code>…_weekly_*_limit_usage</code> mit Attribut <code>kind = weekly_scoped</code>, der Reset aus dem Attribut <code>resets_at</code>. Extra-Nutzung erscheint nur, wenn <code>…_extra_usage_enabled</code> wahr ist.</p>
+    <p><b>Woche · Linie.</b> Der Sensor <code>…_week_usage_pace</code> ist Auslastung minus verstrichener Wochenanteil. „+12 % über Linie“ heißt: schneller verbraucht, als es gleichmäßig über die Woche wäre.</p>
+    <p><b>Platzhalter.</b> Alle Entity-IDs beginnen mit <code>sensor.claude_usage_konto_</code>; <code>konto</code> steht für Kontoname und Plan aus dem Gerätenamen der Integration. Nur <code>variables.prefix</code> in der Karte ersetzen.</p>
+    <p><b>Datenquelle.</b> Die Integration fragt den inoffiziellen Endpunkt, den auch Claude Code für <code>/usage</code> nutzt, alle 300 s ab. Häufigere Abfragen führen zu einer Sperre von etwa 24 h, in der auch claude.ai keine Nutzung zeigt.</p>
+  </section>
+</main>
+
+<script>
+  // Beispielwerte: alle vier Stufen und die Extra-Nutzung sichtbar
+  const jetzt = new Date();
+  const inStunden = (h) => new Date(jetzt.getTime() + h * 3600000);
+  const daten = {
+    stand: new Date(jetzt.getTime() - 4 * 60000),
+    zeilen: [
+      { titel: 'Session · 5 h',          pct: 42, reset: inStunden(2.22) },
+      { titel: 'Woche · alle Modelle',   pct: 68, reset: inStunden(74.0), extra: '12 % über Linie' },
+      { titel: 'Woche · Fable',          pct: 83, reset: inStunden(74.0) },
+      { titel: 'Woche · Sonnet',         pct: 23, reset: inStunden(74.0) },
+      { titel: 'Extra-Nutzung · Monat',  pct: 96, reset: null, extra: '48,10 von 50,00 USD' },
+    ],
+  };
+
+  const stufe = (p) => {
+    if (p >= 95) return { farbe: 'var(--owlet-rot)',     wort: 'kritisch',  voll: true };
+    if (p >= 80) return { farbe: 'var(--owlet-koralle)', wort: 'sehr hoch', voll: false };
+    if (p >= 60) return { farbe: 'var(--owlet-amber)',   wort: 'hoch',      voll: false };
+    return { farbe: 'var(--owlet-gruen)', wort: '', voll: false };
+  };
+  const zwei = (n) => String(n).padStart(2, '0');
+  const uhr = (d) => `${zwei(d.getHours())}:${zwei(d.getMinutes())}`;
+  const tage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const reset = (d) => {
+    if (!d) return { rest: '', wann: '' };
+    const min = Math.round((d - jetzt) / 60000);
+    const h = Math.floor(min / 60), m = min % 60, t = Math.floor(h / 24);
+    const rest = t >= 1 ? `in ${t} T ${h - t * 24} h` : h >= 1 ? `in ${h} h ${m} min` : `in ${m} min`;
+    const morgen = new Date(jetzt); morgen.setDate(jetzt.getDate() + 1);
+    const wann = d.toDateString() === jetzt.toDateString() ? uhr(d)
+      : d.toDateString() === morgen.toDateString() ? `morgen ${uhr(d)}` : `${tage[d.getDay()]} ${uhr(d)}`;
+    return { rest: 'Reset ' + rest, wann };
+  };
+  const pille = (s) => {
+    if (!s.wort) return '';
+    const stil = s.voll
+      ? `background:${s.farbe};color:#3d1512;border:1px solid ${s.farbe};`
+      : `background:color-mix(in srgb, ${s.farbe} 12%, transparent);color:${s.farbe};border:1px solid color-mix(in srgb, ${s.farbe} 24%, transparent);`;
+    return `<span class="pille" style="${stil}">${s.wort}</span>`;
+  };
+  const zeile = (z) => {
+    const s = stufe(z.pct), r = reset(z.reset);
+    const rechts = [z.extra, r.wann].filter(Boolean).join(' · ');
+    return `<div class="zeile">
+      <div class="t">${z.titel}</div>
+      <div class="w">${pille(s)}<span class="pct" style="color:${s.farbe}">${z.pct} %</span></div>
+      <div class="spur"><div style="width:${z.pct}%;background:${s.farbe}"></div></div>
+      <div class="fuss"><span>${r.rest || 'ohne Reset'}</span><span>${rechts}</span></div>
+    </div>`;
+  };
+  const roboter = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 15.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5S15.17 14 16 14s1.5.67 1.5 1.5m-8 0c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5S7.17 14 8 14s1.5.67 1.5 1.5M23 15v3c0 .55-.45 1-1 1h-1v1c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2v-1H2c-.55 0-1-.45-1-1v-3c0-.55.45-1 1-1h1c0-3.87 3.13-7 7-7h1V5.73A2 2 0 0 1 12 2a2 2 0 0 1 1 3.73V7h1c3.87 0 7 3.13 7 7h1c.55 0 1 .45 1 1M21 16h-2v-2c0-2.76-2.24-5-5-5h-4c-2.76 0-5 2.24-5 5v2H3v1h2v3h14v-3h2v-1Z"/></svg>';
+  const karte = () => `
+    <div class="kopf">
+      <div class="kachel">${roboter}</div>
+      <div class="name">Claude</div>
+      <div class="label">Nutzungslimits des Abos</div>
+      <span class="badge"><i></i>verbunden</span>
+    </div>
+    <div class="body">${daten.zeilen.map(zeile).join('')}</div>
+    <div class="stand">Stand ${uhr(daten.stand)} · Abfrage alle 5 min</div>`;
+  document.querySelectorAll('[data-karte]').forEach((el) => { el.innerHTML = karte(); });
+</script>

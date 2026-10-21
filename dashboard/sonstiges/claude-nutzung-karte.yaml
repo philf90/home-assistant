@@ -1,0 +1,276 @@
+# ============================================================================
+# Claude – Nutzungslimits des Abos
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   sensor.claude_usage_konto_*
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Zeigt die Limits eines Claude-Abos (Pro/Max) im Owlet-Stil: je Limit eine
+# Zeile mit Auslastung in Prozent, Fortschrittsbalken und Reset-Zeitpunkt
+# (Countdown und Uhrzeit bzw. Wochentag). Entwurf: entwuerfe/claude-nutzung.html.
+#
+# Zeilen, von oben nach unten:
+#   1. Session (5 h)            ..._session_usage / ..._session_reset_time
+#   2. Woche, alle Modelle      ..._week_usage / ..._weekly_reset_time; dazu
+#                               ..._week_usage_pace als "ueber/unter Linie"
+#                               (Auslastung minus verstrichener Wochenanteil)
+#   3. Woche je Modell          dynamisch: jeder Sensor ..._weekly_*_limit_usage
+#                               mit Attribut kind = weekly_scoped (Sonnet, Fable,
+#                               Opus ...), Reset aus dem Attribut resets_at
+#   4. Extra-Nutzung            nur wenn ..._extra_usage_enabled wahr ist
+# Kopf-Badge: ..._api_error (0 = verbunden, 1 = API-Fehler), Fusszeile: Stand
+# der letzten Aktualisierung.
+#
+# Statusfarben nach Auslastung (Schwellen in variables): unter 60 % Gruen,
+# ab 60 % Amber "hoch", ab 80 % Koralle "sehr hoch", ab 95 % Rot "kritisch".
+# Koralle und Rot stehen immer mit Stufe als Text (DESIGN.md, "Status").
+# Die rote Stufe ist eine gefuellte Pille mit Schrift #3d1512, weil rote
+# Schrift auf roter Toenung in 12 px keine 4,5:1 haelt. Kleine Schrift auf
+# der Unterkachel steht in owlet-text-sekundaer, auf getoenten Pillen in der
+# Stufenfarbe (hell und dunkel mindestens 4,6:1, DESIGN.md "Heller Modus").
+# Alle Farben als Theme-Variablen mit dunklem Rueckfall, deshalb heller und
+# dunkler Modus mit dem Theme "owlet".
+#
+# Datenquelle ist der inoffizielle Endpunkt, den auch Claude Code fuer /usage
+# nutzt (api.anthropic.com/api/oauth/usage). Die Integration fragt ihn alle
+# 300 s ab; haeufiger fuehrt zu einer etwa 24-stuendigen Sperre, in der auch
+# claude.ai keine Nutzung mehr zeigt. Die Karte liest nur Zustaende, sie
+# loest keine Abfrage aus.
+#
+# Nicht gefundene Sensoren (Integration noch nicht eingerichtet, Praefix
+# nicht ersetzt) zeigt die Karte als Hinweis statt leer.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "Claude Usage" (trickv/hass-claude-usage), eingerichtet ueber
+# Einstellungen -> Geraete & Dienste.
+type: custom:button-card
+entity: sensor.claude_usage_konto_session_usage
+# Die Zeilen lesen weitere Sensoren ueber variables.prefix; button-card
+# erkennt sie nicht selbst, deshalb bei jeder Zustandsaenderung neu zeichnen.
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:robot-outline
+name: Claude
+label: Nutzungslimits des Abos
+tap_action:
+  action: more-info
+variables:
+  # Nur diese Zeile anpassen: Praefix aller Sensoren der Integration
+  prefix: sensor.claude_usage_konto
+  schwelle_amber: 60
+  schwelle_koralle: 80
+  schwelle_rot: 95
+  # Palette als Theme-Variablen mit dunklem Rueckfall (DESIGN.md)
+  farben: |
+    [[[
+      return {
+        gruen:   'var(--owlet-gruen, #a6d49e)',
+        amber:   'var(--owlet-amber, #e6b566)',
+        koralle: 'var(--owlet-koralle, #e7936e)',
+        rot:     'var(--owlet-rot, #f0736a)',
+        akzent:  'var(--owlet-violett, #b399d4)',
+        text:    'var(--owlet-text, #f2f5f8)',
+        label:   'var(--owlet-label, #b4c0cf)',
+        sek:     'var(--owlet-text-sekundaer, #8794a5)',
+        aus:     'var(--owlet-aus, #3a4453)',
+        kachel:  'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:    'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:    'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+  # Hilfsfunktionen; einmal je Render ausgewertet
+  hf: |
+    [[[
+      const f = variables.farben;
+      const st = (id) => states[id];
+      const num = (id) => {
+        const e = st(id);
+        if (!e || ['unavailable', 'unknown', ''].includes(e.state)) return null;
+        const v = parseFloat(e.state);
+        return isNaN(v) ? null : v;
+      };
+      const datum = (iso) => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? null : d;
+      };
+      // Stufe nach Auslastung: Farbe, Stufenwort, Pille gefuellt?
+      const stufe = (p) => {
+        if (p === null) return { farbe: f.sek, wort: '', voll: false };
+        if (p >= variables.schwelle_rot)     return { farbe: f.rot,     wort: 'kritisch',  voll: true };
+        if (p >= variables.schwelle_koralle) return { farbe: f.koralle, wort: 'sehr hoch', voll: false };
+        if (p >= variables.schwelle_amber)   return { farbe: f.amber,   wort: 'hoch',      voll: false };
+        return { farbe: f.gruen, wort: '', voll: false };
+      };
+      const zwei = (n) => String(n).padStart(2, '0');
+      const uhr = (d) => `${zwei(d.getHours())}:${zwei(d.getMinutes())}`;
+      const tage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+      // Reset: "in 2 h 13 min" + "14:30" bzw. "Mo 14:00"
+      const reset = (d) => {
+        if (!d) return { rest: 'Reset unbekannt', wann: '' };
+        const now = new Date();
+        const ms = d - now;
+        if (ms <= 0) return { rest: 'Reset faellig', wann: uhr(d) };
+        const min = Math.round(ms / 60000);
+        const h = Math.floor(min / 60), m = min % 60, t = Math.floor(h / 24);
+        let rest;
+        if (t >= 1) rest = `in ${t} T ${h - t * 24} h`;
+        else if (h >= 1) rest = `in ${h} h ${m} min`;
+        else rest = `in ${m} min`;
+        const heute = d.toDateString() === now.toDateString();
+        const morgen = new Date(now); morgen.setDate(now.getDate() + 1);
+        let wann;
+        if (heute) wann = uhr(d);
+        else if (d.toDateString() === morgen.toDateString()) wann = `morgen ${uhr(d)}`;
+        else wann = `${tage[d.getDay()]} ${uhr(d)}`;
+        return { rest: 'Reset ' + rest, wann };
+      };
+      const pille = (s) => {
+        if (!s.wort) return '';
+        const stil = s.voll
+          ? `background:${f.rot};color:#3d1512;border:1px solid ${f.rot};`
+          : `background:color-mix(in srgb, ${s.farbe} 12%, transparent);color:${s.farbe};border:1px solid color-mix(in srgb, ${s.farbe} 24%, transparent);`;
+        return `<span style="${stil}font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:3px 8px;border-radius:9px;white-space:nowrap;">${s.wort}</span>`;
+      };
+      // Eine Limit-Zeile als Unterkachel
+      const zeile = (titel, pct, d, extra) => {
+        const s = stufe(pct);
+        const breite = pct === null ? 0 : Math.max(0, Math.min(100, pct));
+        const wert = pct === null ? '–' : `${Math.round(pct)}&thinsp;%`;
+        const r = reset(d);
+        const links = pct === null ? 'keine Daten' : r.rest;
+        const rechts = [extra, pct === null ? '' : r.wann].filter(Boolean).join(' · ');
+        return `
+          <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 10px;align-items:center;">
+            <div style="font-size:13px;font-weight:700;color:${f.text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${titel}</div>
+            <div style="display:flex;align-items:center;gap:8px;justify-self:end;">
+              ${pille(s)}
+              <span style="font-size:16px;font-weight:750;letter-spacing:-0.01em;color:${pct === null ? f.sek : s.farbe};font-variant-numeric:tabular-nums;">${wert}</span>
+            </div>
+            <div style="grid-column:1 / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;">
+              <div style="height:100%;width:${breite}%;border-radius:5px;background:${s.farbe};transition:width 0.5s ease;"></div>
+            </div>
+            <div style="grid-column:1 / -1;display:flex;justify-content:space-between;gap:8px;font-size:12px;color:${f.sek};font-variant-numeric:tabular-nums;">
+              <span>${links}</span><span style="text-align:right;">${rechts}</span>
+            </div>
+          </div>`;
+      };
+      return { st, num, datum, stufe, reset, zeile, uhr };
+    ]]]
+custom_fields:
+  # Verbindungs-Badge aus ..._api_error (0 verbunden, 1 Fehler, sonst getrennt)
+  badge: |
+    [[[
+      const f = variables.farben;
+      const e = states[variables.prefix + '_api_error'];
+      let c = f.sek, txt = 'getrennt';
+      if (e && e.state === '0') { c = f.gruen; txt = 'verbunden'; }
+      else if (e && e.state === '1') { c = f.rot; txt = 'API-Fehler'; }
+      return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${txt}</span>`;
+    ]]]
+  body: |
+    [[[
+      const f = variables.farben, h = variables.hf, p = variables.prefix;
+      const session = h.st(p + '_session_usage');
+      if (!session) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:4px 2px 0;">Keine Sensoren unter <span style="color:${f.label};">${p}_*</span> gefunden. Integration „Claude Usage“ einrichten und das Praefix in der Karte anpassen.</div>`;
+      }
+      const zeilen = [];
+      // 1. Session (5 h)
+      zeilen.push(h.zeile('Session · 5 h',
+        h.num(p + '_session_usage'),
+        h.datum(h.st(p + '_session_reset_time')?.state)));
+      // 2. Woche, alle Modelle; Tempo gegen den linearen Verlauf
+      const pace = h.num(p + '_week_usage_pace');
+      let tempo = '';
+      if (pace !== null && Math.abs(pace) >= 1) {
+        tempo = `${Math.round(Math.abs(pace))}&thinsp;% ${pace > 0 ? 'über' : 'unter'} Linie`;
+      }
+      zeilen.push(h.zeile('Woche · alle Modelle',
+        h.num(p + '_week_usage'),
+        h.datum(h.st(p + '_weekly_reset_time')?.state), tempo));
+      // 3. Woche je Modell: dynamische Limit-Sensoren mit kind = weekly_scoped
+      const modelle = Object.keys(states)
+        .filter(id => id.startsWith(p + '_weekly_') && id.endsWith('_limit_usage'))
+        .map(id => states[id])
+        .filter(e => e && e.attributes && e.attributes.kind === 'weekly_scoped' && e.attributes.model)
+        .sort((a, b) => String(a.attributes.model).localeCompare(String(b.attributes.model)));
+      for (const e of modelle) {
+        const flaeche = e.attributes.surface ? ` (${e.attributes.surface})` : '';
+        zeilen.push(h.zeile(`Woche · ${e.attributes.model}${flaeche}`,
+          h.num(e.entity_id), h.datum(e.attributes.resets_at)));
+      }
+      // 4. Extra-Nutzung nur, wenn eingeschaltet
+      const extraAn = h.st(p + '_extra_usage_enabled');
+      if (extraAn && ['True', 'true', 'on'].includes(extraAn.state)) {
+        const used = h.num(p + '_extra_usage_credits');
+        const limit = h.num(p + '_extra_usage_limit');
+        const einheit = h.st(p + '_extra_usage_credits')?.attributes?.unit_of_measurement || '';
+        const fmt = (v) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        let info = '';
+        if (used !== null && limit !== null) info = `${fmt(used)} von ${fmt(limit)} ${einheit}`.trim();
+        else if (used !== null) info = `${fmt(used)} ${einheit}`.trim();
+        zeilen.push(h.zeile('Extra-Nutzung · Monat', h.num(p + '_extra_usage_percent'), null, info));
+      }
+      // Fusszeile: Stand der letzten Aktualisierung
+      const stand = session.last_updated ? new Date(session.last_updated) : null;
+      const fuss = stand && !isNaN(stand.getTime())
+        ? `<div style="font-size:11.5px;color:${f.sek};text-align:right;padding:2px 2px 0;">Stand ${h.uhr(stand)} · Abfrage alle 5 min</div>`
+        : '';
+      return `<div style="display:grid;gap:8px;">${zeilen.join('')}</div>${fuss}`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 12px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - overflow: hidden
+  grid:
+    - grid-template-areas: '"i n badge" "i l badge" "body body body"'
+    - grid-template-columns: min-content minmax(0, 1fr) min-content
+    - grid-template-rows: min-content min-content auto
+    - grid-row-gap: 0
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--owlet-violett, #b399d4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--owlet-violett, #b399d4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--owlet-violett, #b399d4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--owlet-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    badge:
+      - justify-self: end
+      - align-self: center
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
