@@ -1,0 +1,197 @@
+# ============================================================================
+# Docker-Übersicht – Kennzahlen und "Braucht Aufmerksamkeit"
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        auto-entities, button-card, card-mod
+# Templates:     owlet_docker_kpi (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml): die Kennzahlen und die Liste
+# "Braucht Aufmerksamkeit" aus docker-karte.yaml, ohne Kopf (den hat die
+# Host-Karte darueber) und ohne "Alle Container" (die zeigt die Karte
+# "Container nach Projekt").
+#
+#   Kennzahlen  Laufend x/y, Gestoppt, Updates, Ungesund (owlet_docker_kpi)
+#   Zeile       Projekte, Images (davon ungenutzt), Image-Speicher
+#   Aufmerksamkeit
+#               gestoppt/dead/created, dann ungesund oder im Uebergang, dann
+#               Image-Update. Die Jinja-Vorlage ist dieselbe wie in
+#               docker-karte.yaml; Aenderungen in beiden Dateien machen.
+#               Ohne Treffer steht dort "Alles in Ordnung", ist die Umgebung
+#               offline "Keine Daten".
+#
+# Voraussetzung: custom:button-card + custom:auto-entities + card-mod (HACS),
+#                Integration Arcane (HACS), Templates aus docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: grid
+    columns: 4
+    square: false
+    cards:
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_laufende_container
+        name: Laufend
+        variables:
+          typ: laufend
+          gesamt: sensor.local_docker_container
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_gestoppte_container
+        name: Gestoppt
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_container_updates_verfugbar
+        name: Updates
+      - type: custom:button-card
+        template: owlet_docker_kpi
+        entity: sensor.local_docker_ungesunde_container
+        name: Ungesund
+        variables:
+          typ: ungesund
+          warn: 'var(--owlet-rot, #f0736a)'
+
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: true
+    label: |
+      [[[
+        const v = (id) => { const s = states[id]; return s && !isNaN(parseFloat(s.state)) ? parseFloat(s.state) : null; };
+        const projekte = v('sensor.local_docker_projekte');
+        const images = v('sensor.local_docker_images');
+        const frei = v('sensor.local_docker_ungenutzte_images');
+        const gb = v('sensor.local_docker_image_speicher');
+        const teile = [];
+        if (projekte !== null) teile.push(projekte + ' Projekte');
+        if (images !== null) teile.push(images + ' Images' + (frei ? ', davon ' + frei + ' ungenutzt' : ''));
+        if (gb !== null) teile.push(gb.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB');
+        return teile.join(' · ');
+      ]]]
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - border: none
+        - box-shadow: none
+        - padding: 0 2px
+      label:
+        - justify-self: start
+        - font-size: 12px
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
+        - white-space: normal
+        - text-align: left
+
+  # Ausgabe als Python-Literal ({{ liste }}), nicht mit tojson (Begruendung in
+  # docker-karte.yaml). else: Zeile "Alles in Ordnung" bzw. "Keine Daten".
+  - type: custom:auto-entities
+    card:
+      type: vertical-stack
+    card_param: cards
+    filter:
+      template: |
+        {%- set ns = namespace(r0=[], r1=[], r2=[]) -%}
+        {%- for s in integration_entities('arcane') | select('match', 'switch\\.container_') | sort -%}
+          {%- set b = s.split('.')[1] -%}
+          {%- set z = states('sensor.' ~ b ~ '_zustand') -%}
+          {%- set e = {'entity': s, 'type': 'custom:button-card', 'template': 'owlet_docker_zeile'} -%}
+          {%- if z in ['unavailable', 'unknown'] -%}
+          {%- elif z in ['exited', 'dead', 'created'] -%}{%- set ns.r0 = ns.r0 + [e] -%}
+          {%- elif z != 'running' or is_state('binary_sensor.' ~ b ~ '_healthy', 'off') -%}{%- set ns.r1 = ns.r1 + [e] -%}
+          {%- elif is_state('update.' ~ b ~ '_image_update', 'on') -%}{%- set ns.r2 = ns.r2 + [e] -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- set liste = ns.r0 + ns.r1 + ns.r2 -%}
+        {%- if liste -%}
+          {%- set titel = {
+            'type': 'custom:button-card', 'name': 'Braucht Aufmerksamkeit',
+            'show_icon': false, 'show_state': false,
+            'tap_action': {'action': 'none'}, 'hold_action': {'action': 'none'},
+            'styles': {
+              'card': [{'background': 'none'}, {'border': 'none'}, {'box-shadow': 'none'}, {'padding': '2px 2px 0'}],
+              'name': [{'justify-self': 'start'}, {'font-size': '10.5px'}, {'font-weight': '700'},
+                       {'letter-spacing': '0.06em'}, {'text-transform': 'uppercase'},
+                       {'color': 'var(--owlet-text-sekundaer, #8794a5)'}]
+            }
+          } -%}
+          {%- set liste = [titel] + liste -%}
+        {%- endif -%}
+        {{ liste }}
+    else:
+      type: custom:button-card
+      entity: binary_sensor.local_docker_online
+      show_icon: true
+      show_name: false
+      show_state: false
+      icon: '[[[ return entity && entity.state === "on" ? "mdi:check-circle-outline" : "mdi:help-circle-outline"; ]]]'
+      variables:
+        akzent: '[[[ return entity && entity.state === "on" ? "var(--owlet-gruen, #a6d49e)" : ""; ]]]'
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      custom_fields:
+        titel: |
+          [[[
+            const on = entity && entity.state === 'on';
+            return `<span style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);">${on ? 'Alles in Ordnung' : 'Keine Daten'}</span>`;
+          ]]]
+        info: |
+          [[[
+            const on = entity && entity.state === 'on';
+            return `<span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${on ? 'Keine gestoppten, ungesunden oder wartenden Container' : 'Arcane ist nicht erreichbar'}</span>`;
+          ]]]
+      styles:
+        card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+          - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        grid:
+          - grid-template-areas: '"i titel" "i info"'
+          - grid-template-columns: 36px minmax(0, 1fr)
+          - grid-template-rows: min-content min-content
+          - column-gap: 12px
+          - row-gap: 2px
+        img_cell:
+          - width: 36px
+          - height: 36px
+          - box-sizing: border-box
+          - border-radius: 11px
+          - margin: 0
+          - background: |
+              [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+          - border: |
+              [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+        icon:
+          - width: 19px
+          - height: 19px
+          - margin: 0
+          - --ha-icon-display: block
+          - color: '[[[ return variables.akzent || "var(--owlet-muted, #6e7988)"; ]]]'
+        custom_fields:
+          titel:
+            - justify-self: start
+            - align-self: end
+          info:
+            - justify-self: start
+            - align-self: start
+            - text-align: left

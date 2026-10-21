@@ -1,0 +1,101 @@
+# ============================================================================
+# Docker-Container – alle Container nach Compose-Projekt gruppiert
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        auto-entities, button-card, card-mod, expander-card
+# Templates:     owlet_docker_kopf (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Kopf       Anzahl der Container
+#   Gruppen    je Projekt mit mehreren Containern ein Abschnittstitel
+#              ("authentik · 4 Container") und die Zeilen (owlet_docker_zeile)
+#   Einzelne   Projekte mit nur einem Container und Container ohne Projekt
+#              (hier dockge), zugeklappt mit Zahl
+#
+# Die Gruppen bildet die Jinja-Vorlage aus dem Geraetebaum: Arcane-HA haengt
+# das Geraet eines Containers an das Geraet seines Projekts (via_device,
+# Modell "Compose project"); Container ohne Projekt haengen direkt an der
+# Umgebung. Die Vorlage setzt die Templates owlet_docker_titel,
+# owlet_docker_zeile und owlet_docker_aufklapper (docker-templates.yaml)
+# selbst; im Kopfblock stehen sie nicht, weil ci/check_kopf.py nur
+# template:-Schluessel im YAML zaehlt. Die Kopfzeile "Einzelne Container"
+# ist wie "Alle Container" in docker-karte.yaml gestaltet.
+#
+# Ausgabe als Python-Literal ({{ liste }}), nicht mit tojson (Begruendung in
+# docker-karte.yaml). Die Vorlage liest keine Zustaende, nur Registry-Daten;
+# HA rechnet sie deshalb nur beim Laden der Seite. Ein neuer Container
+# erscheint nach dem naechsten Laden. Zustand, Neustart und Schalter der
+# Zeilen sind trotzdem live (eigene button-cards).
+#
+# Voraussetzung: custom:button-card + custom:auto-entities
+#                + custom:expander-card + card-mod (HACS), Integration Arcane
+#                (HACS), Templates aus docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    entity: sensor.local_docker_container
+    icon: mdi:package-variant-closed
+    name: Container nach Projekt
+    label: |
+      [[[
+        const g = entity ? parseInt(entity.state, 10) : NaN;
+        const p = states['sensor.local_docker_projekte'];
+        if (isNaN(g)) return 'keine Daten';
+        return g + ' Container' + (p && !isNaN(parseInt(p.state, 10)) ? ' in ' + p.state + ' Projekten' : '');
+      ]]]
+    tap_action:
+      action: more-info
+
+  - type: custom:auto-entities
+    card:
+      type: vertical-stack
+    card_param: cards
+    filter:
+      template: |
+        {%- set ns = namespace(g={}) -%}
+        {%- for s in integration_entities('arcane') | select('match', 'switch\\.container_') | sort -%}
+          {%- set v = device_attr(device_id(s), 'via_device_id') -%}
+          {%- set p = device_attr(v, 'name') if v and device_attr(v, 'model') == 'Compose project' else '' -%}
+          {%- set p = p | regex_replace('^Project ', '') -%}
+          {%- set ns.g = dict(ns.g, **{p: ns.g.get(p, []) + [s]}) -%}
+        {%- endfor -%}
+        {%- set zeile = {'type': 'custom:button-card', 'template': 'owlet_docker_zeile'} -%}
+        {%- set ns2 = namespace(liste=[], einzeln=[]) -%}
+        {%- for p in ns.g | sort -%}
+          {%- set c = ns.g[p] -%}
+          {%- if p and c | count > 1 -%}
+            {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'owlet_docker_titel', 'name': p ~ ' · ' ~ (c | count) ~ ' Container'}] -%}
+            {%- for s in c -%}{%- set ns2.liste = ns2.liste + [dict(zeile, entity=s)] -%}{%- endfor -%}
+          {%- else -%}
+            {%- for s in c -%}{%- set ns2.einzeln = ns2.einzeln + [dict(zeile, entity=s)] -%}{%- endfor -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if ns2.einzeln -%}
+          {%- set stil = 'ha-card { background: none !important; border: none !important; box-shadow: none !important; } '
+             ~ '.title-card-header { background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)); border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)); border-radius: 14px; min-height: 48px; padding-right: 4px; } '
+             ~ 'ha-card ha-icon, ha-card .header { color: var(--owlet-muted, #6e7988) !important; }' -%}
+          {%- set ns2.liste = ns2.liste + [{
+                'type': 'custom:expander-card', 'expanded': false, 'clear': true,
+                'padding': '0', 'child-padding': '0', 'gap': '8px', 'title-card-padding': '0',
+                'title-card': {'type': 'custom:button-card', 'template': 'owlet_docker_aufklapper',
+                               'name': 'Einzelne Container', 'variables': {'zahl': ns2.einzeln | count}},
+                'cards': ns2.einzeln | sort(attribute='entity'),
+                'card_mod': {'style': stil}}] -%}
+        {%- endif -%}
+        {{ ns2.liste }}

@@ -82,8 +82,18 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`docker-container-karte.yaml`](netzwerk/docker-container-karte.yaml) | karte | Docker-Container – alle Container nach Compose-Projekt gruppiert | auto-entities, button-card, card-mod, expander-card | – | aktiv |
+| [`docker-ereignisse-karte.yaml`](netzwerk/docker-ereignisse-karte.yaml) | karte | Docker-Ereignisse – Logbuch der Container und Push bei Absturz | button-card, card-mod | – | aktiv |
+| [`docker-host-karte.yaml`](netzwerk/docker-host-karte.yaml) | karte | Docker-Host – Status, CPU, RAM, Disk und Versionen | button-card, card-mod | – | aktiv |
 | [`docker-karte.yaml`](netzwerk/docker-karte.yaml) | karte | Docker – Container eines Docker-Hosts ueber Arcane | auto-entities, button-card, card-mod, expander-card | – | aktiv |
-| [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Template owlet_docker_zeile | button-card | – | aktiv |
+| [`docker-konfig.yaml`](netzwerk/docker-konfig.yaml) | konfig | Docker – Ereignisse, Absturzmeldung und Sammel-Update fuer die Docker-View | – | `notify.mobile_app_iphone` | aktiv |
+| [`docker-projekte-karte.yaml`](netzwerk/docker-projekte-karte.yaml) | karte | Docker-Projekte – Compose-Projekte mit Start/Stop und Neustart | auto-entities, button-card, card-mod, expander-card | – | aktiv |
+| [`docker-speicher-karte.yaml`](netzwerk/docker-speicher-karte.yaml) | karte | Docker-Speicher – Images, Volumes, Netzwerke und Aufraeumen | button-card, card-mod | – | aktiv |
+| [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Templates owlet_docker_* (Zeilen, Kopf, Kennzahlen) | button-card | – | aktiv |
+| [`docker-uebersicht-karte.yaml`](netzwerk/docker-uebersicht-karte.yaml) | karte | Docker-Übersicht – Kennzahlen und "Braucht Aufmerksamkeit" | auto-entities, button-card, card-mod | – | aktiv |
+| [`docker-updates-karte.yaml`](netzwerk/docker-updates-karte.yaml) | karte | Docker-Updates – Image-Updates der Container und von Arcane | auto-entities, button-card, card-mod | – | aktiv |
+| [`docker-verlauf-karte.yaml`](netzwerk/docker-verlauf-karte.yaml) | karte | Docker-Verlauf – Container und Image-Speicher ueber 7 Tage | apexcharts-card, button-card, card-mod | – | aktiv |
+| [`docker-view.yaml`](netzwerk/docker-view.yaml) | view | Docker – komplette Ansicht | decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`homematic-view.yaml`](netzwerk/homematic-view.yaml) | view | Homematic IP – komplette Ansicht | button-card, card-mod, decluttering-card | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`netzwerk-view.yaml`](netzwerk/netzwerk-view.yaml) | view | Netzwerk – komplette Ansicht | decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`system-karte.yaml`](netzwerk/system-karte.yaml) | karte | System – Home Assistant und Proxmox-VM | button-card, card-mod, uptime-card | – | aktiv |

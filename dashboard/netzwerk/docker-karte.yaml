@@ -5,7 +5,8 @@
 # Bereich:       netzwerk
 # Status:        aktiv
 # Karten:        auto-entities, button-card, card-mod, expander-card
-# Templates:     owlet_docker_zeile (docker-templates.yaml)
+# Templates:     owlet_docker_kpi (docker-templates.yaml),
+#                owlet_docker_zeile (docker-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   keine
 # ============================================================================
@@ -34,11 +35,16 @@
 # nur bei Aenderungen der Entitaeten neu rechnet, die sie schon liest.
 #
 # Steuerung: Stoppen und Neustart fragen nach (button-card confirmation),
-# Starten nicht. Details zu den Zeilen: docker-templates.yaml.
+# Starten nicht. Details zu den Zeilen und Kennzahlen: docker-templates.yaml.
+# Die Docker-View (docker-view.yaml) zeigt dieselben Kennzahlen und dieselbe
+# Liste "Braucht Aufmerksamkeit" in docker-uebersicht-karte.yaml; aendert sich
+# die Vorlage hier, dort mit aendern.
 #
-# Umgebung: Die Entitaeten der Umgebung heissen nach ihrem Namen in Arcane,
-# hier "Local Docker" (sensor.local_docker_*). Bei einem anderen Namen die
-# IDs in Kopf, Kennzahlen und Zeile anpassen.
+# Umgebung: Die Entitaeten der Umgebung heissen nach ihrem Namen in Arcane
+# beim Anlegen, hier "Local Docker" (sensor.local_docker_*). HA behaelt die
+# IDs, wenn die Umgebung spaeter umbenannt wird; der Untertitel im Kopf
+# folgt dem aktuellen Namen. Bei anderen IDs Kopf, Kennzahlen und Zeile
+# anpassen.
 #
 # expander-card 0.1.5 erzeugt die inneren Karten auch zugeklappt. Bei
 # 28 Containern sind das 84 button-cards ohne Diagramme; das bleibt leicht.
@@ -65,7 +71,11 @@ cards:
     entity: binary_sensor.local_docker_online
     icon: mdi:docker
     name: Docker
-    label: Local Docker · Arcane
+    label: |
+      [[[
+        const n = String((entity && entity.attributes.friendly_name) || '').replace(/ Online$/, '');
+        return (n || 'Docker') + ' · Arcane';
+      ]]]
     show_icon: true
     show_name: true
     show_label: true
@@ -121,130 +131,33 @@ cards:
           - justify-self: end
           - align-self: center
 
-  # ---- Kennzahlen ----
+  # ---- Kennzahlen (Template owlet_docker_kpi) ----
   - type: grid
     columns: 4
     square: false
     cards:
       - type: custom:button-card
+        template: owlet_docker_kpi
         entity: sensor.local_docker_laufende_container
         name: Laufend
         variables:
-          wert: |
-            [[[
-              const g = states['sensor.local_docker_container'];
-              if (!entity || isNaN(parseInt(entity.state, 10)) || !g || isNaN(parseInt(g.state, 10))) return '–';
-              return entity.state + '/' + g.state;
-            ]]]
-          akzent: |
-            [[[
-              const g = states['sensor.local_docker_container'];
-              if (variables.wert === '–') return '';
-              return entity.state === g.state ? 'var(--owlet-gruen, #a6d49e)' : 'var(--owlet-amber, #e6b566)';
-            ]]]
-        label: &kpi_label '[[[ return variables.wert; ]]]'
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        tap_action: &kpi_tap
-          action: more-info
-        styles: &kpi_styles
-          card:
-            - border-radius: 14px
-            - padding: 10px 7px
-            - box-shadow: none
-            - background: |
-                [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 12%, transparent)' : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'; ]]]
-            - border: |
-                [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
-          grid:
-            - grid-template-areas: '"l" "n"'
-            - grid-template-columns: 1fr
-            - grid-template-rows: min-content min-content
-            - row-gap: 3px
-          label:
-            - justify-self: start
-            - font-size: 20px
-            - font-weight: 750
-            - letter-spacing: -0.02em
-            - color: '[[[ return variables.akzent || "var(--owlet-text-sekundaer, #8794a5)"; ]]]'
-          name:
-            - justify-self: start
-            - max-width: 100%
-            - overflow: hidden
-            - text-overflow: ellipsis
-            - font-size: 10.5px
-            - font-weight: 700
-            - letter-spacing: 0.02em
-            # 0,02em statt 0,06em und 7 px Innenabstand: auf dem Handy ist eine
-            # Kachel ~86 px breit. Gemessen (Chromium, Arial-Metrik) braucht
-            # "UNGESUND" mit 0,06em 65,1 px bei 64 px Platz, mit 0,02em
-            # 61,8 px bei 70 px Platz; Reserve fuer bis zu 13 % breitere Schrift.
-            - text-transform: uppercase
-            # auf getoenter Flaeche Label-Grau (DESIGN.md, Abschnitt Text)
-            - color: '[[[ return variables.akzent ? "var(--owlet-label, #b4c0cf)" : "var(--owlet-text-sekundaer, #8794a5)"; ]]]'
+          typ: laufend
+          gesamt: sensor.local_docker_container
       - type: custom:button-card
+        template: owlet_docker_kpi
         entity: sensor.local_docker_gestoppte_container
         name: Gestoppt
-        variables:
-          wert: &kpi_wert |
-            [[[
-              const n = entity ? parseInt(entity.state, 10) : NaN;
-              return isNaN(n) ? '–' : String(n);
-            ]]]
-          akzent: '[[[ return parseInt(variables.wert, 10) > 0 ? "var(--owlet-amber, #e6b566)" : ""; ]]]'
-        label: *kpi_label
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        tap_action: *kpi_tap
-        styles: *kpi_styles
       - type: custom:button-card
+        template: owlet_docker_kpi
         entity: sensor.local_docker_container_updates_verfugbar
         name: Updates
-        variables:
-          wert: *kpi_wert
-          akzent: '[[[ return parseInt(variables.wert, 10) > 0 ? "var(--owlet-amber, #e6b566)" : ""; ]]]'
-        label: *kpi_label
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        tap_action: *kpi_tap
-        styles: *kpi_styles
       - type: custom:button-card
+        template: owlet_docker_kpi
         entity: sensor.local_docker_ungesunde_container
         name: Ungesund
         variables:
-          # Selbst gezaehlt statt sensor.local_docker_ungesunde_container:
-          # Arcane zaehlt Container im Healthcheck-Start ("(health:
-          # starting)") als ungesund, z. B. 29 s nach jedem Update. Gezaehlt
-          # wird wie in der Zeile (docker-templates.yaml): laeuft, _healthy
-          # off, kein Start. Die Entity bleibt fuer Antippen und Neuzeichnen.
-          wert: |
-            [[[
-              let n = 0;
-              for (const id of Object.keys(states)) {
-                if (!/^binary_sensor\.container_.+_healthy$/.test(id) || states[id].state !== 'off') continue;
-                const b = id.slice('binary_sensor.'.length, -'_healthy'.length);
-                const z = states['sensor.' + b + '_zustand'];
-                const s = states['sensor.' + b + '_status'];
-                if (!z || z.state !== 'running') continue;
-                if (s && /\(health: starting\)/.test(s.state)) continue;
-                n++;
-              }
-              return String(n);
-            ]]]
-          akzent: '[[[ return parseInt(variables.wert, 10) > 0 ? "var(--owlet-rot, #f0736a)" : ""; ]]]'
-        label: *kpi_label
-        show_icon: false
-        show_name: true
-        show_label: true
-        show_state: false
-        tap_action: *kpi_tap
-        styles: *kpi_styles
+          typ: ungesund
+          warn: 'var(--owlet-rot, #f0736a)'
 
   # ---- Projekte, Images, Speicher ----
   - type: custom:button-card

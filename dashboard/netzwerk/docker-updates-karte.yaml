@@ -1,0 +1,190 @@
+# ============================================================================
+# Docker-Updates – Image-Updates der Container und von Arcane
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        auto-entities, button-card, card-mod
+# Templates:     owlet_docker_kopf (docker-templates.yaml),
+#                owlet_docker_titel (docker-templates.yaml),
+#                owlet_docker_update (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Karte der Docker-View (docker-view.yaml).
+#
+#   Kopf       Anzahl ausstehender Updates; "Alle aktualisieren" startet
+#              script.docker_alle_updates_installieren (docker-konfig.yaml)
+#              nach Rueckfrage. Ohne Update oder waehrend das Skript laeuft
+#              ist der Knopf aus.
+#   Liste      je ausstehendem Image-Update eine Zeile (owlet_docker_update):
+#              Image, installierte und neue Version, "Installieren" mit
+#              Rueckfrage. Ohne Update: "Alle Container-Images aktuell".
+#   Arcane     Arcane selbst; die Installation laedt das neue Arcane-Image und
+#              startet es neu. Recht: system:upgrade.
+#
+# Arcane meldet die Versionen als Kurz-Digest (z. B. 696a5fb17b9a) oder als
+# Tag; nach einer Installation stand bei new-watchtower auf beiden Seiten
+# "latest" (21.10.2026).
+#
+# Voraussetzung: custom:button-card + custom:auto-entities + card-mod (HACS),
+#                Integration Arcane (HACS) mit den Rechten containers:redeploy
+#                und system:upgrade, Skript aus docker-konfig.yaml, Templates
+#                aus docker-templates.yaml.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 10px !important;
+    }
+cards:
+  - type: custom:button-card
+    template: owlet_docker_kopf
+    entity: sensor.local_docker_container_updates_verfugbar
+    icon: mdi:package-up
+    name: Image-Updates
+    label: |
+      [[[
+        const n = entity ? parseInt(entity.state, 10) : NaN;
+        const g = states['sensor.local_docker_container'];
+        if (isNaN(n)) return 'keine Daten';
+        if (n === 0) return 'Alle ' + (g ? g.state + ' ' : '') + 'Container aktuell';
+        return n + (n === 1 ? ' Update ausstehend' : ' Updates ausstehend');
+      ]]]
+    custom_fields:
+      badge:
+        card:
+          type: custom:button-card
+          entity: script.docker_alle_updates_installieren
+          name: |
+            [[[ return entity && entity.state === 'on' ? 'läuft …' : 'Alle aktualisieren'; ]]]
+          show_icon: false
+          show_name: true
+          show_state: false
+          variables:
+            anzahl: |
+              [[[
+                const s = states['sensor.local_docker_container_updates_verfugbar'];
+                const n = s ? parseInt(s.state, 10) : NaN;
+                return isNaN(n) ? 0 : n;
+              ]]]
+            aktiv: |
+              [[[
+                const s = states['sensor.local_docker_container_updates_verfugbar'];
+                const n = s ? parseInt(s.state, 10) : NaN;
+                const sk = states['script.docker_alle_updates_installieren'];
+                return n > 0 && !!sk && sk.state === 'off';
+              ]]]
+          tap_action: |
+            [[[
+              if (!variables.aktiv) return { action: 'none' };
+              return {
+                action: 'perform-action',
+                perform_action: 'script.turn_on',
+                target: { entity_id: 'script.docker_alle_updates_installieren' },
+                confirmation: { text: variables.anzahl + (variables.anzahl === 1 ? ' Image-Update' : ' Image-Updates') + ' nacheinander installieren? Jeder Container ist dabei kurz nicht erreichbar.' }
+              };
+            ]]]
+          hold_action:
+            action: none
+          styles:
+            card:
+              - min-height: 40px
+              - padding: 0 12px
+              - border-radius: 12px
+              - box-shadow: none
+              - background: |
+                  [[[ return variables.aktiv ? 'color-mix(in srgb, var(--owlet-amber, #e6b566) 12%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+              - border: |
+                  [[[ return variables.aktiv ? '1px solid color-mix(in srgb, var(--owlet-amber, #e6b566) 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+              - opacity: '[[[ return variables.aktiv || (entity && entity.state === "on") ? 1 : 0.4; ]]]'
+            name:
+              - font-size: 13px
+              - font-weight: 700
+              - white-space: nowrap
+              - color: '[[[ return variables.aktiv ? "var(--owlet-amber, #e6b566)" : "var(--owlet-label, #b4c0cf)"; ]]]'
+
+  - type: custom:auto-entities
+    card:
+      type: vertical-stack
+    card_param: cards
+    sort:
+      method: name
+    filter:
+      include:
+        - integration: arcane
+          domain: update
+          entity_id: 'update.container_*'
+          state: 'on'
+          options:
+            type: custom:button-card
+            template: owlet_docker_update
+    else:
+      type: custom:button-card
+      icon: mdi:package-variant-closed-check
+      show_icon: true
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      custom_fields:
+        titel: >-
+          <span style="font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);">Alle Container-Images aktuell</span>
+        info: >-
+          <span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">Arcane prüft die Images selbst; neue erscheinen hier</span>
+      styles:
+        card:
+          - border-radius: 14px
+          - padding: 10px 12px
+          - box-shadow: none
+          - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+          - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        grid:
+          - grid-template-areas: '"i titel" "i info"'
+          - grid-template-columns: 36px minmax(0, 1fr)
+          - grid-template-rows: min-content min-content
+          - column-gap: 12px
+          - row-gap: 2px
+        img_cell:
+          - width: 36px
+          - height: 36px
+          - box-sizing: border-box
+          - border-radius: 11px
+          - margin: 0
+          - background: 'color-mix(in srgb, var(--owlet-gruen, #a6d49e) 16%, transparent)'
+          - border: '1px solid color-mix(in srgb, var(--owlet-gruen, #a6d49e) 24%, transparent)'
+        icon:
+          - width: 19px
+          - height: 19px
+          - margin: 0
+          - --ha-icon-display: block
+          - color: 'var(--owlet-gruen, #a6d49e)'
+        custom_fields:
+          titel:
+            - justify-self: start
+            - align-self: end
+          info:
+            - justify-self: start
+            - align-self: start
+            - text-align: left
+            - max-width: 100%
+            - overflow: hidden
+            - text-overflow: ellipsis
+
+  - type: custom:button-card
+    template: owlet_docker_titel
+    name: Arcane
+
+  - type: custom:button-card
+    template: owlet_docker_update
+    entity: update.local_docker_arcane
+    variables:
+      titel: Arcane selbst
+      frage: Arcane jetzt aktualisieren? Arcane lädt sein neues Image und startet neu; die Integration ist dabei kurz nicht erreichbar.

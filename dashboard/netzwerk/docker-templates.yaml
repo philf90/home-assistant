@@ -1,5 +1,5 @@
 # ============================================================================
-# Docker – button-card-Template owlet_docker_zeile
+# Docker – button-card-Templates owlet_docker_* (Zeilen, Kopf, Kennzahlen)
 # ----------------------------------------------------------------------------
 # Art:           templates
 # Bereich:       netzwerk
@@ -10,11 +10,22 @@
 #                oberste Ebene unter button_card_templates:
 # Platzhalter:   keine
 # ============================================================================
-# Genutzt von docker-karte.yaml. Entwurf: Vorschau-Artefakt "Docker-Karte
-# Vorschau" (Oktober 2026).
+# Genutzt von docker-karte.yaml (Netzwerk-View) und den Karten der
+# Docker-View (docker-view.yaml). Entwuerfe: Vorschau-Artefakte "Docker-Karte
+# Vorschau" und "Docker-View Konzept" (Oktober 2026).
+#
+# Uebersicht der Templates (Einzelheiten jeweils darueber):
+#   owlet_docker_zeile     Container-Zeile mit Neustart und Start/Stop
+#   owlet_docker_projekt   Compose-Projekt-Zeile (erbt owlet_docker_zeile)
+#   owlet_docker_update    Zeile mit Image-Update und "Installieren"
+#   owlet_docker_kopf      Kartenkopf: Icon-Kachel, Titel, Untertitel, Badge
+#   owlet_docker_titel     Abschnittstitel (10,5 px, Versalien)
+#   owlet_docker_aufklapper  Kopfzeile einer expander-card mit Zahl-Chip
+#   owlet_docker_kpi       Kennzahl-Kachel (Laufend, Gestoppt, ...)
+#   owlet_docker_messwert  Messwert mit Balken (Host-CPU, -RAM, -Disk)
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> den Eintrag unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> die Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen (neben "views:";
 #   den Block gibt es schon, wenn andere Owlet-Templates drin sind).
 #
@@ -364,3 +375,521 @@ button_card_templates:
           - align-self: center
         schalter:
           - align-self: center
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_projekt: Zeile je Compose-Projekt. Entity ist der Schalter
+  # switch.project_<x> (an = compose up, aus = compose down). Erbt Aufbau,
+  # Neustart und Schalter von owlet_docker_zeile; Geschwister:
+  #   sensor.project_<x>_status             running | partially running | stopped
+  #   sensor.project_<x>_laufende_services  und sensor.project_<x>_services
+  #   binary_sensor.project_<x>_update_verfugbar
+  #   button.project_<x>_neustarten
+  # Herunterfahren fragt nach: compose down entfernt die Container des
+  # Projekts, ihre Entitaeten verschwinden bis zum naechsten Start (laut
+  # README von Arcane-HA). Starten fragt nicht nach.
+  owlet_docker_projekt:
+    template: owlet_docker_zeile
+    variables:
+      anzeige: '[[[ return String((entity && entity.attributes.friendly_name) || variables.basis).replace(/^Project /, ""); ]]]'
+      zustand: |
+        [[[
+          const s = states['sensor.' + variables.basis + '_status'];
+          return s ? s.state : 'unknown';
+        ]]]
+      status: '[[[ return ""; ]]]'
+      startet: '[[[ return false; ]]]'
+      ungesund: '[[[ return false; ]]]'
+      update: '[[[ return false; ]]]'
+      projekt_update: |
+        [[[
+          const u = states['binary_sensor.' + variables.basis + '_update_verfugbar'];
+          return !!u && u.state === 'on';
+        ]]]
+      akzent: |
+        [[[
+          const z = variables.zustand;
+          if (z === 'running') return 'var(--owlet-gruen, #a6d49e)';
+          if (z === 'stopped' || z === 'unavailable' || z === 'unknown') return '';
+          return 'var(--owlet-amber, #e6b566)';
+        ]]]
+      text: |
+        [[[
+          const z = variables.zustand;
+          if (z === 'unavailable' || z === 'unknown') return 'keine Daten';
+          const l = states['sensor.' + variables.basis + '_laufende_services'];
+          const g = states['sensor.' + variables.basis + '_services'];
+          const dienste = (l && g) ? ' · ' + l.state + '/' + g.state + ' Services' : '';
+          const wort = { 'running': 'läuft', 'partially running': 'läuft teilweise', 'stopped': 'gestoppt' }[z] || z;
+          return wort + dienste + (variables.projekt_update ? ' · Update verfügbar' : '');
+        ]]]
+    icon: '[[[ return variables.zustand === "stopped" ? "mdi:layers-off-outline" : "mdi:layers-outline"; ]]]'
+    tap_action:
+      action: more-info
+      entity: '[[[ return "sensor." + variables.basis + "_status"; ]]]'
+    custom_fields:
+      info: |
+        [[[
+          const farbe = variables.zustand === 'partially running' ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-text-sekundaer, #8794a5)';
+          return `<span style="font-size:12px;color:${farbe};">${variables.text}</span>`;
+        ]]]
+      neustart:
+        card:
+          tap_action:
+            confirmation:
+              text: '[[[ return "Projekt " + variables.anzeige + " neu starten? Alle Container des Projekts starten neu."; ]]]'
+      schalter:
+        card:
+          tap_action: |
+            [[[
+              if (!entity || entity.state === 'unavailable') return { action: 'none' };
+              if (entity.state !== 'on') return { action: 'toggle' };
+              return {
+                action: 'toggle',
+                confirmation: { text: 'Projekt ' + variables.anzeige + ' herunterfahren? compose down entfernt seine Container; sie kommen erst mit dem nächsten Start zurück.' }
+              };
+            ]]]
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_update: Zeile je Image-Update. Entity ist eine update-Entitaet
+  # der Arcane-Integration (update.container_<x>_image_update oder die von
+  # Arcane selbst). Antippen oeffnet den Update-Dialog von HA, "Installieren"
+  # ruft update.install mit Rueckfrage auf. Ohne ausstehendes Update steht
+  # "aktuell" mit der installierten Version da und der Knopf ist aus.
+  #   variables.titel  ersetzt den Namen (fuer Arcane selbst)
+  #   variables.frage  Text der Rueckfrage (Standard: Container)
+  # Rechte: containers:redeploy (Container), system:upgrade (Arcane).
+  owlet_docker_update:
+    variables:
+      titel: ''
+      frage: ''
+      anzeige: |
+        [[[
+          if (variables.titel) return variables.titel;
+          let n = String((entity && entity.attributes.friendly_name) || '')
+            .replace(/ Image Update$/, '').replace(/^Container /, '').replace(/-\d+$/, '');
+          const t = n.split('-');
+          if (t.length % 2 === 0) {
+            const h = t.length / 2;
+            if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+          }
+          return n;
+        ]]]
+      offen: '[[[ return !!entity && entity.state === "on"; ]]]'
+      laeuft: '[[[ return !!entity && !!entity.attributes.in_progress; ]]]'
+      akzent: |
+        [[[
+          if (!entity || entity.state === 'unavailable') return '';
+          return variables.offen || variables.laeuft ? 'var(--owlet-amber, #e6b566)' : 'var(--owlet-gruen, #a6d49e)';
+        ]]]
+    show_icon: true
+    show_name: false
+    show_state: false
+    show_label: false
+    icon: '[[[ return variables.offen || variables.laeuft ? "mdi:package-up" : "mdi:package-variant-closed-check"; ]]]'
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      titel: |
+        [[[
+          return `<span style="display:block;min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${variables.anzeige}</span>`;
+        ]]]
+      info: |
+        [[[
+          const sek = 'var(--owlet-text-sekundaer, #8794a5)';
+          if (!entity || entity.state === 'unavailable') return `<span style="font-size:12px;color:${sek};">keine Daten</span>`;
+          const a = entity.attributes;
+          const bild = a.title ? a.title + ' · ' : '';
+          if (variables.laeuft) return `<span style="font-size:12px;color:var(--owlet-amber, #e6b566);">${bild}wird installiert …</span>`;
+          if (!variables.offen) return `<span style="font-size:12px;color:${sek};">${bild}aktuell · ${a.installed_version || '–'}</span>`;
+          return `<span style="font-size:12px;color:${sek};">${bild}${a.installed_version || '?'} → ${a.latest_version || '?'}</span>`;
+        ]]]
+      install:
+        card:
+          type: custom:button-card
+          entity: '[[[ return entity.entity_id; ]]]'
+          name: '[[[ return variables.laeuft ? "läuft …" : "Installieren"; ]]]'
+          show_icon: false
+          show_name: true
+          show_state: false
+          tap_action: |
+            [[[
+              if (!variables.offen || variables.laeuft) return { action: 'none' };
+              const frage = variables.frage || (variables.anzeige + ' jetzt aktualisieren? Der Container wird mit dem neuen Image neu ausgerollt und ist dabei kurz nicht erreichbar.');
+              return {
+                action: 'perform-action',
+                perform_action: 'update.install',
+                target: { entity_id: entity.entity_id },
+                confirmation: { text: frage }
+              };
+            ]]]
+          hold_action:
+            action: none
+          styles:
+            card:
+              - min-height: 40px
+              - padding: 0 12px
+              - border-radius: 12px
+              - box-shadow: none
+              - background: |
+                  [[[ return variables.offen ? 'color-mix(in srgb, var(--owlet-amber, #e6b566) 12%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+              - border: |
+                  [[[ return variables.offen ? '1px solid color-mix(in srgb, var(--owlet-amber, #e6b566) 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+              - opacity: '[[[ return variables.offen ? 1 : 0.4; ]]]'
+            name:
+              - font-size: 13px
+              - font-weight: 700
+              - white-space: nowrap
+              - color: '[[[ return variables.offen ? "var(--owlet-amber, #e6b566)" : "var(--owlet-label, #b4c0cf)"; ]]]'
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel install" "i info install"'
+        - grid-template-columns: 36px minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: |
+            [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: '[[[ return variables.akzent || "var(--owlet-muted, #6e7988)"; ]]]'
+      custom_fields:
+        titel:
+          - justify-self: stretch
+          - align-self: end
+          - min-width: 0
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
+          - text-align: left
+        install:
+          - align-self: center
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_kopf: Kopf einer Karte der Docker-View, wie der Kopf von
+  # docker-karte.yaml. variables.farbe ist die Farbe der Icon-Kachel (Bereich
+  # Netzwerk: Violett); ein Badge rechts setzt die Karte als custom_fields.badge.
+  owlet_docker_kopf:
+    variables:
+      farbe: 'var(--owlet-violett, #b399d4)'
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 4px
+      grid:
+        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-columns: min-content minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: '[[[ return "color-mix(in srgb, " + variables.farbe + " 16%, transparent)"; ]]]'
+        - border: '[[[ return "1px solid color-mix(in srgb, " + variables.farbe + " 24%, transparent)"; ]]]'
+      icon:
+        - width: 23px
+        - height: 23px
+        - --ha-icon-display: block
+        - color: '[[[ return variables.farbe; ]]]'
+      name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: 'var(--owlet-text, #f2f5f8)'
+      label:
+        - justify-self: start
+        - align-self: start
+        - max-width: 100%
+        - font-size: 12.5px
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
+        - margin-top: 2px
+      custom_fields:
+        badge:
+          - justify-self: end
+          - align-self: center
+          - margin-left: 8px
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_titel: Abschnittstitel innerhalb einer Karte, z. B. "authentik".
+  owlet_docker_titel:
+    show_icon: false
+    show_state: false
+    show_name: true
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - border: none
+        - box-shadow: none
+        - padding: 2px 2px 0
+      name:
+        - justify-self: start
+        - font-size: 10.5px
+        - font-weight: 700
+        - letter-spacing: 0.06em
+        - text-transform: uppercase
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_aufklapper: Kopfzeile einer expander-card ("14 weitere
+  # Projekte"), Name links, Zahl als Chip rechts (variables.zahl; leer = kein
+  # Chip). Aufbau wie "Alle Container" in docker-karte.yaml; die Unterkachel
+  # um die Kopfzeile setzt das card_mod der expander-card.
+  owlet_docker_aufklapper:
+    variables:
+      zahl: ''
+    show_icon: false
+    show_name: true
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    # inline-block: Innenabstand eines Inline-Spans wuerde in der Zelle mit
+    # overflow:hidden oben und unten abgeschnitten (wie in docker-karte.yaml)
+    custom_fields:
+      zahl: |
+        [[[
+          if (variables.zahl === '' || variables.zahl === null) return '';
+          return `<span style="display:inline-block;line-height:1.4;font-size:12px;font-weight:700;color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));padding:3px 9px;border-radius:9px;">${variables.zahl}</span>`;
+        ]]]
+    styles:
+      card:
+        - background: none
+        - border: none
+        - box-shadow: none
+        - padding: 12px 4px 12px 14px
+      grid:
+        - grid-template-areas: '"n zahl"'
+        - grid-template-columns: 1fr min-content
+        - align-items: center
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 700
+        - color: 'var(--owlet-text, #f2f5f8)'
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_kpi: Kennzahl-Kachel. Entity ist der Zaehler der Umgebung.
+  #   variables.typ   anzahl (Standard) | laufend | ungesund
+  #     laufend   zeigt "x/y" mit variables.gesamt; alle laufen Gruen, sonst Amber
+  #     anzahl    getoent in variables.warn, sobald der Wert ueber 0 liegt
+  #     ungesund  zaehlt selbst: laeuft, _healthy off, kein Healthcheck-Start.
+  #               Arcane zaehlt Container im Start ("(health: starting)") als
+  #               ungesund, z. B. 29 s nach jedem Update; die Entity bleibt
+  #               fuer Antippen und Neuzeichnen.
+  #   variables.warn  Farbe ab 1 (Standard Amber); '' = nie getoent
+  #   variables.zusatz  Text unter der Beschriftung, z. B. "11 ungenutzt";
+  #                   ohne Text entfaellt die Zeile samt Abstand
+  # Beschriftung: 0,02em und 7 px Innenabstand. Auf dem Handy ist eine von vier
+  # Kacheln ~86 px breit; gemessen (Chromium, Arial-Metrik) braucht "UNGESUND"
+  # mit 0,06em 65,1 px bei 64 px Platz, mit 0,02em 61,8 px bei 70 px Platz.
+  # Auf getoenter Flaeche steht die Beschriftung in Label-Grau (DESIGN.md).
+  owlet_docker_kpi:
+    variables:
+      typ: anzahl
+      gesamt: ''
+      warn: 'var(--owlet-amber, #e6b566)'
+      zusatz: ''
+      wert: |
+        [[[
+          if (variables.typ === 'laufend') {
+            const g = states[variables.gesamt];
+            if (!entity || isNaN(parseInt(entity.state, 10)) || !g || isNaN(parseInt(g.state, 10))) return '–';
+            return entity.state + '/' + g.state;
+          }
+          if (variables.typ === 'ungesund') {
+            let n = 0;
+            for (const id of Object.keys(states)) {
+              if (!/^binary_sensor\.container_.+_healthy$/.test(id) || states[id].state !== 'off') continue;
+              const b = id.slice('binary_sensor.'.length, -'_healthy'.length);
+              const z = states['sensor.' + b + '_zustand'];
+              const s = states['sensor.' + b + '_status'];
+              if (!z || z.state !== 'running') continue;
+              if (s && /\(health: starting\)/.test(s.state)) continue;
+              n++;
+            }
+            return String(n);
+          }
+          const n = entity ? parseInt(entity.state, 10) : NaN;
+          return isNaN(n) ? '–' : String(n);
+        ]]]
+      akzent: |
+        [[[
+          if (variables.wert === '–') return '';
+          if (variables.typ === 'laufend') {
+            const t = variables.wert.split('/');
+            return t[0] === t[1] ? 'var(--owlet-gruen, #a6d49e)' : 'var(--owlet-amber, #e6b566)';
+          }
+          return parseInt(variables.wert, 10) > 0 ? variables.warn : '';
+        ]]]
+    label: '[[[ return variables.wert; ]]]'
+    show_icon: false
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: more-info
+    custom_fields:
+      zusatz: |
+        [[[
+          return variables.zusatz ? `<span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${variables.zusatz}</span>` : '';
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 10px 7px
+        - box-shadow: none
+        - background: |
+            [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 12%, transparent)' : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'; ]]]
+        - border: |
+            [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+      grid:
+        - grid-template-areas: '[[[ return variables.zusatz ? "\"l\" \"n\" \"zusatz\"" : "\"l\" \"n\""; ]]]'
+        - grid-template-columns: 1fr
+        - grid-template-rows: '[[[ return variables.zusatz ? "min-content min-content min-content" : "min-content min-content"; ]]]'
+        - row-gap: 3px
+      custom_fields:
+        zusatz:
+          - display: '[[[ return variables.zusatz ? "block" : "none"; ]]]'
+          - justify-self: start
+          - text-align: left
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
+      label:
+        - justify-self: start
+        - font-size: 20px
+        - font-weight: 750
+        - letter-spacing: -0.02em
+        - color: '[[[ return variables.akzent || "var(--owlet-text-sekundaer, #8794a5)"; ]]]'
+      name:
+        - justify-self: start
+        - max-width: 100%
+        - overflow: hidden
+        - text-overflow: ellipsis
+        - font-size: 10.5px
+        - font-weight: 700
+        - letter-spacing: 0.02em
+        - text-transform: uppercase
+        - color: '[[[ return variables.akzent ? "var(--owlet-label, #b4c0cf)" : "var(--owlet-text-sekundaer, #8794a5)"; ]]]'
+
+  # ---------------------------------------------------------------------------
+  # owlet_docker_messwert: Prozentwert mit Balken (Host-CPU, -RAM, -Disk).
+  # Entity ist ein Sensor in %. Farbe nach Schwelle wie in system-karte.yaml:
+  # ab variables.gelb Amber, ab variables.rot Rot, sonst Gruen.
+  #   variables.zusatz  Text unter der Beschriftung, z. B. "5,1 von 8,3 GB"
+  owlet_docker_messwert:
+    variables:
+      gelb: 75
+      rot: 90
+      zusatz: ''
+      wert: |
+        [[[
+          const v = entity ? parseFloat(entity.state) : NaN;
+          return isNaN(v) ? null : v;
+        ]]]
+      farbe: |
+        [[[
+          const v = variables.wert;
+          if (v === null) return 'var(--owlet-text-sekundaer, #8794a5)';
+          if (v >= variables.rot) return 'var(--owlet-rot, #f0736a)';
+          if (v >= variables.gelb) return 'var(--owlet-amber, #e6b566)';
+          return 'var(--owlet-gruen, #a6d49e)';
+        ]]]
+    label: '[[[ return variables.wert === null ? "–" : variables.wert.toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " %"; ]]]'
+    show_icon: false
+    show_name: true
+    show_label: true
+    show_state: false
+    tap_action:
+      action: more-info
+    custom_fields:
+      balken: |
+        [[[
+          const p = variables.wert === null ? 0 : Math.max(0, Math.min(100, variables.wert));
+          return `<div style="height:6px;border-radius:3px;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${p}%;border-radius:3px;background:${variables.farbe};"></div></div>`;
+        ]]]
+      zusatz: |
+        [[[
+          return variables.zusatz ? `<span style="font-size:12px;color:var(--owlet-text-sekundaer, #8794a5);">${variables.zusatz}</span>` : '';
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 10px 11px
+        - box-shadow: none
+        - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"l" "balken" "n" "zusatz"'
+        - grid-template-columns: 1fr
+        - grid-template-rows: min-content min-content min-content min-content
+        - row-gap: 6px
+      label:
+        - justify-self: start
+        - font-size: 20px
+        - font-weight: 750
+        - letter-spacing: -0.02em
+        - color: '[[[ return variables.farbe; ]]]'
+      name:
+        - justify-self: start
+        - font-size: 10.5px
+        - font-weight: 700
+        - letter-spacing: 0.02em
+        - text-transform: uppercase
+        - color: 'var(--owlet-text-sekundaer, #8794a5)'
+      custom_fields:
+        balken:
+          - justify-self: stretch
+        zusatz:
+          - justify-self: start
+          - text-align: left
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: nowrap
+          - text-overflow: ellipsis
