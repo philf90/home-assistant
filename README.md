@@ -127,7 +127,8 @@ Datei erklärt den Unterschied.
      `environments:list`, `containers:list`, `projects:list`,
      `images:list`, `volumes:list`, `networks:list`, `system:read`;
      Steuern zusätzlich `containers:start`, `containers:stop`,
-     `containers:restart`, `projects:deploy`, `projects:down`,
+     `containers:restart`, `containers:redeploy` (Image-Updates
+     installieren), `projects:deploy`, `projects:down`,
      `projects:restart`.
   2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
   3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
