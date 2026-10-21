@@ -36,7 +36,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
 | [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
 | [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
-| [`sonstiges/`](dashboard/sonstiges/) | `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | – |
+| [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
 | [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md` | – | – |
 <!-- index:end -->
@@ -99,6 +99,23 @@ Datei erklärt den Unterschied.
   lesend. Freigaben, Firmware-Updates, Speicherdurchsatz und Steuerung
   (Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
   Passwort); die Karte braucht davon nichts.
+- für die Claude-Nutzungskarte (`claude-nutzung-karte.yaml`): die Integration
+  [Claude Usage](https://github.com/trickv/hass-claude-usage)
+  (HACS-Standardkatalog). Sie liest die Limits eines Claude-Abos (Pro/Max):
+  Session (5 h), Woche über alle Modelle, Wochenlimits je Modell und
+  Extra-Nutzung, jeweils mit Auslastung in Prozent und Reset-Zeitpunkt.
+  Einrichtung: in HACS *Claude Usage* herunterladen, Home Assistant neu
+  starten, Einstellungen → Geräte & Dienste → Integration hinzufügen →
+  *Claude Usage*; der angezeigte Link öffnet die Anmeldung bei Anthropic,
+  danach den Code (Form `xxxx#yyyy`) in den Dialog einfügen. Der
+  Gerätename trägt Kontoname und Plan, deshalb stehen die Entity-IDs im
+  Repo als Platzhalter `sensor.claude_usage_konto_*`.
+  Die Integration fragt den inoffiziellen Endpunkt ab, den auch Claude Code
+  für `/usage` nutzt; Anthropic dokumentiert ihn nicht, eine offizielle
+  Schnittstelle für Abo-Limits gibt es nicht. Das Abfrageintervall bei den
+  voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
+  von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
+  anzeigen.
 - optional für Kabel-Clients im UniFi-Netzplan: das Paket
   `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
   und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
@@ -171,6 +188,7 @@ daraus und aus den Kopfblöcken erzeugt.
 | `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `homematic-view.yaml`, `kameras-view.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `sicherheit-templates.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `fenster-lichter-uebersicht-karte.yaml`, `temperaturen-karte.yaml` |
 | `weather.wohnort` | Wetter-Entity des Wohnorts (Vorhersage, Bedingung fürs Icon) | Einstellungen → Geräte & Dienste → Deutscher Wetterdienst (HACS, `dwd_weather`) → Station → Entität `weather.*` | `welcome-banner-karte.yaml`, `wetter-karte-v2.yaml`; in `archiv/`: `wetter-karte.yaml` |
 | `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml`, `warnlage-templates.yaml`, `wetter-view.yaml` |
+| `sensor.claude_usage_konto_*` | Sensoren der HACS-Integration Claude Usage (`…_session_usage`, `…_weekly_reset_time`, `…_weekly_<modell>_limit_usage`); `konto` steht für Kontoname und Plan aus dem Gerätenamen (`claude_usage_<name>_<plan>`) | Einstellungen → Geräte & Dienste → Claude Usage → Gerät → Entitäten | `claude-nutzung-karte.yaml`, `claude-nutzung.html` |
 | `VG Wohnort` | Verbandsgemeinde im Titel der Abfuhrtermine (`Restmüll in VG Wohnort`); die trash-card ordnet die Termine über diesen Text den Tonnen zu | Kalender des Abfallentsorgers (`calendar.mull`) → Titel eines Termins, der Teil nach „in“ | `muellabfuhr-karte-v2.yaml`; in `archiv/`: `muellabfuhr-karte.yaml` |
 | `sensor.tankstelle_1_*` bis `sensor.tankstelle_4_*`, Name `Tankstelle 1` bis `Tankstelle 4` | Tankstelle aus der Tankerkönig-Integration. HA bildet die Entity-ID aus Marke und Adresse (`sensor.…_diesel`, `…_super`, `…_super_e10`, `binary_sensor.…_status`); der Anzeigename steht frei im Template | Einstellungen → Geräte & Dienste → Tankerkönig → Tankstelle → Entitäten | `tanken-templates.yaml` |
 | `benutzer_id_1`, `benutzer_id_2` | ID eines Home-Assistant-Benutzers in `visible:` (View) und `condition: user` (Karte); `1` und `2` trennen zwei Benutzer. Unersetzt sind die betroffenen Views und Karten für niemanden sichtbar | View- bzw. Karteneditor → *Sichtbarkeit* → Benutzer auswählen, Home Assistant setzt die ID selbst ein | `gesundheit-view.yaml`, `kameras-view.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `netzwerk-view.yaml`; in `archiv/`: `kameras-karte.yaml` |
