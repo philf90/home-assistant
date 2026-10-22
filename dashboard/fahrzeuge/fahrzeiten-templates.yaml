@@ -8,7 +8,7 @@
 # Templates:     keine
 # Einfuegen:     Raw-Konfigurationseditor,
 #                oberste Ebene unter button_card_templates:
-# Platzhalter:   device_tracker.iphone, DEIN_EMBED_KEY
+# Platzhalter:   device_tracker.iphone, person.bewohner, DEIN_EMBED_KEY
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Vier button-card-Templates fuer fahrzeiten-karte.yaml:
@@ -17,14 +17,22 @@
 #                           "Fahrzeiten", darunter der Startpunkt. Die Zeilen
 #                           und die Start-Chips haengt die Karte selbst als
 #                           custom_fields ein.
-#   owlet_fahrzeit_start    Chip "Zuhause" oder "Standort" (variables.option).
-#                           Tippen waehlt die Option im input_select. Ein Chip
+#   owlet_fahrzeit_start    Chip fuer einen Startpunkt (variables.option).
+#                           Tippen waehlt die Option im input_select. Aktiv
+#                           ist der Chip, dessen variables.wert dem
+#                           tatsaechlichen Start (sensor.fahrt_start) gleicht
+#                           ("tracker" fuer jeden device_tracker).
+#                           variables.sichtbar: "daheim", "unterwegs" oder
+#                           "immer", bezogen auf variables.person. Ein Chip
 #                           mit variables.position: true ist gedimmt und ohne
 #                           Aktion, solange keiner der Tracker in
 #                           variables.tracker Koordinaten hat.
 #   owlet_fahrzeit_ziel     Eine Zeile je Ziel: Name, Verzoegerungs-Pille,
 #                           Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse.
-#                           Tippen: Popup mit owlet_fahrzeit_popup.
+#                           Tippen: Popup mit owlet_fahrzeit_popup. Die Zeile
+#                           blendet sich aus, wenn ihre Zone (variables.zone)
+#                           der Start ist oder die Person in der Zone ist:
+#                           ein Ort ist nie Start und Ziel zugleich.
 #   owlet_fahrzeit_popup    Inhalt des Popups: Kennzahlen, Routenkarte
 #                           (Google Maps Embed API), Links zu Google Maps und
 #                           Waze.
@@ -45,17 +53,26 @@
 # Startpunkt: Waze loest Start und Ziel bei jedem Abruf mit find_coordinates
 # (homeassistant/helpers/location.py) auf und folgt dabei einer Entity-ID im
 # Zustand. Der Template-Helfer sensor.fahrt_start liefert deshalb nur
-# "zone.home" oder die ID des Handy-Trackers (Companion App, GPS):
+# "zone.home", "zone.arbeit" oder die ID des Handy-Trackers (Companion App,
+# GPS). Zuhause ist Start nur, solange die Person daheim ist; unterwegs wird
+# aus "Zuhause" der Standort. Arbeit ist Start nur unterwegs:
+#   {% set p = 'person.bewohner' %}
 #   {% set t = 'device_tracker.iphone' %}
-#   {% if is_state('input_select.fahrt_startpunkt', 'Standort')
-#         and state_attr(t, 'latitude') is number
-#         and state_attr(t, 'longitude') is number %}
+#   {% set wahl = states('input_select.fahrt_startpunkt') %}
+#   {% set daheim = is_state(p, 'home') %}
+#   {% set pos = state_attr(t, 'latitude') is number
+#                and state_attr(t, 'longitude') is number %}
+#   {% if wahl == 'Arbeit' and not daheim %}
+#     zone.arbeit
+#   {% elif (wahl == 'Standort' or not daheim) and pos %}
 #     {{ t }}
 #   {% else %}
 #     zone.home
 #   {% endif %}
-# Ohne Koordinaten bleibt er auf Zuhause; sonst wuerde Waze den Text
-# "unknown" als Adresse suchen. Der Tracker des Autos taugt dafuer nicht:
+# Die acht Faelle (Wahl x daheim/unterwegs x mit/ohne Position) sind mit
+# ha_eval_template geprueft. Ohne Koordinaten faellt er auf Zuhause zurueck;
+# sonst wuerde Waze den Text "unknown" als Adresse suchen. Steht der Start
+# dann auf Zuhause, blendet sich das Ziel Zuhause aus (siehe oben). Der Tracker des Autos taugt dafuer nicht:
 # vag_connect liefert keinen Standort (siehe autos-karte-v4.yaml), der Tracker
 # aus volkswagencarnet stand im Oktober 2026 ueber den ganzen Verlauf
 # (10 Tage) auf unavailable. Derselbe Tracker steht in owlet_fahrzeit_start
@@ -104,13 +121,17 @@
 # Linienfuehrung, und die Embed-Karte kennt keinen Parameter zur
 # Routenwahl; sie zeigt weiter Googles eigene Route.
 #
+# Dauer: unter 60 min "45 min", ab 60 min "1 h 14 min", volle Stunden
+# "2 h". Erst auf ganze Minuten runden, dann teilen. Gilt fuer Zeile, Pille,
+# Kennzahlen und Alternativrouten.
+#
 # Neu zeichnen: Zeile und Popup lesen beide Sensoren und zeichnen bei jeder
 # Aenderung neu (alle 5 min). Die Ankunftszeit rechnet mit der Uhrzeit dieses
 # Zeitpunkts und ist bis zum naechsten Abruf hoechstens 5 min alt.
 #
 # Voraussetzung: custom:button-card (v7) und browser_mod (HACS), Integration
 # Waze Travel Time (je Ziel "live" und "typisch"), Helfer
-# input_select.fahrt_startpunkt (Zuhause, Standort), Template-Helfer
+# input_select.fahrt_startpunkt (Zuhause, Arbeit, Standort), Template-Helfer
 # sensor.fahrt_start, je Ziel eine Zone.
 button_card_templates:
   owlet_fahrzeiten:
@@ -134,9 +155,11 @@ button_card_templates:
         - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         - overflow: hidden
         - cursor: default
+      # Abstaende tragen die Chips und Zeilen selbst (margin), damit
+      # ausgeblendete Felder keine leere Luecke im Raster hinterlassen.
       grid:
-        - row-gap: 12px
-        - column-gap: 8px
+        - row-gap: 0
+        - column-gap: 0
       custom_fields:
         kopf:
           - width: 100%
@@ -147,9 +170,12 @@ button_card_templates:
           const grau = 'var(--owlet-text-sekundaer, #8794a5)';
           const s = states[variables.start];
           const w = states[variables.auswahl];
-          const abStandort = s && s.state && s.state.startsWith('device_tracker.');
-          let unter = abStandort ? 'ab Standort' : 'ab Zuhause';
-          if (!abStandort && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
+          const st = (s && s.state) || 'zone.home';
+          const name = st.startsWith('device_tracker.') ? 'Standort'
+            : st === 'zone.home' ? 'Zuhause'
+            : (states[st] && states[st].attributes.friendly_name) || st;
+          let unter = 'ab ' + name;
+          if (st === 'zone.home' && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
           const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
             <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
           return `
@@ -171,6 +197,10 @@ button_card_templates:
     show_label: false
     variables:
       option: Zuhause
+      wert: zone.home
+      sichtbar: immer
+      person: person.bewohner
+      start: sensor.fahrt_start
       position: false
       tracker:
         - device_tracker.iphone
@@ -178,11 +208,13 @@ button_card_templates:
       action: none
     tap_action: |
       [[[
+        const st = (states[variables.start] && states[variables.start].state) || '';
+        const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
         const hatPos = !variables.position || variables.tracker.some((t) => {
           const s = states[t];
           return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
         });
-        if (!hatPos || (entity && entity.state === variables.option)) return { action: 'none' };
+        if (!hatPos || an) return { action: 'none' };
         return {
           action: 'perform-action',
           perform_action: 'input_select.select_option',
@@ -196,15 +228,26 @@ button_card_templates:
         - border-radius: 999px
         - box-shadow: none
         - width: auto
+        - margin: 12px 8px 0 0
+        - display: |
+            [[[
+              const p = states[variables.person];
+              const daheim = !!p && p.state === 'home';
+              if (variables.sichtbar === 'daheim') return daheim ? 'block' : 'none';
+              if (variables.sichtbar === 'unterwegs') return daheim ? 'none' : 'block';
+              return 'block';
+            ]]]
         - background: |
             [[[
-              const an = entity && entity.state === variables.option;
+              const st = (states[variables.start] && states[variables.start].state) || '';
+              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
               return an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
                         : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
             ]]]
         - border: |
             [[[
-              const an = entity && entity.state === variables.option;
+              const st = (states[variables.start] && states[variables.start].state) || '';
+              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
               return an ? '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
                         : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
             ]]]
@@ -222,7 +265,8 @@ button_card_templates:
     custom_fields:
       chip: |
         [[[
-          const an = entity && entity.state === variables.option;
+          const st = (states[variables.start] && states[variables.start].state) || '';
+          const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
           const farbe = an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-muted, #6e7988)';
           const text = an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)';
           const pfad = variables.position
@@ -239,8 +283,11 @@ button_card_templates:
     show_label: false
     variables:
       ziel: Ziel
+      zone: zone.ziel
       typisch: sensor.waze_fahrzeit_ziel_typisch
       embed_key: DEIN_EMBED_KEY
+      person: person.bewohner
+      start: sensor.fahrt_start
     hold_action:
       action: none
     tap_action:
@@ -273,6 +320,16 @@ button_card_templates:
         - padding: 12px 14px
         - border-radius: 16px
         - box-shadow: none
+        - margin-top: 10px
+        # Ausblenden: Zone ist der Start, oder die Person ist in der Zone.
+        - display: |
+            [[[
+              const st = states[variables.start] && states[variables.start].state;
+              const p = states[variables.person];
+              const zonen = (p && Array.isArray(p.attributes.in_zones)) ? p.attributes.in_zones : [];
+              const drin = zonen.includes(variables.zone) || (variables.zone === 'zone.home' && !!p && p.state === 'home');
+              return (st === variables.zone || drin) ? 'none' : 'block';
+            ]]]
         - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
         - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
@@ -288,12 +345,16 @@ button_card_templates:
           const live = zahl(entity);
           const typ = zahl(states[variables.typisch]);
           const grau = 'var(--owlet-text-sekundaer, #8794a5)';
+          // Dauer ab 60 min in Stunden und Minuten; erst runden, dann teilen
+          // (73,4 -> 73 -> "1 h 13 min").
+          const teil = (min) => { const t = Math.round(min); return { h: Math.floor(t / 60), m: t % 60 }; };
+          const dauer = (min) => { const { h, m } = teil(min); return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`; };
           let stufe = { text: 'keine Daten', farbe: 'var(--owlet-muted, #6e7988)' };
           if (live !== null && typ !== null) {
             const v = Math.max(0, Math.round(live - typ));
-            if (v < 3) stufe = { text: v > 0 ? `frei · +${v} min` : 'frei', farbe: 'var(--owlet-gruen, #a6d49e)' };
-            else if (v < 10) stufe = { text: `zäh · +${v} min`, farbe: 'var(--owlet-amber, #e6b566)' };
-            else stufe = { text: `Stau · +${v} min`, farbe: 'var(--owlet-rot, #f0736a)' };
+            if (v < 3) stufe = { text: v > 0 ? `frei · +${dauer(v)}` : 'frei', farbe: 'var(--owlet-gruen, #a6d49e)' };
+            else if (v < 10) stufe = { text: `zäh · +${dauer(v)}`, farbe: 'var(--owlet-amber, #e6b566)' };
+            else stufe = { text: `Stau · +${dauer(v)}`, farbe: 'var(--owlet-rot, #f0736a)' };
           }
           const a = (entity && entity.attributes) || {};
           const teile = [];
@@ -309,15 +370,18 @@ button_card_templates:
               border-radius:999px;padding:2px 8px;color:var(--owlet-label, #b4c0cf);
               background:color-mix(in srgb, ${stufe.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${stufe.farbe} 24%, transparent);">
               <i style="width:7px;height:7px;border-radius:50%;background:${stufe.farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${stufe.farbe} 18%, transparent);"></i>${stufe.text}</span>`;
-          const minuten = live !== null
-            ? `${Math.round(live)}<span style="font-size:13px;font-weight:500;color:${grau};margin-left:2px;">min</span>`
-            : `–`;
+          const einheit = (u) => `<span style="font-size:13px;font-weight:500;color:${grau};margin-left:2px;">${u}</span>`;
+          let minuten = '–';
+          if (live !== null) {
+            const { h, m } = teil(live);
+            minuten = h ? `${h}${einheit('h')}${m ? ` ${m}${einheit('min')}` : ''}` : `${m}${einheit('min')}`;
+          }
           return `
             <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;text-align:left;">
               <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
                 <span style="font-size:15px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">${variables.ziel}</span>${pille}
               </div>
-              <div style="grid-row:span 2;font-size:24px;line-height:1;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${minuten}</div>
+              <div style="grid-row:span 2;font-size:24px;line-height:1;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${minuten}</div>
               <div style="font-size:12.5px;color:${grau};font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere;">${teile.join(' · ') || 'Waze liefert gerade keine Route'}</div>
             </div>`;
         ]]]
@@ -354,11 +418,16 @@ button_card_templates:
         [[[
           // Bibliothek fuer Tippen und Links, einmal pro Seite (Erklaerung im
           // Kopf, Abschnitt "Klicks im Popup"). VERSION bei jeder Aenderung erhoehen.
-          const VERSION = 2;
+          const VERSION = 4;
           if (!window.__owletFz || window.__owletFz.version !== VERSION) {
             const fz = { version: VERSION, routen: {} };
             const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
             const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+            // Dauer ab 60 min in Stunden und Minuten (wie in owlet_fahrzeit_ziel)
+            fz.dauer = (min) => {
+              const t = Math.round(min), h = Math.floor(t / 60), m = t % 60;
+              return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
+            };
             // Alternativen aus waze_travel_time.get_travel_times, je Start|Ziel
             // 5 min im Browser gemerkt. Antwort: routes[] mit duration (min),
             // distance (km), name, street_names.
@@ -380,7 +449,7 @@ button_card_templates:
                   <span style="width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;${nr}">${i + 1}</span>
                   <span style="color:var(--owlet-titel, #e7ecf3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(String(x.name || '–').replace(/;\s*/g, ' · '))}</span>
                   <span style="color:var(--owlet-text-sekundaer, #8794a5);">${typeof x.distance === 'number' ? kmTxt(x.distance) : ''}</span>
-                  <span style="font-weight:700;color:var(--owlet-text, #f2f5f8);text-align:right;">${Math.round(x.duration)} min${i ? `<span style="font-weight:500;color:var(--owlet-text-sekundaer, #8794a5);"> +${plus}</span>` : ''}</span>
+                  <span style="font-weight:700;color:var(--owlet-text, #f2f5f8);text-align:right;">${fz.dauer(x.duration)}${i ? `<span style="font-weight:500;color:var(--owlet-text-sekundaer, #8794a5);"> +${fz.dauer(plus)}</span>` : ''}</span>
                 </div>`;
               }).join('');
             };
@@ -433,8 +502,8 @@ button_card_templates:
           const ankunft = live !== null
             ? new Date(Date.now() + live * 60000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
           const zahlen = [
-            ['Mit Verkehr', live !== null ? Math.round(live) + ' min' : '–'],
-            ['Typisch', typ !== null ? Math.round(typ) + ' min' : '–'],
+            ['Mit Verkehr', live !== null ? window.__owletFz.dauer(live) : '–'],
+            ['Typisch', typ !== null ? window.__owletFz.dauer(typ) : '–'],
             ['Ankunft', ankunft],
             ['Strecke', km],
           ].map(([l, w]) => `
@@ -444,7 +513,10 @@ button_card_templates:
             </div>`).join('');
 
           const s = states[variables.start];
-          const ab = s && s.state && s.state.startsWith('device_tracker.') ? 'ab Standort' : 'ab Zuhause';
+          const st = (s && s.state) || 'zone.home';
+          const ab = 'ab ' + (st.startsWith('device_tracker.') ? 'Standort'
+            : st === 'zone.home' ? 'Zuhause'
+            : (states[st] && states[st].attributes.friendly_name) || st);
           const ueber = a.route ? ' · über ' + String(a.route).replace(/;\s*/g, ' · ') : '';
           const stand = entity && entity.last_updated
             ? ' · Stand ' + new Date(entity.last_updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
