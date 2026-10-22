@@ -94,6 +94,16 @@
 # button-card auch click verwirft. Im iframe selbst greift das nicht: Seine
 # Ereignisse bleiben im iframe-Dokument.
 #
+# Alternativrouten im Popup: Beim Oeffnen ruft das Popup
+# waze_travel_time.get_travel_times mit den Attributen origin und
+# destination des Live-Sensors auf (hass.callService mit returnResponse,
+# HA-Frontend src/types.ts). Die Antwort bleibt je Start|Ziel 5 min in
+# window.__owletFz.routen, damit mehrfaches Oeffnen Waze nicht erneut fragt.
+# Die Liste ist sortiert, die schnellste Route markiert, dahinter der
+# Abstand in Minuten. Antippen waehlt keine Route: Waze liefert keine
+# Linienfuehrung, und die Embed-Karte kennt keinen Parameter zur
+# Routenwahl; sie zeigt weiter Googles eigene Route.
+#
 # Neu zeichnen: Zeile und Popup lesen beide Sensoren und zeichnen bei jeder
 # Aenderung neu (alle 5 min). Die Ankunftszeit rechnet mit der Uhrzeit dieses
 # Zeitpunkts und ist bis zum naechsten Abruf hoechstens 5 min alt.
@@ -325,6 +335,7 @@ button_card_templates:
       typisch: sensor.waze_fahrzeit_ziel_typisch
       embed_key: DEIN_EMBED_KEY
       start: sensor.fahrt_start
+      region: eu
     styles:
       card:
         - padding: 4px 0 8px
@@ -343,9 +354,50 @@ button_card_templates:
         [[[
           // Bibliothek fuer Tippen und Links, einmal pro Seite (Erklaerung im
           // Kopf, Abschnitt "Klicks im Popup"). VERSION bei jeder Aenderung erhoehen.
-          const VERSION = 1;
+          const VERSION = 2;
           if (!window.__owletFz || window.__owletFz.version !== VERSION) {
-            const fz = { version: VERSION };
+            const fz = { version: VERSION, routen: {} };
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+            // Alternativen aus waze_travel_time.get_travel_times, je Start|Ziel
+            // 5 min im Browser gemerkt. Antwort: routes[] mit duration (min),
+            // distance (km), name, street_names.
+            fz.routenHtml = (key) => {
+              const r = fz.routen[key];
+              const hinweis = (t) => `<div style="font-size:13px;color:var(--owlet-label, #b4c0cf);">${t}</div>`;
+              if (!r || r.laeuft) return hinweis('Routen werden bei Waze abgefragt …');
+              if (r.fehler) return hinweis('Waze hat die Alternativen gerade nicht geliefert.');
+              const liste = (r.daten || []).filter((x) => typeof x.duration === 'number').sort((x, y) => x.duration - y.duration);
+              if (!liste.length) return hinweis('Waze kennt für diese Strecke keine Alternativen.');
+              const best = liste[0].duration;
+              return liste.map((x, i) => {
+                const plus = Math.round(x.duration - best);
+                const nr = i === 0
+                  ? 'background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent);color:var(--owlet-blau, #7fb3d5);'
+                  : 'background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);';
+                return `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:10px;align-items:center;font-size:13.5px;padding:8px 10px;border-radius:12px;
+                    background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-variant-numeric:tabular-nums;">
+                  <span style="width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;${nr}">${i + 1}</span>
+                  <span style="color:var(--owlet-titel, #e7ecf3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(String(x.name || '–').replace(/;\s*/g, ' · '))}</span>
+                  <span style="color:var(--owlet-text-sekundaer, #8794a5);">${typeof x.distance === 'number' ? kmTxt(x.distance) : ''}</span>
+                  <span style="font-weight:700;color:var(--owlet-text, #f2f5f8);text-align:right;">${Math.round(x.duration)} min${i ? `<span style="font-weight:500;color:var(--owlet-text-sekundaer, #8794a5);"> +${plus}</span>` : ''}</span>
+                </div>`;
+              }).join('');
+            };
+            fz.ladeRouten = (karte, hass, o, d, region) => {
+              const key = o + '|' + d;
+              const r = fz.routen[key];
+              if (r && (r.laeuft || Date.now() - r.zeit < 300000)) return;
+              fz.routen[key] = { laeuft: true, zeit: Date.now() };
+              const zeige = () => {
+                const ziel = karte && karte.shadowRoot && karte.shadowRoot.querySelector('[data-fz-routen]');
+                if (ziel && ziel.getAttribute('data-fz-routen') === key) ziel.innerHTML = fz.routenHtml(key);
+              };
+              hass.callService('waze_travel_time', 'get_travel_times',
+                { origin: o, destination: d, region: region, realtime: true }, undefined, false, true)
+                .then((res) => { fz.routen[key] = { zeit: Date.now(), daten: (res && res.response && res.response.routes) || [] }; zeige(); })
+                .catch(() => { fz.routen[key] = { zeit: Date.now(), fehler: true }; zeige(); });
+            };
             fz.tipp = (e, url) => {
               e.stopPropagation();
               if (e.type === 'touchstart') {
@@ -426,12 +478,26 @@ button_card_templates:
               ${knopf('https://waze.com/ul?navigate=yes&ll=' + d, 'In Waze navigieren', 'M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z')}
             </div>` : '';
 
+          // Alternativen: Abruf nach dem Zeichnen, das Ergebnis setzt
+          // window.__owletFz.ladeRouten direkt in den Block data-fz-routen.
+          let routen = '';
+          if (a.origin && a.destination) {
+            const rkey = a.origin + '|' + a.destination;
+            setTimeout(() => window.__owletFz.ladeRouten(this, this._hass || hass, a.origin, a.destination, variables.region), 0);
+            routen = `
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <span style="font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:${grau};">Routen laut Waze, mit Verkehr</span>
+                <div data-fz-routen="${rkey.replace(/"/g, '')}" style="display:flex;flex-direction:column;gap:6px;">${window.__owletFz.routenHtml(rkey)}</div>
+              </div>`;
+          }
+
           return `
             <div ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"
               style="display:flex;flex-direction:column;gap:12px;text-align:left;pointer-events:auto;white-space:normal;">
               <div style="font-size:12.5px;color:${grau};">${ab}${ueber}${stand}</div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;">${zahlen}</div>
               ${karte}
+              ${routen}
               ${links}
             </div>`;
         ]]]
