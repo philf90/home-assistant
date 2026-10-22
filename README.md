@@ -205,7 +205,7 @@ daraus und aus den Kopfblöcken erzeugt.
 <!-- platzhalter:start -->
 | Platzhalter | Steht für | Echte ID finden | Dateien |
 |---|---|---|---|
-| `person.bewohner` | Personen-Entity | Einstellungen → Personen | `person-presence-karte.yaml`, `sicherheit-templates.yaml`, `wachmodus-konfig.yaml`, `doku/karten-basemap-carto.md` |
+| `person.bewohner` | Personen-Entity | Einstellungen → Personen | `fahrzeiten-templates.yaml`, `person-presence-karte.yaml`, `sicherheit-templates.yaml`, `wachmodus-konfig.yaml`, `doku/karten-basemap-carto.md` |
 | `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-karte.yaml` |
 | `device_tracker.iphone` | Standort-Tracker der Companion App auf dem Handy (GPS); `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät → Entität `device_tracker.*` | `fahrzeiten-templates.yaml` |
 | `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `docker-konfig.yaml`, `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html`, `wachmodus-konfig.yaml` |

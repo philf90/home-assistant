@@ -8,7 +8,7 @@
 # Templates:     keine
 # Einfuegen:     Raw-Konfigurationseditor,
 #                oberste Ebene unter button_card_templates:
-# Platzhalter:   device_tracker.iphone, DEIN_EMBED_KEY
+# Platzhalter:   device_tracker.iphone, person.bewohner, DEIN_EMBED_KEY
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Vier button-card-Templates fuer fahrzeiten-karte.yaml:
@@ -17,14 +17,22 @@
 #                           "Fahrzeiten", darunter der Startpunkt. Die Zeilen
 #                           und die Start-Chips haengt die Karte selbst als
 #                           custom_fields ein.
-#   owlet_fahrzeit_start    Chip "Zuhause" oder "Standort" (variables.option).
-#                           Tippen waehlt die Option im input_select. Ein Chip
+#   owlet_fahrzeit_start    Chip fuer einen Startpunkt (variables.option).
+#                           Tippen waehlt die Option im input_select. Aktiv
+#                           ist der Chip, dessen variables.wert dem
+#                           tatsaechlichen Start (sensor.fahrt_start) gleicht
+#                           ("tracker" fuer jeden device_tracker).
+#                           variables.sichtbar: "daheim", "unterwegs" oder
+#                           "immer", bezogen auf variables.person. Ein Chip
 #                           mit variables.position: true ist gedimmt und ohne
 #                           Aktion, solange keiner der Tracker in
 #                           variables.tracker Koordinaten hat.
 #   owlet_fahrzeit_ziel     Eine Zeile je Ziel: Name, Verzoegerungs-Pille,
 #                           Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse.
-#                           Tippen: Popup mit owlet_fahrzeit_popup.
+#                           Tippen: Popup mit owlet_fahrzeit_popup. Die Zeile
+#                           blendet sich aus, wenn ihre Zone (variables.zone)
+#                           der Start ist oder die Person in der Zone ist:
+#                           ein Ort ist nie Start und Ziel zugleich.
 #   owlet_fahrzeit_popup    Inhalt des Popups: Kennzahlen, Routenkarte
 #                           (Google Maps Embed API), Links zu Google Maps und
 #                           Waze.
@@ -45,17 +53,26 @@
 # Startpunkt: Waze loest Start und Ziel bei jedem Abruf mit find_coordinates
 # (homeassistant/helpers/location.py) auf und folgt dabei einer Entity-ID im
 # Zustand. Der Template-Helfer sensor.fahrt_start liefert deshalb nur
-# "zone.home" oder die ID des Handy-Trackers (Companion App, GPS):
+# "zone.home", "zone.arbeit" oder die ID des Handy-Trackers (Companion App,
+# GPS). Zuhause ist Start nur, solange die Person daheim ist; unterwegs wird
+# aus "Zuhause" der Standort. Arbeit ist Start nur unterwegs:
+#   {% set p = 'person.bewohner' %}
 #   {% set t = 'device_tracker.iphone' %}
-#   {% if is_state('input_select.fahrt_startpunkt', 'Standort')
-#         and state_attr(t, 'latitude') is number
-#         and state_attr(t, 'longitude') is number %}
+#   {% set wahl = states('input_select.fahrt_startpunkt') %}
+#   {% set daheim = is_state(p, 'home') %}
+#   {% set pos = state_attr(t, 'latitude') is number
+#                and state_attr(t, 'longitude') is number %}
+#   {% if wahl == 'Arbeit' and not daheim %}
+#     zone.arbeit
+#   {% elif (wahl == 'Standort' or not daheim) and pos %}
 #     {{ t }}
 #   {% else %}
 #     zone.home
 #   {% endif %}
-# Ohne Koordinaten bleibt er auf Zuhause; sonst wuerde Waze den Text
-# "unknown" als Adresse suchen. Der Tracker des Autos taugt dafuer nicht:
+# Die acht Faelle (Wahl x daheim/unterwegs x mit/ohne Position) sind mit
+# ha_eval_template geprueft. Ohne Koordinaten faellt er auf Zuhause zurueck;
+# sonst wuerde Waze den Text "unknown" als Adresse suchen. Steht der Start
+# dann auf Zuhause, blendet sich das Ziel Zuhause aus (siehe oben). Der Tracker des Autos taugt dafuer nicht:
 # vag_connect liefert keinen Standort (siehe autos-karte-v4.yaml), der Tracker
 # aus volkswagencarnet stand im Oktober 2026 ueber den ganzen Verlauf
 # (10 Tage) auf unavailable. Derselbe Tracker steht in owlet_fahrzeit_start
@@ -110,7 +127,7 @@
 #
 # Voraussetzung: custom:button-card (v7) und browser_mod (HACS), Integration
 # Waze Travel Time (je Ziel "live" und "typisch"), Helfer
-# input_select.fahrt_startpunkt (Zuhause, Standort), Template-Helfer
+# input_select.fahrt_startpunkt (Zuhause, Arbeit, Standort), Template-Helfer
 # sensor.fahrt_start, je Ziel eine Zone.
 button_card_templates:
   owlet_fahrzeiten:
@@ -134,9 +151,11 @@ button_card_templates:
         - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         - overflow: hidden
         - cursor: default
+      # Abstaende tragen die Chips und Zeilen selbst (margin), damit
+      # ausgeblendete Felder keine leere Luecke im Raster hinterlassen.
       grid:
-        - row-gap: 12px
-        - column-gap: 8px
+        - row-gap: 0
+        - column-gap: 0
       custom_fields:
         kopf:
           - width: 100%
@@ -147,9 +166,12 @@ button_card_templates:
           const grau = 'var(--owlet-text-sekundaer, #8794a5)';
           const s = states[variables.start];
           const w = states[variables.auswahl];
-          const abStandort = s && s.state && s.state.startsWith('device_tracker.');
-          let unter = abStandort ? 'ab Standort' : 'ab Zuhause';
-          if (!abStandort && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
+          const st = (s && s.state) || 'zone.home';
+          const name = st.startsWith('device_tracker.') ? 'Standort'
+            : st === 'zone.home' ? 'Zuhause'
+            : (states[st] && states[st].attributes.friendly_name) || st;
+          let unter = 'ab ' + name;
+          if (st === 'zone.home' && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
           const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
             <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
           return `
@@ -171,6 +193,10 @@ button_card_templates:
     show_label: false
     variables:
       option: Zuhause
+      wert: zone.home
+      sichtbar: immer
+      person: person.bewohner
+      start: sensor.fahrt_start
       position: false
       tracker:
         - device_tracker.iphone
@@ -178,11 +204,13 @@ button_card_templates:
       action: none
     tap_action: |
       [[[
+        const st = (states[variables.start] && states[variables.start].state) || '';
+        const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
         const hatPos = !variables.position || variables.tracker.some((t) => {
           const s = states[t];
           return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
         });
-        if (!hatPos || (entity && entity.state === variables.option)) return { action: 'none' };
+        if (!hatPos || an) return { action: 'none' };
         return {
           action: 'perform-action',
           perform_action: 'input_select.select_option',
@@ -196,15 +224,26 @@ button_card_templates:
         - border-radius: 999px
         - box-shadow: none
         - width: auto
+        - margin: 12px 8px 0 0
+        - display: |
+            [[[
+              const p = states[variables.person];
+              const daheim = !!p && p.state === 'home';
+              if (variables.sichtbar === 'daheim') return daheim ? 'block' : 'none';
+              if (variables.sichtbar === 'unterwegs') return daheim ? 'none' : 'block';
+              return 'block';
+            ]]]
         - background: |
             [[[
-              const an = entity && entity.state === variables.option;
+              const st = (states[variables.start] && states[variables.start].state) || '';
+              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
               return an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
                         : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
             ]]]
         - border: |
             [[[
-              const an = entity && entity.state === variables.option;
+              const st = (states[variables.start] && states[variables.start].state) || '';
+              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
               return an ? '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
                         : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
             ]]]
@@ -222,7 +261,8 @@ button_card_templates:
     custom_fields:
       chip: |
         [[[
-          const an = entity && entity.state === variables.option;
+          const st = (states[variables.start] && states[variables.start].state) || '';
+          const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
           const farbe = an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-muted, #6e7988)';
           const text = an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)';
           const pfad = variables.position
@@ -239,8 +279,11 @@ button_card_templates:
     show_label: false
     variables:
       ziel: Ziel
+      zone: zone.ziel
       typisch: sensor.waze_fahrzeit_ziel_typisch
       embed_key: DEIN_EMBED_KEY
+      person: person.bewohner
+      start: sensor.fahrt_start
     hold_action:
       action: none
     tap_action:
@@ -273,6 +316,16 @@ button_card_templates:
         - padding: 12px 14px
         - border-radius: 16px
         - box-shadow: none
+        - margin-top: 10px
+        # Ausblenden: Zone ist der Start, oder die Person ist in der Zone.
+        - display: |
+            [[[
+              const st = states[variables.start] && states[variables.start].state;
+              const p = states[variables.person];
+              const zonen = (p && Array.isArray(p.attributes.in_zones)) ? p.attributes.in_zones : [];
+              const drin = zonen.includes(variables.zone) || (variables.zone === 'zone.home' && !!p && p.state === 'home');
+              return (st === variables.zone || drin) ? 'none' : 'block';
+            ]]]
         - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
         - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
@@ -354,7 +407,7 @@ button_card_templates:
         [[[
           // Bibliothek fuer Tippen und Links, einmal pro Seite (Erklaerung im
           // Kopf, Abschnitt "Klicks im Popup"). VERSION bei jeder Aenderung erhoehen.
-          const VERSION = 2;
+          const VERSION = 3;
           if (!window.__owletFz || window.__owletFz.version !== VERSION) {
             const fz = { version: VERSION, routen: {} };
             const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -444,7 +497,10 @@ button_card_templates:
             </div>`).join('');
 
           const s = states[variables.start];
-          const ab = s && s.state && s.state.startsWith('device_tracker.') ? 'ab Standort' : 'ab Zuhause';
+          const st = (s && s.state) || 'zone.home';
+          const ab = 'ab ' + (st.startsWith('device_tracker.') ? 'Standort'
+            : st === 'zone.home' ? 'Zuhause'
+            : (states[st] && states[st].attributes.friendly_name) || st);
           const ueber = a.route ? ' · über ' + String(a.route).replace(/;\s*/g, ' · ') : '';
           const stand = entity && entity.last_updated
             ? ' · Stand ' + new Date(entity.last_updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';

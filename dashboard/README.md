@@ -117,7 +117,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`autos-passat-konfig.yaml`](fahrzeuge/autos-passat-konfig.yaml) | konfig | Passat – kombinierte Fenster- und Tueren-Sensoren | – | `kennzeichen`, `passat_*_kombiniert` | aktiv |
 | [`autos-templates.yaml`](fahrzeuge/autos-templates.yaml) | templates | Auto-Animation – button-card-Template owlet_auto_fx | – | – | aktiv |
 | [`fahrzeiten-karte.yaml`](fahrzeuge/fahrzeiten-karte.yaml) | karte | Fahrzeiten – Waze-Fahrzeit zu festen Zielen, Route im Popup | button-card | `DEIN_EMBED_KEY` | aktiv |
-| [`fahrzeiten-templates.yaml`](fahrzeuge/fahrzeiten-templates.yaml) | templates | Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Standort, Zeile und Routen-Popup | button-card | `device_tracker.iphone`, `DEIN_EMBED_KEY` | aktiv |
+| [`fahrzeiten-templates.yaml`](fahrzeuge/fahrzeiten-templates.yaml) | templates | Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Standort, Zeile und Routen-Popup | button-card | `device_tracker.iphone`, `person.bewohner`, `DEIN_EMBED_KEY` | aktiv |
 | [`tanken-karte.yaml`](fahrzeuge/tanken-karte.yaml) | karte | Tanken – guenstigster Diesel in der Naehe | button-card | – | aktiv |
 | [`tanken-templates.yaml`](fahrzeuge/tanken-templates.yaml) | templates | Tanken – Spritpreise aus Tankerkoenig, Bibliothek und Popup | apexcharts-card, button-card, card-mod | `tankstelle_<n>` | aktiv |
 | [`autos-animation.html`](fahrzeuge/entwuerfe/autos-animation.html) | entwurf | Auto-View: Animationen – Entwurf und Datenlage | – | `kennzeichen`, `fin_*` | Entwurf zu `autos-karte-v4.yaml`, `autos-templates.yaml` |

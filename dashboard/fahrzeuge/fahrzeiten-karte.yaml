@@ -15,12 +15,14 @@
 # Fahrzeiten (Owlet-Karte) fuer die Auto-View.
 #
 #   Kopf     Icon-Kachel in Auto-Grau, "Fahrzeiten", darunter der Startpunkt
-#            ("ab Zuhause", "ab Standort" oder "Standort unbekannt · ab
-#            Zuhause")
-#   Chips    Startpunkt Zuhause / Standort (input_select.fahrt_startpunkt).
-#            Standort ist der Handy-Tracker; der Chip ist gedimmt, solange er
-#            keine Koordinaten hat.
-#   Zeilen   je Ziel: Name, Pille mit Verzoegerung gegenueber typisch,
+#            ("ab Zuhause", "ab Arbeit", "ab Standort" oder "Standort
+#            unbekannt · ab Zuhause")
+#   Chips    Startpunkt (input_select.fahrt_startpunkt). Daheim: Zuhause und
+#            Standort, unterwegs: Arbeit und Standort. Standort ist der
+#            Handy-Tracker; der Chip ist gedimmt, solange er keine
+#            Koordinaten hat. Aktiv ist der tatsaechliche Start.
+#   Zeilen   je Ziel (Zuhause nur unterwegs, kein Ziel gleich dem Start):
+#            Name, Pille mit Verzoegerung gegenueber typisch,
 #            Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse laut Waze.
 #            Tippen oeffnet das Popup mit Kennzahlen, Routenkarte und Links
 #            zu Google Maps und Waze.
@@ -28,7 +30,8 @@
 #
 # Weiteres Ziel: Zone anlegen, zwei Waze-Eintraege ("live" mit Echtzeit,
 # "typisch" ohne, Start sensor.fahrt_start, Ziel die Zone), eine Zeile wie
-# "arbeit" ergaenzen und in grid-template-areas eintragen, die beiden
+# "ziel_arbeit" mit variables.zone ergaenzen und in grid-template-areas
+# eintragen, die beiden
 # Sensoren in die Automation "Fahrzeiten nach Startwechsel aktualisieren"
 # aufnehmen.
 #
@@ -42,36 +45,67 @@ type: custom:button-card
 template: owlet_fahrzeiten
 styles:
   grid:
-    - grid-template-areas: '"kopf kopf kopf" "zuhause standort ." "arbeit arbeit arbeit"'
-    - grid-template-columns: auto auto 1fr
+    - grid-template-areas: >-
+        "kopf kopf kopf kopf"
+        "start_zuhause start_arbeit start_standort ."
+        "ziel_zuhause ziel_zuhause ziel_zuhause ziel_zuhause"
+        "ziel_arbeit ziel_arbeit ziel_arbeit ziel_arbeit"
+    - grid-template-columns: auto auto auto 1fr
   custom_fields:
-    zuhause:
+    start_zuhause:
       - justify-self: start
-    standort:
+    start_arbeit:
       - justify-self: start
-    arbeit:
+    start_standort:
+      - justify-self: start
+    ziel_zuhause:
+      - width: 100%
+      - min-width: 0
+    ziel_arbeit:
       - width: 100%
       - min-width: 0
 custom_fields:
-  zuhause:
+  start_zuhause:
     card:
       type: custom:button-card
       template: owlet_fahrzeit_start
       variables:
         option: Zuhause
-  standort:
+        wert: zone.home
+        sichtbar: daheim
+  start_arbeit:
+    card:
+      type: custom:button-card
+      template: owlet_fahrzeit_start
+      variables:
+        option: Arbeit
+        wert: zone.arbeit
+        sichtbar: unterwegs
+  start_standort:
     card:
       type: custom:button-card
       template: owlet_fahrzeit_start
       variables:
         option: Standort
+        wert: tracker
         position: true
-  arbeit:
+  ziel_zuhause:
+    card:
+      type: custom:button-card
+      template: owlet_fahrzeit_ziel
+      entity: sensor.waze_fahrzeit_zuhause_live
+      variables:
+        ziel: Zuhause
+        zone: zone.home
+        typisch: sensor.waze_fahrzeit_zuhause_typisch
+        embed_key: DEIN_EMBED_KEY
+  ziel_arbeit:
     card:
       type: custom:button-card
       template: owlet_fahrzeit_ziel
       entity: sensor.waze_fahrzeit_arbeit_live
       variables:
         ziel: Arbeit
+        zone: zone.arbeit
         typisch: sensor.waze_fahrzeit_arbeit_typisch
         embed_key: DEIN_EMBED_KEY
