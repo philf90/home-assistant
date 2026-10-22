@@ -1,5 +1,5 @@
 # ============================================================================
-# Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Standort, Zeile und Routen-Popup
+# Fahrzeiten – Waze-Fahrzeit je angemeldeter Person, Routen-Popup
 # ----------------------------------------------------------------------------
 # Art:           templates
 # Bereich:       fahrzeuge
@@ -8,131 +8,103 @@
 # Templates:     keine
 # Einfuegen:     Raw-Konfigurationseditor,
 #                oberste Ebene unter button_card_templates:
-# Platzhalter:   device_tracker.iphone, person.bewohner, DEIN_EMBED_KEY
+# Platzhalter:   DEIN_EMBED_KEY
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Vier button-card-Templates fuer fahrzeiten-karte.yaml:
+# Zwei button-card-Templates fuer fahrzeiten-karte.yaml:
 #
-#   owlet_fahrzeiten        Kartenhuelle mit Kopf: Icon-Kachel (Auto-Grau),
-#                           "Fahrzeiten", darunter der Startpunkt. Die Zeilen
-#                           und die Start-Chips haengt die Karte selbst als
-#                           custom_fields ein.
-#   owlet_fahrzeit_start    Chip fuer einen Startpunkt (variables.option).
-#                           Tippen waehlt die Option im input_select. Aktiv
-#                           ist der Chip, dessen variables.wert dem
-#                           tatsaechlichen Start (sensor.fahrt_start) gleicht
-#                           ("tracker" fuer jeden device_tracker).
-#                           variables.sichtbar: "daheim", "unterwegs" oder
-#                           "immer", bezogen auf variables.person. Ein Chip
-#                           mit variables.position: true ist gedimmt und ohne
-#                           Aktion, solange keiner der Tracker in
-#                           variables.tracker Koordinaten hat.
-#   owlet_fahrzeit_ziel     Eine Zeile je Ziel: Name, Verzoegerungs-Pille,
-#                           Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse.
-#                           Tippen: Popup mit owlet_fahrzeit_popup. Die Zeile
-#                           blendet sich aus, wenn ihre Zone (variables.zone)
-#                           der Start ist oder die Person in der Zone ist:
-#                           ein Ort ist nie Start und Ziel zugleich.
+#   owlet_fahrzeiten        Die ganze Karte: Kopf, Start-Chips, eine Zeile je
+#                           Ziel. Rechnet im Browser fuer die angemeldete
+#                           Person. Enthaelt die Bibliothek window.__owletFz.
 #   owlet_fahrzeit_popup    Inhalt des Popups: Kennzahlen, Routenkarte
-#                           (Google Maps Embed API), Links zu Google Maps und
-#                           Waze.
+#                           (Google Maps Embed API), Alternativrouten, Links
+#                           zu Google Maps und Waze.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> alle vier Eintraege unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> beide Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
-# Daten je Ziel: zwei Eintraege der Integration Waze Travel Time mit
-# demselben Start und Ziel, einer mit Option "Echtzeit" (variables.live bzw.
-# entity), einer ohne (variables.typisch). Ohne Echtzeit rechnet Waze mit
-# crossTimeWithoutRealTime (pywaze, Modul route_calculator), also ohne aktuellen
-# Verkehr. Die Differenz ist die Verzoegerung der Pille:
+# Person: die Person aus variables.personen, deren Attribut user_id dem
+# angemeldeten Benutzer gleicht (button-card: user.id). Nur die gelisteten
+# Personen werden gelesen; ein Durchsuchen aller Zustaende liesse die Karte
+# bei jeder Aenderung im System neu zeichnen (button-card v7 merkt sich
+# gelesene Zustaende). Ihr Standort sind die Attribute latitude/longitude
+# der Person (Quelle ist ihr aktueller Tracker, attribute source).
+#
+# Startpunkt je Geraet: Die Wahl (variables.starts, Feld id) steht in
+# localStorage unter "owletFahrtStart:<person>"; ohne localStorage nur bis
+# zum Neuladen. Tatsaechlicher Start:
+#   gewaehlter Start, wenn er gerade sichtbar ist (Standort: wenn die Person
+#   Koordinaten hat); sonst unterwegs mit Koordinaten der Standort; sonst
+#   der Start mit zone.home.
+# Sichtbar: Feld sichtbar "daheim" / "unterwegs" (Person home oder nicht),
+# Feld personen beschraenkt Start oder Ziel auf diese Personen.
+# Ziele: ausgeblendet, wenn die Zone der Start ist oder die Person in der Zone
+# ist (Attribut in_zones; zone.home auch bei Zustand home). Ein Ort ist so
+# nie Start und Ziel zugleich.
+#
+# Rechnung: je Start|Ziel zwei Aufrufe von waze_travel_time.get_travel_times
+# (hass.callService mit returnResponse, HA-Frontend src/types.ts), einmal mit
+# realtime: true, einmal ohne. Ohne Echtzeit rechnet Waze mit
+# crossTimeWithoutRealTime (pywaze, Modul route_calculator), also ohne
+# aktuellen Verkehr. Start und Ziel gehen als Koordinaten "breite,laenge"
+# hinein (pywaze erkennt sie, COORD_MATCH); der Standort ist auf drei
+# Nachkommastellen (rund 100 m) gerundet, damit kleine GPS-Spruenge nicht neu
+# rechnen. Ergebnisse stehen in window.__owletFz.cache je Person, Start und
+# Ziel (nicht je Koordinate, sonst fragte die Karte beim Fahren bei jeder
+# neuen Position): neu gerechnet wird nach 5 min, bei geaendertem Start oder
+# Ziel nach 2 min. Ein Takt jede Minute zeichnet Karte und offenes Popup neu
+# (Ankunftszeit) und stoesst faellige Rechnungen an. Waehrend eine Rechnung
+# laeuft, bleiben die alten Werte stehen. Gerechnet wird nur, solange eine
+# Karte offen ist, und in jedem Browser fuer sich.
+# Angezeigt wird je Aufruf die schnellste Route. Die Differenz live minus
+# typisch ist die Verzoegerung der Pille:
 #   unter 3 min frei (Gruen), 3 bis 9 min zaeh (Amber), ab 10 min Stau (Rot),
 #   ohne Wert "keine Daten". Die Stufe steht immer als Text in der Pille.
 # Die Grenzen sind gesetzt, nicht gemessen.
 #
-# Startpunkt: Waze loest Start und Ziel bei jedem Abruf mit find_coordinates
-# (homeassistant/helpers/location.py) auf und folgt dabei einer Entity-ID im
-# Zustand. Der Template-Helfer sensor.fahrt_start liefert deshalb nur
-# "zone.home", "zone.arbeit" oder die ID des Handy-Trackers (Companion App,
-# GPS). Zuhause ist Start nur, solange die Person daheim ist; unterwegs wird
-# aus "Zuhause" der Standort. Arbeit ist Start nur unterwegs:
-#   {% set p = 'person.bewohner' %}
-#   {% set t = 'device_tracker.iphone' %}
-#   {% set wahl = states('input_select.fahrt_startpunkt') %}
-#   {% set daheim = is_state(p, 'home') %}
-#   {% set pos = state_attr(t, 'latitude') is number
-#                and state_attr(t, 'longitude') is number %}
-#   {% if wahl == 'Arbeit' and not daheim %}
-#     zone.arbeit
-#   {% elif (wahl == 'Standort' or not daheim) and pos %}
-#     {{ t }}
-#   {% else %}
-#     zone.home
-#   {% endif %}
-# Die acht Faelle (Wahl x daheim/unterwegs x mit/ohne Position) sind mit
-# ha_eval_template geprueft. Ohne Koordinaten faellt er auf Zuhause zurueck;
-# sonst wuerde Waze den Text "unknown" als Adresse suchen. Steht der Start
-# dann auf Zuhause, blendet sich das Ziel Zuhause aus (siehe oben). Der Tracker des Autos taugt dafuer nicht:
-# vag_connect liefert keinen Standort (siehe autos-karte-v4.yaml), der Tracker
-# aus volkswagencarnet stand im Oktober 2026 ueber den ganzen Verlauf
-# (10 Tage) auf unavailable. Derselbe Tracker steht in owlet_fahrzeit_start
-# (variables.tracker), damit der Chip "Standort" weiss, ob er waehlbar ist. Eine Automation ruft homeassistant.update_entity fuer alle
-# Fahrzeit-Sensoren auf, sobald sensor.fahrt_start wechselt; sonst kaeme der
-# neue Start erst mit dem naechsten 5-Minuten-Abruf.
+# Neu zeichnen: button-card zeichnet nur bei Aenderung gelesener Zustaende
+# neu (shouldUpdate, button-card.ts). Nach einer Antwort von Waze, einem
+# Startwechsel und im Minutentakt schreibt window.__owletFz.neu() den Inhalt
+# deshalb selbst in jede offene Karte (Element data-fz-karte) und in die
+# Bloecke data-fz-teil des Popups; die Routenkarte (iframe) bleibt stehen und
+# laedt nicht neu.
 #
-# Popup: Die Zeile oeffnet es per fire-dom-event, damit es nur im aktuellen
-# Browser aufgeht (wie das More-Menue in navigation-templates.yaml).
-# button-card wertet bei fire-dom-event jedes [[[ ]]] im Aktionsobjekt aus
-# (_evalActions -> _objectEvalTemplate, button-card.ts). Titel, Entity und
-# Variablen des Popups kommen so aus der Zeile; die Logik des Popups steht im
-# Template owlet_fahrzeit_popup und bleibt dabei unberuehrt.
+# Dauer: unter 60 min "45 min", ab 60 min "1 h 14 min", volle Stunden
+# "2 h". Erst auf ganze Minuten runden, dann teilen.
 #
-# Routenkarte: iframe der Maps Embed API, Modus directions, mit den
-# Attributen origin und destination des Live-Sensors (aufgeloeste
-# Koordinaten "breite,laenge"). Laut Google sind Embed-Abrufe kostenlos und
+# Popup: window.browser_mod.service('popup', ...) (browser_mod,
+# js/plugin/services.ts); es oeffnet nur im aktuellen Browser. Inhalt ist
+# owlet_fahrzeit_popup mit variables.key (Person|Start|Ziel); es liest
+# dieselben Daten aus dem Cache, die Alternativrouten kommen aus dem
+# Live-Aufruf.
+#
+# Routenkarte: iframe der Maps Embed API, Modus directions, mit Start und
+# Ziel als Koordinaten. Laut Google sind Embed-Abrufe kostenlos und
 # unbegrenzt; der Schluessel braucht trotzdem ein Abrechnungskonto. Er steht
-# in variables.embed_key und ist im Browser sichtbar: in der Cloud Console
-# nur fuer "Maps Embed API" freigeben und auf die Adressen der Instanz
-# beschraenken (Websites). Das HA-Frontend setzt
+# in variables.embed_key der Karte und ist im Browser sichtbar: in der Cloud
+# Console nur fuer "Maps Embed API" freigeben und auf die Adressen der
+# Instanz beschraenken (Websites). Das HA-Frontend setzt
 # <meta name="referrer" content="same-origin">; ohne eigenes
 # referrerpolicy="origin" schickte das iframe keinen Referrer, und Google
 # lehnte einen so beschraenkten Schluessel ab (RefererNotAllowedMapError).
 # Steht noch der Platzhalter drin, zeigt das Popup statt der Karte einen
-# Hinweis.
+# Hinweis. Waze liefert keine Linienfuehrung und die Embed-Karte keinen
+# Parameter zur Routenwahl; die Karte zeigt Googles eigene Route.
 #
-# Klicks im Popup (wie im Flugradar, flugradar-templates.yaml, gemessen):
-# Der Popup-Inhalt hat keine Aktion; button-card gibt ihm deshalb die Klasse
-# "disabled" mit pointer-events: none (styles.ts, _computeIsClickable), und
-# weder Karte noch Knoepfe reagierten. Der Inhalt setzt pointer-events: auto
-# und haelt touchstart/-end/-cancel an, weil button-card bei touchend
-# preventDefault() aufruft und am Handy dann kein click mehr kommt. Die
-# Knoepfe loesen ueber window.__owletFz.tipp bei touchend (echter Tipp:
-# unter 10 px, unter 800 ms) oder click aus und oeffnen per window.open, weil
-# button-card auch click verwirft. Im iframe selbst greift das nicht: Seine
-# Ereignisse bleiben im iframe-Dokument.
-#
-# Alternativrouten im Popup: Beim Oeffnen ruft das Popup
-# waze_travel_time.get_travel_times mit den Attributen origin und
-# destination des Live-Sensors auf (hass.callService mit returnResponse,
-# HA-Frontend src/types.ts). Die Antwort bleibt je Start|Ziel 5 min in
-# window.__owletFz.routen, damit mehrfaches Oeffnen Waze nicht erneut fragt.
-# Die Liste ist sortiert, die schnellste Route markiert, dahinter der
-# Abstand in Minuten. Antippen waehlt keine Route: Waze liefert keine
-# Linienfuehrung, und die Embed-Karte kennt keinen Parameter zur
-# Routenwahl; sie zeigt weiter Googles eigene Route.
-#
-# Dauer: unter 60 min "45 min", ab 60 min "1 h 14 min", volle Stunden
-# "2 h". Erst auf ganze Minuten runden, dann teilen. Gilt fuer Zeile, Pille,
-# Kennzahlen und Alternativrouten.
-#
-# Neu zeichnen: Zeile und Popup lesen beide Sensoren und zeichnen bei jeder
-# Aenderung neu (alle 5 min). Die Ankunftszeit rechnet mit der Uhrzeit dieses
-# Zeitpunkts und ist bis zum naechsten Abruf hoechstens 5 min alt.
+# Klicks (wie im Flugradar, flugradar-templates.yaml, gemessen): Karte und
+# Popup-Inhalt haben keine Aktion; button-card gibt ihnen die Klasse
+# "disabled" mit pointer-events: none (styles.ts, _computeIsClickable). Der
+# Inhalt setzt pointer-events: auto und haelt touchstart/-end/-cancel an,
+# weil button-card bei touchend preventDefault() aufruft und am Handy dann
+# kein click mehr kommt. Chips, Zeilen und Knoepfe loesen ueber
+# window.__owletFz.tipp bei touchend (echter Tipp: unter 10 px, unter
+# 800 ms) oder click aus; Links oeffnen per window.open.
 #
 # Voraussetzung: custom:button-card (v7) und browser_mod (HACS), Integration
-# Waze Travel Time (je Ziel "live" und "typisch"), Helfer
-# input_select.fahrt_startpunkt (Zuhause, Arbeit, Standort), Template-Helfer
-# sensor.fahrt_start, je Ziel eine Zone.
+# Waze Travel Time (die Aktion; Eintraege oder Sensoren braucht die Karte
+# nicht), je Ziel eine Zone, je Person ein Benutzer und ein Tracker mit
+# Koordinaten.
 button_card_templates:
   owlet_fahrzeiten:
     show_name: false
@@ -144,8 +116,11 @@ button_card_templates:
     hold_action:
       action: none
     variables:
-      start: sensor.fahrt_start
-      auswahl: input_select.fahrt_startpunkt
+      personen: []
+      starts: []
+      ziele: []
+      region: eu
+      embed_key: DEIN_EMBED_KEY
     styles:
       card:
         - padding: 16px
@@ -155,235 +130,277 @@ button_card_templates:
         - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
         - overflow: hidden
         - cursor: default
-      # Abstaende tragen die Chips und Zeilen selbst (margin), damit
-      # ausgeblendete Felder keine leere Luecke im Raster hinterlassen.
       grid:
-        - row-gap: 0
-        - column-gap: 0
+        - grid-template-areas: '"inhalt"'
       custom_fields:
-        kopf:
+        inhalt:
           - width: 100%
           - min-width: 0
     custom_fields:
-      kopf: |
+      inhalt: |
         [[[
-          const grau = 'var(--owlet-text-sekundaer, #8794a5)';
-          const s = states[variables.start];
-          const w = states[variables.auswahl];
-          const st = (s && s.state) || 'zone.home';
-          const name = st.startsWith('device_tracker.') ? 'Standort'
-            : st === 'zone.home' ? 'Zuhause'
-            : (states[st] && states[st].attributes.friendly_name) || st;
-          let unter = 'ab ' + name;
-          if (st === 'zone.home' && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
-          const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
-            <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
-          return `
-            <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;">
-              <div style="width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;color:${grau};
-                background:color-mix(in srgb, ${grau} 16%, transparent);border:1px solid color-mix(in srgb, ${grau} 24%, transparent);">${auto}</div>
-              <div style="display:flex;flex-direction:column;min-width:0;">
-                <span style="font-size:16px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">Fahrzeiten</span>
-                <span style="font-size:12.5px;color:${grau};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter} · Waze, mit Verkehr</span>
-              </div>
-            </div>`;
-        ]]]
+          // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
+          const VERSION = 5;
+          if (!window.__owletFz || window.__owletFz.version !== VERSION) {
+            if (window.__owletFz && window.__owletFz.takt) clearInterval(window.__owletFz.takt);
+            const fz = { version: VERSION, cache: {}, ctx: {}, karten: new Set(), wahlen: {} };
+            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const GRAU = 'var(--owlet-text-sekundaer, #8794a5)';
+            const BLAU = 'var(--owlet-blau, #7fb3d5)';
+            const KACHEL = 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+            fz.esc = esc;
+            fz.dauer = (min) => {
+              const t = Math.round(min), h = Math.floor(t / 60), m = t % 60;
+              return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
+            };
+            fz.km = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+            fz.zeit = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            fz.koord = (s, stellen) => (s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number')
+              ? s.attributes.latitude.toFixed(stellen) + ',' + s.attributes.longitude.toFixed(stellen) : null;
+            fz.beste = (r) => (Array.isArray(r) && r.length)
+              ? r.filter((x) => typeof x.duration === 'number').reduce((a, b) => (!a || b.duration < a.duration ? b : a), null) : null;
+            fz.erlaubt = (e, pid) => !Array.isArray(e.personen) || e.personen.includes(pid);
+            fz.wahl = (pid) => {
+              try { const w = localStorage.getItem('owletFahrtStart:' + pid); if (w) return w; } catch (e) { /* kein localStorage */ }
+              return fz.wahlen[pid] || 'zuhause';
+            };
+            fz.waehle = (pid, id) => {
+              fz.wahlen[pid] = id;
+              try { localStorage.setItem('owletFahrtStart:' + pid, id); } catch (e) { /* nur bis zum Neuladen */ }
+              fz.neu();
+            };
 
-  owlet_fahrzeit_start:
-    entity: input_select.fahrt_startpunkt
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    variables:
-      option: Zuhause
-      wert: zone.home
-      sichtbar: immer
-      person: person.bewohner
-      start: sensor.fahrt_start
-      position: false
-      tracker:
-        - device_tracker.iphone
-    hold_action:
-      action: none
-    tap_action: |
-      [[[
-        const st = (states[variables.start] && states[variables.start].state) || '';
-        const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
-        const hatPos = !variables.position || variables.tracker.some((t) => {
-          const s = states[t];
-          return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
-        });
-        if (!hatPos || an) return { action: 'none' };
-        return {
-          action: 'perform-action',
-          perform_action: 'input_select.select_option',
-          target: { entity_id: entity.entity_id },
-          data: { option: variables.option },
-        };
-      ]]]
-    styles:
-      card:
-        - padding: 6px 12px
-        - border-radius: 999px
-        - box-shadow: none
-        - width: auto
-        - margin: 12px 8px 0 0
-        - display: |
-            [[[
-              const p = states[variables.person];
-              const daheim = !!p && p.state === 'home';
-              if (variables.sichtbar === 'daheim') return daheim ? 'block' : 'none';
-              if (variables.sichtbar === 'unterwegs') return daheim ? 'none' : 'block';
-              return 'block';
-            ]]]
-        - background: |
-            [[[
-              const st = (states[variables.start] && states[variables.start].state) || '';
-              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
-              return an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
-                        : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
-            ]]]
-        - border: |
-            [[[
-              const st = (states[variables.start] && states[variables.start].state) || '';
-              const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
-              return an ? '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
-                        : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
-            ]]]
-        - opacity: |
-            [[[
-              if (!variables.position) return 1;
-              const hatPos = variables.tracker.some((t) => {
-                const s = states[t];
-                return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
+            // Lage der angemeldeten Person: sichtbare Starts, tatsaechlicher Start, Ziele
+            fz.lage = (states, user, v) => {
+              const p = (v.personen || []).map((id) => states[id])
+                .find((s) => s && user && s.attributes.user_id === user.id);
+              if (!p) return null;
+              const pid = p.entity_id, daheim = p.state === 'home';
+              const zonen = Array.isArray(p.attributes.in_zones) ? p.attributes.in_zones : [];
+              const pos = fz.koord(p, 3);
+              const alle = (v.starts || []).filter((s) => fz.erlaubt(s, pid));
+              const sichtbar = alle.filter((s) => s.sichtbar === 'daheim' ? daheim : s.sichtbar === 'unterwegs' ? !daheim : true);
+              const wahl = fz.wahl(pid);
+              const gewaehlt = sichtbar.find((s) => s.id === wahl);
+              const standort = alle.find((s) => s.standort);
+              const heim = alle.find((s) => s.zone === 'zone.home');
+              let start;
+              if (gewaehlt && (!gewaehlt.standort || pos)) start = gewaehlt;
+              else if (!daheim && pos && standort) start = standort;
+              else start = heim;
+              if (!start) return null;
+              const koord = start.standort ? pos : fz.koord(states[start.zone], 5);
+              const ziele = (v.ziele || []).filter((z) => fz.erlaubt(z, pid) && z.zone !== start.zone
+                && !zonen.includes(z.zone) && !(z.zone === 'zone.home' && daheim));
+              const unbekannt = !pos && start === heim && (wahl === (standort && standort.id) || !daheim);
+              return { p, pid, pos, sichtbar, start, koord, ziele, unbekannt };
+            };
+
+            // Waze: live und typisch je Person|Start|Ziel. Neu nach 5 min,
+            // bei geaenderten Koordinaten nach 2 min.
+            fz.abruf = (hass, key, o, d, region) => {
+              const c = fz.cache[key];
+              const alter = c ? Date.now() - c.zeit : Infinity;
+              const gleich = c && c.o === o && c.d === d;
+              if (c && (c.laeuft || alter < (gleich ? 300000 : 120000))) return;
+              fz.cache[key] = { ...(c || {}), laeuft: true, zeit: Date.now() };
+              const frage = (rt) => hass.callService('waze_travel_time', 'get_travel_times',
+                { origin: o, destination: d, region: region, realtime: rt }, undefined, false, true)
+                .then((r) => (r && r.response && r.response.routes) || []);
+              Promise.all([frage(true), frage(false)])
+                .then(([live, typ]) => { fz.cache[key] = { zeit: Date.now(), o, d, live, typ }; fz.neu(); })
+                .catch(() => { fz.cache[key] = { ...(c || {}), zeit: Date.now(), fehler: true }; fz.neu(); });
+            };
+
+            // Tippen: touchend (echter Tipp) oder click, nicht beides
+            fz.tipp = (e, aktion) => {
+              e.stopPropagation();
+              if (e.type === 'touchstart') {
+                const t = e.touches && e.touches[0];
+                fz._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+                return;
+              }
+              if (e.type === 'touchend') {
+                const t = e.changedTouches && e.changedTouches[0], st = fz._tipp;
+                fz._tipp = null;
+                if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+                if (e.cancelable) e.preventDefault();
+                fz._tippZeit = Date.now();
+                if (aktion) aktion();
+                return;
+              }
+              if (e.type === 'click') {
+                e.preventDefault();
+                if (Date.now() - (fz._tippZeit || 0) < 700) return;
+                if (aktion) aktion();
+              }
+            };
+            fz.tippAttr = (js) => `ontouchstart="window.__owletFz.tipp(event)" ontouchend="window.__owletFz.tipp(event,()=>{${js}})" onclick="window.__owletFz.tipp(event,()=>{${js}})"`;
+            fz.touchStopp = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"';
+
+            fz.oeffne = (key) => {
+              const x = fz.ctx[key];
+              if (!x || !window.browser_mod) return;
+              window.browser_mod.service('popup', {
+                title: x.ziel,
+                // Oberflaeche, Breite und Seitenabstand wie im DWD-Popup
+                // (warnlage-templates.yaml, Erklaerung dort)
+                style: '--ha-card-background: var(--owlet-huelle-oben, #1b2231);'
+                  + '--card-background-color: var(--owlet-huelle-oben, #1b2231);'
+                  + '--primary-background-color: var(--owlet-seite, #171d29);'
+                  + '--secondary-background-color: var(--owlet-huelle-oben, #1b2231);'
+                  + '--primary-text-color: var(--owlet-text, #f2f5f8);'
+                  + '--secondary-text-color: var(--owlet-text-sekundaer, #8794a5);'
+                  + '--mdc-dialog-scrim-color: rgba(0,0,0,0.62);'
+                  + '--popup-min-width: min(100vw, 720px);--popup-max-width: min(100vw, 720px);',
+                content: { type: 'custom:button-card', template: 'owlet_fahrzeit_popup', variables: { key } },
               });
-              return hatPos ? 1 : 0.45;
-            ]]]
-      grid:
-        - grid-template-areas: '"chip"'
-    custom_fields:
-      chip: |
-        [[[
-          const st = (states[variables.start] && states[variables.start].state) || '';
-          const an = variables.wert === 'tracker' ? st.startsWith('device_tracker.') : st === variables.wert;
-          const farbe = an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-muted, #6e7988)';
-          const text = an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)';
-          const pfad = variables.position
-            ? 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7m0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5'
-            : 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
-          return `<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:${text};white-space:nowrap;">
-            <svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;color:${farbe};"><path d="${pfad}"/></svg>${variables.option}</div>`;
-        ]]]
+            };
 
-  owlet_fahrzeit_ziel:
-    show_name: false
-    show_state: false
-    show_icon: false
-    show_label: false
-    variables:
-      ziel: Ziel
-      zone: zone.ziel
-      typisch: sensor.waze_fahrzeit_ziel_typisch
-      embed_key: DEIN_EMBED_KEY
-      person: person.bewohner
-      start: sensor.fahrt_start
-    hold_action:
-      action: none
-    tap_action:
-      action: fire-dom-event
-      browser_mod:
-        service: browser_mod.popup
-        data:
-          title: '[[[ return variables.ziel; ]]]'
-          # Oberflaeche, Breite und Seitenabstand wie im DWD-Popup
-          # (warnlage-templates.yaml, Erklaerung dort)
-          style: |
-            --ha-card-background: var(--owlet-huelle-oben, #1b2231);
-            --card-background-color: var(--owlet-huelle-oben, #1b2231);
-            --primary-background-color: var(--owlet-seite, #171d29);
-            --secondary-background-color: var(--owlet-huelle-oben, #1b2231);
-            --primary-text-color: var(--owlet-text, #f2f5f8);
-            --secondary-text-color: var(--owlet-text-sekundaer, #8794a5);
-            --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
-            --popup-min-width: min(100vw, 720px);
-            --popup-max-width: min(100vw, 720px);
-          content:
-            type: custom:button-card
-            template: owlet_fahrzeit_popup
-            entity: '[[[ return entity.entity_id; ]]]'
-            variables:
-              typisch: '[[[ return variables.typisch; ]]]'
-              embed_key: '[[[ return variables.embed_key; ]]]'
-    styles:
-      card:
-        - padding: 12px 14px
-        - border-radius: 16px
-        - box-shadow: none
-        - margin-top: 10px
-        # Ausblenden: Zone ist der Start, oder die Person ist in der Zone.
-        - display: |
-            [[[
-              const st = states[variables.start] && states[variables.start].state;
-              const p = states[variables.person];
-              const zonen = (p && Array.isArray(p.attributes.in_zones)) ? p.attributes.in_zones : [];
-              const drin = zonen.includes(variables.zone) || (variables.zone === 'zone.home' && !!p && p.state === 'home');
-              return (st === variables.zone || drin) ? 'none' : 'block';
-            ]]]
-        - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
-        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
-      grid:
-        - grid-template-areas: '"zeile"'
-      custom_fields:
-        zeile:
-          - width: 100%
-          - min-width: 0
-    custom_fields:
-      zeile: |
-        [[[
-          const zahl = (s) => (s && !isNaN(parseFloat(s.state))) ? parseFloat(s.state) : null;
-          const live = zahl(entity);
-          const typ = zahl(states[variables.typisch]);
-          const grau = 'var(--owlet-text-sekundaer, #8794a5)';
-          // Dauer ab 60 min in Stunden und Minuten; erst runden, dann teilen
-          // (73,4 -> 73 -> "1 h 13 min").
-          const teil = (min) => { const t = Math.round(min); return { h: Math.floor(t / 60), m: t % 60 }; };
-          const dauer = (min) => { const { h, m } = teil(min); return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`; };
-          let stufe = { text: 'keine Daten', farbe: 'var(--owlet-muted, #6e7988)' };
-          if (live !== null && typ !== null) {
-            const v = Math.max(0, Math.round(live - typ));
-            if (v < 3) stufe = { text: v > 0 ? `frei · +${dauer(v)}` : 'frei', farbe: 'var(--owlet-gruen, #a6d49e)' };
-            else if (v < 10) stufe = { text: `zäh · +${dauer(v)}`, farbe: 'var(--owlet-amber, #e6b566)' };
-            else stufe = { text: `Stau · +${dauer(v)}`, farbe: 'var(--owlet-rot, #f0736a)' };
+            // Eine Zeile je Ziel
+            fz.zeile = (key, ziel) => {
+              const c = fz.cache[key] || {};
+              const live = fz.beste(c.live), typ = fz.beste(c.typ);
+              let stufe = { text: 'keine Daten', farbe: 'var(--owlet-muted, #6e7988)' };
+              if (live && typ) {
+                const v = Math.max(0, Math.round(live.duration - typ.duration));
+                if (v < 3) stufe = { text: v > 0 ? `frei · +${fz.dauer(v)}` : 'frei', farbe: 'var(--owlet-gruen, #a6d49e)' };
+                else if (v < 10) stufe = { text: `zäh · +${fz.dauer(v)}`, farbe: 'var(--owlet-amber, #e6b566)' };
+                else stufe = { text: `Stau · +${fz.dauer(v)}`, farbe: 'var(--owlet-rot, #f0736a)' };
+              }
+              const teile = [];
+              if (live) {
+                if (typeof live.distance === 'number') teile.push(fz.km(live.distance));
+                teile.push('an ' + fz.zeit(Date.now() + live.duration * 60000));
+                if (live.name) teile.push('über ' + esc(String(live.name).replace(/;\s*/g, ' · ')));
+              }
+              const info = teile.length ? teile.join(' · ')
+                : (c.laeuft ? 'wird bei Waze berechnet …' : 'Waze liefert gerade keine Route');
+              const einheit = (u) => `<span style="font-size:13px;font-weight:500;color:${GRAU};margin-left:2px;">${u}</span>`;
+              let gross = '–';
+              if (live) {
+                const t = Math.round(live.duration), h = Math.floor(t / 60), m = t % 60;
+                gross = h ? `${h}${einheit('h')}${m ? ` ${m}${einheit('min')}` : ''}` : `${m}${einheit('min')}`;
+              }
+              const pille = `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap;
+                  border-radius:999px;padding:2px 8px;color:var(--owlet-label, #b4c0cf);
+                  background:color-mix(in srgb, ${stufe.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${stufe.farbe} 24%, transparent);">
+                  <i style="width:7px;height:7px;border-radius:50%;background:${stufe.farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${stufe.farbe} 18%, transparent);"></i>${stufe.text}</span>`;
+              return `
+                <div role="button" tabindex="0" ${fz.tippAttr(`window.__owletFz.oeffne('${key}')`)}
+                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__owletFz.oeffne('${key}')}"
+                  style="${KACHEL}border-radius:16px;padding:12px 14px;margin-top:10px;cursor:pointer;
+                    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;text-align:left;">
+                  <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
+                    <span style="font-size:15px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">${esc(ziel.name)}</span>${pille}
+                  </div>
+                  <div style="grid-row:span 2;font-size:24px;line-height:1;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${gross}</div>
+                  <div style="font-size:12.5px;color:${GRAU};font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere;">${info}</div>
+                </div>`;
+            };
+
+            // Ganze Karte
+            fz.html = (states, user, hass, v) => {
+              const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
+                <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
+              const l = fz.lage(states, user, v);
+              const unter = !l ? 'Für diesen Benutzer ist keine Person eingetragen'
+                : (l.unbekannt ? 'Standort unbekannt · ab ' + esc(l.start.name) : 'ab ' + esc(l.start.name)) + ' · Waze, mit Verkehr';
+              const kopf = `
+                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                  <div style="width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;color:${GRAU};
+                    background:color-mix(in srgb, ${GRAU} 16%, transparent);border:1px solid color-mix(in srgb, ${GRAU} 24%, transparent);">${auto}</div>
+                  <div style="display:flex;flex-direction:column;min-width:0;">
+                    <span style="font-size:16px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">Fahrzeiten</span>
+                    <span style="font-size:12.5px;color:${GRAU};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</span>
+                  </div>
+                </div>`;
+              if (!l) return kopf;
+              const chips = l.sichtbar.map((s) => {
+                const an = s.id === l.start.id;
+                const gesperrt = s.standort && !l.pos;
+                const pfad = s.standort
+                  ? 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7m0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5'
+                  : s.zone === 'zone.home' ? 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'
+                  : 'M10 2h4a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4V4a2 2 0 0 1 2-2m4 4V4h-4v2z';
+                const aktion = (an || gesperrt) ? '' : fz.tippAttr(`window.__owletFz.waehle('${l.pid}','${s.id}')`);
+                return `<button type="button" ${aktion} style="display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:500;
+                    white-space:nowrap;border-radius:999px;padding:6px 12px;cursor:${aktion ? 'pointer' : 'default'};opacity:${gesperrt ? 0.45 : 1};
+                    color:${an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)'};
+                    background:${an ? `color-mix(in srgb, ${BLAU} 12%, transparent)` : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'};
+                    border:1px solid ${an ? `color-mix(in srgb, ${BLAU} 24%, transparent)` : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">
+                    <svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;color:${an ? BLAU : 'var(--owlet-muted, #6e7988)'};"><path d="${pfad}"/></svg>${esc(s.name)}</button>`;
+              }).join('');
+              const zeilen = l.koord ? l.ziele.map((z) => {
+                const ziel = fz.koord(states[z.zone], 5);
+                if (!ziel) return '';
+                const key = l.pid + '|' + l.start.id + '|' + z.id;
+                fz.abruf(hass, key, l.koord, ziel, v.region || 'eu');
+                fz.ctx[key] = { ziel: z.name, start: l.start.name, embed_key: v.embed_key };
+                return fz.zeile(key, z);
+              }).join('') : '';
+              const leer = zeilen ? '' : `<div style="${KACHEL}border-radius:16px;padding:12px 14px;margin-top:10px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Von hier aus ist kein Ziel eingetragen.</div>`;
+              return `${kopf}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">${chips}</div>${zeilen}${leer}`;
+            };
+
+            // Popup: Zeile ueber der Karte, Kennzahlen und Routen aus dem Cache
+            fz.popupTeile = (key) => {
+              const c = fz.cache[key] || {};
+              const x = fz.ctx[key] || {};
+              const live = fz.beste(c.live), typ = fz.beste(c.typ);
+              const hinweis = (t) => `<div style="font-size:13px;color:var(--owlet-label, #b4c0cf);">${t}</div>`;
+              const zahlen = [
+                ['Mit Verkehr', live ? fz.dauer(live.duration) : '–'],
+                ['Typisch', typ ? fz.dauer(typ.duration) : '–'],
+                ['Ankunft', live ? fz.zeit(Date.now() + live.duration * 60000) : '–'],
+                ['Strecke', live && typeof live.distance === 'number' ? fz.km(live.distance) : '–'],
+              ].map(([l, w]) => `
+                <div style="${KACHEL}border-radius:13px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0;">
+                  <span style="font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:${GRAU};">${l}</span>
+                  <span style="font-size:19px;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${w}</span>
+                </div>`).join('');
+              const ueber = live && live.name ? ' · über ' + esc(String(live.name).replace(/;\s*/g, ' · ')) : '';
+              const stand = c.zeit && !c.laeuft ? ' · Stand ' + fz.zeit(c.zeit) : '';
+              // Alternativen aus dem Live-Aufruf, schnellste zuerst
+              const liste = (Array.isArray(c.live) ? c.live : []).filter((r) => typeof r.duration === 'number').sort((a, b) => a.duration - b.duration);
+              const routen = liste.length ? liste.map((r, i) => {
+                const nr = i === 0
+                  ? `background:color-mix(in srgb, ${BLAU} 16%, transparent);color:${BLAU};`
+                  : 'background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);';
+                return `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:10px;align-items:center;font-size:13.5px;padding:8px 10px;border-radius:12px;${KACHEL}font-variant-numeric:tabular-nums;">
+                    <span style="width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;${nr}">${i + 1}</span>
+                    <span style="color:var(--owlet-titel, #e7ecf3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(String(r.name || '–').replace(/;\s*/g, ' · '))}</span>
+                    <span style="color:${GRAU};">${typeof r.distance === 'number' ? fz.km(r.distance) : ''}</span>
+                    <span style="font-weight:700;color:var(--owlet-text, #f2f5f8);text-align:right;">${fz.dauer(r.duration)}${i ? `<span style="font-weight:500;color:${GRAU};"> +${fz.dauer(Math.round(r.duration - liste[0].duration))}</span>` : ''}</span>
+                  </div>`;
+              }).join('') : hinweis(c.laeuft ? 'Routen werden bei Waze abgefragt …' : 'Waze kennt für diese Strecke gerade keine Routen.');
+              return { zeile: `ab ${esc(x.start || '–')}${ueber}${stand}`, zahlen, routen };
+            };
+
+            // Offene Karten und Popups neu schreiben (Antwort, Startwechsel,
+            // Minutentakt). Im Popup nur die Bloecke data-fz-teil, nicht die
+            // Routenkarte.
+            fz.neu = () => {
+              fz.karten.forEach((k) => {
+                if (!k.isConnected) { fz.karten.delete(k); return; }
+                const r = k.shadowRoot;
+                if (!r) return;
+                if (k.__fzKey !== undefined) {
+                  const t = fz.popupTeile(k.__fzKey);
+                  r.querySelectorAll('[data-fz-teil]').forEach((el) => { el.innerHTML = t[el.getAttribute('data-fz-teil')] || ''; });
+                  return;
+                }
+                const el = r.querySelector('[data-fz-karte]');
+                if (el && k._hass && k.__fzV) el.innerHTML = fz.html(k._hass.states, k._hass.user, k._hass, k.__fzV);
+              });
+            };
+            fz.takt = setInterval(fz.neu, 60000);
+            window.__owletFz = fz;
           }
-          const a = (entity && entity.attributes) || {};
-          const teile = [];
-          if (typeof a.distance === 'number') {
-            teile.push(a.distance.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km');
-          }
-          if (live !== null) {
-            const an = new Date(Date.now() + live * 60000);
-            teile.push('an ' + an.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }));
-          }
-          if (a.route) teile.push('über ' + String(a.route).replace(/;\s*/g, ' · '));
-          const pille = `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap;
-              border-radius:999px;padding:2px 8px;color:var(--owlet-label, #b4c0cf);
-              background:color-mix(in srgb, ${stufe.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${stufe.farbe} 24%, transparent);">
-              <i style="width:7px;height:7px;border-radius:50%;background:${stufe.farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${stufe.farbe} 18%, transparent);"></i>${stufe.text}</span>`;
-          const einheit = (u) => `<span style="font-size:13px;font-weight:500;color:${grau};margin-left:2px;">${u}</span>`;
-          let minuten = '–';
-          if (live !== null) {
-            const { h, m } = teil(live);
-            minuten = h ? `${h}${einheit('h')}${m ? ` ${m}${einheit('min')}` : ''}` : `${m}${einheit('min')}`;
-          }
-          return `
-            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;text-align:left;">
-              <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
-                <span style="font-size:15px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">${variables.ziel}</span>${pille}
-              </div>
-              <div style="grid-row:span 2;font-size:24px;line-height:1;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${minuten}</div>
-              <div style="font-size:12.5px;color:${grau};font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere;">${teile.join(' · ') || 'Waze liefert gerade keine Route'}</div>
-            </div>`;
+          const fz = window.__owletFz;
+          this.__fzV = variables;
+          fz.karten.add(this);
+          return `<div data-fz-karte ${fz.touchStopp} style="display:flex;flex-direction:column;text-align:left;pointer-events:auto;white-space:normal;">${fz.html(states, user, this._hass || hass, variables)}</div>`;
         ]]]
 
   owlet_fahrzeit_popup:
@@ -396,10 +413,7 @@ button_card_templates:
     hold_action:
       action: none
     variables:
-      typisch: sensor.waze_fahrzeit_ziel_typisch
-      embed_key: DEIN_EMBED_KEY
-      start: sensor.fahrt_start
-      region: eu
+      key: ''
     styles:
       card:
         - padding: 4px 0 8px
@@ -416,160 +430,55 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[
-          // Bibliothek fuer Tippen und Links, einmal pro Seite (Erklaerung im
-          // Kopf, Abschnitt "Klicks im Popup"). VERSION bei jeder Aenderung erhoehen.
-          const VERSION = 4;
-          if (!window.__owletFz || window.__owletFz.version !== VERSION) {
-            const fz = { version: VERSION, routen: {} };
-            const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-            const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
-            // Dauer ab 60 min in Stunden und Minuten (wie in owlet_fahrzeit_ziel)
-            fz.dauer = (min) => {
-              const t = Math.round(min), h = Math.floor(t / 60), m = t % 60;
-              return h ? (m ? `${h} h ${m} min` : `${h} h`) : `${m} min`;
-            };
-            // Alternativen aus waze_travel_time.get_travel_times, je Start|Ziel
-            // 5 min im Browser gemerkt. Antwort: routes[] mit duration (min),
-            // distance (km), name, street_names.
-            fz.routenHtml = (key) => {
-              const r = fz.routen[key];
-              const hinweis = (t) => `<div style="font-size:13px;color:var(--owlet-label, #b4c0cf);">${t}</div>`;
-              if (!r || r.laeuft) return hinweis('Routen werden bei Waze abgefragt …');
-              if (r.fehler) return hinweis('Waze hat die Alternativen gerade nicht geliefert.');
-              const liste = (r.daten || []).filter((x) => typeof x.duration === 'number').sort((x, y) => x.duration - y.duration);
-              if (!liste.length) return hinweis('Waze kennt für diese Strecke keine Alternativen.');
-              const best = liste[0].duration;
-              return liste.map((x, i) => {
-                const plus = Math.round(x.duration - best);
-                const nr = i === 0
-                  ? 'background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent);color:var(--owlet-blau, #7fb3d5);'
-                  : 'background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--owlet-label, #b4c0cf);';
-                return `<div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:10px;align-items:center;font-size:13.5px;padding:8px 10px;border-radius:12px;
-                    background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-variant-numeric:tabular-nums;">
-                  <span style="width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;${nr}">${i + 1}</span>
-                  <span style="color:var(--owlet-titel, #e7ecf3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(String(x.name || '–').replace(/;\s*/g, ' · '))}</span>
-                  <span style="color:var(--owlet-text-sekundaer, #8794a5);">${typeof x.distance === 'number' ? kmTxt(x.distance) : ''}</span>
-                  <span style="font-weight:700;color:var(--owlet-text, #f2f5f8);text-align:right;">${fz.dauer(x.duration)}${i ? `<span style="font-weight:500;color:var(--owlet-text-sekundaer, #8794a5);"> +${fz.dauer(plus)}</span>` : ''}</span>
-                </div>`;
-              }).join('');
-            };
-            fz.ladeRouten = (karte, hass, o, d, region) => {
-              const key = o + '|' + d;
-              const r = fz.routen[key];
-              if (r && (r.laeuft || Date.now() - r.zeit < 300000)) return;
-              fz.routen[key] = { laeuft: true, zeit: Date.now() };
-              const zeige = () => {
-                const ziel = karte && karte.shadowRoot && karte.shadowRoot.querySelector('[data-fz-routen]');
-                if (ziel && ziel.getAttribute('data-fz-routen') === key) ziel.innerHTML = fz.routenHtml(key);
-              };
-              hass.callService('waze_travel_time', 'get_travel_times',
-                { origin: o, destination: d, region: region, realtime: true }, undefined, false, true)
-                .then((res) => { fz.routen[key] = { zeit: Date.now(), daten: (res && res.response && res.response.routes) || [] }; zeige(); })
-                .catch(() => { fz.routen[key] = { zeit: Date.now(), fehler: true }; zeige(); });
-            };
-            fz.tipp = (e, url) => {
-              e.stopPropagation();
-              if (e.type === 'touchstart') {
-                const t = e.touches && e.touches[0];
-                fz._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
-                return;
-              }
-              if (e.type === 'touchend') {
-                const t = e.changedTouches && e.changedTouches[0], st = fz._tipp;
-                fz._tipp = null;
-                if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
-                if (e.cancelable) e.preventDefault();
-                fz._tippZeit = Date.now();
-                if (url) window.open(url, '_blank');
-                return;
-              }
-              if (e.type === 'click') {
-                e.preventDefault();
-                if (Date.now() - (fz._tippZeit || 0) < 700) return;
-                if (url) window.open(url, '_blank');
-              }
-            };
-            window.__owletFz = fz;
-          }
-          const zahl = (s) => (s && !isNaN(parseFloat(s.state))) ? parseFloat(s.state) : null;
-          const live = zahl(entity);
-          const typ = zahl(states[variables.typisch]);
-          const a = (entity && entity.attributes) || {};
+          const fz = window.__owletFz;
+          const hinweis = (t) => `<div style="font-size:13px;color:var(--owlet-label, #b4c0cf);">${t}</div>`;
+          if (!fz || !fz.popupTeile) return hinweis('Die Karte Fahrzeiten ist auf dieser Seite noch nicht geladen.');
+          const key = String(variables.key || '');
+          const c = fz.cache[key] || {};
+          const x = fz.ctx[key] || {};
+          const t = fz.popupTeile(key);
+          this.__fzKey = key;
+          fz.karten.add(this);
           const grau = 'var(--owlet-text-sekundaer, #8794a5)';
           const kachel = 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
-          const km = typeof a.distance === 'number'
-            ? a.distance.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km' : '–';
-          const ankunft = live !== null
-            ? new Date(Date.now() + live * 60000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
-          const zahlen = [
-            ['Mit Verkehr', live !== null ? window.__owletFz.dauer(live) : '–'],
-            ['Typisch', typ !== null ? window.__owletFz.dauer(typ) : '–'],
-            ['Ankunft', ankunft],
-            ['Strecke', km],
-          ].map(([l, w]) => `
-            <div style="${kachel}border-radius:13px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0;">
-              <span style="font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:${grau};">${l}</span>
-              <span style="font-size:19px;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${w}</span>
-            </div>`).join('');
 
-          const s = states[variables.start];
-          const st = (s && s.state) || 'zone.home';
-          const ab = 'ab ' + (st.startsWith('device_tracker.') ? 'Standort'
-            : st === 'zone.home' ? 'Zuhause'
-            : (states[st] && states[st].attributes.friendly_name) || st);
-          const ueber = a.route ? ' · über ' + String(a.route).replace(/;\s*/g, ' · ') : '';
-          const stand = entity && entity.last_updated
-            ? ' · Stand ' + new Date(entity.last_updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-
-          const o = a.origin ? encodeURIComponent(a.origin) : '';
-          const d = a.destination ? encodeURIComponent(a.destination) : '';
-          const key = String(variables.embed_key || '');
+          // Routenkarte mit den Koordinaten der letzten Rechnung
+          const ekey = String(x.embed_key || '');
+          const oe = c.o ? encodeURIComponent(c.o) : '', de = c.d ? encodeURIComponent(c.d) : '';
           let karte;
-          if (!o || !d) {
-            karte = `<div style="${kachel}border-radius:16px;padding:14px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Waze hat Start oder Ziel noch nicht aufgelöst.</div>`;
-          } else if (!key || key === 'DEIN_EMBED_KEY') {
+          if (!oe || !de) {
+            karte = `<div style="${kachel}border-radius:16px;padding:14px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Waze hat für diese Strecke noch nicht gerechnet.</div>`;
+          } else if (!ekey || ekey === 'DEIN_EMBED_KEY') {
             karte = `<div style="${kachel}border-radius:16px;padding:14px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Für die Routenkarte fehlt der API-Schlüssel der Maps Embed API (variables.embed_key in fahrzeiten-karte.yaml).</div>`;
           } else {
-            const src = 'https://www.google.com/maps/embed/v1/directions?key=' + encodeURIComponent(key)
-              + '&mode=driving&language=de&origin=' + o + '&destination=' + d;
+            const src = 'https://www.google.com/maps/embed/v1/directions?key=' + encodeURIComponent(ekey)
+              + '&mode=driving&language=de&origin=' + oe + '&destination=' + de;
             karte = `<iframe src="${src}" loading="lazy" referrerpolicy="origin" allowfullscreen
               style="display:block;width:100%;height:320px;border:0;border-radius:16px;background:var(--owlet-flaeche-vertieft, #10151d);"></iframe>`;
           }
 
           const knopf = (href, text, pfad) => `
-            <button type="button" ontouchstart="window.__owletFz.tipp(event)" ontouchend="window.__owletFz.tipp(event,'${href}')"
-               onclick="window.__owletFz.tipp(event,'${href}')" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+            <button type="button" ${fz.tippAttr(`window.open('${href}','_blank')`)} style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
                font:inherit;font-size:13.5px;font-weight:600;color:var(--owlet-titel, #e7ecf3);border-radius:13px;padding:9px 14px;
                background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);
                border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);">
               <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;color:var(--owlet-blau, #7fb3d5);"><path d="${pfad}"/></svg>${text}</button>`;
-          const links = (o && d) ? `
+          const links = (oe && de) ? `
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              ${knopf('https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=' + o + '&destination=' + d, 'In Google Maps öffnen',
+              ${knopf('https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=' + oe + '&destination=' + de, 'In Google Maps öffnen',
                 'M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2z')}
-              ${knopf('https://waze.com/ul?navigate=yes&ll=' + d, 'In Waze navigieren', 'M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z')}
+              ${knopf('https://waze.com/ul?navigate=yes&ll=' + de, 'In Waze navigieren', 'M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z')}
             </div>` : '';
 
-          // Alternativen: Abruf nach dem Zeichnen, das Ergebnis setzt
-          // window.__owletFz.ladeRouten direkt in den Block data-fz-routen.
-          let routen = '';
-          if (a.origin && a.destination) {
-            const rkey = a.origin + '|' + a.destination;
-            setTimeout(() => window.__owletFz.ladeRouten(this, this._hass || hass, a.origin, a.destination, variables.region), 0);
-            routen = `
+          return `
+            <div ${fz.touchStopp} style="display:flex;flex-direction:column;gap:12px;text-align:left;pointer-events:auto;white-space:normal;">
+              <div data-fz-teil="zeile" style="font-size:12.5px;color:${grau};">${t.zeile}</div>
+              <div data-fz-teil="zahlen" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;">${t.zahlen}</div>
+              ${karte}
               <div style="display:flex;flex-direction:column;gap:6px;">
                 <span style="font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:${grau};">Routen laut Waze, mit Verkehr</span>
-                <div data-fz-routen="${rkey.replace(/"/g, '')}" style="display:flex;flex-direction:column;gap:6px;">${window.__owletFz.routenHtml(rkey)}</div>
-              </div>`;
-          }
-
-          return `
-            <div ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"
-              style="display:flex;flex-direction:column;gap:12px;text-align:left;pointer-events:auto;white-space:normal;">
-              <div style="font-size:12.5px;color:${grau};">${ab}${ueber}${stand}</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;">${zahlen}</div>
-              ${karte}
-              ${routen}
+                <div data-fz-teil="routen" style="display:flex;flex-direction:column;gap:6px;">${t.routen}</div>
+              </div>
               ${links}
             </div>`;
         ]]]

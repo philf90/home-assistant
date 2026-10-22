@@ -1,111 +1,77 @@
 # ============================================================================
-# Fahrzeiten – Waze-Fahrzeit zu festen Zielen, Route im Popup
+# Fahrzeiten – Waze-Fahrzeit je angemeldeter Person, Route im Popup
 # ----------------------------------------------------------------------------
 # Art:           karte
 # Bereich:       fahrzeuge
 # Status:        aktiv
 # Karten:        button-card
-# Templates:     owlet_fahrzeiten (fahrzeiten-templates.yaml),
-#                owlet_fahrzeit_start (fahrzeiten-templates.yaml),
-#                owlet_fahrzeit_ziel (fahrzeiten-templates.yaml)
+# Templates:     owlet_fahrzeiten (fahrzeiten-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
-# Platzhalter:   DEIN_EMBED_KEY
+# Platzhalter:   person.bewohner, DEIN_EMBED_KEY
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Fahrzeiten (Owlet-Karte) fuer die Auto-View.
+# Fahrzeiten (Owlet-Karte) fuer die Auto-View. Jeder Benutzer sieht die
+# Fahrzeiten ab seinem eigenen Standort; die Person ergibt sich aus dem
+# angemeldeten Benutzer (Attribut user_id der Person).
 #
 #   Kopf     Icon-Kachel in Auto-Grau, "Fahrzeiten", darunter der Startpunkt
 #            ("ab Zuhause", "ab Arbeit", "ab Standort" oder "Standort
 #            unbekannt · ab Zuhause")
-#   Chips    Startpunkt (input_select.fahrt_startpunkt). Daheim: Zuhause und
-#            Standort, unterwegs: Arbeit und Standort. Standort ist der
-#            Handy-Tracker; der Chip ist gedimmt, solange er keine
-#            Koordinaten hat. Aktiv ist der tatsaechliche Start.
-#   Zeilen   je Ziel (Zuhause nur unterwegs, kein Ziel gleich dem Start):
-#            Name, Pille mit Verzoegerung gegenueber typisch,
-#            Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse laut Waze.
-#            Tippen oeffnet das Popup mit Kennzahlen, Routenkarte und Links
-#            zu Google Maps und Waze.
+#   Chips    Startpunkt, gemerkt je Geraet. Daheim: Zuhause und Standort,
+#            unterwegs: Arbeit (nur person.bewohner) und Standort. Standort
+#            ist die Position der Person; der Chip ist gedimmt, solange sie
+#            keine Koordinaten hat. Aktiv ist der tatsaechliche Start.
+#   Zeilen   je Ziel (Zuhause nur unterwegs, Arbeit nur fuer
+#            person.bewohner, kein Ziel gleich dem Start): Name, Pille mit
+#            Verzoegerung gegenueber typisch, Fahrzeit mit Verkehr, Strecke,
+#            Ankunft, Strasse laut Waze. Tippen oeffnet das Popup mit
+#            Kennzahlen, Routenkarte, Alternativrouten und Links zu Google
+#            Maps und Waze.
 # Logik, Stufen der Pille und Startpunkt: fahrzeiten-templates.yaml.
 #
-# Weiteres Ziel: Zone anlegen, zwei Waze-Eintraege ("live" mit Echtzeit,
-# "typisch" ohne, Start sensor.fahrt_start, Ziel die Zone), eine Zeile wie
-# "ziel_arbeit" mit variables.zone ergaenzen und in grid-template-areas
-# eintragen, die beiden
-# Sensoren in die Automation "Fahrzeiten nach Startwechsel aktualisieren"
-# aufnehmen.
+#   personen   Personen, die die Karte nutzen; jede braucht einen Benutzer.
+#              Benutzer ohne Person sehen nur den Kopf mit Hinweis.
+#   starts     id, name, und entweder zone oder standort: true.
+#              sichtbar: daheim / unterwegs (fehlt: immer),
+#              personen: nur fuer diese Personen (fehlt: fuer alle).
+#   ziele      id, name, zone, optional personen wie oben.
+# Weiteres Ziel: Zone anlegen und unter ziele eintragen.
 #
 # DEIN_EMBED_KEY: API-Schluessel der Maps Embed API (Einrichtung und
 # Beschraenkung siehe fahrzeiten-templates.yaml). Ohne Schluessel zeigt das
 # Popup statt der Karte einen Hinweis, der Rest funktioniert.
 #
 # Voraussetzung: custom:button-card (v7) und browser_mod (HACS), die
-# Templates aus fahrzeiten-templates.yaml, Integration Waze Travel Time.
+# Templates aus fahrzeiten-templates.yaml, Integration Waze Travel Time,
+# Zone zone.arbeit.
 type: custom:button-card
 template: owlet_fahrzeiten
-styles:
-  grid:
-    - grid-template-areas: >-
-        "kopf kopf kopf kopf"
-        "start_zuhause start_arbeit start_standort ."
-        "ziel_zuhause ziel_zuhause ziel_zuhause ziel_zuhause"
-        "ziel_arbeit ziel_arbeit ziel_arbeit ziel_arbeit"
-    - grid-template-columns: auto auto auto 1fr
-  custom_fields:
-    start_zuhause:
-      - justify-self: start
-    start_arbeit:
-      - justify-self: start
-    start_standort:
-      - justify-self: start
-    ziel_zuhause:
-      - width: 100%
-      - min-width: 0
-    ziel_arbeit:
-      - width: 100%
-      - min-width: 0
-custom_fields:
-  start_zuhause:
-    card:
-      type: custom:button-card
-      template: owlet_fahrzeit_start
-      variables:
-        option: Zuhause
-        wert: zone.home
-        sichtbar: daheim
-  start_arbeit:
-    card:
-      type: custom:button-card
-      template: owlet_fahrzeit_start
-      variables:
-        option: Arbeit
-        wert: zone.arbeit
-        sichtbar: unterwegs
-  start_standort:
-    card:
-      type: custom:button-card
-      template: owlet_fahrzeit_start
-      variables:
-        option: Standort
-        wert: tracker
-        position: true
-  ziel_zuhause:
-    card:
-      type: custom:button-card
-      template: owlet_fahrzeit_ziel
-      entity: sensor.waze_fahrzeit_zuhause_live
-      variables:
-        ziel: Zuhause
-        zone: zone.home
-        typisch: sensor.waze_fahrzeit_zuhause_typisch
-        embed_key: DEIN_EMBED_KEY
-  ziel_arbeit:
-    card:
-      type: custom:button-card
-      template: owlet_fahrzeit_ziel
-      entity: sensor.waze_fahrzeit_arbeit_live
-      variables:
-        ziel: Arbeit
-        zone: zone.arbeit
-        typisch: sensor.waze_fahrzeit_arbeit_typisch
-        embed_key: DEIN_EMBED_KEY
+variables:
+  personen:
+    - person.bewohner
+    - person.bewohner_2
+  starts:
+    - id: zuhause
+      name: Zuhause
+      zone: zone.home
+      sichtbar: daheim
+    - id: arbeit
+      name: Arbeit
+      zone: zone.arbeit
+      sichtbar: unterwegs
+      personen:
+        - person.bewohner
+    - id: standort
+      name: Standort
+      standort: true
+  ziele:
+    - id: zuhause
+      name: Zuhause
+      zone: zone.home
+    - id: arbeit
+      name: Arbeit
+      zone: zone.arbeit
+      personen:
+        - person.bewohner
+  region: eu
+  embed_key: DEIN_EMBED_KEY
