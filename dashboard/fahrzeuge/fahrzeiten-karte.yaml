@@ -1,0 +1,77 @@
+# ============================================================================
+# Fahrzeiten – Waze-Fahrzeit zu festen Zielen, Route im Popup
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       fahrzeuge
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     owlet_fahrzeiten (fahrzeiten-templates.yaml),
+#                owlet_fahrzeit_start (fahrzeiten-templates.yaml),
+#                owlet_fahrzeit_ziel (fahrzeiten-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   DEIN_EMBED_KEY
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Fahrzeiten (Owlet-Karte) fuer die Auto-View.
+#
+#   Kopf     Icon-Kachel in Auto-Grau, "Fahrzeiten", darunter der Startpunkt
+#            ("ab Zuhause", "ab Standort" oder "Standort unbekannt · ab
+#            Zuhause")
+#   Chips    Startpunkt Zuhause / Standort (input_select.fahrt_startpunkt).
+#            Standort ist der Handy-Tracker; der Chip ist gedimmt, solange er
+#            keine Koordinaten hat.
+#   Zeilen   je Ziel: Name, Pille mit Verzoegerung gegenueber typisch,
+#            Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse laut Waze.
+#            Tippen oeffnet das Popup mit Kennzahlen, Routenkarte und Links
+#            zu Google Maps und Waze.
+# Logik, Stufen der Pille und Startpunkt: fahrzeiten-templates.yaml.
+#
+# Weiteres Ziel: Zone anlegen, zwei Waze-Eintraege ("live" mit Echtzeit,
+# "typisch" ohne, Start sensor.fahrt_start, Ziel die Zone), eine Zeile wie
+# "arbeit" ergaenzen und in grid-template-areas eintragen, die beiden
+# Sensoren in die Automation "Fahrzeiten nach Startwechsel aktualisieren"
+# aufnehmen.
+#
+# DEIN_EMBED_KEY: API-Schluessel der Maps Embed API (Einrichtung und
+# Beschraenkung siehe fahrzeiten-templates.yaml). Ohne Schluessel zeigt das
+# Popup statt der Karte einen Hinweis, der Rest funktioniert.
+#
+# Voraussetzung: custom:button-card (v7) und browser_mod (HACS), die
+# Templates aus fahrzeiten-templates.yaml, Integration Waze Travel Time.
+type: custom:button-card
+template: owlet_fahrzeiten
+styles:
+  grid:
+    - grid-template-areas: '"kopf kopf kopf" "zuhause standort ." "arbeit arbeit arbeit"'
+    - grid-template-columns: auto auto 1fr
+  custom_fields:
+    zuhause:
+      - justify-self: start
+    standort:
+      - justify-self: start
+    arbeit:
+      - width: 100%
+      - min-width: 0
+custom_fields:
+  zuhause:
+    card:
+      type: custom:button-card
+      template: owlet_fahrzeit_start
+      variables:
+        option: Zuhause
+  standort:
+    card:
+      type: custom:button-card
+      template: owlet_fahrzeit_start
+      variables:
+        option: Standort
+        position: true
+  arbeit:
+    card:
+      type: custom:button-card
+      template: owlet_fahrzeit_ziel
+      entity: sensor.waze_fahrzeit_arbeit_live
+      variables:
+        ziel: Arbeit
+        typisch: sensor.waze_fahrzeit_arbeit_typisch
+        embed_key: DEIN_EMBED_KEY

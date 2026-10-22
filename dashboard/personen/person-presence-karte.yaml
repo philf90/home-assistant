@@ -18,7 +18,13 @@
 # Status über die volle Kartenbreite -> Texte werden auch bei schmaler
 # horizontal-stack-Spalte (iPhone) vollständig angezeigt statt abgeschnitten.
 # Zustand "home" -> gruener Ring + gruener Home-Badge, "not_home" -> Graustufen-Foto
-# + roter Home-Export-Badge. Akku: gruen >= 30 %, gelb 15-29 %, rot < 15 %.
+# + roter Home-Export-Badge. In einer anderen Zone (Zustand = Zonenname, z. B.
+# "Arbeit") -> Graustufen-Foto mit blauem Ring, blauer Badge mit dem Icon der
+# Zone, Status-Icon blau, Text = Zonenname. Blau ist die Rolle "Info-Wert"
+# (DESIGN.md): ein bekannter Ort, keine Bewertung wie Gruen oder Rot. Die Zone
+# kommt aus dem Attribut in_zones der Person (ohne zone.home); ohne Zonen-Icon
+# steht eine Stecknadel. Der Rand bleibt Dragonfruit, die Person ist nicht da.
+# Akku: gruen >= 30 %, gelb 15-29 %, rot < 15 %.
 # Zusaetzlich faerbt sich der linke Kartenrand (4 px) statusabhaengig in den
 # Identitaetsfarben: Zuhause -> #4B2E7A, Abwesend -> Dragonfruit #FF4696.
 # #4B2E7A ist ein aufgehelltes Night Violet (#1E1033) - der Originalton liegt
@@ -83,7 +89,13 @@ cards:
           const pic  = e && e.attributes ? e.attributes.entity_picture : null;
           const name = (e && e.attributes && e.attributes.friendly_name) || '';
           const initial = name ? name.trim().charAt(0).toUpperCase() : '?';
-          const accent = home ? green : muted;
+          // Andere Zone: Zustand ist der Zonenname, in_zones nennt die Zone.
+          const blau = 'var(--owlet-blau, #7fb3d5)';
+          const inZone = !home && !!e && !['not_home', 'unknown', 'unavailable'].includes(e.state);
+          const zonen = (e && e.attributes && Array.isArray(e.attributes.in_zones)) ? e.attributes.in_zones : [];
+          const zoneId = zonen.find((z) => z !== 'zone.home');
+          const zoneIcon = inZone && zoneId && states[zoneId] ? states[zoneId].attributes.icon : null;
+          const accent = home ? green : (inZone ? blau : muted);
           const fb = variables.avatar_fallback || 'linear-gradient(160deg,#4a5a74,#33404f)';
 
           // ---------- Akku ----------
@@ -104,14 +116,22 @@ cards:
             <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
           const icoAwayStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${muted};width:13px;height:13px;flex:none;">
             <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
-          const statusIcon = home ? icoHomeStatus : icoAwayStatus;
+          const icoZoneStatus = zoneIcon
+            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:13px;width:13px;height:13px;display:flex;flex:none;color:${blau};"></ha-icon>`
+            : icoAwayStatus.replace(`color:${muted}`, `color:${blau}`);
+          const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : icoAwayStatus);
 
           const badgeHome = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
             <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
           const badgeAway = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
             <path d="M4 11.5 11 5.7V19h-5v-8.4"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/></svg>`;
-          const badgeBg   = home ? '#a6d49e' : '#f0736a'; // Fuellung: bleibt in beiden Modi pastell
-          const badgeIcon = home ? badgeHome : badgeAway;
+          const badgeZone = zoneIcon
+            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:11px;width:11px;height:11px;display:flex;color:#12161f;"></ha-icon>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
+            <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
+          // Fuellung: bleibt in beiden Modi pastell
+          const badgeBg   = home ? '#a6d49e' : (inZone ? '#7fb3d5' : '#f0736a');
+          const badgeIcon = home ? badgeHome : (inZone ? badgeZone : badgeAway);
 
           const icoBat = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${batIconColor};width:18px;height:18px;flex:none;">
             <rect x="2.5" y="8" width="16.5" height="8" rx="2.4"/>
@@ -159,10 +179,10 @@ cards:
         ]]]
 
   - type: custom:button-card
-    entity: person.annalena
+    entity: person.bewohner_2
     variables:
-      battery_entity: sensor.samsung_s25_battery_level
-      charging_entity: sensor.samsung_s25_battery_state
+      battery_entity: sensor.iphone_2_battery_level
+      charging_entity: sensor.iphone_2_battery_state
       avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
     tap_action:
       action: more-info

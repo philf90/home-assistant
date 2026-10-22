@@ -29,7 +29,7 @@ wiederholt sie nicht.
 1. **Platzhalter in der Zieldatei finden.** Die Zeile `Platzhalter:` im
    Kopfblock der Datei lesen und die Datei mit den Mustern aus
    `design/platzhalter.yaml` durchsuchen, z. B.:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|claude_usage_konto|[Tt]ankstelle[ _][1-4]|VG Wohnort' <datei>`
+   `grep -nE 'person\.bewohner|sensor\.iphone_|device_tracker\.iphone|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|claude_usage_konto|[Tt]ankstelle[ _][1-4]|VG Wohnort' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
