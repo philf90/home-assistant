@@ -83,6 +83,17 @@
 # Steht noch der Platzhalter drin, zeigt das Popup statt der Karte einen
 # Hinweis.
 #
+# Klicks im Popup (wie im Flugradar, flugradar-templates.yaml, gemessen):
+# Der Popup-Inhalt hat keine Aktion; button-card gibt ihm deshalb die Klasse
+# "disabled" mit pointer-events: none (styles.ts, _computeIsClickable), und
+# weder Karte noch Knoepfe reagierten. Der Inhalt setzt pointer-events: auto
+# und haelt touchstart/-end/-cancel an, weil button-card bei touchend
+# preventDefault() aufruft und am Handy dann kein click mehr kommt. Die
+# Knoepfe loesen ueber window.__owletFz.tipp bei touchend (echter Tipp:
+# unter 10 px, unter 800 ms) oder click aus und oeffnen per window.open, weil
+# button-card auch click verwirft. Im iframe selbst greift das nicht: Seine
+# Ereignisse bleiben im iframe-Dokument.
+#
 # Neu zeichnen: Zeile und Popup lesen beide Sensoren und zeichnen bei jeder
 # Aenderung neu (alle 5 min). Die Ankunftszeit rechnet mit der Uhrzeit dieses
 # Zeitpunkts und ist bis zum naechsten Abruf hoechstens 5 min alt.
@@ -330,6 +341,35 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[
+          // Bibliothek fuer Tippen und Links, einmal pro Seite (Erklaerung im
+          // Kopf, Abschnitt "Klicks im Popup"). VERSION bei jeder Aenderung erhoehen.
+          const VERSION = 1;
+          if (!window.__owletFz || window.__owletFz.version !== VERSION) {
+            const fz = { version: VERSION };
+            fz.tipp = (e, url) => {
+              e.stopPropagation();
+              if (e.type === 'touchstart') {
+                const t = e.touches && e.touches[0];
+                fz._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+                return;
+              }
+              if (e.type === 'touchend') {
+                const t = e.changedTouches && e.changedTouches[0], st = fz._tipp;
+                fz._tipp = null;
+                if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+                if (e.cancelable) e.preventDefault();
+                fz._tippZeit = Date.now();
+                if (url) window.open(url, '_blank');
+                return;
+              }
+              if (e.type === 'click') {
+                e.preventDefault();
+                if (Date.now() - (fz._tippZeit || 0) < 700) return;
+                if (url) window.open(url, '_blank');
+              }
+            };
+            window.__owletFz = fz;
+          }
           const zahl = (s) => (s && !isNaN(parseFloat(s.state))) ? parseFloat(s.state) : null;
           const live = zahl(entity);
           const typ = zahl(states[variables.typisch]);
@@ -373,11 +413,12 @@ button_card_templates:
           }
 
           const knopf = (href, text, pfad) => `
-            <a href="${href}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;
-               font-size:13.5px;font-weight:600;color:var(--owlet-titel, #e7ecf3);border-radius:13px;padding:9px 14px;
+            <button type="button" ontouchstart="window.__owletFz.tipp(event)" ontouchend="window.__owletFz.tipp(event,'${href}')"
+               onclick="window.__owletFz.tipp(event,'${href}')" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+               font:inherit;font-size:13.5px;font-weight:600;color:var(--owlet-titel, #e7ecf3);border-radius:13px;padding:9px 14px;
                background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);
                border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);">
-              <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;color:var(--owlet-blau, #7fb3d5);"><path d="${pfad}"/></svg>${text}</a>`;
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;color:var(--owlet-blau, #7fb3d5);"><path d="${pfad}"/></svg>${text}</button>`;
           const links = (o && d) ? `
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               ${knopf('https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=' + o + '&destination=' + d, 'In Google Maps öffnen',
@@ -386,7 +427,8 @@ button_card_templates:
             </div>` : '';
 
           return `
-            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+            <div ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()"
+              style="display:flex;flex-direction:column;gap:12px;text-align:left;pointer-events:auto;white-space:normal;">
               <div style="font-size:12.5px;color:${grau};">${ab}${ueber}${stand}</div>
               <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;">${zahlen}</div>
               ${karte}
