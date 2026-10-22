@@ -1,0 +1,396 @@
+# ============================================================================
+# Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Auto, Zeile und Routen-Popup
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       fahrzeuge
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   fin_*, DEIN_EMBED_KEY
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Vier button-card-Templates fuer fahrzeiten-karte.yaml:
+#
+#   owlet_fahrzeiten        Kartenhuelle mit Kopf: Icon-Kachel (Auto-Grau),
+#                           "Fahrzeiten", darunter der Startpunkt. Die Zeilen
+#                           und die Start-Chips haengt die Karte selbst als
+#                           custom_fields ein.
+#   owlet_fahrzeit_start    Chip "Zuhause" oder "Auto" (variables.option).
+#                           Tippen waehlt die Option im input_select. "Auto"
+#                           ist gedimmt und ohne Aktion, solange keiner der
+#                           Tracker in variables.tracker Koordinaten hat.
+#   owlet_fahrzeit_ziel     Eine Zeile je Ziel: Name, Verzoegerungs-Pille,
+#                           Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse.
+#                           Tippen: Popup mit owlet_fahrzeit_popup.
+#   owlet_fahrzeit_popup    Inhalt des Popups: Kennzahlen, Routenkarte
+#                           (Google Maps Embed API), Links zu Google Maps und
+#                           Waze.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> alle vier Eintraege unter
+#   "button_card_templates:" auf oberster Ebene ergaenzen.
+#
+# Daten je Ziel: zwei Eintraege der Integration Waze Travel Time mit
+# demselben Start und Ziel, einer mit Option "Echtzeit" (variables.live bzw.
+# entity), einer ohne (variables.typisch). Ohne Echtzeit rechnet Waze mit
+# crossTimeWithoutRealTime (pywaze, Modul route_calculator), also ohne aktuellen
+# Verkehr. Die Differenz ist die Verzoegerung der Pille:
+#   unter 3 min frei (Gruen), 3 bis 9 min zaeh (Amber), ab 10 min Stau (Rot),
+#   ohne Wert "keine Daten". Die Stufe steht immer als Text in der Pille.
+# Die Grenzen sind gesetzt, nicht gemessen.
+#
+# Startpunkt: Waze loest Start und Ziel bei jedem Abruf mit find_coordinates
+# (homeassistant/helpers/location.py) auf und folgt dabei einer Entity-ID im
+# Zustand. Der Template-Helfer sensor.fahrt_start liefert deshalb nur
+# "zone.home" oder die ID des Auto-Trackers:
+#   {% set ns = namespace(start='zone.home') %}
+#   {% if is_state('input_select.fahrt_startpunkt', 'Auto') %}
+#     {% for t in ['device_tracker.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_position',
+#                  'device_tracker.fin_passat_position'] %}
+#       {% if ns.start == 'zone.home'
+#             and state_attr(t, 'latitude') is number
+#             and state_attr(t, 'longitude') is number %}
+#         {% set ns.start = t %}
+#       {% endif %}
+#     {% endfor %}
+#   {% endif %}
+#   {{ ns.start }}
+# Ohne Koordinaten bleibt er auf Zuhause; sonst wuerde Waze den Text
+# "unknown" als Adresse suchen. Dieselbe Tracker-Liste steht in
+# owlet_fahrzeit_start (variables.tracker), damit der Chip "Auto" weiss, ob
+# er waehlbar ist. Eine Automation ruft homeassistant.update_entity fuer alle
+# Fahrzeit-Sensoren auf, sobald sensor.fahrt_start wechselt; sonst kaeme der
+# neue Start erst mit dem naechsten 5-Minuten-Abruf.
+#
+# Popup: Die Zeile oeffnet es per fire-dom-event, damit es nur im aktuellen
+# Browser aufgeht (wie das More-Menue in navigation-templates.yaml).
+# button-card wertet bei fire-dom-event jedes [[[ ]]] im Aktionsobjekt aus
+# (_evalActions -> _objectEvalTemplate, button-card.ts). Titel, Entity und
+# Variablen des Popups kommen so aus der Zeile; die Logik des Popups steht im
+# Template owlet_fahrzeit_popup und bleibt dabei unberuehrt.
+#
+# Routenkarte: iframe der Maps Embed API, Modus directions, mit den
+# Attributen origin und destination des Live-Sensors (aufgeloeste
+# Koordinaten "breite,laenge"). Laut Google sind Embed-Abrufe kostenlos und
+# unbegrenzt; der Schluessel braucht trotzdem ein Abrechnungskonto. Er steht
+# in variables.embed_key und ist im Browser sichtbar: in der Cloud Console
+# nur fuer "Maps Embed API" freigeben und auf die Adressen der Instanz
+# beschraenken (Websites). Das HA-Frontend setzt
+# <meta name="referrer" content="same-origin">; ohne eigenes
+# referrerpolicy="origin" schickte das iframe keinen Referrer, und Google
+# lehnte einen so beschraenkten Schluessel ab (RefererNotAllowedMapError).
+# Steht noch der Platzhalter drin, zeigt das Popup statt der Karte einen
+# Hinweis.
+#
+# Neu zeichnen: Zeile und Popup lesen beide Sensoren und zeichnen bei jeder
+# Aenderung neu (alle 5 min). Die Ankunftszeit rechnet mit der Uhrzeit dieses
+# Zeitpunkts und ist bis zum naechsten Abruf hoechstens 5 min alt.
+#
+# Voraussetzung: custom:button-card (v7) und browser_mod (HACS), Integration
+# Waze Travel Time (je Ziel "live" und "typisch"), Helfer
+# input_select.fahrt_startpunkt (Zuhause, Auto), Template-Helfer
+# sensor.fahrt_start, je Ziel eine Zone.
+button_card_templates:
+  owlet_fahrzeiten:
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    variables:
+      start: sensor.fahrt_start
+      auswahl: input_select.fahrt_startpunkt
+    styles:
+      card:
+        - padding: 16px
+        - border-radius: 22px
+        - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+        - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+        - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+        - overflow: hidden
+        - cursor: default
+      grid:
+        - row-gap: 12px
+        - column-gap: 8px
+      custom_fields:
+        kopf:
+          - width: 100%
+          - min-width: 0
+    custom_fields:
+      kopf: |
+        [[[
+          const grau = 'var(--owlet-text-sekundaer, #8794a5)';
+          const s = states[variables.start];
+          const w = states[variables.auswahl];
+          const abAuto = s && s.state && s.state.startsWith('device_tracker.');
+          let unter = abAuto ? 'ab Auto' : 'ab Zuhause';
+          if (!abAuto && w && w.state === 'Auto') unter = 'Auto ohne Position · ab Zuhause';
+          const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
+            <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
+          return `
+            <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;">
+              <div style="width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;color:${grau};
+                background:color-mix(in srgb, ${grau} 16%, transparent);border:1px solid color-mix(in srgb, ${grau} 24%, transparent);">${auto}</div>
+              <div style="display:flex;flex-direction:column;min-width:0;">
+                <span style="font-size:16px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">Fahrzeiten</span>
+                <span style="font-size:12.5px;color:${grau};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter} · Waze, mit Verkehr</span>
+              </div>
+            </div>`;
+        ]]]
+
+  owlet_fahrzeit_start:
+    entity: input_select.fahrt_startpunkt
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    variables:
+      option: Zuhause
+      tracker:
+        - device_tracker.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_position
+        - device_tracker.fin_passat_position
+    hold_action:
+      action: none
+    tap_action: |
+      [[[
+        const hatPos = variables.option !== 'Auto' || variables.tracker.some((t) => {
+          const s = states[t];
+          return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
+        });
+        if (!hatPos || (entity && entity.state === variables.option)) return { action: 'none' };
+        return {
+          action: 'perform-action',
+          perform_action: 'input_select.select_option',
+          target: { entity_id: entity.entity_id },
+          data: { option: variables.option },
+        };
+      ]]]
+    styles:
+      card:
+        - padding: 6px 12px
+        - border-radius: 999px
+        - box-shadow: none
+        - width: auto
+        - background: |
+            [[[
+              const an = entity && entity.state === variables.option;
+              return an ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+                        : 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))';
+            ]]]
+        - border: |
+            [[[
+              const an = entity && entity.state === variables.option;
+              return an ? '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
+                        : '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+            ]]]
+        - opacity: |
+            [[[
+              if (variables.option !== 'Auto') return 1;
+              const hatPos = variables.tracker.some((t) => {
+                const s = states[t];
+                return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
+              });
+              return hatPos ? 1 : 0.45;
+            ]]]
+      grid:
+        - grid-template-areas: '"chip"'
+    custom_fields:
+      chip: |
+        [[[
+          const an = entity && entity.state === variables.option;
+          const farbe = an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-muted, #6e7988)';
+          const text = an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)';
+          const pfad = variables.option === 'Auto'
+            ? 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7m0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5'
+            : 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
+          return `<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:${text};white-space:nowrap;">
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;color:${farbe};"><path d="${pfad}"/></svg>${variables.option}</div>`;
+        ]]]
+
+  owlet_fahrzeit_ziel:
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    variables:
+      ziel: Ziel
+      typisch: sensor.waze_fahrzeit_ziel_typisch
+      embed_key: DEIN_EMBED_KEY
+    hold_action:
+      action: none
+    tap_action:
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        data:
+          title: '[[[ return variables.ziel; ]]]'
+          # Oberflaeche, Breite und Seitenabstand wie im DWD-Popup
+          # (warnlage-templates.yaml, Erklaerung dort)
+          style: |
+            --ha-card-background: var(--owlet-huelle-oben, #1b2231);
+            --card-background-color: var(--owlet-huelle-oben, #1b2231);
+            --primary-background-color: var(--owlet-seite, #171d29);
+            --secondary-background-color: var(--owlet-huelle-oben, #1b2231);
+            --primary-text-color: var(--owlet-text, #f2f5f8);
+            --secondary-text-color: var(--owlet-text-sekundaer, #8794a5);
+            --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+            --popup-min-width: min(100vw, 720px);
+            --popup-max-width: min(100vw, 720px);
+          content:
+            type: custom:button-card
+            template: owlet_fahrzeit_popup
+            entity: '[[[ return entity.entity_id; ]]]'
+            variables:
+              typisch: '[[[ return variables.typisch; ]]]'
+              embed_key: '[[[ return variables.embed_key; ]]]'
+    styles:
+      card:
+        - padding: 12px 14px
+        - border-radius: 16px
+        - box-shadow: none
+        - background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))
+        - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"zeile"'
+      custom_fields:
+        zeile:
+          - width: 100%
+          - min-width: 0
+    custom_fields:
+      zeile: |
+        [[[
+          const zahl = (s) => (s && !isNaN(parseFloat(s.state))) ? parseFloat(s.state) : null;
+          const live = zahl(entity);
+          const typ = zahl(states[variables.typisch]);
+          const grau = 'var(--owlet-text-sekundaer, #8794a5)';
+          let stufe = { text: 'keine Daten', farbe: 'var(--owlet-muted, #6e7988)' };
+          if (live !== null && typ !== null) {
+            const v = Math.max(0, Math.round(live - typ));
+            if (v < 3) stufe = { text: v > 0 ? `frei · +${v} min` : 'frei', farbe: 'var(--owlet-gruen, #a6d49e)' };
+            else if (v < 10) stufe = { text: `zäh · +${v} min`, farbe: 'var(--owlet-amber, #e6b566)' };
+            else stufe = { text: `Stau · +${v} min`, farbe: 'var(--owlet-rot, #f0736a)' };
+          }
+          const a = (entity && entity.attributes) || {};
+          const teile = [];
+          if (typeof a.distance === 'number') {
+            teile.push(a.distance.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km');
+          }
+          if (live !== null) {
+            const an = new Date(Date.now() + live * 60000);
+            teile.push('an ' + an.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }));
+          }
+          if (a.route) teile.push('über ' + String(a.route).replace(/;\s*/g, ' · '));
+          const pille = `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap;
+              border-radius:999px;padding:2px 8px;color:var(--owlet-label, #b4c0cf);
+              background:color-mix(in srgb, ${stufe.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${stufe.farbe} 24%, transparent);">
+              <i style="width:7px;height:7px;border-radius:50%;background:${stufe.farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${stufe.farbe} 18%, transparent);"></i>${stufe.text}</span>`;
+          const minuten = live !== null
+            ? `${Math.round(live)}<span style="font-size:13px;font-weight:500;color:${grau};margin-left:2px;">min</span>`
+            : `–`;
+          return `
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;text-align:left;">
+              <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
+                <span style="font-size:15px;font-weight:600;color:var(--owlet-titel, #e7ecf3);">${variables.ziel}</span>${pille}
+              </div>
+              <div style="grid-row:span 2;font-size:24px;line-height:1;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${minuten}</div>
+              <div style="font-size:12.5px;color:${grau};font-variant-numeric:tabular-nums;min-width:0;overflow-wrap:anywhere;">${teile.join(' · ') || 'Waze liefert gerade keine Route'}</div>
+            </div>`;
+        ]]]
+
+  owlet_fahrzeit_popup:
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    variables:
+      typisch: sensor.waze_fahrzeit_ziel_typisch
+      embed_key: DEIN_EMBED_KEY
+      start: sensor.fahrt_start
+    styles:
+      card:
+        - padding: 4px 0 8px
+        - background: none
+        - border: none
+        - box-shadow: none
+        - cursor: default
+      grid:
+        - grid-template-areas: '"inhalt"'
+      custom_fields:
+        inhalt:
+          - width: 100%
+          - min-width: 0
+    custom_fields:
+      inhalt: |
+        [[[
+          const zahl = (s) => (s && !isNaN(parseFloat(s.state))) ? parseFloat(s.state) : null;
+          const live = zahl(entity);
+          const typ = zahl(states[variables.typisch]);
+          const a = (entity && entity.attributes) || {};
+          const grau = 'var(--owlet-text-sekundaer, #8794a5)';
+          const kachel = 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+          const km = typeof a.distance === 'number'
+            ? a.distance.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km' : '–';
+          const ankunft = live !== null
+            ? new Date(Date.now() + live * 60000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–';
+          const zahlen = [
+            ['Mit Verkehr', live !== null ? Math.round(live) + ' min' : '–'],
+            ['Typisch', typ !== null ? Math.round(typ) + ' min' : '–'],
+            ['Ankunft', ankunft],
+            ['Strecke', km],
+          ].map(([l, w]) => `
+            <div style="${kachel}border-radius:13px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0;">
+              <span style="font-size:11.5px;letter-spacing:0.04em;text-transform:uppercase;color:${grau};">${l}</span>
+              <span style="font-size:19px;font-weight:700;color:var(--owlet-text, #f2f5f8);font-variant-numeric:tabular-nums;">${w}</span>
+            </div>`).join('');
+
+          const s = states[variables.start];
+          const ab = s && s.state && s.state.startsWith('device_tracker.') ? 'ab Auto' : 'ab Zuhause';
+          const ueber = a.route ? ' · über ' + String(a.route).replace(/;\s*/g, ' · ') : '';
+          const stand = entity && entity.last_updated
+            ? ' · Stand ' + new Date(entity.last_updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+
+          const o = a.origin ? encodeURIComponent(a.origin) : '';
+          const d = a.destination ? encodeURIComponent(a.destination) : '';
+          const key = String(variables.embed_key || '');
+          let karte;
+          if (!o || !d) {
+            karte = `<div style="${kachel}border-radius:16px;padding:14px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Waze hat Start oder Ziel noch nicht aufgelöst.</div>`;
+          } else if (!key || key === 'DEIN_EMBED_KEY') {
+            karte = `<div style="${kachel}border-radius:16px;padding:14px;font-size:13px;color:var(--owlet-label, #b4c0cf);">Für die Routenkarte fehlt der API-Schlüssel der Maps Embed API (variables.embed_key in fahrzeiten-karte.yaml).</div>`;
+          } else {
+            const src = 'https://www.google.com/maps/embed/v1/directions?key=' + encodeURIComponent(key)
+              + '&mode=driving&language=de&origin=' + o + '&destination=' + d;
+            karte = `<iframe src="${src}" loading="lazy" referrerpolicy="origin" allowfullscreen
+              style="display:block;width:100%;height:320px;border:0;border-radius:16px;background:var(--owlet-flaeche-vertieft, #10151d);"></iframe>`;
+          }
+
+          const knopf = (href, text, pfad) => `
+            <a href="${href}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+               font-size:13.5px;font-weight:600;color:var(--owlet-titel, #e7ecf3);border-radius:13px;padding:9px 14px;
+               background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);
+               border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px;color:var(--owlet-blau, #7fb3d5);"><path d="${pfad}"/></svg>${text}</a>`;
+          const links = (o && d) ? `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${knopf('https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=' + o + '&destination=' + d, 'In Google Maps öffnen',
+                'M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2z')}
+              ${knopf('https://waze.com/ul?navigate=yes&ll=' + d, 'In Waze navigieren', 'M12 2 4.5 20.29l.71.71L12 18l6.79 3 .71-.71z')}
+            </div>` : '';
+
+          return `
+            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+              <div style="font-size:12.5px;color:${grau};">${ab}${ueber}${stand}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:8px;">${zahlen}</div>
+              ${karte}
+              ${links}
+            </div>`;
+        ]]]
