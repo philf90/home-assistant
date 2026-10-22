@@ -1,5 +1,5 @@
 # ============================================================================
-# Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Auto, Zeile und Routen-Popup
+# Fahrzeiten – Waze-Fahrzeit ab Zuhause oder Standort, Zeile und Routen-Popup
 # ----------------------------------------------------------------------------
 # Art:           templates
 # Bereich:       fahrzeuge
@@ -8,7 +8,7 @@
 # Templates:     keine
 # Einfuegen:     Raw-Konfigurationseditor,
 #                oberste Ebene unter button_card_templates:
-# Platzhalter:   fin_*, DEIN_EMBED_KEY
+# Platzhalter:   device_tracker.iphone, DEIN_EMBED_KEY
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Vier button-card-Templates fuer fahrzeiten-karte.yaml:
@@ -17,10 +17,11 @@
 #                           "Fahrzeiten", darunter der Startpunkt. Die Zeilen
 #                           und die Start-Chips haengt die Karte selbst als
 #                           custom_fields ein.
-#   owlet_fahrzeit_start    Chip "Zuhause" oder "Auto" (variables.option).
-#                           Tippen waehlt die Option im input_select. "Auto"
-#                           ist gedimmt und ohne Aktion, solange keiner der
-#                           Tracker in variables.tracker Koordinaten hat.
+#   owlet_fahrzeit_start    Chip "Zuhause" oder "Standort" (variables.option).
+#                           Tippen waehlt die Option im input_select. Ein Chip
+#                           mit variables.position: true ist gedimmt und ohne
+#                           Aktion, solange keiner der Tracker in
+#                           variables.tracker Koordinaten hat.
 #   owlet_fahrzeit_ziel     Eine Zeile je Ziel: Name, Verzoegerungs-Pille,
 #                           Fahrzeit mit Verkehr, Strecke, Ankunft, Strasse.
 #                           Tippen: Popup mit owlet_fahrzeit_popup.
@@ -44,23 +45,21 @@
 # Startpunkt: Waze loest Start und Ziel bei jedem Abruf mit find_coordinates
 # (homeassistant/helpers/location.py) auf und folgt dabei einer Entity-ID im
 # Zustand. Der Template-Helfer sensor.fahrt_start liefert deshalb nur
-# "zone.home" oder die ID des Auto-Trackers:
-#   {% set ns = namespace(start='zone.home') %}
-#   {% if is_state('input_select.fahrt_startpunkt', 'Auto') %}
-#     {% for t in ['device_tracker.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_position',
-#                  'device_tracker.fin_passat_position'] %}
-#       {% if ns.start == 'zone.home'
-#             and state_attr(t, 'latitude') is number
-#             and state_attr(t, 'longitude') is number %}
-#         {% set ns.start = t %}
-#       {% endif %}
-#     {% endfor %}
+# "zone.home" oder die ID des Handy-Trackers (Companion App, GPS):
+#   {% set t = 'device_tracker.iphone' %}
+#   {% if is_state('input_select.fahrt_startpunkt', 'Standort')
+#         and state_attr(t, 'latitude') is number
+#         and state_attr(t, 'longitude') is number %}
+#     {{ t }}
+#   {% else %}
+#     zone.home
 #   {% endif %}
-#   {{ ns.start }}
 # Ohne Koordinaten bleibt er auf Zuhause; sonst wuerde Waze den Text
-# "unknown" als Adresse suchen. Dieselbe Tracker-Liste steht in
-# owlet_fahrzeit_start (variables.tracker), damit der Chip "Auto" weiss, ob
-# er waehlbar ist. Eine Automation ruft homeassistant.update_entity fuer alle
+# "unknown" als Adresse suchen. Der Tracker des Autos taugt dafuer nicht:
+# vag_connect liefert keinen Standort (siehe autos-karte-v4.yaml), der Tracker
+# aus volkswagencarnet stand im Oktober 2026 ueber den ganzen Verlauf
+# (10 Tage) auf unavailable. Derselbe Tracker steht in owlet_fahrzeit_start
+# (variables.tracker), damit der Chip "Standort" weiss, ob er waehlbar ist. Eine Automation ruft homeassistant.update_entity fuer alle
 # Fahrzeit-Sensoren auf, sobald sensor.fahrt_start wechselt; sonst kaeme der
 # neue Start erst mit dem naechsten 5-Minuten-Abruf.
 #
@@ -90,7 +89,7 @@
 #
 # Voraussetzung: custom:button-card (v7) und browser_mod (HACS), Integration
 # Waze Travel Time (je Ziel "live" und "typisch"), Helfer
-# input_select.fahrt_startpunkt (Zuhause, Auto), Template-Helfer
+# input_select.fahrt_startpunkt (Zuhause, Standort), Template-Helfer
 # sensor.fahrt_start, je Ziel eine Zone.
 button_card_templates:
   owlet_fahrzeiten:
@@ -127,9 +126,9 @@ button_card_templates:
           const grau = 'var(--owlet-text-sekundaer, #8794a5)';
           const s = states[variables.start];
           const w = states[variables.auswahl];
-          const abAuto = s && s.state && s.state.startsWith('device_tracker.');
-          let unter = abAuto ? 'ab Auto' : 'ab Zuhause';
-          if (!abAuto && w && w.state === 'Auto') unter = 'Auto ohne Position · ab Zuhause';
+          const abStandort = s && s.state && s.state.startsWith('device_tracker.');
+          let unter = abStandort ? 'ab Standort' : 'ab Zuhause';
+          if (!abStandort && w && w.state === 'Standort') unter = 'Standort unbekannt · ab Zuhause';
           const auto = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:22px;height:22px;">
             <path d="M5 11l1.5-4.5h11L19 11M17.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-11 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M18.92 6c-.2-.58-.76-1-1.42-1h-11c-.66 0-1.22.42-1.42 1L3 12v8a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-8z"/></svg>`;
           return `
@@ -151,14 +150,14 @@ button_card_templates:
     show_label: false
     variables:
       option: Zuhause
+      position: false
       tracker:
-        - device_tracker.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_position
-        - device_tracker.fin_passat_position
+        - device_tracker.iphone
     hold_action:
       action: none
     tap_action: |
       [[[
-        const hatPos = variables.option !== 'Auto' || variables.tracker.some((t) => {
+        const hatPos = !variables.position || variables.tracker.some((t) => {
           const s = states[t];
           return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
         });
@@ -190,7 +189,7 @@ button_card_templates:
             ]]]
         - opacity: |
             [[[
-              if (variables.option !== 'Auto') return 1;
+              if (!variables.position) return 1;
               const hatPos = variables.tracker.some((t) => {
                 const s = states[t];
                 return s && typeof s.attributes.latitude === 'number' && typeof s.attributes.longitude === 'number';
@@ -205,7 +204,7 @@ button_card_templates:
           const an = entity && entity.state === variables.option;
           const farbe = an ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-muted, #6e7988)';
           const text = an ? 'var(--owlet-titel, #e7ecf3)' : 'var(--owlet-label, #b4c0cf)';
-          const pfad = variables.option === 'Auto'
+          const pfad = variables.position
             ? 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7m0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5'
             : 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
           return `<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:${text};white-space:nowrap;">
@@ -353,7 +352,7 @@ button_card_templates:
             </div>`).join('');
 
           const s = states[variables.start];
-          const ab = s && s.state && s.state.startsWith('device_tracker.') ? 'ab Auto' : 'ab Zuhause';
+          const ab = s && s.state && s.state.startsWith('device_tracker.') ? 'ab Standort' : 'ab Zuhause';
           const ueber = a.route ? ' · über ' + String(a.route).replace(/;\s*/g, ' · ') : '';
           const stand = entity && entity.last_updated
             ? ' · Stand ' + new Date(entity.last_updated).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
