@@ -46,6 +46,12 @@
 #       meldet ueber Telegram erst nach bestaetigtem "locked". Steht die Tuer
 #       offen: Warnung und bis zu 1 Stunde Warten auf das Schliessen;
 #       abgeschlossen wird danach nur, wenn noch niemand zuhause ist.
+#   automation "Unifi: G3 Reader Pro - Haustuer oeffnen (Door Hub)"
+#       oeffnet die Haustuer (lock.open am HmIP-DLD), wenn der Door Hub einen
+#       gewaehrten Zugang meldet. Loest das Ereignis der UniFi-Access-
+#       Integration aus statt eines Webhooks: ein Webhook ohne Pruefung oeffnet
+#       die Tuer fuer jede Anfrage aus dem lokalen Netz, die seine ID kennt.
+#       Etwa 0,8 s langsamer als der Webhook.
 #   automation "Sicherheit: Person an Aussenkamera"
 #       Personenerkennung an Haustuer, Hof, Garage und Pool mit Kamerabild,
 #       hoechstens eine Meldung je Minute. Die Kamera "Trampolin" fehlt, weil
@@ -538,3 +544,33 @@ automation:
             data:
               config_entry_id: telegram_eintrag
               message: "Abschließen fehlgeschlagen – Schlosszustand: {{ states('lock.haustur_schloss') }}"
+
+  - id: unifi_g3_reader_haustuer_oeffnen
+    alias: "Unifi: G3 Reader Pro - Haustür öffnen (Door Hub)"
+    description: >-
+      Öffnet die Haustür (lock.open), wenn der UniFi Door Hub einen gewährten
+      Zugang meldet. Ersetzt den Webhook-Auslöser der Automation
+      „Unifi: G3 Reader Pro - Haustür öffnen“ (deaktiviert als Backup).
+      Der Zeitstempel des Ereignisses muss jünger als 10 s sein, damit ein nach
+      einem Neustart wiederhergestelltes Ereignis die Tür nicht öffnet.
+    # Der Door Hub meldet jeden Zugang zweimal (1-2 ms Abstand); single
+    # verwirft die zweite Meldung ohne Warnung
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: event.received
+        target:
+          entity_id: event.haustur_door_hub_zugang
+        options:
+          event_type:
+            - access_granted
+    conditions:
+      # Zeitstempel des Ereignisses (Zustand der Event-Entity) juenger als
+      # 10 s; dafuer gibt es keine native Bedingung
+      - condition: template
+        value_template: >-
+          {% set t = as_datetime(states('event.haustur_door_hub_zugang'), none) %}{{ t is not none and (now() - t).total_seconds() < 10 }}
+    actions:
+      - action: lock.open
+        target:
+          entity_id: lock.haustur_schloss
