@@ -7,12 +7,21 @@
 # Einfuegen:     configuration.yaml unter homeassistant: packages:
 #                (oder Helfer in der UI anlegen und die Automationen einzeln
 #                im YAML-Editor der UI einfuegen)
-# Platzhalter:   person.bewohner, notify.mobile_app_iphone, *_seriennr
+# Platzhalter:   person.bewohner, notify.mobile_app_iphone, *_seriennr,
+#                telegram_eintrag
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Wachmodus: Home Assistant meldet bei Abwesenheit mehr als sonst. Er ist keine
 # Alarmanlage und loest keine Sirene aus; die Alarme in UniFi Protect laufen
 # unabhaengig davon weiter.
+#
+# Abwesenheit = Zone Zuhause (zone.home) mindestens 3 Minuten leer. Die
+# 3 Minuten filtern GPS-Spruenge an der Zonengrenze und Standortmeldungen,
+# die in falscher Reihenfolge ankommen (laengster beobachteter Fehlsprung
+# 2:20 min), und die kurzen 0-Werte von zone.home beim Neuladen. Ohne sie
+# schloss die Haustuer bei Rueckkehrern ab und der Wachmodus ging beim
+# Heimkommen kurz wieder an. Der Radius von zone.home sollte nicht zu klein
+# sein (bewaehrt: 35 m).
 #
 # Inhalt:
 #   input_boolean.wachmodus                  an, solange niemand zuhause ist
@@ -20,16 +29,23 @@
 #   input_boolean.sicherheit_meldung_*       Schalter je Meldung (Karte
 #                                            "Meldungen" in sicherheit-view.yaml)
 #   automation "Sicherheit: Wachmodus nach Anwesenheit"
-#       an, sobald die letzte Person die Zone Zuhause verlaesst; nach 30 s
-#       (damit das automatische Abschliessen der Haustuer mitzaehlt) Meldung
-#       mit allem, was noch offen ist. Aus, sobald jemand heimkommt.
+#       an, sobald zone.home 3 Minuten leer ist; die Meldung wartet bis zu
+#       60 s, bis die Haustuer verriegelt ist oder ihr Kontakt offen meldet,
+#       und nennt alles, was noch offen ist. Aus, sobald jemand heimkommt
+#       (sofort, sonst meldet der eigene Zugang als Alarm).
 #   automation "Sicherheit: Meldungen im Wachmodus"
-#       Tuer oder Fenster geoeffnet, Keypad gesperrt.
+#       Tuer oder Fenster geoeffnet, Keypad gesperrt. Die Haustuer nicht, wenn
+#       der Door Hub in den 60 s davor einen gewaehrten Zugang gemeldet hat.
 #   automation "Sicherheit: Haustuer-Zugang im Wachmodus"
 #       Zugang am Door Hub (gewaehrt oder verweigert), Haustuer aufgeschlossen
 #       (nicht doppelt, wenn der Door Hub in der Minute davor einen Zugang
-#       gemeldet hat). Eigene Automation mit 30 s Sperre: der Door Hub meldet
-#       jeden Zugang zweimal (1 ms Abstand), die Gesichtserkennung oft mehrmals.
+#       gemeldet hat). Eigene Automation mit 5 s Sperre: der Door Hub meldet
+#       jeden Zugang zweimal (1-2 ms Abstand).
+#   automation "Haustuer abschliessen bei Abwesenheit"
+#       schliesst die Haustuer ab, sobald zone.home 3 Minuten leer ist, und
+#       meldet ueber Telegram erst nach bestaetigtem "locked". Steht die Tuer
+#       offen: Warnung und bis zu 1 Stunde Warten auf das Schliessen;
+#       abgeschlossen wird danach nur, wenn noch niemand zuhause ist.
 #   automation "Sicherheit: Person an Aussenkamera"
 #       Personenerkennung an Haustuer, Hof, Garage und Pool mit Kamerabild,
 #       hoechstens eine Meldung je Minute. Die Kamera "Trampolin" fehlt, weil
@@ -44,7 +60,10 @@
 #   - binary_sensor.hmip_wkp_seriennr_*: Keypad HmIP-WKP (Platzhalter);
 #     "Temporaer gesperrt" und "Permanent gesperrt" sind in der Integration
 #     standardmaessig deaktiviert und muessen aktiviert sein
-#   - Tuer- und Fensterkontakte, Kameras: Listen in den Triggern
+#   - telegram_eintrag: Config-Entry-ID des Telegram-Bots (Platzhalter)
+#   - Tuer- und Fensterkontakte, Kameras: Listen in den Triggern und in
+#     kontakte; Innentueren, die dauerhaft offen stehen, nicht in kontakte
+#     (sonst stehen sie in jeder Meldung "Wachmodus an")
 #   - namen: eigene Namen fuer Kontakte, deren Anzeigename in Home Assistant
 #     nicht in die Meldung passt (sonst gilt der Anzeigename); in beiden
 #     Automationen gleich halten
@@ -57,10 +76,12 @@
 # Gibt es Helfer oder Automationen mit denselben IDs schon aus der UI, diese
 # vorher loeschen, sonst kommt jede Meldung doppelt.
 #
-# Voraussetzung: Home Assistant 2026.7 oder neuer (Trigger zone.left,
-#                door.opened, window.opened, event.received), Companion App,
+# Voraussetzung: Home Assistant 2026.7 oder neuer (Trigger
+#                zone.occupancy_cleared, zone.entered, door.opened,
+#                window.opened, event.received; Bedingung
+#                zone.occupancy_is_not_detected), Companion App,
 #                Integrationen Homematic(IP) Local, UniFi Protect, UniFi
-#                Access.
+#                Access, Telegram Bot.
 
 input_boolean:
   wachmodus:
@@ -86,11 +107,14 @@ automation:
   - id: sicherheit_wachmodus_nach_anwesenheit
     alias: "Sicherheit: Wachmodus nach Anwesenheit"
     description: >-
-      Sicherheits-View: schaltet input_boolean.wachmodus an, sobald niemand mehr
-      zuhause ist, und aus, sobald jemand heimkommt. Beim Einschalten nennt die
-      Meldung, was noch offen ist (30 s Wartezeit, damit das automatische
-      Abschliessen der Haustuer mitgezaehlt wird). Schalter der Meldung:
-      input_boolean.sicherheit_meldung_wachmodus.
+      Sicherheits-View: schaltet input_boolean.wachmodus an, sobald zone.home
+      3 Minuten leer ist (gleicher Zeitpunkt wie das automatische Abschliessen;
+      filtert GPS-Spruenge), und sofort aus, sobald jemand heimkommt. Beim
+      Einschalten wartet die Meldung bis zu 60 s, bis die Haustuer verriegelt
+      ist oder der Tuerkontakt offen meldet, und nennt dann, was noch offen
+      ist. Schalter der Meldung: input_boolean.sicherheit_meldung_wachmodus.
+      Die Kellertuer (Innentuer, steht dauerhaft offen) ist absichtlich nicht
+      in der Liste.
     mode: queued
     max: 5
     variables:
@@ -98,10 +122,10 @@ automation:
       personen:
         - person.bewohner_1
         - person.bewohner_2
+      # Ohne binary_sensor.tur_keller: Innentuer, steht dauerhaft offen
       kontakte:
         - binary_sensor.haustur
         - binary_sensor.tur_windfang
-        - binary_sensor.tur_keller
         - binary_sensor.balkontur
         - binary_sensor.fenster_kuche
         - binary_sensor.fenster_wohnzimmer_links
@@ -120,14 +144,10 @@ automation:
         binary_sensor.fenster_kinderzimmer: Kinderzimmer 1
         binary_sensor.fenster_buro: Kinderzimmer 2
     triggers:
-      - trigger: zone.left
-        target:
-          entity_id:
-            - person.bewohner_1
-            - person.bewohner_2
+      - trigger: zone.occupancy_cleared
         options:
           zone: zone.home
-          behavior: all
+          for: "00:03:00"
         id: weg
       - trigger: zone.entered
         target:
@@ -153,7 +173,11 @@ automation:
               - condition: state
                 entity_id: input_boolean.sicherheit_meldung_wachmodus
                 state: "on"
-              - delay: "00:00:30"
+              # Das Abschliessen startet zum selben Zeitpunkt (eigene
+              # Automation); bei offener Tuer geht es sofort weiter
+              - wait_template: "{{ is_state('lock.haustur_schloss', 'locked') or is_state('binary_sensor.haustur', 'on') }}"
+                timeout: "00:01:00"
+                continue_on_timeout: true
               - variables:
                   offen: >-
                     {% set ns = namespace(l=[]) %}{% for e in kontakte | select('is_state', 'on') %}{% set ns.l = ns.l + [namen.get(e) or state_attr(e, 'friendly_name')] %}{% endfor %}{{ ns.l }}
@@ -196,6 +220,9 @@ automation:
       Fenster und die Sperre des Keypads. Jede Art hat einen eigenen Schalter
       (input_boolean.sicherheit_meldung_oeffnung, _keypad). Zugang am Door Hub
       und Schloss: Automation "Sicherheit: Haustuer-Zugang im Wachmodus".
+      Die Oeffnung der Haustuer wird nicht gemeldet, wenn der Door Hub in den
+      60 s davor einen gewaehrten Zugang gemeldet hat (dann kam bereits
+      "Zugang gewaehrt").
     mode: queued
     max: 20
     variables:
@@ -207,13 +234,19 @@ automation:
       - trigger: door.opened
         target:
           entity_id:
-            - binary_sensor.haustur
             - binary_sensor.tur_windfang
             - binary_sensor.tur_keller
             - binary_sensor.balkontur
         options:
           behavior: each
         id: oeffnung
+      # Haustuer eigener Trigger: nach einem gewaehrten Zugang keine zweite Meldung
+      - trigger: door.opened
+        target:
+          entity_id: binary_sensor.haustur
+        options:
+          behavior: each
+        id: oeffnung_haustur
       - trigger: window.opened
         target:
           entity_id:
@@ -248,10 +281,24 @@ automation:
       - choose:
           - conditions:
               - condition: trigger
-                id: oeffnung
+                id:
+                  - oeffnung
+                  - oeffnung_haustur
               - condition: state
                 entity_id: input_boolean.sicherheit_meldung_oeffnung
                 state: "on"
+              # not mit and: "not" allein waere nur wahr, wenn beide falsch sind
+              - condition: not
+                conditions:
+                  - condition: and
+                    conditions:
+                      - condition: trigger
+                        id: oeffnung_haustur
+                      # Gewaehrter Zugang am Door Hub juenger als 60 s; dafuer
+                      # gibt es keine native Bedingung
+                      - condition: template
+                        value_template: >-
+                          {% set z = states('event.haustur_door_hub_zugang') %}{% set t = as_datetime(z, none) %}{{ t is not none and state_attr('event.haustur_door_hub_zugang', 'event_type') == 'access_granted' and (now() - t).total_seconds() < 60 }}
             sequence:
               - action: notify.mobile_app_iphone
                 data:
@@ -281,8 +328,10 @@ automation:
     description: >-
       Sicherheits-View: meldet bei aktivem Wachmodus Zugaenge am Door Hub
       (gewaehrt oder verweigert) und das Aufschliessen der Haustuer. Hoechstens
-      eine Meldung je 30 s (mode single + Pause), weil der Door Hub jeden Zugang
-      doppelt meldet. Schalter: input_boolean.sicherheit_meldung_zugang.
+      eine Meldung je 5 s (mode single + Pause), weil der Door Hub jeden Zugang
+      doppelt meldet (Abstand 1-2 ms); das Aufschliessen nach einem Zugang
+      unterdrueckt die 60-s-Pruefung. Schalter:
+      input_boolean.sicherheit_meldung_zugang.
     mode: single
     max_exceeded: silent
     variables:
@@ -356,7 +405,9 @@ automation:
                     group: sicherheit
                     push:
                       interruption-level: time-sensitive
-      - delay: "00:00:30"
+      # Laenger nicht: in der Sperre gehen alle weiteren Ereignisse verloren,
+      # auch ein verweigerter Zugang
+      - delay: "00:00:05"
 
   - id: sicherheit_person_an_aussenkamera
     alias: "Sicherheit: Person an Außenkamera"
@@ -414,3 +465,76 @@ automation:
             push:
               interruption-level: time-sensitive
       - delay: "00:01:00"
+
+  - id: haustuer_abschliessen_bei_abwesenheit
+    alias: "Haustür abschließen bei abwesend"
+    description: >-
+      Schliesst die Haustuer ab, wenn zone.home mindestens 3 Minuten leer ist.
+      Die 3 Minuten filtern GPS-Spruenge (laengster beobachteter Fehlsprung
+      2:20 min) und die kurzen 0-Werte beim Neuladen. Steht die Tuer offen,
+      wird gewarnt und bis zu 1 Stunde auf das Schliessen gewartet;
+      abgeschlossen wird danach nur, wenn noch niemand zuhause ist.
+      Erfolgsmeldung erst nach bestaetigtem "locked".
+    mode: single
+    triggers:
+      - trigger: zone.occupancy_cleared
+        options:
+          zone: zone.home
+          for: "00:03:00"
+    conditions:
+      - condition: state
+        entity_id: lock.haustur_schloss
+        state: unlocked
+    actions:
+      # Offene Tuer: der Riegel faehrt sonst ins Leere und die Tuer schliesst
+      # nicht mehr
+      - if:
+          - condition: state
+            entity_id: binary_sensor.haustur
+            state: "on"
+        then:
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: telegram_eintrag
+              message: Niemand zu Hause, aber die Haustür steht offen – sie wird abgeschlossen, sobald sie geschlossen ist.
+          - wait_template: "{{ is_state('binary_sensor.haustur', 'off') }}"
+            timeout: "01:00:00"
+            continue_on_timeout: true
+          - if:
+              - condition: state
+                entity_id: binary_sensor.haustur
+                state: "on"
+            then:
+              - action: telegram_bot.send_message
+                data:
+                  config_entry_id: telegram_eintrag
+                  message: Haustür steht seit 1 Stunde offen – nicht abgeschlossen.
+              - stop: Haustür nach 1 Stunde noch offen
+      # Nach dem Warten erneut: inzwischen heimgekommen oder schon abgeschlossen
+      - condition: zone.occupancy_is_not_detected
+        options:
+          zone: zone.home
+      - condition: state
+        entity_id: lock.haustur_schloss
+        state: unlocked
+      - action: lock.lock
+        target:
+          entity_id: lock.haustur_schloss
+      # Das Schloss (HmIP-DLD) braucht 6-8 s bis "locked"
+      - wait_template: "{{ is_state('lock.haustur_schloss', 'locked') }}"
+        timeout: "00:01:00"
+        continue_on_timeout: true
+      - if:
+          - condition: state
+            entity_id: lock.haustur_schloss
+            state: locked
+        then:
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: telegram_eintrag
+              message: Haustür durch Abwesenheit automatisch abgeschlossen.
+        else:
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: telegram_eintrag
+              message: "Abschließen fehlgeschlagen – Schlosszustand: {{ states('lock.haustur_schloss') }}"
