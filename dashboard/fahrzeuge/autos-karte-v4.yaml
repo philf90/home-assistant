@@ -88,10 +88,33 @@
 # (VW verlangt alle paar Wochen einen neuen E-Mail-Code), stehen die Zellen
 # auf '–' bzw. auf der Zweitquelle.
 #
-# ZWEITQUELLE: Alle Fahrten-Zellen fragen vag_connect zuerst und fallen nur
-# dann auf cupra_eu_data_act zurueck, wenn dort keine Zahl steht. Die
-# Reihenfolge steckt je Kachel in variables.ids. Ø Tempo nimmt den Wert des
-# Bordcomputers und rechnet ersatzweise Strecke / Fahrzeit aus vag_connect.
+# ZWEITQUELLE: Fahrten-Zellen und Kennzahl-Kacheln fragen vag_connect zuerst
+# und fallen auf cupra_eu_data_act (EU-Data-Act-Portal, sensor.<modell>_*)
+# zurueck, wenn dort keine Zahl steht. Die Reihenfolge steckt je Kachel in
+# variables.ids; Tank zusaetzlich level_ids, Inspektion und Oelwechsel
+# days_ids und date_ids (Auswertung in owlet_auto_fx). Ø Tempo nimmt den Wert
+# des Bordcomputers und rechnet ersatzweise Strecke / Fahrzeit aus vag_connect.
+# Anlass: Am 23.10.2026 stand vag_connect nach einem HA-Neustart auf
+# setup_error (Portal nicht erreichbar), alle Entitaeten auf unavailable. Das
+# Portal hielt die letzten Werte, die Kacheln zeigten trotzdem "–".
+#
+# Was das Portal fuer die Kacheln liefert (geprueft 23.10.2026, beide
+# Fahrzeuge, Werte gleich wie in vag_connect): Kilometerstand, Reichweite
+# (reichweite_kombiniert, beim Diesel gleich reichweite_primar),
+# Tankfuellstand (tankfullstand, %), km bis Inspektion und Oelwechsel
+# (inspektion_strecke, olwechsel_strecke: das Portal zaehlt rueckwaerts,
+# -27600 km heisst 27600 km bis faellig, neg_ids dreht das Vorzeichen),
+# Faelligkeitsdatum als Zeitstempel (nachste_inspektion, nachster_olwechsel;
+# bei vag_connect heissen so die km-Sensoren), AdBlue-Reichweite
+# (scr_reichweite) und Oelstand (olstand, %). Keine Tage bis faellig: das
+# Template rechnet sie ersatzweise aus dem Datum. Die inspektionsdistanz des
+# Touran (positiv, "nicht kuratiert") faellt immer wieder auf unavailable und
+# bleibt aussen vor. Die Fahrten-Entitaeten des Portals (strecke_kurzzeit
+# usw.) existieren, stehen aber seit mindestens 13.10.2026 auf unavailable;
+# die Fahrten-Zellen haben damit derzeit keine wirksame Zweitquelle.
+# Nur aus vag_connect, ohne Zweitquelle: Sicherheitsleiste, Status-Chips,
+# Aussentemperatur am Fahrzeugbild, die Schwelle des Tank-Hinweises
+# (conditional-Karte, eine Entitaet), Daten aktualisieren und Datenstand.
 #
 # Achtung Namensschema: Die Ø-Geschwindigkeit der letzten Fahrt ist erst mit
 # dem vw.de-Kanal entstanden und heisst
@@ -563,11 +586,28 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-gruen, #a6d49e)', unit: km, decimals: 0 }
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_kilometerstand
+            variables:
+              accent: 'var(--owlet-gruen, #a6d49e)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_kilometerstand
+                - sensor.passat_variant_elegance_20_l_tdi_scr_kilometerstand
+            # Zweiquellig wie &lbl_dual: erste Entitaet aus ids mit einer Zahl
+            # gewinnt, ohne ids die Kartenentitaet; neg_ids zaehlen rueckwaerts.
             label: &lbl_val |
               [[[
-                const e=(typeof entity!=='undefined')?entity:null;
-                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                const ids=variables.ids||[], neg=variables.neg_ids||[];
+                let v=NaN;
+                if(ids.length){
+                  for(const id of ids){ const s=states[id]; if(!s) continue;
+                    const n=parseFloat(s.state); if(!isNaN(n)){ v=neg.includes(id)?-n:n; break; } }
+                } else {
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                }
                 if(variables.abs && !isNaN(v)) v=Math.abs(v);
                 const d=(variables.decimals===undefined?0:variables.decimals);
                 let n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -625,7 +665,18 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: tank, fx_icon: mdi:gas-station, accent: 'var(--owlet-amber, #e6b566)', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_fin_passat_tankstand }
+            variables:
+              fx: tank
+              fx_icon: mdi:gas-station
+              accent: 'var(--owlet-amber, #e6b566)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_reichweite
+                - sensor.passat_variant_elegance_20_l_tdi_scr_reichweite_kombiniert
+              level_ids:
+                - sensor.garage_volkswagen_fin_passat_tankstand
+                - sensor.passat_variant_elegance_20_l_tdi_scr_tankfullstand
             name: &name_fx |
               [[[ return variables.au.name(variables.au.lage(states, variables, entity), states, variables); ]]]
             label: *lbl_val
@@ -688,7 +739,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:wrench-clock', accent: 'var(--owlet-blau, #7fb3d5)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_passat_inspektionsdatum, days_id: sensor.garage_volkswagen_fin_passat_inspektion_in, due_prefix: 'Inspektion: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:wrench-clock'
+              accent: 'var(--owlet-blau, #7fb3d5)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Inspektion: '
+              ids:
+                - sensor.garage_volkswagen_fin_passat_nachste_inspektion
+                - sensor.passat_variant_elegance_20_l_tdi_scr_inspektion_strecke
+              neg_ids:
+                - sensor.passat_variant_elegance_20_l_tdi_scr_inspektion_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_passat_inspektion_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_passat_inspektionsdatum
+                - sensor.passat_variant_elegance_20_l_tdi_scr_nachste_inspektion
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -701,7 +768,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:oil', accent: 'var(--owlet-violett, #b399d4)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_passat_olwechseldatum, days_id: sensor.garage_volkswagen_fin_passat_olwechsel_in, due_prefix: 'Ölwechsel: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:oil'
+              accent: 'var(--owlet-violett, #b399d4)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Ölwechsel: '
+              ids:
+                - sensor.garage_volkswagen_fin_passat_nachster_olwechsel
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olwechsel_strecke
+              neg_ids:
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olwechsel_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_passat_olwechsel_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_passat_olwechseldatum
+                - sensor.passat_variant_elegance_20_l_tdi_scr_nachster_olwechsel
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -714,7 +797,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: adblue, fx_icon: 'mdi:fuel', accent: 'var(--owlet-tuerkis, #7fd0d5)', unit: km, decimals: 0 }
+            variables:
+              fx: adblue
+              fx_icon: 'mdi:fuel'
+              accent: 'var(--owlet-tuerkis, #7fd0d5)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_adblue_reichweite
+                - sensor.passat_variant_elegance_20_l_tdi_scr_scr_reichweite
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -728,7 +819,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_olstand
+            variables:
+              accent: 'var(--owlet-text-sekundaer, #8794a5)'
+              unit: '%'
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_olstand_prozent
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olstand
             label: *lbl_val
             styles: *tile_styles
       # ---- Tank-Hinweis: guenstigster Diesel, nur unter 150 km ----
@@ -1383,7 +1482,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-gruen, #a6d49e)', unit: km, decimals: 0 }
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_kilometerstand
+            variables:
+              accent: 'var(--owlet-gruen, #a6d49e)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_kilometerstand
+                - sensor.touran_highline_20_l_tdi_scr_kilometerstand
             label: *lbl_val
             styles: *tile_styles
           # Tank: Fuellung, Plausibilitaetspruefung und Farbstufen aus owlet_auto_fx
@@ -1394,7 +1501,18 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: tank, fx_icon: mdi:gas-station, accent: 'var(--owlet-amber, #e6b566)', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_fin_touran_tankstand }
+            variables:
+              fx: tank
+              fx_icon: mdi:gas-station
+              accent: 'var(--owlet-amber, #e6b566)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_reichweite
+                - sensor.touran_highline_20_l_tdi_scr_reichweite_kombiniert
+              level_ids:
+                - sensor.garage_volkswagen_fin_touran_tankstand
+                - sensor.touran_highline_20_l_tdi_scr_tankfullstand
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1407,7 +1525,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:wrench-clock', accent: 'var(--owlet-blau, #7fb3d5)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_touran_inspektionsdatum, days_id: sensor.garage_volkswagen_fin_touran_inspektion_in, due_prefix: 'Inspektion: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:wrench-clock'
+              accent: 'var(--owlet-blau, #7fb3d5)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Inspektion: '
+              ids:
+                - sensor.garage_volkswagen_fin_touran_nachste_inspektion
+                - sensor.touran_highline_20_l_tdi_scr_inspektion_strecke
+              neg_ids:
+                - sensor.touran_highline_20_l_tdi_scr_inspektion_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_touran_inspektion_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_touran_inspektionsdatum
+                - sensor.touran_highline_20_l_tdi_scr_nachste_inspektion
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1420,7 +1554,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:oil', accent: 'var(--owlet-violett, #b399d4)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_touran_olwechseldatum, days_id: sensor.garage_volkswagen_fin_touran_olwechsel_in, due_prefix: 'Ölwechsel: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:oil'
+              accent: 'var(--owlet-violett, #b399d4)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Ölwechsel: '
+              ids:
+                - sensor.garage_volkswagen_fin_touran_nachster_olwechsel
+                - sensor.touran_highline_20_l_tdi_scr_olwechsel_strecke
+              neg_ids:
+                - sensor.touran_highline_20_l_tdi_scr_olwechsel_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_touran_olwechsel_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_touran_olwechseldatum
+                - sensor.touran_highline_20_l_tdi_scr_nachster_olwechsel
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1433,7 +1583,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: adblue, fx_icon: 'mdi:fuel', accent: 'var(--owlet-tuerkis, #7fd0d5)', unit: km, decimals: 0 }
+            variables:
+              fx: adblue
+              fx_icon: 'mdi:fuel'
+              accent: 'var(--owlet-tuerkis, #7fd0d5)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_adblue_reichweite
+                - sensor.touran_highline_20_l_tdi_scr_scr_reichweite
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1447,7 +1605,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_olstand
+            variables:
+              accent: 'var(--owlet-text-sekundaer, #8794a5)'
+              unit: '%'
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_olstand_prozent
+                - sensor.touran_highline_20_l_tdi_scr_olstand
             label: *lbl_val
             styles: *tile_styles
       # ---- Tank-Hinweis wie beim Passat ----
