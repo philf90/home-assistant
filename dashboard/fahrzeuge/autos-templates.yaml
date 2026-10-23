@@ -26,6 +26,8 @@
 #   au.kachel(...)    HTML der Icon-Kachel fuer das Feld "tile" der
 #                     Kennzahl-Kacheln: Zustandsfarbe, beim Tank die Fuellung
 #                     mit Welle, bei Handlungsbedarf der Hinweis-Puls.
+#   au.melder(...)    Zweiquellige on/off-Melder fuer Status-Chips und
+#                     Sicherheitsleiste (variables.quellen).
 #   extra_styles      Keyframes und Klassen ".au-*", Ringe am #img-cell fuer
 #                     die Sicherheitsleiste, Drehung fuer "Daten aktualisieren".
 #
@@ -37,11 +39,27 @@
 #                    adblue:  entity = AdBlue-Reichweite (km)
 #                    wartung: entity = km bis faellig, variables.days_id
 #                             (Tage bis faellig), date_id, due_prefix
+#                    Zweitquelle: variables.ids (Reichweite bzw. km bis
+#                    faellig; die erste Entitaet mit einer Zahl gewinnt,
+#                    ohne ids zaehlt die Kartenentitaet), level_ids,
+#                    days_ids, date_ids nach derselben Regel statt level_id,
+#                    days_id, date_id. Entitaeten in neg_ids zaehlen
+#                    rueckwaerts (das EU-Data-Act-Portal meldet -27600 km
+#                    bis zur Inspektion), ihr Vorzeichen wird gedreht.
+#                    Fehlen die Tage bis faellig, rechnet wartung sie aus
+#                    dem Faelligkeitsdatum.
 #                    Fuellhoehe als CSS-Variable --au-lvl auf styles.card:
 #                    so bleibt das Element beim Wertwechsel bestehen und die
 #                    Hoehe gleitet (gleiches Vorgehen wie --wx-dir in
 #                    owlet_wetter_fx).
 #   Sicherheitsleiste  --au-ring (block | none) auf styles.img_cell.
+#   Leiste und Chips variables.quellen: Liste von Entitaetslisten, vag_connect
+#                    zuerst, dann Portal. au.melder nimmt die erste Quelle, in
+#                    der mindestens ein Melder auf on/off steht, und liefert
+#                    an (Indizes mit 'on'), bekannt (Melder auf on/off), ids
+#                    (gewaehlte Liste), q (Index der Quelle) und luecke (ein
+#                    Melder fehlt oder keine Quelle brauchbar). Die Leiste
+#                    traegt dazu variables.namen je Quelle in gleicher Folge.
 #   Aktualisieren    variables.upd_id (Zeitstempel des letzten Abrufs); die
 #                    Karte liest sensor.time, damit die Drehung spaetestens
 #                    nach 3 min endet.
@@ -117,13 +135,52 @@ button_card_templates:
       wartung_km: 1000
       au: |
         [[[
-          const VERSION = 2, alt = window.__owletAu;
+          const VERSION = 4, alt = window.__owletAu;
           if (alt && alt.version === VERSION) return alt;
 
           const zahl = (s) => {
             if (!s || s.state === undefined || s.state === null) return null;
             const n = parseFloat(s.state);
             return isNaN(n) ? null : n;
+          };
+          // Zweitquelle: erste Entitaet aus ids mit einer Zahl gewinnt, ohne
+          // ids die Kartenentitaet e. Entitaeten in v.neg_ids zaehlen
+          // rueckwaerts (Portal: -27600 km bis Inspektion), ihr Vorzeichen
+          // wird gedreht.
+          const wert = (st, v, ids, e) => {
+            if (!ids || !ids.length) return zahl(e);
+            for (const id of ids) {
+              const n = zahl(st[id]);
+              if (n !== null) return (v.neg_ids || []).includes(id) ? -n : n;
+            }
+            return null;
+          };
+          // Erste Entitaet aus ids mit brauchbarem Zustand (Datum)
+          const erste = (st, ids) => {
+            for (const id of ids || []) {
+              const s = st[id];
+              if (s && s.state && s.state !== 'unknown' && s.state !== 'unavailable') return s;
+            }
+            return null;
+          };
+          // Tage bis zum Datum einer Entitaet, wenn keine Entitaet sie liefert
+          const tageBis = (s) => {
+            const t = s ? Date.parse(s.state) : NaN;
+            return isNaN(t) ? null : Math.round((t - Date.now()) / 86400000);
+          };
+          // ---------- Status-Chips und Sicherheitsleiste ----------
+          // v.quellen = Liste von Entitaetslisten (vag_connect zuerst, dann
+          // Portal); die erste Liste mit einem Melder auf on/off gewinnt.
+          const melder = (st, v) => {
+            for (const ids of v.quellen || []) {
+              const an = []; let bekannt = 0;
+              ids.forEach((id, i) => {
+                const s = st[id]; if (!s) return;
+                if (s.state === 'on') { an.push(i); bekannt++; } else if (s.state === 'off') bekannt++;
+              });
+              if (bekannt) return { an, bekannt, ids, q: v.quellen.indexOf(ids), luecke: bekannt < ids.length };
+            }
+            return { an: [], bekannt: 0, ids: [], q: -1, luecke: true };
           };
           const ROT = 'var(--owlet-rot, #f0736a)', KORALLE = 'var(--owlet-koralle, #e7936e)', AMBER = 'var(--owlet-amber, #e6b566)', GRAU = 'var(--owlet-muted, #6e7988)';
 
@@ -134,7 +191,7 @@ button_card_templates:
           const lage = (st, v, e) => {
             const ok = { z: 'ok', acc: v.accent, txt: '', puls: false, lvl: 0 };
             if (v.fx === 'tank') {
-              const pct = zahl(st[v.level_id]), km = zahl(e);
+              const pct = wert(st, v, v.level_ids || [v.level_id]), km = wert(st, v, v.ids, e);
               if (pct === null) return { z: 'leer', acc: GRAU, txt: '', puls: false, lvl: 0 };
               // Artefakt: 100 % ohne passende Reichweite
               if (pct >= 100 && (km === null || km < v.tank_voll_ab_km)) return { z: 'unplausibel', acc: GRAU, txt: '', puls: false, lvl: 0 };
@@ -144,14 +201,16 @@ button_card_templates:
               return { ...ok, lvl, pct };
             }
             if (v.fx === 'adblue') {
-              const km = zahl(e);
+              const km = wert(st, v, v.ids, e);
               if (km === null) return ok;
               if (km <= v.adblue_rot_km) return { z: 'kritisch', acc: ROT, txt: 'dringend nachfüllen', puls: true, lvl: 0 };
               if (km <= v.adblue_hinweis_km) return { z: 'hinweis', acc: AMBER, txt: 'nachfüllen', puls: true, lvl: 0 };
               return ok;
             }
             if (v.fx === 'wartung') {
-              const km = zahl(e), tage = zahl(st[v.days_id]);
+              const km = wert(st, v, v.ids, e);
+              let tage = wert(st, v, v.days_ids || [v.days_id]);
+              if (tage === null) tage = tageBis(erste(st, v.date_ids || [v.date_id]));
               if ((tage !== null && tage <= 0) || (km !== null && km <= 0)) return { z: 'ueberfaellig', acc: ROT, txt: '', puls: true, lvl: 0, tage };
               if ((tage !== null && tage <= v.wartung_tage) || (km !== null && km <= v.wartung_km)) return { z: 'faellig', acc: AMBER, txt: '', puls: true, lvl: 0, tage };
               return { ...ok, tage };
@@ -179,7 +238,7 @@ button_card_templates:
               if (l.tage !== null && l.tage <= v.wartung_tage) return pre + 'in ' + Math.round(l.tage) + (Math.round(l.tage) === 1 ? ' Tag' : ' Tagen');
               return pre + 'bald fällig';
             }
-            return pre + datum(st[v.date_id]);
+            return pre + datum(erste(st, v.date_ids || [v.date_id]));
           };
 
           // ---------- Icon-Kachel ----------
@@ -206,7 +265,7 @@ button_card_templates:
             return 'ruhe';
           };
 
-          const lib = { version: VERSION, lage, name, kachel, abruf };
+          const lib = { version: VERSION, lage, name, kachel, abruf, melder };
           window.__owletAu = lib;
           return lib;
         ]]]

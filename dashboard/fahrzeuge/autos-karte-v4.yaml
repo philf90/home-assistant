@@ -39,7 +39,12 @@
 #     owlet-flaeche-erhoeht (hell Weiss).
 #   - Fahrzeugbild: das echte Bild aus VW Group Connect (image-Entitaet
 #     "Front Left" je Fahrzeug, image_entity) statt einer festen Datei
-#     unter /local/auto/.
+#     unter /local/auto/. Steht die Bild-Entitaet auf unavailable (vag_connect
+#     gestoert, das Portal hat keine Bilder), zeigt eine zweite
+#     conditional-Karte die feste Datei der V3 (/local/auto/<modell>/...png)
+#     ohne den engen Zuschnitt, weil deren Raender anders sind. Der
+#     Glaette-Hinweis gilt fuer beide Bilder und liest die Aussentemperatur
+#     ersatzweise aus dem Portal (sensor.<modell>_aussentemperatur).
 #   - Die Zeile unter dem Wert bricht um, statt abgeschnitten zu werden:
 #     bei Hinweisen und beim Faelligkeitsdatum von Inspektion und
 #     Oelwechsel; die Kachel wird dann eine Zeile hoeher.
@@ -88,10 +93,45 @@
 # (VW verlangt alle paar Wochen einen neuen E-Mail-Code), stehen die Zellen
 # auf '–' bzw. auf der Zweitquelle.
 #
-# ZWEITQUELLE: Alle Fahrten-Zellen fragen vag_connect zuerst und fallen nur
-# dann auf cupra_eu_data_act zurueck, wenn dort keine Zahl steht. Die
-# Reihenfolge steckt je Kachel in variables.ids. Ø Tempo nimmt den Wert des
-# Bordcomputers und rechnet ersatzweise Strecke / Fahrzeit aus vag_connect.
+# ZWEITQUELLE: Fahrten-Zellen und Kennzahl-Kacheln fragen vag_connect zuerst
+# und fallen auf cupra_eu_data_act (EU-Data-Act-Portal, sensor.<modell>_*)
+# zurueck, wenn dort keine Zahl steht. Die Reihenfolge steckt je Kachel in
+# variables.ids; Tank zusaetzlich level_ids, Inspektion und Oelwechsel
+# days_ids und date_ids (Auswertung in owlet_auto_fx). Ø Tempo nimmt den Wert
+# des Bordcomputers und rechnet ersatzweise Strecke / Fahrzeit aus vag_connect.
+# Anlass: Am 23.10.2026 stand vag_connect nach einem HA-Neustart auf
+# setup_error (Portal nicht erreichbar), alle Entitaeten auf unavailable. Das
+# Portal hielt die letzten Werte, die Kacheln zeigten trotzdem "–".
+#
+# Was das Portal fuer die Kacheln liefert (geprueft 23.10.2026, beide
+# Fahrzeuge, Werte gleich wie in vag_connect): Kilometerstand, Reichweite
+# (reichweite_kombiniert, beim Diesel gleich reichweite_primar),
+# Tankfuellstand (tankfullstand, %), km bis Inspektion und Oelwechsel
+# (inspektion_strecke, olwechsel_strecke: das Portal zaehlt rueckwaerts,
+# -27600 km heisst 27600 km bis faellig, neg_ids dreht das Vorzeichen),
+# Faelligkeitsdatum als Zeitstempel (nachste_inspektion, nachster_olwechsel;
+# bei vag_connect heissen so die km-Sensoren), AdBlue-Reichweite
+# (scr_reichweite) und Oelstand (olstand, %). Keine Tage bis faellig: das
+# Template rechnet sie ersatzweise aus dem Datum. Die inspektionsdistanz des
+# Touran (positiv, "nicht kuratiert") faellt immer wieder auf unavailable und
+# bleibt aussen vor. Die Fahrten-Entitaeten des Portals (strecke_kurzzeit
+# usw.) existieren, stehen aber seit mindestens 13.10.2026 auf unavailable;
+# die Fahrten-Zellen haben damit derzeit keine wirksame Zweitquelle.
+# Sicherheitsleiste und Status-Chips (ausser Verbindung) sind ebenfalls
+# zweiquellig: variables.quellen ist eine Liste von Entitaetslisten, die
+# erste Quelle mit einem Melder auf on/off gewinnt (au.melder in
+# owlet_auto_fx). Portal-Melder: fenster_*, tur_*, heckklappe, motorhaube,
+# schiebedach, standlichter, feststellbremse, turschloss_* und
+# heckklappenschloss (vier Tuerschloesser einzeln statt "Tueren
+# verriegelt"). Semantik gegengeprueft am 21.-23.10.2026: Feststellbremse
+# 'on' = angezogen, Schloesser 'on' = nicht verriegelt, in beiden Quellen
+# zur selben Zeit gleich. Ohne brauchbare Quelle zeigen die Chips
+# "... unbekannt" in Grau statt wie bisher "zu"; die Leiste zeigt
+# "Schlossstatus unbekannt" ohne "seit".
+# Fahrzeugbild und Aussentemperatur des Glaette-Hinweises: siehe oben.
+# Nur aus vag_connect, ohne Zweitquelle: Verbindungs-Chip (das Portal hat
+# keinen online/offline-Melder), die Schwelle des Tank-Hinweises
+# (conditional-Karte, eine Entitaet), Daten aktualisieren und Datenstand.
 #
 # Achtung Namensschema: Die Ø-Geschwindigkeit der letzten Fahrt ist erst mit
 # dem vw.de-Kanal entstanden und heisst
@@ -116,8 +156,9 @@
 # Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles,
 # &bar_*, &chip_*, &conn_*, &lbl_val, &tile_styles, &sub_styles,
 # &mini_styles, &lbl_dual, &lbl_dur, &lbl_speed, &act_styles, &data_*;
-# neu in V4: &name_fx, &tile_fx, &tile_fx_styles, &act_name, &act_icon.
-# Entfallen: &frame (Bildstil je Fahrzeug), &name_level, &name_date.
+# neu in V4: &name_fx, &tile_fx, &tile_fx_styles, &act_name, &act_icon,
+# &bild_passat, &bild_touran (Bildstil je Fahrzeug, fuer VW-Bild und
+# Ersatzdatei gemeinsam). Entfallen: &frame, &name_level, &name_date.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS), das Template
 # owlet_auto_fx, sensor.time (Integration "Time & Date") und fuer den
@@ -186,59 +227,79 @@ cards:
             - font-size: 11.5px
             - color: 'var(--owlet-text-sekundaer, #8794a5)'
             - margin-top: 1px
-      - type: picture
-        image_entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
-        # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-        # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-        # ein eigener Stil statt eines Ankers.
-        # Das VW-Bild (16:9) hat breite transparente Raender: Das Auto samt
-        # Schatten liegt bei 18,6-81,4 % der Breite und 27,4-78,3 % der Hoehe
-        # (gemessen am Passat). img 1,4-fach breit und oben/unten beschnitten:
-        # Auto 88 % der Kartenbreite, 6 % Rand seitlich, 5 % oben und unten.
-        # Touran: Auto groesser im Bild (14,6-79,2 % der Breite, 14,4-79,2 %
-        # der Hoehe, Bild 1,81:1); 1,35-fach, gleiche Raender wie beim Passat.
-        card_mod:
-          style: |
-            ha-card {
-              position: relative !important;
-              border-radius: 16px !important;
-              overflow: hidden !important;
-              border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
-              box-shadow: none !important;
-              background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
-            }
-            ha-card img {
-              width: 140% !important;
-              max-width: none !important;
-              margin: -16.6% -20% -12.1% !important;
-            }
-            {% set t = states('sensor.garage_volkswagen_fin_passat_aussentemperatur') | float(99) %}
-            {% if t < 4 %}
-            ha-card::after {
-              content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-              box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
-              --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
-              background-image:
-                radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
-              opacity: 0.6;
-              animation: au-funkel 2.8s ease-in-out 3;
-            }
-            ha-card::before {
-              content: "Glättegefahr · {{ t | round(0) | int }} °C";
-              position: absolute; left: 10px; top: 10px; z-index: 1;
-              padding: 4px 10px; border-radius: 999px;
-              background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
-              color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
-            }
-            @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-            @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
-            {% endif %}
-      # ---- Sicherheitsleiste (lock_ids und lock_names in gleicher Reihenfolge) ----
+      # ---- Fahrzeugbild: VW-Bild aus vag_connect, ersatzweise feste Datei ----
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+            state_not: unavailable
+        card:
+          type: picture
+          image_entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
+          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
+          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Zuschnitt nur fuer das VW-Bild (Jinja-if im Stil). Das VW-Bild (16:9)
+          # hat breite transparente Raender: Das Auto samt
+          # Schatten liegt bei 18,6-81,4 % der Breite und 27,4-78,3 % der Hoehe
+          # (gemessen am Passat). img 1,4-fach breit und oben/unten beschnitten:
+          # Auto 88 % der Kartenbreite, 6 % Rand seitlich, 5 % oben und unten.
+          # Touran: Auto groesser im Bild (14,6-79,2 % der Breite, 14,4-79,2 %
+          # der Hoehe, Bild 1,81:1); 1,35-fach, gleiche Raender wie beim Passat.
+          card_mod: &bild_passat
+            style: |
+              ha-card {
+                position: relative !important;
+                border-radius: 16px !important;
+                overflow: hidden !important;
+                border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+                box-shadow: none !important;
+                background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+              }
+              {% if not is_state('image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left', 'unavailable') %}
+              ha-card img {
+                width: 140% !important;
+                max-width: none !important;
+                margin: -16.6% -20% -12.1% !important;
+              }
+              {% endif %}
+              {% set t = states('sensor.garage_volkswagen_fin_passat_aussentemperatur') | float(none) %}
+              {% if t is none %}{% set t = states('sensor.passat_variant_elegance_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
+              {% if t < 4 %}
+              ha-card::after {
+                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
+                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
+                background-image:
+                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                opacity: 0.6;
+                animation: au-funkel 2.8s ease-in-out 3;
+              }
+              ha-card::before {
+                content: "Glättegefahr · {{ t | round(0) | int }} °C";
+                position: absolute; left: 10px; top: 10px; z-index: 1;
+                padding: 4px 10px; border-radius: 999px;
+                background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
+                color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
+              }
+              @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+              @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
+              {% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+            state: unavailable
+        card:
+          type: picture
+          image: /local/auto/passat/passat_b8.png
+          card_mod: *bild_passat
+      # ---- Sicherheitsleiste (quellen und namen je Quelle in gleicher Reihenfolge) ----
       # 'on' = nicht verriegelt (device_class lock), siehe Kopf der Datei.
       - type: custom:button-card
         template: owlet_auto_fx
@@ -251,44 +312,43 @@ cards:
         tap_action:
           action: more-info
         variables:
-          lock_ids:
-            - binary_sensor.garage_volkswagen_fin_passat_turen_verriegelt
-            - binary_sensor.garage_volkswagen_fin_passat_kofferraum_verriegelt
-          lock_names:
-            - Türen
-            - Heckklappe
+          quellen:
+            - - binary_sensor.garage_volkswagen_fin_passat_turen_verriegelt
+              - binary_sensor.garage_volkswagen_fin_passat_kofferraum_verriegelt
+            - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_vorne_links
+              - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_vorne_rechts
+              - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_hinten_links
+              - binary_sensor.passat_variant_elegance_20_l_tdi_scr_turschloss_hinten_rechts
+              - binary_sensor.passat_variant_elegance_20_l_tdi_scr_heckklappenschloss
+          namen:
+            - [Türen, Heckklappe]
+            - [Tür vorne links, Tür vorne rechts, Tür hinten links, Tür hinten rechts, Heckklappe]
         name: &bar_name |
           [[[
-            const ids=variables.lock_ids||[], nms=variables.lock_names||[];
-            let open=[], unknown=0;
-            ids.forEach((id,i)=>{ const s=states[id];
-              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
-              if(s.state==='on') open.push(nms[i]||id);
-            });
+            const m=variables.au.melder(states, variables);
+            if(!m.bekannt) return 'Schlossstatus unbekannt';
+            const nms=(variables.namen||[])[m.q]||[];
+            const open=m.an.map(i=>nms[i]||m.ids[i]);
             if(open.length===1) return open[0]+' nicht verriegelt';
-            if(open.length>1) return open.join(' und ')+' nicht verriegelt';
-            if(unknown>0) return 'Schlossstatus unbekannt';
+            if(open.length===2) return open.join(' und ')+' nicht verriegelt';
+            if(open.length>2) return open.length+' Schlösser nicht verriegelt';
+            if(m.luecke) return 'Schlossstatus unbekannt';
             return 'Fahrzeug abgeschlossen';
           ]]]
         icon: &bar_icon |
           [[[
-            const ids=variables.lock_ids||[];
-            let open=0, unknown=0;
-            ids.forEach(id=>{ const s=states[id];
-              if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
-              if(s.state==='on') open++;
-            });
-            if(open>0) return 'mdi:lock-open-variant';
-            if(unknown>0) return 'mdi:lock-question';
+            const m=variables.au.melder(states, variables);
+            if(m.an.length>0) return 'mdi:lock-open-variant';
+            if(m.luecke) return 'mdi:lock-question';
             return 'mdi:lock';
           ]]]
         label: &bar_label |
           [[[
-            const ids=variables.lock_ids||[];
+            const m=variables.au.melder(states, variables);
             let open=[], all=[];
-            ids.forEach(id=>{ const s=states[id]; if(!s) return;
+            m.ids.forEach((id,i)=>{ const s=states[id]; if(!s) return;
               const t=new Date(s.last_changed).getTime(); if(isNaN(t)) return;
-              all.push(t); if(s.state==='on') open.push(t);
+              all.push(t); if(m.an.includes(i)) open.push(t);
             });
             const pool=open.length?open:all;
             if(!pool.length) return '';
@@ -316,27 +376,18 @@ cards:
             - align-self: center
             - position: relative
             - overflow: visible
-            # Ringe aus owlet_auto_fx nur bei "on"; filter statt some, damit
-            # button-card v7 jeden Melder liest und ueberwacht.
+            # Ringe aus owlet_auto_fx nur bei "on" in der gewaehlten Quelle.
             - --au-ring: |
-                [[[
-                  const ids=variables.lock_ids||[];
-                  return ids.filter(id=>states[id]&&states[id].state==='on').length>0 ? 'block' : 'none';
-                ]]]
+                [[[ return variables.au.melder(states, variables).an.length>0 ? 'block' : 'none'; ]]]
           icon:
             - width: 20px
             - height: 20px
             - --ha-icon-display: block
             - color: &bar_col |
                 [[[
-                  const ids=variables.lock_ids||[];
-                  let open=0, unknown=0;
-                  ids.forEach(id=>{ const s=states[id];
-                    if(!s||s.state==='unavailable'||s.state==='unknown'){ unknown++; return; }
-                    if(s.state==='on') open++;
-                  });
-                  if(open>0) return 'var(--owlet-amber, #e6b566)';
-                  if(unknown>0) return 'var(--owlet-text-sekundaer, #8794a5)';
+                  const m=variables.au.melder(states, variables);
+                  if(m.an.length>0) return 'var(--owlet-amber, #e6b566)';
+                  if(m.luecke) return 'var(--owlet-text-sekundaer, #8794a5)';
                   return 'var(--owlet-gruen, #a6d49e)';
                 ]]]
           name:
@@ -355,43 +406,45 @@ cards:
             - margin-left: 10px
       # ---- Status-Chips (Fenster/Tueren aus je 4 Einzelmeldern kombiniert) ----
       # Statt Bewegung und Standort (fehlen in vag_connect) stehen hier
-      # Feststellbremse und Verbindungsstatus.
+      # Feststellbremse und Verbindungsstatus. Zweiquellig ueber
+      # variables.quellen (siehe Kopf), unk_txt ohne brauchbare Quelle.
       - type: grid
         columns: 4
         square: false
         cards:
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_fenster_offen
             show_icon: true
             show_name: true
             show_state: false
             triggers_update: all
             variables:
-              ids:
-                - binary_sensor.garage_volkswagen_fin_passat_fenster_vorne_links
-                - binary_sensor.garage_volkswagen_fin_passat_fenster_vorne_rechts
-                - binary_sensor.garage_volkswagen_fin_passat_fenster_hinten_links
-                - binary_sensor.garage_volkswagen_fin_passat_fenster_hinten_rechts
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_fenster_vorne_links
+                  - binary_sensor.garage_volkswagen_fin_passat_fenster_vorne_rechts
+                  - binary_sensor.garage_volkswagen_fin_passat_fenster_hinten_links
+                  - binary_sensor.garage_volkswagen_fin_passat_fenster_hinten_rechts
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_fenster_vorne_links
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_fenster_vorne_rechts
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_fenster_hinten_links
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_fenster_hinten_rechts
               off_txt: Fenster zu
               open_word: Fenster offen
+              unk_txt: Fenster unbekannt
               on_col: 'var(--owlet-amber, #e6b566)'
               off_col: 'var(--owlet-gruen, #a6d49e)'
               on_icon: mdi:car-windshield
               off_icon: mdi:car-windshield-outline
             name: &chip_name |
               [[[
-                const e=(typeof entity!=='undefined')?entity:null;
-                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
-                  return o>0 ? (o+' '+(variables.open_word||'offen')) : (variables.off_txt||'zu'); }
-                return (e&&e.state==='on')?variables.on_txt:variables.off_txt;
+                const m=variables.au.melder(states, variables), o=m.an.length;
+                if(!m.bekannt) return variables.unk_txt||'Unbekannt';
+                if(variables.open_word) return o>0 ? o+' '+variables.open_word : variables.off_txt;
+                return o>0 ? variables.on_txt : variables.off_txt;
               ]]]
             icon: &chip_icon |
-              [[[
-                const e=(typeof entity!=='undefined')?entity:null;
-                if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
-                  return o>0 ? variables.on_icon : variables.off_icon; }
-                return (e&&e.state==='on')?variables.on_icon:variables.off_icon;
-              ]]]
+              [[[ return variables.au.melder(states, variables).an.length>0 ? variables.on_icon : variables.off_icon; ]]]
             styles: &chip_styles
               card:
                 - border-radius: 13px
@@ -413,10 +466,9 @@ cards:
                 - --ha-icon-display: block
                 - color: &chip_col |
                     [[[
-                      const e=(typeof entity!=='undefined')?entity:null;
-                      if(variables.ids){ let o=0; variables.ids.forEach(id=>{const s=states[id]; if(s&&s.state==='on')o++;});
-                        return o>0 ? variables.on_col : variables.off_col; }
-                      return (e&&e.state==='on')?variables.on_col:variables.off_col;
+                      const m=variables.au.melder(states, variables);
+                      if(!m.bekannt) return 'var(--owlet-text-sekundaer, #8794a5)';
+                      return m.an.length>0 ? variables.on_col : variables.off_col;
                     ]]]
               name:
                 - font-size: 11px
@@ -426,19 +478,25 @@ cards:
                 - line-height: 1.2
                 - color: *chip_col
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_tur_vorne_links
             show_icon: true
             show_name: true
             show_state: false
             triggers_update: all
             variables:
-              ids:
-                - binary_sensor.garage_volkswagen_fin_passat_tur_vorne_links
-                - binary_sensor.garage_volkswagen_fin_passat_tur_vorne_rechts
-                - binary_sensor.garage_volkswagen_fin_passat_tur_hinten_links
-                - binary_sensor.garage_volkswagen_fin_passat_tur_hinten_rechts
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_tur_vorne_links
+                  - binary_sensor.garage_volkswagen_fin_passat_tur_vorne_rechts
+                  - binary_sensor.garage_volkswagen_fin_passat_tur_hinten_links
+                  - binary_sensor.garage_volkswagen_fin_passat_tur_hinten_rechts
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_tur_vorne_links
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_tur_vorne_rechts
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_tur_hinten_links
+                  - binary_sensor.passat_variant_elegance_20_l_tdi_scr_tur_hinten_rechts
               off_txt: Türen zu
               open_word: Türen offen
+              unk_txt: Türen unbekannt
               on_col: 'var(--owlet-rot, #f0736a)'
               off_col: 'var(--owlet-gruen, #a6d49e)'
               on_icon: mdi:car-door
@@ -447,49 +505,104 @@ cards:
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_kofferraum_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_kofferraum_offen
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_heckklappe
+              on_txt: Heck offen
+              off_txt: Heck zu
+              unk_txt: Heck unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-back
+              off_icon: mdi:car-back
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_motorhaube_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_motorhaube_offen
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_motorhaube
+              on_txt: Haube offen
+              off_txt: Haube zu
+              unk_txt: Haube unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-lifted-pickup
+              off_icon: mdi:car-lifted-pickup
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_schiebedach_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_schiebedach_offen
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_schiebedach
+              on_txt: Dach offen
+              off_txt: Dach zu
+              unk_txt: Dach unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-select
+              off_icon: mdi:car-select
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
-          # Standlicht kommt als sensor mit den Textzustaenden on/off, nicht als
-          # binary_sensor -- die Chip-Templates pruefen ohnehin auf 'on'.
+          # Standlicht kommt bei vag_connect als sensor mit den Textzustaenden
+          # on/off, im Portal als binary_sensor -- au.melder prueft nur auf on/off.
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: sensor.garage_volkswagen_fin_passat_standlicht
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-text-sekundaer, #8794a5)', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            variables:
+              quellen:
+                - - sensor.garage_volkswagen_fin_passat_standlicht
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_standlichter
+              on_txt: Licht an
+              off_txt: Licht aus
+              unk_txt: Licht unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-text-sekundaer, #8794a5)'
+              on_icon: mdi:car-parking-lights
+              off_icon: mdi:car-parking-lights
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_passat_feststellbremse
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Angezogen, off_txt: Gelöst, on_col: 'var(--owlet-gruen, #a6d49e)', off_col: 'var(--owlet-text-sekundaer, #8794a5)', on_icon: mdi:car-brake-parking, off_icon: mdi:car-brake-parking }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_passat_feststellbremse
+                - - binary_sensor.passat_variant_elegance_20_l_tdi_scr_feststellbremse
+              on_txt: Angezogen
+              off_txt: Gelöst
+              unk_txt: Bremse unbekannt
+              on_col: 'var(--owlet-gruen, #a6d49e)'
+              off_col: 'var(--owlet-text-sekundaer, #8794a5)'
+              on_icon: mdi:car-brake-parking
+              off_icon: mdi:car-brake-parking
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
@@ -563,11 +676,28 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-gruen, #a6d49e)', unit: km, decimals: 0 }
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_kilometerstand
+            variables:
+              accent: 'var(--owlet-gruen, #a6d49e)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_kilometerstand
+                - sensor.passat_variant_elegance_20_l_tdi_scr_kilometerstand
+            # Zweiquellig wie &lbl_dual: erste Entitaet aus ids mit einer Zahl
+            # gewinnt, ohne ids die Kartenentitaet; neg_ids zaehlen rueckwaerts.
             label: &lbl_val |
               [[[
-                const e=(typeof entity!=='undefined')?entity:null;
-                let v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                const ids=variables.ids||[], neg=variables.neg_ids||[];
+                let v=NaN;
+                if(ids.length){
+                  for(const id of ids){ const s=states[id]; if(!s) continue;
+                    const n=parseFloat(s.state); if(!isNaN(n)){ v=neg.includes(id)?-n:n; break; } }
+                } else {
+                  const e=(typeof entity!=='undefined')?entity:null;
+                  v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
+                }
                 if(variables.abs && !isNaN(v)) v=Math.abs(v);
                 const d=(variables.decimals===undefined?0:variables.decimals);
                 let n=isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -625,7 +755,18 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: tank, fx_icon: mdi:gas-station, accent: 'var(--owlet-amber, #e6b566)', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_fin_passat_tankstand }
+            variables:
+              fx: tank
+              fx_icon: mdi:gas-station
+              accent: 'var(--owlet-amber, #e6b566)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_reichweite
+                - sensor.passat_variant_elegance_20_l_tdi_scr_reichweite_kombiniert
+              level_ids:
+                - sensor.garage_volkswagen_fin_passat_tankstand
+                - sensor.passat_variant_elegance_20_l_tdi_scr_tankfullstand
             name: &name_fx |
               [[[ return variables.au.name(variables.au.lage(states, variables, entity), states, variables); ]]]
             label: *lbl_val
@@ -688,7 +829,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:wrench-clock', accent: 'var(--owlet-blau, #7fb3d5)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_passat_inspektionsdatum, days_id: sensor.garage_volkswagen_fin_passat_inspektion_in, due_prefix: 'Inspektion: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:wrench-clock'
+              accent: 'var(--owlet-blau, #7fb3d5)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Inspektion: '
+              ids:
+                - sensor.garage_volkswagen_fin_passat_nachste_inspektion
+                - sensor.passat_variant_elegance_20_l_tdi_scr_inspektion_strecke
+              neg_ids:
+                - sensor.passat_variant_elegance_20_l_tdi_scr_inspektion_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_passat_inspektion_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_passat_inspektionsdatum
+                - sensor.passat_variant_elegance_20_l_tdi_scr_nachste_inspektion
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -701,7 +858,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:oil', accent: 'var(--owlet-violett, #b399d4)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_passat_olwechseldatum, days_id: sensor.garage_volkswagen_fin_passat_olwechsel_in, due_prefix: 'Ölwechsel: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:oil'
+              accent: 'var(--owlet-violett, #b399d4)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Ölwechsel: '
+              ids:
+                - sensor.garage_volkswagen_fin_passat_nachster_olwechsel
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olwechsel_strecke
+              neg_ids:
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olwechsel_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_passat_olwechsel_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_passat_olwechseldatum
+                - sensor.passat_variant_elegance_20_l_tdi_scr_nachster_olwechsel
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -714,7 +887,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: adblue, fx_icon: 'mdi:fuel', accent: 'var(--owlet-tuerkis, #7fd0d5)', unit: km, decimals: 0 }
+            variables:
+              fx: adblue
+              fx_icon: 'mdi:fuel'
+              accent: 'var(--owlet-tuerkis, #7fd0d5)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_adblue_reichweite
+                - sensor.passat_variant_elegance_20_l_tdi_scr_scr_reichweite
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -728,7 +909,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
+            triggers_update:
+              - sensor.passat_variant_elegance_20_l_tdi_scr_olstand
+            variables:
+              accent: 'var(--owlet-text-sekundaer, #8794a5)'
+              unit: '%'
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_passat_olstand_prozent
+                - sensor.passat_variant_elegance_20_l_tdi_scr_olstand
             label: *lbl_val
             styles: *tile_styles
       # ---- Tank-Hinweis: guenstigster Diesel, nur unter 150 km ----
@@ -1194,7 +1383,7 @@ cards:
     cards:
       - type: custom:button-card
         icon: mdi:car-estate
-        name: SAB - EF 456
+        name: AB - EF 456
         label: Touran Highline · Diesel
         show_icon: true
         show_name: true
@@ -1203,52 +1392,71 @@ cards:
         tap_action:
           action: none
         styles: *header_styles
-      - type: picture
-        image_entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
-        # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-        # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-        # ein eigener Stil statt eines Ankers.
-        card_mod:
-          style: |
-            ha-card {
-              position: relative !important;
-              border-radius: 16px !important;
-              overflow: hidden !important;
-              border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
-              box-shadow: none !important;
-              background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
-            }
-            ha-card img {
-              width: 135% !important;
-              max-width: none !important;
-              margin: -5.7% -21.7% -10.5% -13.3% !important;
-            }
-            {% set t = states('sensor.garage_volkswagen_fin_touran_aussentemperatur') | float(99) %}
-            {% if t < 4 %}
-            ha-card::after {
-              content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-              box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
-              --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
-              background-image:
-                radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
-              opacity: 0.6;
-              animation: au-funkel 2.8s ease-in-out 3;
-            }
-            ha-card::before {
-              content: "Glättegefahr · {{ t | round(0) | int }} °C";
-              position: absolute; left: 10px; top: 10px; z-index: 1;
-              padding: 4px 10px; border-radius: 999px;
-              background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
-              color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
-            }
-            @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-            @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
-            {% endif %}
+      # ---- Fahrzeugbild: VW-Bild aus vag_connect, ersatzweise feste Datei ----
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+            state_not: unavailable
+        card:
+          type: picture
+          image_entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
+          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
+          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          card_mod: &bild_touran
+            style: |
+              ha-card {
+                position: relative !important;
+                border-radius: 16px !important;
+                overflow: hidden !important;
+                border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+                box-shadow: none !important;
+                background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+              }
+              {% if not is_state('image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left', 'unavailable') %}
+              ha-card img {
+                width: 135% !important;
+                max-width: none !important;
+                margin: -5.7% -21.7% -10.5% -13.3% !important;
+              }
+              {% endif %}
+              {% set t = states('sensor.garage_volkswagen_fin_touran_aussentemperatur') | float(none) %}
+              {% if t is none %}{% set t = states('sensor.touran_highline_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
+              {% if t < 4 %}
+              ha-card::after {
+                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
+                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
+                background-image:
+                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                opacity: 0.6;
+                animation: au-funkel 2.8s ease-in-out 3;
+              }
+              ha-card::before {
+                content: "Glättegefahr · {{ t | round(0) | int }} °C";
+                position: absolute; left: 10px; top: 10px; z-index: 1;
+                padding: 4px 10px; border-radius: 999px;
+                background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
+                color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
+              }
+              @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+              @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
+              {% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+            state: unavailable
+        card:
+          type: picture
+          image: /local/auto/touran/touran.png
+          card_mod: *bild_touran
       - type: custom:button-card
         template: owlet_auto_fx
         entity: binary_sensor.garage_volkswagen_fin_touran_turen_verriegelt
@@ -1260,12 +1468,17 @@ cards:
         tap_action:
           action: more-info
         variables:
-          lock_ids:
-            - binary_sensor.garage_volkswagen_fin_touran_turen_verriegelt
-            - binary_sensor.garage_volkswagen_fin_touran_kofferraum_verriegelt
-          lock_names:
-            - Türen
-            - Heckklappe
+          quellen:
+            - - binary_sensor.garage_volkswagen_fin_touran_turen_verriegelt
+              - binary_sensor.garage_volkswagen_fin_touran_kofferraum_verriegelt
+            - - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_vorne_links
+              - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_vorne_rechts
+              - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_hinten_links
+              - binary_sensor.touran_highline_20_l_tdi_scr_turschloss_hinten_rechts
+              - binary_sensor.touran_highline_20_l_tdi_scr_heckklappenschloss
+          namen:
+            - [Türen, Heckklappe]
+            - [Tür vorne links, Tür vorne rechts, Tür hinten links, Tür hinten rechts, Heckklappe]
         name: *bar_name
         icon: *bar_icon
         label: *bar_label
@@ -1275,19 +1488,25 @@ cards:
         square: false
         cards:
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_fenster_offen
             show_icon: true
             show_name: true
             show_state: false
             triggers_update: all
             variables:
-              ids:
-                - binary_sensor.garage_volkswagen_fin_touran_fenster_vorne_links
-                - binary_sensor.garage_volkswagen_fin_touran_fenster_vorne_rechts
-                - binary_sensor.garage_volkswagen_fin_touran_fenster_hinten_links
-                - binary_sensor.garage_volkswagen_fin_touran_fenster_hinten_rechts
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_fenster_vorne_links
+                  - binary_sensor.garage_volkswagen_fin_touran_fenster_vorne_rechts
+                  - binary_sensor.garage_volkswagen_fin_touran_fenster_hinten_links
+                  - binary_sensor.garage_volkswagen_fin_touran_fenster_hinten_rechts
+                - - binary_sensor.touran_highline_20_l_tdi_scr_fenster_vorne_links
+                  - binary_sensor.touran_highline_20_l_tdi_scr_fenster_vorne_rechts
+                  - binary_sensor.touran_highline_20_l_tdi_scr_fenster_hinten_links
+                  - binary_sensor.touran_highline_20_l_tdi_scr_fenster_hinten_rechts
               off_txt: Fenster zu
               open_word: Fenster offen
+              unk_txt: Fenster unbekannt
               on_col: 'var(--owlet-amber, #e6b566)'
               off_col: 'var(--owlet-gruen, #a6d49e)'
               on_icon: mdi:car-windshield
@@ -1296,19 +1515,25 @@ cards:
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_tur_vorne_links
             show_icon: true
             show_name: true
             show_state: false
             triggers_update: all
             variables:
-              ids:
-                - binary_sensor.garage_volkswagen_fin_touran_tur_vorne_links
-                - binary_sensor.garage_volkswagen_fin_touran_tur_vorne_rechts
-                - binary_sensor.garage_volkswagen_fin_touran_tur_hinten_links
-                - binary_sensor.garage_volkswagen_fin_touran_tur_hinten_rechts
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_tur_vorne_links
+                  - binary_sensor.garage_volkswagen_fin_touran_tur_vorne_rechts
+                  - binary_sensor.garage_volkswagen_fin_touran_tur_hinten_links
+                  - binary_sensor.garage_volkswagen_fin_touran_tur_hinten_rechts
+                - - binary_sensor.touran_highline_20_l_tdi_scr_tur_vorne_links
+                  - binary_sensor.touran_highline_20_l_tdi_scr_tur_vorne_rechts
+                  - binary_sensor.touran_highline_20_l_tdi_scr_tur_hinten_links
+                  - binary_sensor.touran_highline_20_l_tdi_scr_tur_hinten_rechts
               off_txt: Türen zu
               open_word: Türen offen
+              unk_txt: Türen unbekannt
               on_col: 'var(--owlet-rot, #f0736a)'
               off_col: 'var(--owlet-gruen, #a6d49e)'
               on_icon: mdi:car-door
@@ -1317,47 +1542,104 @@ cards:
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_kofferraum_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Heck offen, off_txt: Heck zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-back, off_icon: mdi:car-back }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_kofferraum_offen
+                - - binary_sensor.touran_highline_20_l_tdi_scr_heckklappe
+              on_txt: Heck offen
+              off_txt: Heck zu
+              unk_txt: Heck unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-back
+              off_icon: mdi:car-back
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_motorhaube_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Haube offen, off_txt: Haube zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-lifted-pickup, off_icon: mdi:car-lifted-pickup }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_motorhaube_offen
+                - - binary_sensor.touran_highline_20_l_tdi_scr_motorhaube
+              on_txt: Haube offen
+              off_txt: Haube zu
+              unk_txt: Haube unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-lifted-pickup
+              off_icon: mdi:car-lifted-pickup
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_schiebedach_offen
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Dach offen, off_txt: Dach zu, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-gruen, #a6d49e)', on_icon: mdi:car-select, off_icon: mdi:car-select }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_schiebedach_offen
+                - - binary_sensor.touran_highline_20_l_tdi_scr_schiebedach
+              on_txt: Dach offen
+              off_txt: Dach zu
+              unk_txt: Dach unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-gruen, #a6d49e)'
+              on_icon: mdi:car-select
+              off_icon: mdi:car-select
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
+          # Standlicht kommt bei vag_connect als sensor mit den Textzustaenden
+          # on/off, im Portal als binary_sensor -- au.melder prueft nur auf on/off.
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: sensor.garage_volkswagen_fin_touran_standlicht
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Licht an, off_txt: Licht aus, on_col: 'var(--owlet-amber, #e6b566)', off_col: 'var(--owlet-text-sekundaer, #8794a5)', on_icon: mdi:car-parking-lights, off_icon: mdi:car-parking-lights }
+            variables:
+              quellen:
+                - - sensor.garage_volkswagen_fin_touran_standlicht
+                - - binary_sensor.touran_highline_20_l_tdi_scr_standlichter
+              on_txt: Licht an
+              off_txt: Licht aus
+              unk_txt: Licht unbekannt
+              on_col: 'var(--owlet-amber, #e6b566)'
+              off_col: 'var(--owlet-text-sekundaer, #8794a5)'
+              on_icon: mdi:car-parking-lights
+              off_icon: mdi:car-parking-lights
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
           - type: custom:button-card
+            template: owlet_auto_fx
             entity: binary_sensor.garage_volkswagen_fin_touran_feststellbremse
             show_icon: true
             show_name: true
             show_state: false
-            variables: { on_txt: Angezogen, off_txt: Gelöst, on_col: 'var(--owlet-gruen, #a6d49e)', off_col: 'var(--owlet-text-sekundaer, #8794a5)', on_icon: mdi:car-brake-parking, off_icon: mdi:car-brake-parking }
+            variables:
+              quellen:
+                - - binary_sensor.garage_volkswagen_fin_touran_feststellbremse
+                - - binary_sensor.touran_highline_20_l_tdi_scr_feststellbremse
+              on_txt: Angezogen
+              off_txt: Gelöst
+              unk_txt: Bremse unbekannt
+              on_col: 'var(--owlet-gruen, #a6d49e)'
+              off_col: 'var(--owlet-text-sekundaer, #8794a5)'
+              on_icon: mdi:car-brake-parking
+              off_icon: mdi:car-brake-parking
             name: *chip_name
             icon: *chip_icon
             styles: *chip_styles
@@ -1383,7 +1665,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-gruen, #a6d49e)', unit: km, decimals: 0 }
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_kilometerstand
+            variables:
+              accent: 'var(--owlet-gruen, #a6d49e)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_kilometerstand
+                - sensor.touran_highline_20_l_tdi_scr_kilometerstand
             label: *lbl_val
             styles: *tile_styles
           # Tank: Fuellung, Plausibilitaetspruefung und Farbstufen aus owlet_auto_fx
@@ -1394,7 +1684,18 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: tank, fx_icon: mdi:gas-station, accent: 'var(--owlet-amber, #e6b566)', unit: km, decimals: 0, level_id: sensor.garage_volkswagen_fin_touran_tankstand }
+            variables:
+              fx: tank
+              fx_icon: mdi:gas-station
+              accent: 'var(--owlet-amber, #e6b566)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_reichweite
+                - sensor.touran_highline_20_l_tdi_scr_reichweite_kombiniert
+              level_ids:
+                - sensor.garage_volkswagen_fin_touran_tankstand
+                - sensor.touran_highline_20_l_tdi_scr_tankfullstand
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1407,7 +1708,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:wrench-clock', accent: 'var(--owlet-blau, #7fb3d5)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_touran_inspektionsdatum, days_id: sensor.garage_volkswagen_fin_touran_inspektion_in, due_prefix: 'Inspektion: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:wrench-clock'
+              accent: 'var(--owlet-blau, #7fb3d5)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Inspektion: '
+              ids:
+                - sensor.garage_volkswagen_fin_touran_nachste_inspektion
+                - sensor.touran_highline_20_l_tdi_scr_inspektion_strecke
+              neg_ids:
+                - sensor.touran_highline_20_l_tdi_scr_inspektion_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_touran_inspektion_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_touran_inspektionsdatum
+                - sensor.touran_highline_20_l_tdi_scr_nachste_inspektion
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1420,7 +1737,23 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: wartung, fx_icon: 'mdi:oil', accent: 'var(--owlet-violett, #b399d4)', unit: km, decimals: 0, date_id: sensor.garage_volkswagen_fin_touran_olwechseldatum, days_id: sensor.garage_volkswagen_fin_touran_olwechsel_in, due_prefix: 'Ölwechsel: ' }
+            variables:
+              fx: wartung
+              fx_icon: 'mdi:oil'
+              accent: 'var(--owlet-violett, #b399d4)'
+              unit: km
+              decimals: 0
+              due_prefix: 'Ölwechsel: '
+              ids:
+                - sensor.garage_volkswagen_fin_touran_nachster_olwechsel
+                - sensor.touran_highline_20_l_tdi_scr_olwechsel_strecke
+              neg_ids:
+                - sensor.touran_highline_20_l_tdi_scr_olwechsel_strecke
+              days_ids:
+                - sensor.garage_volkswagen_fin_touran_olwechsel_in
+              date_ids:
+                - sensor.garage_volkswagen_fin_touran_olwechseldatum
+                - sensor.touran_highline_20_l_tdi_scr_nachster_olwechsel
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1433,7 +1766,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { fx: adblue, fx_icon: 'mdi:fuel', accent: 'var(--owlet-tuerkis, #7fd0d5)', unit: km, decimals: 0 }
+            variables:
+              fx: adblue
+              fx_icon: 'mdi:fuel'
+              accent: 'var(--owlet-tuerkis, #7fd0d5)'
+              unit: km
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_adblue_reichweite
+                - sensor.touran_highline_20_l_tdi_scr_scr_reichweite
             name: *name_fx
             label: *lbl_val
             custom_fields:
@@ -1447,7 +1788,15 @@ cards:
             show_name: true
             show_label: true
             show_state: false
-            variables: { accent: 'var(--owlet-text-sekundaer, #8794a5)', unit: '%', decimals: 0 }
+            triggers_update:
+              - sensor.touran_highline_20_l_tdi_scr_olstand
+            variables:
+              accent: 'var(--owlet-text-sekundaer, #8794a5)'
+              unit: '%'
+              decimals: 0
+              ids:
+                - sensor.garage_volkswagen_fin_touran_olstand_prozent
+                - sensor.touran_highline_20_l_tdi_scr_olstand
             label: *lbl_val
             styles: *tile_styles
       # ---- Tank-Hinweis wie beim Passat ----
