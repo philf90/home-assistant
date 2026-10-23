@@ -166,7 +166,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`sicherheit-templates.yaml`](sicherheit/sicherheit-templates.yaml) | templates | Sicherheit – button-card-Templates | – | `person.bewohner`, `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`sicherheit-view.yaml`](sicherheit/sicherheit-view.yaml) | view | Sicherheit – komplette Ansicht | button-card, card-mod, decluttering-card | – | aktiv |
-| [`wachmodus-konfig.yaml`](sicherheit/wachmodus-konfig.yaml) | konfig | Sicherheit – Wachmodus und Meldungen (Helfer, Automationen) | – | `person.bewohner`, `notify.mobile_app_iphone`, `*_seriennr` | aktiv |
+| [`wachmodus-konfig.yaml`](sicherheit/wachmodus-konfig.yaml) | konfig | Sicherheit – Wachmodus und Meldungen (Helfer, Automationen) | – | `person.bewohner`, `notify.mobile_app_iphone`, `*_seriennr`, `telegram_eintrag` | aktiv |
 
 ## sonstiges
 
