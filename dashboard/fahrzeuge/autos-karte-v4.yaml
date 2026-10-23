@@ -39,7 +39,12 @@
 #     owlet-flaeche-erhoeht (hell Weiss).
 #   - Fahrzeugbild: das echte Bild aus VW Group Connect (image-Entitaet
 #     "Front Left" je Fahrzeug, image_entity) statt einer festen Datei
-#     unter /local/auto/.
+#     unter /local/auto/. Steht die Bild-Entitaet auf unavailable (vag_connect
+#     gestoert, das Portal hat keine Bilder), zeigt eine zweite
+#     conditional-Karte die feste Datei der V3 (/local/auto/<modell>/...png)
+#     ohne den engen Zuschnitt, weil deren Raender anders sind. Der
+#     Glaette-Hinweis gilt fuer beide Bilder und liest die Aussentemperatur
+#     ersatzweise aus dem Portal (sensor.<modell>_aussentemperatur).
 #   - Die Zeile unter dem Wert bricht um, statt abgeschnitten zu werden:
 #     bei Hinweisen und beim Faelligkeitsdatum von Inspektion und
 #     Oelwechsel; die Kachel wird dann eine Zeile hoeher.
@@ -123,10 +128,10 @@
 # zur selben Zeit gleich. Ohne brauchbare Quelle zeigen die Chips
 # "... unbekannt" in Grau statt wie bisher "zu"; die Leiste zeigt
 # "Schlossstatus unbekannt" ohne "seit".
+# Fahrzeugbild und Aussentemperatur des Glaette-Hinweises: siehe oben.
 # Nur aus vag_connect, ohne Zweitquelle: Verbindungs-Chip (das Portal hat
-# keinen online/offline-Melder), Aussentemperatur am Fahrzeugbild, die
-# Schwelle des Tank-Hinweises (conditional-Karte, eine Entitaet), Daten
-# aktualisieren und Datenstand.
+# keinen online/offline-Melder), die Schwelle des Tank-Hinweises
+# (conditional-Karte, eine Entitaet), Daten aktualisieren und Datenstand.
 #
 # Achtung Namensschema: Die Ø-Geschwindigkeit der letzten Fahrt ist erst mit
 # dem vw.de-Kanal entstanden und heisst
@@ -151,8 +156,9 @@
 # Gemeinsame Optik/Logik ueber YAML-Anker: &shell, &header_styles,
 # &bar_*, &chip_*, &conn_*, &lbl_val, &tile_styles, &sub_styles,
 # &mini_styles, &lbl_dual, &lbl_dur, &lbl_speed, &act_styles, &data_*;
-# neu in V4: &name_fx, &tile_fx, &tile_fx_styles, &act_name, &act_icon.
-# Entfallen: &frame (Bildstil je Fahrzeug), &name_level, &name_date.
+# neu in V4: &name_fx, &tile_fx, &tile_fx_styles, &act_name, &act_icon,
+# &bild_passat, &bild_touran (Bildstil je Fahrzeug, fuer VW-Bild und
+# Ersatzdatei gemeinsam). Entfallen: &frame, &name_level, &name_date.
 #
 # Voraussetzung: custom:button-card + card-mod (HACS), das Template
 # owlet_auto_fx, sensor.time (Integration "Time & Date") und fuer den
@@ -221,58 +227,78 @@ cards:
             - font-size: 11.5px
             - color: 'var(--owlet-text-sekundaer, #8794a5)'
             - margin-top: 1px
-      - type: picture
-        image_entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
-        # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-        # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-        # ein eigener Stil statt eines Ankers.
-        # Das VW-Bild (16:9) hat breite transparente Raender: Das Auto samt
-        # Schatten liegt bei 18,6-81,4 % der Breite und 27,4-78,3 % der Hoehe
-        # (gemessen am Passat). img 1,4-fach breit und oben/unten beschnitten:
-        # Auto 88 % der Kartenbreite, 6 % Rand seitlich, 5 % oben und unten.
-        # Touran: Auto groesser im Bild (14,6-79,2 % der Breite, 14,4-79,2 %
-        # der Hoehe, Bild 1,81:1); 1,35-fach, gleiche Raender wie beim Passat.
-        card_mod:
-          style: |
-            ha-card {
-              position: relative !important;
-              border-radius: 16px !important;
-              overflow: hidden !important;
-              border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
-              box-shadow: none !important;
-              background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
-            }
-            ha-card img {
-              width: 140% !important;
-              max-width: none !important;
-              margin: -16.6% -20% -12.1% !important;
-            }
-            {% set t = states('sensor.garage_volkswagen_fin_passat_aussentemperatur') | float(99) %}
-            {% if t < 4 %}
-            ha-card::after {
-              content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-              box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
-              --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
-              background-image:
-                radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
-              opacity: 0.6;
-              animation: au-funkel 2.8s ease-in-out 3;
-            }
-            ha-card::before {
-              content: "Glättegefahr · {{ t | round(0) | int }} °C";
-              position: absolute; left: 10px; top: 10px; z-index: 1;
-              padding: 4px 10px; border-radius: 999px;
-              background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
-              color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
-            }
-            @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-            @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
-            {% endif %}
+      # ---- Fahrzeugbild: VW-Bild aus vag_connect, ersatzweise feste Datei ----
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+            state_not: unavailable
+        card:
+          type: picture
+          image_entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
+          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
+          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Zuschnitt nur fuer das VW-Bild (Jinja-if im Stil). Das VW-Bild (16:9)
+          # hat breite transparente Raender: Das Auto samt
+          # Schatten liegt bei 18,6-81,4 % der Breite und 27,4-78,3 % der Hoehe
+          # (gemessen am Passat). img 1,4-fach breit und oben/unten beschnitten:
+          # Auto 88 % der Kartenbreite, 6 % Rand seitlich, 5 % oben und unten.
+          # Touran: Auto groesser im Bild (14,6-79,2 % der Breite, 14,4-79,2 %
+          # der Hoehe, Bild 1,81:1); 1,35-fach, gleiche Raender wie beim Passat.
+          card_mod: &bild_passat
+            style: |
+              ha-card {
+                position: relative !important;
+                border-radius: 16px !important;
+                overflow: hidden !important;
+                border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+                box-shadow: none !important;
+                background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+              }
+              {% if not is_state('image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left', 'unavailable') %}
+              ha-card img {
+                width: 140% !important;
+                max-width: none !important;
+                margin: -16.6% -20% -12.1% !important;
+              }
+              {% endif %}
+              {% set t = states('sensor.garage_volkswagen_fin_passat_aussentemperatur') | float(none) %}
+              {% if t is none %}{% set t = states('sensor.passat_variant_elegance_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
+              {% if t < 4 %}
+              ha-card::after {
+                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
+                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
+                background-image:
+                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                opacity: 0.6;
+                animation: au-funkel 2.8s ease-in-out 3;
+              }
+              ha-card::before {
+                content: "Glättegefahr · {{ t | round(0) | int }} °C";
+                position: absolute; left: 10px; top: 10px; z-index: 1;
+                padding: 4px 10px; border-radius: 999px;
+                background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
+                color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
+              }
+              @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+              @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
+              {% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
+            state: unavailable
+        card:
+          type: picture
+          image: /local/auto/passat/passat_b8.png
+          card_mod: *bild_passat
       # ---- Sicherheitsleiste (quellen und namen je Quelle in gleicher Reihenfolge) ----
       # 'on' = nicht verriegelt (device_class lock), siehe Kopf der Datei.
       - type: custom:button-card
@@ -1366,52 +1392,71 @@ cards:
         tap_action:
           action: none
         styles: *header_styles
-      - type: picture
-        image_entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
-        # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-        # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-        # ein eigener Stil statt eines Ankers.
-        card_mod:
-          style: |
-            ha-card {
-              position: relative !important;
-              border-radius: 16px !important;
-              overflow: hidden !important;
-              border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
-              box-shadow: none !important;
-              background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
-            }
-            ha-card img {
-              width: 135% !important;
-              max-width: none !important;
-              margin: -5.7% -21.7% -10.5% -13.3% !important;
-            }
-            {% set t = states('sensor.garage_volkswagen_fin_touran_aussentemperatur') | float(99) %}
-            {% if t < 4 %}
-            ha-card::after {
-              content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-              box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
-              --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
-              background-image:
-                radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
-              opacity: 0.6;
-              animation: au-funkel 2.8s ease-in-out 3;
-            }
-            ha-card::before {
-              content: "Glättegefahr · {{ t | round(0) | int }} °C";
-              position: absolute; left: 10px; top: 10px; z-index: 1;
-              padding: 4px 10px; border-radius: 999px;
-              background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
-              color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
-            }
-            @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-            @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
-            {% endif %}
+      # ---- Fahrzeugbild: VW-Bild aus vag_connect, ersatzweise feste Datei ----
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+            state_not: unavailable
+        card:
+          type: picture
+          image_entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
+          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
+          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          card_mod: &bild_touran
+            style: |
+              ha-card {
+                position: relative !important;
+                border-radius: 16px !important;
+                overflow: hidden !important;
+                border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+                box-shadow: none !important;
+                background: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+              }
+              {% if not is_state('image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left', 'unavailable') %}
+              ha-card img {
+                width: 135% !important;
+                max-width: none !important;
+                margin: -5.7% -21.7% -10.5% -13.3% !important;
+              }
+              {% endif %}
+              {% set t = states('sensor.garage_volkswagen_fin_touran_aussentemperatur') | float(none) %}
+              {% if t is none %}{% set t = states('sensor.touran_highline_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
+              {% if t < 4 %}
+              ha-card::after {
+                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 28%, transparent));
+                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--owlet-dunkel-anteil, 100%), color-mix(in srgb, var(--owlet-eis, #cfe3f2) 95%, transparent));
+                background-image:
+                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
+                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
+                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                opacity: 0.6;
+                animation: au-funkel 2.8s ease-in-out 3;
+              }
+              ha-card::before {
+                content: "Glättegefahr · {{ t | round(0) | int }} °C";
+                position: absolute; left: 10px; top: 10px; z-index: 1;
+                padding: 4px 10px; border-radius: 999px;
+                background: var(--owlet-flaeche-erhoeht, #222b3c); border: 1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);
+                color: var(--owlet-blau, #7fb3d5); font-size: 11.5px; font-weight: 600; line-height: 1.4;
+              }
+              @keyframes au-funkel { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+              @media (prefers-reduced-motion: reduce) { ha-card::after { animation: none; } }
+              {% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
+            state: unavailable
+        card:
+          type: picture
+          image: /local/auto/touran/touran.png
+          card_mod: *bild_touran
       - type: custom:button-card
         template: owlet_auto_fx
         entity: binary_sensor.garage_volkswagen_fin_touran_turen_verriegelt
