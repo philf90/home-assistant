@@ -51,6 +51,10 @@
 # es lesen. Kopieren nutzt mit HTTPS die Zwischenablage-API, per HTTP den
 # aelteren Weg ueber execCommand('copy'); klappt beides nicht, meldet das
 # Pop-up "Kopieren nicht moeglich, bitte ablesen".
+# Tippen wie im Flugradar: button-card gibt dem Pop-up-Inhalt ohne Aktion
+# pointer-events: none und ruft bei touchend preventDefault() auf, am Handy
+# kommt dann kein click. Auge und Kopieren setzen pointer-events: auto und
+# loesen ueber window.__owletWlan.tipp bei touchend oder click aus.
 #
 # Voraussetzung: custom:button-card, custom:bubble-card, card-mod (HACS),
 # UniFi Network mit Admin-Konto, QR-Bilder der WLANs aktiviert, Text-Helfer
@@ -291,13 +295,78 @@ cards:
               const AUGE = 'M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z';
               const AUGE_ZU = 'M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z';
               const KOPIE = 'M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z';
-              const knopf = 'width:36px;height:36px;padding:0;border-radius:11px;display:grid;place-items:center;cursor:pointer;color:var(--owlet-label, #b4c0cf);background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
-              // Auge: Text und Icon tauschen. Der Zustand lebt nur im DOM dieses Geraets
-              // und endet beim naechsten Neuzeichnen (spaetestens Token-Tausch, 5 min).
-              const zeigen = "event.stopPropagation();const w=this.closest('[data-pw]');const s=w.querySelector('[data-wert]');const auf=w.dataset.offen!=='1';w.dataset.offen=auf?'1':'0';s.textContent=auf?w.dataset.pw:'" + PUNKTE + "';s.style.fontFamily=auf?'" + MONO + "':'';s.style.letterSpacing=auf?'0.02em':'0.18em';this.querySelector('[data-auf]').style.display=auf?'none':'flex';this.querySelector('[data-zu]').style.display=auf?'flex':'none';this.setAttribute('aria-label',auf?'Passwort verbergen':'Passwort anzeigen');";
-              // Kopieren: Zwischenablage-API gibt es nur mit HTTPS; per HTTP (lokale IP)
-              // Rueckfall auf ein markiertes Textfeld und execCommand('copy').
-              const kopieren = "event.stopPropagation();const w=this.closest('[data-pw]');const t=w.dataset.pw;const m=w.querySelector('[data-meldung]');const alt=()=>{const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;';w.appendChild(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy');}catch(e){}a.remove();m.textContent=ok?'Passwort kopiert':'Kopieren nicht möglich, bitte ablesen';};const api=window.isSecureContext?navigator.clipboard:null;if(api){api.writeText(t).then(()=>{m.textContent='Passwort kopiert';},alt);}else{alt();}";
+              // Tippziele wie im Flugradar (flugradar-templates.yaml): button-card gibt
+              // Karten ohne Aktion pointer-events: none und ruft bei touchend
+              // preventDefault() auf, am Handy kommt dann kein click. Die Knoepfe setzen
+              // pointer-events: auto und loesen bei touchend (echter Tipp: unter 10 px,
+              // unter 800 ms) oder click aus; ein click direkt nach touchend zaehlt nicht.
+              const knopf = 'width:36px;height:36px;padding:0;border-radius:11px;display:grid;place-items:center;cursor:pointer;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;color:var(--owlet-label, #b4c0cf);background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+              // Funktionen einmal pro Seite in window.__owletWlan. VERSION bei jeder
+              // Aenderung an diesem Block erhoehen, sonst behaelt eine offene Seite den alten.
+              const VERSION = 1;
+              if (!window.__owletWlan || window.__owletWlan.version !== VERSION) {
+                const wl = { version: VERSION };
+                wl.tipp = (e, el, fn) => {
+                  e.stopPropagation();
+                  if (e.type === 'touchstart') {
+                    const t = e.touches && e.touches[0];
+                    wl._t = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+                    return;
+                  }
+                  if (e.type === 'touchend') {
+                    const t = e.changedTouches && e.changedTouches[0], st = wl._t;
+                    wl._t = null;
+                    if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+                    if (e.cancelable) e.preventDefault();
+                    wl._z = Date.now();
+                    wl[fn](el);
+                    return;
+                  }
+                  if (e.type === 'click') {
+                    e.preventDefault();
+                    if (Date.now() - (wl._z || 0) < 700) return;
+                    wl[fn](el);
+                  }
+                };
+                // Auge: Text und Icon tauschen. Der Zustand lebt nur im DOM dieses
+                // Geraets und endet beim naechsten Neuzeichnen (spaetestens Token-Tausch).
+                wl.zeigen = (k) => {
+                  const w = k.closest('[data-pw]'), s = w.querySelector('[data-wert]');
+                  const auf = w.dataset.offen !== '1';
+                  w.dataset.offen = auf ? '1' : '0';
+                  s.textContent = auf ? w.dataset.pw : PUNKTE;
+                  s.style.fontFamily = auf ? MONO : '';
+                  s.style.letterSpacing = auf ? '0.02em' : '0.18em';
+                  k.querySelector('[data-auf]').style.display = auf ? 'none' : 'flex';
+                  k.querySelector('[data-zu]').style.display = auf ? 'flex' : 'none';
+                  k.setAttribute('aria-label', auf ? 'Passwort verbergen' : 'Passwort anzeigen');
+                };
+                // Kopieren: Zwischenablage-API gibt es nur mit HTTPS; per HTTP (lokale IP)
+                // Rueckfall auf ein markiertes Textfeld und execCommand('copy').
+                wl.kopieren = (k) => {
+                  const w = k.closest('[data-pw]'), t = w.dataset.pw, m = w.querySelector('[data-meldung]');
+                  const fertig = (ok) => { m.textContent = ok ? 'Passwort kopiert' : 'Kopieren nicht möglich, bitte ablesen'; };
+                  const alt = () => {
+                    const a = document.createElement('textarea');
+                    a.value = t;
+                    a.setAttribute('readonly', '');
+                    a.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+                    w.appendChild(a);
+                    a.focus();
+                    a.select();
+                    a.setSelectionRange(0, t.length);
+                    let ok = false;
+                    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+                    a.remove();
+                    fertig(ok);
+                  };
+                  const api = window.isSecureContext ? navigator.clipboard : null;
+                  if (api) api.writeText(t).then(() => fertig(true), alt);
+                  else alt();
+                };
+                window.__owletWlan = wl;
+              }
+              const tippAttr = (fn) => `ontouchstart="window.__owletWlan.tipp(event,this)" ontouchend="window.__owletWlan.tipp(event,this,'${fn}')" onclick="window.__owletWlan.tipp(event,this,'${fn}')"`;
               const zeile = (titel, inhalt, rechts) => `<div style="display:grid;grid-template-columns:72px minmax(0, 1fr) auto;align-items:center;gap:10px;padding:9px 10px 9px 12px;min-height:52px;">
                 <span style="font-size:12.5px;color:${M};">${titel}</span>${inhalt}${rechts || '<span></span>'}</div>`;
               const pwInhalt = pw
@@ -305,10 +374,10 @@ cards:
                 : `<span style="font-size:13px;color:${M};">nicht hinterlegt</span>`;
               const pwKnoepfe = pw
                 ? `<span style="display:flex;gap:6px;">
-                    <button type="button" aria-label="Passwort anzeigen" onclick="${zeigen}" style="${knopf}"><span data-auf style="display:flex;">${svg(AUGE)}</span><span data-zu style="display:none;">${svg(AUGE_ZU)}</span></button>
-                    <button type="button" aria-label="Passwort kopieren" onclick="${kopieren}" style="${knopf}">${svg(KOPIE)}</button></span>`
+                    <button type="button" aria-label="Passwort anzeigen" ${tippAttr('zeigen')} style="${knopf}"><span data-auf style="display:flex;pointer-events:none;">${svg(AUGE)}</span><span data-zu style="display:none;pointer-events:none;">${svg(AUGE_ZU)}</span></button>
+                    <button type="button" aria-label="Passwort kopieren" ${tippAttr('kopieren')} style="${knopf}"><span style="display:flex;pointer-events:none;">${svg(KOPIE)}</span></button></span>`
                 : '';
-              const zugang = !an ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;">
+              const zugang = !an ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;pointer-events:auto;cursor:default;">
                 <div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;">
                   ${zeile('Netz', `<span style="font-size:14.5px;color:${T};overflow-wrap:anywhere;min-width:0;">${esc(name)}</span>`)}
                   <div style="height:1px;background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>
