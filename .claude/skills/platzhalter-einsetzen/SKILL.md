@@ -1,6 +1,6 @@
 ---
 name: platzhalter-einsetzen
-description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, weather.wohnort, sensor.warnregion_*, sensor.claude_usage_konto_*, Tankstellen (tankstelle_<n>), Verbandsgemeinde (VG Wohnort), Kennzeichen, unique_id, Seriennummern/MAC/FIN/IEEE/Vornamen in Entity-IDs, Benutzer-IDs) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
+description: Anonymisierte Platzhalter (person.bewohner, sensor.iphone_*, notify.mobile_app_iphone, sensor.pv_anlage_*, weather.wohnort, sensor.warnregion_*, sensor.claude_usage_konto_*, Tankstellen (tankstelle_<n>), Verbandsgemeinde (VG Wohnort), WLAN-Entitaeten (wlan_heim/wlan_gast), Kennzeichen, unique_id, Seriennummern/MAC/FIN/IEEE/Vornamen in Entity-IDs, Benutzer-IDs) in einer Karte oder View aus diesem Repo durch die echten Entity-IDs der eigenen Home-Assistant-Instanz ersetzen. Verwenden, wenn eine Datei aus dem Repo in die Instanz uebernommen werden soll, wenn eine eingefuegte Karte leer bleibt oder "Entitaet nicht verfuegbar" meldet, und bevor neue oder geaenderte Dateien mit persoenlichen Angaben committet werden.
 ---
 
 # Platzhalter einsetzen
@@ -29,7 +29,7 @@ wiederholt sie nicht.
 1. **Platzhalter in der Zieldatei finden.** Die Zeile `Platzhalter:` im
    Kopfblock der Datei lesen und die Datei mit den Mustern aus
    `design/platzhalter.yaml` durchsuchen, z. B.:
-   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|claude_usage_konto|[Tt]ankstelle[ _][1-4]|VG Wohnort' <datei>`
+   `grep -nE 'person\.bewohner|sensor\.iphone_|notify\.mobile_app_iphone|pv_anlage_|AB - (CD 123|EF 456)|passat_(fenster|tueren)_kombiniert|<breite>|<laenge>|seriennr|shelly[a-z0-9]*_mac|fin_(passat|touran)|ieee_adresse|kind_[12]|benutzer_id_[12]|weather\.wohnort|sensor\.warnregion_|claude_usage_konto|[Tt]ankstelle[ _][1-4]|VG Wohnort|wlan_(heim|gast)' <datei>`
    Fuer jeden Treffer die Suffixe notieren (z. B. `battery_level`,
    `hausbedarf`).
 
@@ -49,6 +49,11 @@ wiederholt sie nicht.
      Benutzer-IDs der Instanz. Den Nutzer fragen, welcher Benutzer jeweils
      gemeint ist, oder ihn bitten, den Benutzer im View- bzw. Karteneditor
      unter *Sichtbarkeit* auszuwaehlen (HA setzt die ID dann selbst ein).
+   - `wlan_heim`/`wlan_gast` (`image.wlan_*_qr_code`, `switch.wlan_gast`):
+     Entitaeten der UniFi-Integration, deren ID HA aus dem Netznamen bildet.
+     Per `ha_search` mit `domain_filter="image"` bzw. `"switch"` suchen;
+     fehlen sie, hat das UniFi-Konto der Integration keine Admin-Rechte oder
+     das QR-Bild ist noch deaktiviert. Dann den Nutzer fragen, statt zu raten.
 
 3. **Zuordnung vorlegen.** Tabelle Platzhalter -> echte ID mit Anzahl der
    Ersetzungen zeigen und Bestaetigung abwarten.

@@ -1,0 +1,165 @@
+# ============================================================================
+# WLAN-QR – aufklappbar, Heim- und Gaeste-WLAN
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        button-card, card-mod, expander-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wlan_heim/wlan_gast
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# WLAN-QR (aufklappbar) mit einem Code je Netz, nebeneinander
+#
+# Unterschied zu wlan-karte.yaml (archiv): Statt einer picture-Karte ueber die
+# volle Breite zeichnet eine button-card die Codes aus der Liste "netze".
+# Ein Netz zeigt einen Code mit hoechstens 210 px Breite, zwei Netze stehen in
+# zwei Spalten; unter jedem Code steht der Netzname, darunter ein Hinweis.
+# Die Kopfzeile nennt die gerade gezeigten Netze statt eines festen Textes.
+#
+# Liste "netze" (YAML-Anker, gilt fuer Kopf und Codes):
+#   name      Anzeigename unter dem Code und in der Kopfzeile
+#   qr        Bildpfad (/local/...) oder Bild-Entitaet (image.*)
+#   schalter  optional: Netz nur zeigen, solange diese Entitaet "on" ist;
+#             fehlt die Entitaet, bleibt das Netz ausgeblendet
+#
+# Gaeste-WLAN: Der Eintrag steht schon in der Liste und bleibt unsichtbar, bis
+# es switch.wlan_gast gibt und er eingeschaltet ist. QR-Bild und WLAN-Schalter
+# legt die UniFi-Integration nur an, wenn ihr UniFi-Konto Admin-Rechte hat;
+# das QR-Bild ist danach standardmaessig deaktiviert und muss in HA aktiviert
+# werden. Die Bild-Entitaet erzeugt den Code neu, sobald sich das Passwort
+# aendert. Fuer das Heim-WLAN dann qr auf image.wlan_heim_qr_code umstellen.
+# Neue Netz-Entitaeten auch in triggers_update eintragen (Anker trigger):
+# HA tauscht den Token in entity_picture alle 5 Minuten.
+#
+# Voraussetzung: custom:expander-card, custom:button-card, card-mod (HACS),
+# UniFi Network fuer das Gaeste-WLAN.
+type: custom:expander-card
+expanded: false
+clear: false
+clear-children: true
+title-card:
+  type: custom:button-card
+  show_icon: true
+  show_name: true
+  show_label: true
+  show_state: false
+  icon: mdi:wifi
+  name: WLAN
+  variables:
+    netze: &netze
+      - name: Heim-WLAN
+        qr: /local/wlan/ui-wlan-qr.png
+      - name: Gäste-WLAN
+        qr: image.wlan_gast_qr_code
+        schalter: switch.wlan_gast
+  triggers_update: &trigger
+    - switch.wlan_gast
+    - image.wlan_gast_qr_code
+  label: |
+    [[[
+      const an = (variables.netze || []).filter((n) => !n.schalter || (states[n.schalter] && states[n.schalter].state === 'on'));
+      return an.map((n) => n.name).join(' · ');
+    ]]]
+  tap_action:
+    action: none
+  styles:
+    card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 2px
+    grid:
+      - grid-template-areas: '"i n" "i l"'
+      - grid-template-columns: min-content 1fr
+      - grid-template-rows: min-content min-content
+    img_cell:
+      - width: 46px
+      - height: 46px
+      - border-radius: 14px
+      - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent)'
+      - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
+      - margin-right: 15px
+    icon:
+      - width: 24px
+      - height: 24px
+      - color: 'var(--owlet-blau, #7fb3d5)'
+    name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 18px
+      - font-weight: 700
+      - letter-spacing: -0.02em
+      - color: 'var(--owlet-text, #f2f5f8)'
+    label:
+      - justify-self: start
+      - align-self: start
+      - font-size: 13px
+      - color: 'var(--owlet-text-sekundaer, #8794a5)'
+      - margin-top: 2px
+cards:
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    variables:
+      netze: *netze
+    triggers_update: *trigger
+    tap_action:
+      action: none
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 4px 0 2px
+      grid:
+        - grid-template-areas: '"codes"'
+        - grid-template-columns: 1fr
+      custom_fields:
+        codes:
+          - width: 100%
+    custom_fields:
+      codes: |
+        [[[
+          const M = 'var(--owlet-text-sekundaer, #8794a5)';
+          const L = 'var(--owlet-label, #b4c0cf)';
+          const netze = (variables.netze || []).filter((n) => !n.schalter || (states[n.schalter] && states[n.schalter].state === 'on'));
+          // Bildpfad direkt, Bild-Entitaet ueber entity_picture (mit Token)
+          const quelle = (n) => {
+            if (!String(n.qr).startsWith('image.')) return n.qr;
+            const s = states[n.qr];
+            return s && s.state !== 'unavailable' ? s.attributes.entity_picture : '';
+          };
+          const zelle = (n) => {
+            const src = quelle(n);
+            const code = src
+              ? `<img src="${src}" alt="QR-Code ${n.name}" style="display:block;width:100%;height:auto;border-radius:14px;">`
+              : `<div style="aspect-ratio:1;border-radius:14px;border:1px dashed var(--owlet-aus, #3a4453);display:grid;place-items:center;padding:10px;text-align:center;font-size:12px;color:${M};">QR-Code nicht verfügbar</div>`;
+            return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;">
+              ${code}
+              <span style="font-size:13px;font-weight:650;color:${L};">${n.name}</span></div>`;
+          };
+          const spalten = netze.length > 1 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 210px)';
+          return `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:grid;grid-template-columns:${spalten};justify-content:center;gap:12px;">${netze.map(zelle).join('')}</div>
+            <div style="font-size:12.5px;color:${M};text-align:center;">Kamera-App öffnen und auf den Code richten</div></div>`;
+        ]]]
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 22px !important;
+      border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+      box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 14px 16px !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+    }
+    /* Aufklapp-Pfeil dezent */
+    ha-card ha-icon,
+    ha-card .expander-icon,
+    ha-card mwc-icon-button {
+      color: var(--owlet-muted, #6e7988) !important;
+    }

@@ -105,9 +105,10 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`unifi-udm-system-karte-v2.yaml`](netzwerk/unifi-udm-system-karte-v2.yaml) | karte | UDM SE System v2 – CPU, RAM, Temperatur, PoE | button-card, card-mod | – | aktiv |
 | [`unifi-unas-pro-karte.yaml`](netzwerk/unifi-unas-pro-karte.yaml) | karte | UNAS Pro – Speicher, CPU, RAM, Schaechte | button-card, card-mod | – | aktiv |
 | [`unifi-verlauf-karte.yaml`](netzwerk/unifi-verlauf-karte.yaml) | karte | Netzwerk-Verlauf – aufklappbar | apexcharts-card, button-card, card-mod, expander-card, uptime-card | – | aktiv |
-| [`wlan-karte.yaml`](netzwerk/wlan-karte.yaml) | karte | WLAN-QR – aufklappbar | button-card, card-mod, expander-card | – | aktiv |
+| [`wlan-karte-v2.yaml`](netzwerk/wlan-karte-v2.yaml) | karte | WLAN-QR – aufklappbar, Heim- und Gaeste-WLAN | button-card, card-mod, expander-card | `wlan_heim/wlan_gast` | aktiv |
 | [`homematic-karte.yaml`](netzwerk/archiv/homematic-karte.yaml) | karte | Homematic IP / OpenCCU | button-card, card-mod, homematicip-system-health-card | `*_seriennr` | archiv, ersetzt durch `homematic-view.yaml` |
 | [`unifi-udm-system-karte.yaml`](netzwerk/archiv/unifi-udm-system-karte.yaml) | karte | UDM SE Systemzustand v1 | button-card, card-mod | – | archiv, ersetzt durch `unifi-udm-system-karte-v2.yaml` |
+| [`wlan-karte.yaml`](netzwerk/archiv/wlan-karte.yaml) | karte | WLAN-QR – aufklappbar | button-card, card-mod, expander-card | – | archiv, ersetzt durch `wlan-karte-v2.yaml` |
 
 ## fahrzeuge
 
