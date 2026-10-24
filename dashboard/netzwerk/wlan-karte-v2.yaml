@@ -26,6 +26,8 @@
 #   qr        Bild-Entitaet "QR-Code" des WLANs
 #   schalter  Schalter "Aktiviert" des WLANs; aus: Pille "aus", Pop-up ohne
 #             Code
+#   passwort  Text-Helfer mit dem WLAN-Passwort (input_text, Modus password,
+#             max 63 Zeichen); leer: Pop-up zeigt "nicht hinterlegt"
 # Ein weiteres Netz: Anker anlegen, in netze eintragen, eine Zeile und ein
 # Pop-up mit eigenem Hash ergaenzen, Entitaeten in triggers_update.
 #
@@ -40,8 +42,19 @@
 # per Wischen nach unten, Tipp daneben oder Escape. Hintergrund wie im
 # Flugradar-View (owlet-seite dunkel, owlet-flaeche-erhoeht hell).
 #
+# Passwort im Pop-up: Die UniFi-Integration stellt das Passwort nicht als
+# Entitaet bereit, es kommt aus je einem Text-Helfer (von Hand gepflegt, nur
+# in der Instanz). Wechselt das Passwort in UniFi, folgt der QR-Code selbst,
+# der Helfer erst nach dem Nachtragen. Das Passwort ist zuerst verborgen; das
+# Auge deckt es auf (nur auf diesem Geraet, bis zum naechsten Neuzeichnen).
+# Verbergen ist ein Sichtschutz: jeder Benutzer mit Zugang zum Dashboard kann
+# es lesen. Kopieren nutzt mit HTTPS die Zwischenablage-API, per HTTP den
+# aelteren Weg ueber execCommand('copy'); klappt beides nicht, meldet das
+# Pop-up "Kopieren nicht moeglich, bitte ablesen".
+#
 # Voraussetzung: custom:button-card, custom:bubble-card, card-mod (HACS),
-# UniFi Network mit Admin-Konto, QR-Bilder der WLANs aktiviert.
+# UniFi Network mit Admin-Konto, QR-Bilder der WLANs aktiviert, Text-Helfer
+# input_text.wlan_intern_passwort und input_text.wlan_gaeste_passwort.
 type: vertical-stack
 cards:
   # ======================= Sichtbare Karte =======================
@@ -73,19 +86,23 @@ cards:
               clients: sensor.wlan_heim_clients
               qr: image.wlan_heim_qr_code
               schalter: switch.wlan_heim_aktiviert
+              passwort: input_text.wlan_intern_passwort
             - &gaeste
               rolle: Gäste
               icon: mdi:account-group
               clients: sensor.wlan_gast_clients
               qr: image.wlan_gast_qr_code
               schalter: switch.wlan_gast_aktiviert
+              passwort: input_text.wlan_gaeste_passwort
         triggers_update: &trigger
           - sensor.wlan_heim_clients
           - image.wlan_heim_qr_code
           - switch.wlan_heim_aktiviert
+          - input_text.wlan_intern_passwort
           - sensor.wlan_gast_clients
           - image.wlan_gast_qr_code
           - switch.wlan_gast_aktiviert
+          - input_text.wlan_gaeste_passwort
         label: |
           [[[
             const an = (variables.netze || []).filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
@@ -265,6 +282,40 @@ cards:
                 : (src
                   ? `<img src="${esc(src)}" alt="QR-Code ${esc(name)}" style="display:block;width:min(100%, 250px);height:auto;border-radius:16px;">`
                   : `<div style="${rahmen}">QR-Code nicht verfügbar</div>`);
+              // Zugang fuer Geraete ohne Kamera: Netzname und Passwort aus dem Text-Helfer
+              const p = n.passwort ? states[n.passwort] : null;
+              const pw = p && !['unknown', 'unavailable', ''].includes(p.state) ? p.state : '';
+              const PUNKTE = '••••••••••';
+              const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+              const svg = (pfad) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="${pfad}"/></svg>`;
+              const AUGE = 'M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z';
+              const AUGE_ZU = 'M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z';
+              const KOPIE = 'M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z';
+              const knopf = 'width:36px;height:36px;padding:0;border-radius:11px;display:grid;place-items:center;cursor:pointer;color:var(--owlet-label, #b4c0cf);background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+              // Auge: Text und Icon tauschen. Der Zustand lebt nur im DOM dieses Geraets
+              // und endet beim naechsten Neuzeichnen (spaetestens Token-Tausch, 5 min).
+              const zeigen = "event.stopPropagation();const w=this.closest('[data-pw]');const s=w.querySelector('[data-wert]');const auf=w.dataset.offen!=='1';w.dataset.offen=auf?'1':'0';s.textContent=auf?w.dataset.pw:'" + PUNKTE + "';s.style.fontFamily=auf?'" + MONO + "':'';s.style.letterSpacing=auf?'0.02em':'0.18em';this.querySelector('[data-auf]').style.display=auf?'none':'flex';this.querySelector('[data-zu]').style.display=auf?'flex':'none';this.setAttribute('aria-label',auf?'Passwort verbergen':'Passwort anzeigen');";
+              // Kopieren: Zwischenablage-API gibt es nur mit HTTPS; per HTTP (lokale IP)
+              // Rueckfall auf ein markiertes Textfeld und execCommand('copy').
+              const kopieren = "event.stopPropagation();const w=this.closest('[data-pw]');const t=w.dataset.pw;const m=w.querySelector('[data-meldung]');const alt=()=>{const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;';w.appendChild(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy');}catch(e){}a.remove();m.textContent=ok?'Passwort kopiert':'Kopieren nicht möglich, bitte ablesen';};const api=window.isSecureContext?navigator.clipboard:null;if(api){api.writeText(t).then(()=>{m.textContent='Passwort kopiert';},alt);}else{alt();}";
+              const zeile = (titel, inhalt, rechts) => `<div style="display:grid;grid-template-columns:72px minmax(0, 1fr) auto;align-items:center;gap:10px;padding:9px 10px 9px 12px;min-height:52px;">
+                <span style="font-size:12.5px;color:${M};">${titel}</span>${inhalt}${rechts || '<span></span>'}</div>`;
+              const pwInhalt = pw
+                ? `<span data-wert style="font-size:14.5px;color:${T};letter-spacing:0.18em;overflow-wrap:anywhere;min-width:0;">${PUNKTE}</span>`
+                : `<span style="font-size:13px;color:${M};">nicht hinterlegt</span>`;
+              const pwKnoepfe = pw
+                ? `<span style="display:flex;gap:6px;">
+                    <button type="button" aria-label="Passwort anzeigen" onclick="${zeigen}" style="${knopf}"><span data-auf style="display:flex;">${svg(AUGE)}</span><span data-zu style="display:none;">${svg(AUGE_ZU)}</span></button>
+                    <button type="button" aria-label="Passwort kopieren" onclick="${kopieren}" style="${knopf}">${svg(KOPIE)}</button></span>`
+                : '';
+              const zugang = !an ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;">
+                <div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;">
+                  ${zeile('Netz', `<span style="font-size:14.5px;color:${T};overflow-wrap:anywhere;min-width:0;">${esc(name)}</span>`)}
+                  <div style="height:1px;background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>
+                  ${zeile('Passwort', pwInhalt, pwKnoepfe)}</div>
+                <div data-meldung style="font-size:12px;color:var(--owlet-gruen, #a6d49e);text-align:center;min-height:16px;"></div></div>`;
+              const hinweis = !an ? 'Einschalten in der UniFi-App'
+                : (pw ? 'Kamera-App öffnen und auf den Code richten, oder Netz wählen und Passwort eingeben' : 'Kamera-App öffnen und auf den Code richten');
               return `<div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
                 <div style="display:grid;grid-template-columns:auto minmax(0, 1fr);align-items:center;gap:14px;">
                   <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb, ${B} 16%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};">
@@ -273,7 +324,8 @@ cards:
                     <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;color:${T};line-height:1.2;overflow-wrap:anywhere;">${esc(name)}</div>
                     <div style="font-size:13px;color:${M};margin-top:2px;">${esc(zeile2)}</div></div></div>
                 <div style="display:flex;justify-content:center;">${code}</div>
-                <div style="font-size:12.5px;color:${M};text-align:center;">${an ? 'Kamera-App öffnen und auf den Code richten' : 'Einschalten in der UniFi-App'}</div>
+                ${zugang}
+                <div style="font-size:12.5px;color:${M};text-align:center;">${hinweis}</div>
               </div>`;
             ]]]
 
