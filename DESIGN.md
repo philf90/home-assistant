@@ -293,7 +293,7 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `top-navigation-karte.yaml`) sowie von der Home-View
 `haustuer-ereignis-karte.yaml`, `person-presence-karte.yaml`,
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
-`pollenflug-karte.yaml`, `wlan-karte.yaml`, `muellabfuhr-karte-v2.yaml`,
+`pollenflug-karte.yaml`, `wlan-karte-v2.yaml`, `muellabfuhr-karte-v2.yaml`,
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-view.yaml`,
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)

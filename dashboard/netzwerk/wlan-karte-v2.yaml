@@ -1,0 +1,425 @@
+# ============================================================================
+# WLAN – Netzliste mit QR-Pop-ups
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        bubble-card, button-card, card-mod
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wlan_heim/wlan_gast
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# WLAN-Karte als Netzliste: eine Zeile je WLAN, der QR-Code im Pop-up
+#
+# Unterschied zu wlan-karte.yaml (archiv): Statt eines festen PNG hinter einer
+# aufklappbaren Karte zeigt die Karte je WLAN eine Zeile mit Netzname,
+# verbundenen Geraeten, Status-Pille (aktiv/aus) und QR-Knopf. Ein Tipp auf
+# die Zeile oeffnet ein Bubble-Pop-up mit dem QR-Code aus der
+# UniFi-Integration. Netzname = Name des UniFi-WLAN-Geraets (SSID); er steht
+# nicht in der Datei, sondern kommt zur Laufzeit aus Home Assistant.
+#
+# Netze (YAML-Anker &intern, &gaeste; Kopf, Zeilen und Pop-ups lesen sie):
+#   rolle     Anzeige, wenn das WLAN-Geraet fehlt, und im Pop-up
+#   icon      Icon der Zeile und des Pop-ups
+#   clients   Sensor "Clients" des WLANs; ueber sein Geraet kommt der Name
+#   qr        Bild-Entitaet "QR-Code" des WLANs
+#   schalter  Schalter "Aktiviert" des WLANs; aus: Pille "aus", Pop-up ohne
+#             Code
+#   passwort  Text-Helfer mit dem WLAN-Passwort (input_text, Modus password,
+#             max 63 Zeichen); leer: Pop-up zeigt "nicht hinterlegt"
+# Ein weiteres Netz: Anker anlegen, in netze eintragen, eine Zeile und ein
+# Pop-up mit eigenem Hash ergaenzen, Entitaeten in triggers_update.
+#
+# Die UniFi-Integration legt QR-Bild und Schalter nur an, wenn ihr Konto in
+# der Network-App die Site-Rolle admin hat. Das QR-Bild ist danach
+# standardmaessig deaktiviert und muss in HA aktiviert werden. Es erzeugt den
+# Code neu, sobald sich das Passwort aendert. Alle Entitaeten stehen in
+# triggers_update (Anker trigger): HA tauscht den Token in entity_picture
+# alle 5 Minuten, das Pop-up muss das Bild dann neu laden.
+#
+# Pop-ups: Bubble Card ab 3.x mit "cards" (eigenstaendiges Pop-up), schliessen
+# per Wischen nach unten, Tipp daneben oder Escape. Hintergrund wie im
+# Flugradar-View (owlet-seite dunkel, owlet-flaeche-erhoeht hell).
+#
+# Passwort im Pop-up: Die UniFi-Integration stellt das Passwort nicht als
+# Entitaet bereit, es kommt aus je einem Text-Helfer (von Hand gepflegt, nur
+# in der Instanz). Wechselt das Passwort in UniFi, folgt der QR-Code selbst,
+# der Helfer erst nach dem Nachtragen. Das Passwort ist zuerst verborgen; das
+# Auge deckt es auf (nur auf diesem Geraet, bis zum naechsten Neuzeichnen).
+# Verbergen ist ein Sichtschutz: jeder Benutzer mit Zugang zum Dashboard kann
+# es lesen. Kopieren nutzt mit HTTPS die Zwischenablage-API, per HTTP den
+# aelteren Weg ueber execCommand('copy'); klappt beides nicht, meldet das
+# Pop-up "Kopieren nicht moeglich, bitte ablesen".
+# Tippen wie im Flugradar: button-card gibt dem Pop-up-Inhalt ohne Aktion
+# pointer-events: none und ruft bei touchend preventDefault() auf, am Handy
+# kommt dann kein click. Auge und Kopieren setzen pointer-events: auto und
+# loesen ueber window.__owletWlan.tipp bei touchend oder click aus.
+#
+# Voraussetzung: custom:button-card, custom:bubble-card, card-mod (HACS),
+# UniFi Network mit Admin-Konto, QR-Bilder der WLANs aktiviert, Text-Helfer
+# input_text.wlan_intern_passwort und input_text.wlan_gaeste_passwort.
+type: vertical-stack
+cards:
+  # ======================= Sichtbare Karte =======================
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 14px 16px !important;
+          gap: 10px !important;
+        }
+    cards:
+      # ---------- Kopf ----------
+      - type: custom:button-card
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        icon: mdi:wifi
+        name: WLAN
+        variables:
+          netze:
+            - &intern
+              rolle: Intern
+              icon: mdi:home
+              clients: sensor.wlan_heim_clients
+              qr: image.wlan_heim_qr_code
+              schalter: switch.wlan_heim_aktiviert
+              passwort: input_text.wlan_intern_passwort
+            - &gaeste
+              rolle: Gäste
+              icon: mdi:account-group
+              clients: sensor.wlan_gast_clients
+              qr: image.wlan_gast_qr_code
+              schalter: switch.wlan_gast_aktiviert
+              passwort: input_text.wlan_gaeste_passwort
+        triggers_update: &trigger
+          - sensor.wlan_heim_clients
+          - image.wlan_heim_qr_code
+          - switch.wlan_heim_aktiviert
+          - input_text.wlan_intern_passwort
+          - sensor.wlan_gast_clients
+          - image.wlan_gast_qr_code
+          - switch.wlan_gast_aktiviert
+          - input_text.wlan_gaeste_passwort
+        label: |
+          [[[
+            const an = (variables.netze || []).filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
+            const summe = an.reduce((s, n) => {
+              const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
+              return isNaN(z) ? s : s + z;
+            }, 0);
+            if (!an.length) return 'kein WLAN aktiv';
+            return `${an.length} ${an.length === 1 ? 'Netz' : 'Netze'} · ${summe} ${summe === 1 ? 'Gerät' : 'Geräte'}`;
+          ]]]
+        tap_action:
+          action: none
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: min-content 1fr
+            - grid-template-rows: min-content min-content
+          img_cell:
+            - width: 46px
+            - height: 46px
+            - border-radius: 14px
+            - background: 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)'
+            - border: '1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)'
+            - margin-right: 14px
+          icon:
+            - width: 24px
+            - height: 24px
+            - color: 'var(--owlet-blau, #7fb3d5)'
+          name:
+            - justify-self: start
+            - align-self: end
+            - font-size: 18px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: 'var(--owlet-text, #f2f5f8)'
+          label:
+            - justify-self: start
+            - align-self: start
+            - font-size: 13px
+            - color: 'var(--owlet-text-sekundaer, #8794a5)'
+            - margin-top: 2px
+
+      # ---------- Zeile intern ----------
+      - type: custom:button-card
+        variables:
+          netz: *intern
+        triggers_update: *trigger
+        show_icon: false
+        show_name: false
+        show_label: false
+        show_state: false
+        tap_action:
+          action: navigate
+          navigation_path: '#wlan-intern'
+        styles: &zeile_styles
+          card:
+            - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
+            - border: '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+            - border-radius: 16px
+            - box-shadow: none
+            - padding: 10px 12px
+          grid:
+            - grid-template-areas: '"zeile"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            zeile:
+              - width: 100%
+        custom_fields: &zeile_felder
+          zeile: |
+            [[[
+              const n = variables.netz;
+              const B = 'var(--owlet-blau, #7fb3d5)', G = 'var(--owlet-gruen, #a6d49e)';
+              const T = 'var(--owlet-text, #f2f5f8)', M = 'var(--owlet-text-sekundaer, #8794a5)';
+              const ents = hass.entities || {}, devs = hass.devices || {};
+              const d = devs[(ents[n.clients] || {}).device_id];
+              const name = d ? (d.name_by_user || d.name) : n.rolle;
+              const esc = (t) => String(t).replace(/[&<>"]/g, (z) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[z]);
+              const an = !!(states[n.schalter] && states[n.schalter].state === 'on');
+              const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
+              const sub = !an ? 'ausgeschaltet' : (isNaN(z) ? n.rolle : `${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden`);
+              // an: Blau getoent (0,16 / 0,24), aus: neutrale Kachel
+              const kachel = an
+                ? `background:color-mix(in srgb, ${B} 16%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};`
+                : `background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--owlet-muted, #6e7988);`;
+              const pille = an
+                ? `color:${G};background:color-mix(in srgb, ${G} 12%, transparent);border:1px solid color-mix(in srgb, ${G} 24%, transparent);`
+                : `color:${M};background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));`;
+              return `<div style="display:grid;grid-template-columns:auto minmax(0, 1fr) auto auto;align-items:center;gap:12px;text-align:left;">
+                <div style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;${kachel}">
+                  <ha-icon icon="${n.icon}" style="--mdc-icon-size:21px;width:21px;height:21px;display:flex;color:inherit;"></ha-icon></div>
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:680;color:${T};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+                  <div style="font-size:12.5px;color:${M};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sub}</div></div>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:11px;white-space:nowrap;${pille}">
+                  <span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>${an ? 'aktiv' : 'aus'}</span>
+                <div style="width:38px;height:38px;border-radius:12px;display:grid;place-items:center;${kachel}">
+                  <ha-icon icon="mdi:qrcode" style="--mdc-icon-size:20px;width:20px;height:20px;display:flex;color:inherit;"></ha-icon></div>
+              </div>`;
+            ]]]
+
+      # ---------- Zeile Gaeste ----------
+      - type: custom:button-card
+        variables:
+          netz: *gaeste
+        triggers_update: *trigger
+        show_icon: false
+        show_name: false
+        show_label: false
+        show_state: false
+        tap_action:
+          action: navigate
+          navigation_path: '#wlan-gaeste'
+        styles: *zeile_styles
+        custom_fields: *zeile_felder
+
+  # ======================= Pop-up intern =======================
+  # Unsichtbar, bis die Zeile den Hash #wlan-intern setzt.
+  - type: custom:bubble-card
+    card_type: pop-up
+    hash: '#wlan-intern'
+    show_header: false
+    popup_mode: fit-content
+    with_bottom_offset: true
+    bg_opacity: '100'
+    # bg_color loest Bubble Card (v3.4.2) nur einmal auf; !important im
+    # eigenen CSS schlaegt den Inline-Wert (wie im Flugradar-View).
+    styles: &popup_hintergrund |
+      .bubble-pop-up {
+        --bubble-pop-up-background-color: color-mix(in srgb, var(--owlet-seite, #171d29) var(--owlet-dunkel-anteil, 100%), var(--owlet-flaeche-erhoeht, #222b3c)) !important;
+      }
+    cards:
+      - type: custom:button-card
+        variables:
+          netz: *intern
+        triggers_update: *trigger
+        show_icon: false
+        show_name: false
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: &popup_styles
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 4px 4px 8px
+          grid:
+            - grid-template-areas: '"inhalt"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            inhalt:
+              - width: 100%
+        custom_fields: &popup_felder
+          inhalt: |
+            [[[
+              const n = variables.netz;
+              const B = 'var(--owlet-blau, #7fb3d5)';
+              const T = 'var(--owlet-text, #f2f5f8)', M = 'var(--owlet-text-sekundaer, #8794a5)';
+              const ents = hass.entities || {}, devs = hass.devices || {};
+              const d = devs[(ents[n.clients] || {}).device_id];
+              const name = d ? (d.name_by_user || d.name) : n.rolle;
+              const esc = (t) => String(t).replace(/[&<>"]/g, (z) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[z]);
+              const an = !!(states[n.schalter] && states[n.schalter].state === 'on');
+              const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
+              const zeile2 = n.rolle + (an && !isNaN(z) ? ` · ${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden` : '');
+              const q = states[n.qr];
+              const src = q && q.state !== 'unavailable' ? q.attributes.entity_picture : '';
+              const rahmen = `width:min(100%, 250px);aspect-ratio:1;border-radius:16px;border:1px dashed var(--owlet-aus, #3a4453);display:grid;place-items:center;padding:16px;text-align:center;font-size:13px;color:${M};`;
+              const code = !an
+                ? `<div style="width:min(100%, 250px);border-radius:16px;border:1px dashed var(--owlet-aus, #3a4453);padding:18px 16px;text-align:center;font-size:13px;color:${M};">Dieses WLAN ist ausgeschaltet</div>`
+                : (src
+                  ? `<img src="${esc(src)}" alt="QR-Code ${esc(name)}" style="display:block;width:min(100%, 250px);height:auto;border-radius:16px;">`
+                  : `<div style="${rahmen}">QR-Code nicht verfügbar</div>`);
+              // Zugang fuer Geraete ohne Kamera: Netzname und Passwort aus dem Text-Helfer.
+              // button-card rendert Custom Fields mit class="ellipsis" (white-space: nowrap);
+              // die Kachel setzt white-space: normal, damit lange Passwoerter umbrechen
+              // statt unter die Knoepfe zu laufen.
+              const p = n.passwort ? states[n.passwort] : null;
+              const pw = p && !['unknown', 'unavailable', ''].includes(p.state) ? p.state : '';
+              const PUNKTE = '••••••••••';
+              const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+              const svg = (pfad) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="${pfad}"/></svg>`;
+              const AUGE = 'M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z';
+              const AUGE_ZU = 'M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z';
+              const KOPIE = 'M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z';
+              // Tippziele wie im Flugradar (flugradar-templates.yaml): button-card gibt
+              // Karten ohne Aktion pointer-events: none und ruft bei touchend
+              // preventDefault() auf, am Handy kommt dann kein click. Die Knoepfe setzen
+              // pointer-events: auto und loesen bei touchend (echter Tipp: unter 10 px,
+              // unter 800 ms) oder click aus; ein click direkt nach touchend zaehlt nicht.
+              const knopf = 'width:36px;height:36px;padding:0;border-radius:11px;display:grid;place-items:center;cursor:pointer;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;color:var(--owlet-label, #b4c0cf);background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+              // Funktionen einmal pro Seite in window.__owletWlan. VERSION bei jeder
+              // Aenderung an diesem Block erhoehen, sonst behaelt eine offene Seite den alten.
+              const VERSION = 1;
+              if (!window.__owletWlan || window.__owletWlan.version !== VERSION) {
+                const wl = { version: VERSION };
+                wl.tipp = (e, el, fn) => {
+                  e.stopPropagation();
+                  if (e.type === 'touchstart') {
+                    const t = e.touches && e.touches[0];
+                    wl._t = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null;
+                    return;
+                  }
+                  if (e.type === 'touchend') {
+                    const t = e.changedTouches && e.changedTouches[0], st = wl._t;
+                    wl._t = null;
+                    if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+                    if (e.cancelable) e.preventDefault();
+                    wl._z = Date.now();
+                    wl[fn](el);
+                    return;
+                  }
+                  if (e.type === 'click') {
+                    e.preventDefault();
+                    if (Date.now() - (wl._z || 0) < 700) return;
+                    wl[fn](el);
+                  }
+                };
+                // Auge: Text und Icon tauschen. Der Zustand lebt nur im DOM dieses
+                // Geraets und endet beim naechsten Neuzeichnen (spaetestens Token-Tausch).
+                wl.zeigen = (k) => {
+                  const w = k.closest('[data-pw]'), s = w.querySelector('[data-wert]');
+                  const auf = w.dataset.offen !== '1';
+                  w.dataset.offen = auf ? '1' : '0';
+                  s.textContent = auf ? w.dataset.pw : PUNKTE;
+                  s.style.fontFamily = auf ? MONO : '';
+                  s.style.letterSpacing = auf ? '0.02em' : '0.18em';
+                  k.querySelector('[data-auf]').style.display = auf ? 'none' : 'flex';
+                  k.querySelector('[data-zu]').style.display = auf ? 'flex' : 'none';
+                  k.setAttribute('aria-label', auf ? 'Passwort verbergen' : 'Passwort anzeigen');
+                };
+                // Kopieren: Zwischenablage-API gibt es nur mit HTTPS; per HTTP (lokale IP)
+                // Rueckfall auf ein markiertes Textfeld und execCommand('copy').
+                wl.kopieren = (k) => {
+                  const w = k.closest('[data-pw]'), t = w.dataset.pw, m = w.querySelector('[data-meldung]');
+                  const fertig = (ok) => { m.textContent = ok ? 'Passwort kopiert' : 'Kopieren nicht möglich, bitte ablesen'; };
+                  const alt = () => {
+                    const a = document.createElement('textarea');
+                    a.value = t;
+                    a.setAttribute('readonly', '');
+                    a.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+                    w.appendChild(a);
+                    a.focus();
+                    a.select();
+                    a.setSelectionRange(0, t.length);
+                    let ok = false;
+                    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+                    a.remove();
+                    fertig(ok);
+                  };
+                  const api = window.isSecureContext ? navigator.clipboard : null;
+                  if (api) api.writeText(t).then(() => fertig(true), alt);
+                  else alt();
+                };
+                window.__owletWlan = wl;
+              }
+              const tippAttr = (fn) => `ontouchstart="window.__owletWlan.tipp(event,this)" ontouchend="window.__owletWlan.tipp(event,this,'${fn}')" onclick="window.__owletWlan.tipp(event,this,'${fn}')"`;
+              const zeile = (titel, inhalt, rechts) => `<div style="display:grid;grid-template-columns:72px minmax(0, 1fr) auto;align-items:center;gap:10px;padding:9px 10px 9px 12px;min-height:52px;">
+                <span style="font-size:12.5px;color:${M};">${titel}</span>${inhalt}${rechts || '<span></span>'}</div>`;
+              const pwInhalt = pw
+                ? `<span data-wert style="font-size:14.5px;line-height:1.35;color:${T};letter-spacing:0.18em;overflow-wrap:anywhere;word-break:break-all;min-width:0;">${PUNKTE}</span>`
+                : `<span style="font-size:13px;color:${M};">nicht hinterlegt</span>`;
+              const pwKnoepfe = pw
+                ? `<span style="display:flex;gap:6px;">
+                    <button type="button" aria-label="Passwort anzeigen" ${tippAttr('zeigen')} style="${knopf}"><span data-auf style="display:flex;pointer-events:none;">${svg(AUGE)}</span><span data-zu style="display:none;pointer-events:none;">${svg(AUGE_ZU)}</span></button>
+                    <button type="button" aria-label="Passwort kopieren" ${tippAttr('kopieren')} style="${knopf}"><span style="display:flex;pointer-events:none;">${svg(KOPIE)}</span></button></span>`
+                : '';
+              const zugang = !an ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;pointer-events:auto;cursor:default;white-space:normal;">
+                <div style="background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;">
+                  ${zeile('SSID', `<span style="font-size:14.5px;color:${T};overflow-wrap:anywhere;min-width:0;">${esc(name)}</span>`)}
+                  <div style="height:1px;background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>
+                  ${zeile('Passwort', pwInhalt, pwKnoepfe)}</div>
+                <div data-meldung style="font-size:12px;color:var(--owlet-gruen, #a6d49e);text-align:center;min-height:16px;"></div></div>`;
+              const hinweis = !an ? 'Einschalten in der UniFi-App'
+                : (pw ? 'Kamera-App öffnen und auf den Code richten, oder Netz wählen und Passwort eingeben' : 'Kamera-App öffnen und auf den Code richten');
+              return `<div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
+                <div style="display:grid;grid-template-columns:auto minmax(0, 1fr);align-items:center;gap:14px;">
+                  <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb, ${B} 16%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};">
+                    <ha-icon icon="${n.icon}" style="--mdc-icon-size:24px;width:24px;height:24px;display:flex;color:inherit;"></ha-icon></div>
+                  <div style="min-width:0;">
+                    <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;color:${T};line-height:1.2;overflow-wrap:anywhere;">${esc(name)}</div>
+                    <div style="font-size:13px;color:${M};margin-top:2px;">${esc(zeile2)}</div></div></div>
+                <div style="display:flex;justify-content:center;">${code}</div>
+                ${zugang}
+                <div style="font-size:12.5px;color:${M};text-align:center;">${hinweis}</div>
+              </div>`;
+            ]]]
+
+  # ======================= Pop-up Gaeste =======================
+  - type: custom:bubble-card
+    card_type: pop-up
+    hash: '#wlan-gaeste'
+    show_header: false
+    popup_mode: fit-content
+    with_bottom_offset: true
+    bg_opacity: '100'
+    styles: *popup_hintergrund
+    cards:
+      - type: custom:button-card
+        variables:
+          netz: *gaeste
+        triggers_update: *trigger
+        show_icon: false
+        show_name: false
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        styles: *popup_styles
+        custom_fields: *popup_felder
