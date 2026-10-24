@@ -49,11 +49,14 @@ wiederholt sie nicht.
      Benutzer-IDs der Instanz. Den Nutzer fragen, welcher Benutzer jeweils
      gemeint ist, oder ihn bitten, den Benutzer im View- bzw. Karteneditor
      unter *Sichtbarkeit* auszuwaehlen (HA setzt die ID dann selbst ein).
-   - `wlan_heim`/`wlan_gast` (`image.wlan_*_qr_code`, `switch.wlan_gast`):
-     Entitaeten der UniFi-Integration, deren ID HA aus dem Netznamen bildet.
-     Per `ha_search` mit `domain_filter="image"` bzw. `"switch"` suchen;
-     fehlen sie, hat das UniFi-Konto der Integration keine Admin-Rechte oder
-     das QR-Bild ist noch deaktiviert. Dann den Nutzer fragen, statt zu raten.
+   - `wlan_heim`/`wlan_gast` (`sensor.wlan_*_clients`, `image.wlan_*_qr_code`,
+     `switch.wlan_*_aktiviert`): Entitaeten der UniFi-Integration, deren ID
+     HA aus dem Netznamen bildet. Welches Netz intern und welches fuer Gaeste
+     ist, fragt man den Nutzer. Dann mit `ha_get_device(entity_id=...)` am
+     Clients-Sensor alle drei IDs des WLAN-Geraets lesen; der Clients-Sensor
+     heisst teils ohne `_clients`. Fehlen Bild oder Schalter, hat das
+     UniFi-Konto keine Site-Rolle admin; ist das Bild deaktiviert, den Nutzer
+     fragen, bevor es aktiviert wird.
 
 3. **Zuordnung vorlegen.** Tabelle Platzhalter -> echte ID mit Anzahl der
    Ersetzungen zeigen und Bestaetigung abwarten.

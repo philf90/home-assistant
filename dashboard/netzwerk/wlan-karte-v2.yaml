@@ -1,5 +1,5 @@
 # ============================================================================
-# WLAN-QR – aufklappbar, Heim- und Gaeste-WLAN
+# WLAN-QR – aufklappbar, internes und Gaeste-WLAN
 # ----------------------------------------------------------------------------
 # Art:           karte
 # Bereich:       netzwerk
@@ -12,29 +12,30 @@
 # ============================================================================
 # WLAN-QR (aufklappbar) mit einem Code je Netz, nebeneinander
 #
-# Unterschied zu wlan-karte.yaml (archiv): Statt einer picture-Karte ueber die
-# volle Breite zeichnet eine button-card die Codes aus der Liste "netze".
-# Ein Netz zeigt einen Code mit hoechstens 210 px Breite, zwei Netze stehen in
-# zwei Spalten; unter jedem Code steht der Netzname, darunter ein Hinweis.
-# Die Kopfzeile nennt die gerade gezeigten Netze statt eines festen Textes.
+# Unterschied zu wlan-karte.yaml (archiv): Statt eines festen PNG ueber die
+# volle Breite zeichnet eine button-card die Codes aus den Entitaeten der
+# UniFi-Integration. Ein Netz zeigt einen Code mit hoechstens 210 px Breite,
+# zwei Netze stehen in zwei Spalten. Unter jedem Code stehen der Netzname
+# (Name des UniFi-WLAN-Geraets, also die SSID), die Rolle und die Anzahl
+# verbundener Geraete. Die Kopfzeile nennt die gerade gezeigten Netze.
 #
 # Liste "netze" (YAML-Anker, gilt fuer Kopf und Codes):
-#   name      Anzeigename unter dem Code und in der Kopfzeile
-#   qr        Bildpfad (/local/...) oder Bild-Entitaet (image.*)
-#   schalter  optional: Netz nur zeigen, solange diese Entitaet "on" ist;
-#             fehlt die Entitaet, bleibt das Netz ausgeblendet
+#   rolle     Anzeige unter dem Netznamen und in der Kopfzeile
+#   clients   Sensor "Clients" des WLANs; ueber sein Geraet kommt der
+#             Netzname. Fehlt das Geraet, steht dort die Rolle
+#   qr        Bild-Entitaet "QR-Code" des WLANs
+#   schalter  Schalter "Aktiviert" des WLANs: Netz nur zeigen, solange er
+#             "on" ist; fehlt die Entitaet, bleibt das Netz ausgeblendet
 #
-# Gaeste-WLAN: Der Eintrag steht schon in der Liste und bleibt unsichtbar, bis
-# es switch.wlan_gast gibt und er eingeschaltet ist. QR-Bild und WLAN-Schalter
-# legt die UniFi-Integration nur an, wenn ihr UniFi-Konto Admin-Rechte hat;
-# das QR-Bild ist danach standardmaessig deaktiviert und muss in HA aktiviert
-# werden. Die Bild-Entitaet erzeugt den Code neu, sobald sich das Passwort
-# aendert. Fuer das Heim-WLAN dann qr auf image.wlan_heim_qr_code umstellen.
-# Neue Netz-Entitaeten auch in triggers_update eintragen (Anker trigger):
-# HA tauscht den Token in entity_picture alle 5 Minuten.
+# Die UniFi-Integration legt QR-Bild und Schalter nur an, wenn ihr Konto in
+# der Network-App die Site-Rolle admin hat. Das QR-Bild ist danach
+# standardmaessig deaktiviert und muss in HA aktiviert werden. Es erzeugt den
+# Code neu, sobald sich das Passwort aendert. Alle Entitaeten der Liste stehen
+# auch in triggers_update (Anker trigger): HA tauscht den Token in
+# entity_picture alle 5 Minuten, die Karte muss das Bild dann neu laden.
 #
 # Voraussetzung: custom:expander-card, custom:button-card, card-mod (HACS),
-# UniFi Network fuer das Gaeste-WLAN.
+# UniFi Network mit Admin-Konto, QR-Bilder der WLANs aktiviert.
 type: custom:expander-card
 expanded: false
 clear: false
@@ -49,18 +50,25 @@ title-card:
   name: WLAN
   variables:
     netze: &netze
-      - name: Heim-WLAN
-        qr: /local/wlan/ui-wlan-qr.png
-      - name: Gäste-WLAN
+      - rolle: Intern
+        clients: sensor.wlan_heim_clients
+        qr: image.wlan_heim_qr_code
+        schalter: switch.wlan_heim_aktiviert
+      - rolle: Gäste
+        clients: sensor.wlan_gast_clients
         qr: image.wlan_gast_qr_code
-        schalter: switch.wlan_gast
+        schalter: switch.wlan_gast_aktiviert
   triggers_update: &trigger
-    - switch.wlan_gast
+    - sensor.wlan_heim_clients
+    - image.wlan_heim_qr_code
+    - switch.wlan_heim_aktiviert
+    - sensor.wlan_gast_clients
     - image.wlan_gast_qr_code
+    - switch.wlan_gast_aktiviert
   label: |
     [[[
-      const an = (variables.netze || []).filter((n) => !n.schalter || (states[n.schalter] && states[n.schalter].state === 'on'));
-      return an.map((n) => n.name).join(' · ');
+      const an = (variables.netze || []).filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
+      return an.length ? an.map((n) => n.rolle).join(' · ') : 'kein WLAN aktiv';
     ]]]
   tap_action:
     action: none
@@ -126,22 +134,30 @@ cards:
         [[[
           const M = 'var(--owlet-text-sekundaer, #8794a5)';
           const L = 'var(--owlet-label, #b4c0cf)';
-          const netze = (variables.netze || []).filter((n) => !n.schalter || (states[n.schalter] && states[n.schalter].state === 'on'));
-          // Bildpfad direkt, Bild-Entitaet ueber entity_picture (mit Token)
-          const quelle = (n) => {
-            if (!String(n.qr).startsWith('image.')) return n.qr;
-            const s = states[n.qr];
-            return s && s.state !== 'unavailable' ? s.attributes.entity_picture : '';
+          const ents = hass.entities || {}, devs = hass.devices || {};
+          const netze = (variables.netze || []).filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
+          // Netzname = Name des UniFi-WLAN-Geraets (SSID), sonst die Rolle
+          const ssid = (n) => {
+            const d = devs[(ents[n.clients] || {}).device_id];
+            return d ? (d.name_by_user || d.name) : n.rolle;
           };
+          const esc = (t) => String(t).replace(/[&<>"]/g, (z) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[z]);
           const zelle = (n) => {
-            const src = quelle(n);
+            const q = states[n.qr];
+            const src = q && q.state !== 'unavailable' ? q.attributes.entity_picture : '';
+            const c = states[n.clients];
+            const anzahl = c && !isNaN(parseInt(c.state, 10)) ? ` · ${parseInt(c.state, 10)} ${parseInt(c.state, 10) === 1 ? 'Gerät' : 'Geräte'}` : '';
             const code = src
-              ? `<img src="${src}" alt="QR-Code ${n.name}" style="display:block;width:100%;height:auto;border-radius:14px;">`
+              ? `<img src="${src}" alt="QR-Code ${esc(ssid(n))}" style="display:block;width:100%;height:auto;border-radius:14px;">`
               : `<div style="aspect-ratio:1;border-radius:14px;border:1px dashed var(--owlet-aus, #3a4453);display:grid;place-items:center;padding:10px;text-align:center;font-size:12px;color:${M};">QR-Code nicht verfügbar</div>`;
-            return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;">
+            return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;width:100%;">
               ${code}
-              <span style="font-size:13px;font-weight:650;color:${L};">${n.name}</span></div>`;
+              <span style="margin-top:2px;font-size:13px;font-weight:650;color:${L};max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ssid(n))}</span>
+              <span style="font-size:12px;color:${M};">${esc(n.rolle)}${anzahl}</span></div>`;
           };
+          if (!netze.length) {
+            return `<div style="font-size:12.5px;color:${M};text-align:center;padding:8px 0;">Kein WLAN aktiv</div>`;
+          }
           const spalten = netze.length > 1 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 210px)';
           return `<div style="display:flex;flex-direction:column;gap:10px;">
             <div style="display:grid;grid-template-columns:${spalten};justify-content:center;gap:12px;">${netze.map(zelle).join('')}</div>
