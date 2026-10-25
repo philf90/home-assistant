@@ -238,8 +238,12 @@
 #     Nachspielzeit der 1. Halbzeit nach der Pause (nur, solange die Seite offen
 #     war, sonst 45 min).
 #   - Ueberlappung: Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit
-#     280 px. Liegen zwei Symbole einer Spur naeher, rueckt das spaetere eine
-#     Ebene nach aussen.
+#     242 px Strahl (Galaxy S25: 306 px in der Huelle minus 22 px Unterkachel
+#     und 42 px Kuerzelspalte; iPhone 17 Pro 284 px). Liegen zwei Symbole einer
+#     Spur naeher als 19 px (16 px Symbol, 3 px Luft), rueckt das spaetere eine
+#     Ebene nach aussen. Mit den frueher angenommenen 280 px lagen Gelb 88' und
+#     90'+5' (24.10.2026) gerechnet 19,4 px auseinander, auf dem S25 sind es
+#     16,7 px; sie blieben deshalb nebeneinander, statt gestapelt zu werden.
 #
 # Wappen: teamIconUrl aus OpenLigaDB (meist Wikimedia-SVG). Bis das Bild
 # geladen ist bzw. falls es fehlt, stehen die Initialen im Kreis.
@@ -256,7 +260,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 19, alt = window.__fussball;
+          const VERSION = 20, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -959,9 +963,11 @@ button_card_templates:
             const ie = (per >= 5 || /PEN/.test(st.type?.name || '')) && hc.shootoutScore != null && gc.shootoutScore != null
               ? [Number(hc.shootoutScore), Number(gc.shootoutScore)] : null;
             // Ebenen je Spur: liegt ein Symbol naeher als seine Breite am vorigen, rueckt es nach aussen.
-            // Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit 280 px (eher eng), abzueglich
-            // der Abstaende zwischen den Abschnitten und der Spalte fuer das Elfmeterschiessen.
-            const pxMin = (280 - 9 * (zahl - 1) - (ie ? 34 : 0)) / len.slice(0, zahl).reduce((p, q) => p + q, 0), lage = new Map(), tief = { o: 0, u: 0 };
+            // Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit der schmalsten gemessenen
+            // (DESIGN.md, Bildschirmbreiten): Galaxy S25 306 px in der Huelle, minus 22 px Unterkachel
+            // und 42 px Kuerzelspalte = 242 px (iPhone 17 Pro 284 px), abzueglich der Abstaende
+            // zwischen den Abschnitten und der Spalte fuer das Elfmeterschiessen.
+            const pxMin = (242 - 9 * (zahl - 1) - (ie ? 34 : 0)) / len.slice(0, zahl).reduce((p, q) => p + q, 0), lage = new Map(), tief = { o: 0, u: 0 };
             [1, 2, 3, 4].forEach(h => [true, false].forEach(oben => {
               const rechts = [];
               ev.filter(x => x.h === h && x.oben === oben).forEach(x => {
@@ -992,7 +998,8 @@ button_card_templates:
               ev.filter(x => x.h === h).forEach(x => {
                 const [farbe, sym, titel] = ZS_SYM[x.art], l = lage.get(x), left = Math.min(100, x.pos / Lh * 100);
                 const top = x.oben ? Y - 5 - 16 - l * 18 : Y + 7 + l * 18;
-                const zusatz = x.art === 'tor' && (x.elf || x.et) ? `<span style="position:absolute;left:13px;top:-3px;font-size:8.5px;font-weight:800;color:${FARBE.tor};">${x.et ? 'ET' : 'E'}</span>` : '';
+                // "E"/"ET" an der von der Linie abgewandten Ecke, sonst steht es in der unteren Spur auf der Linie
+                const zusatz = x.art === 'tor' && (x.elf || x.et) ? `<span style="position:absolute;left:13px;${x.oben ? 'top' : 'bottom'}:-3px;font-size:8.5px;font-weight:800;color:${FARBE.tor};">${x.et ? 'ET' : 'E'}</span>` : '';
                 const min = x.x ? `${x.b}'+${x.x}'` : `${x.b}'`;
                 s += `<span title="${fb.esc(`${min} ${titel}${x.elf ? ' (Elfmeter)' : ''}${x.et ? ' (Eigentor)' : ''} · ${x.name}`)}" style="position:absolute;left:${left}%;top:${top}px;transform:translateX(-50%);color:${farbe};line-height:0;">${sym}${zusatz}</span>`;
               });
