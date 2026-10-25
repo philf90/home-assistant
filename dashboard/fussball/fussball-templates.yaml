@@ -214,9 +214,13 @@
 #   - Nur bei Status live oder post; bei "Ergebnis offen" und vor Anstoss nicht.
 #     Ohne ESPN-Daten (Fehler, CORS, Spiel nicht gefunden) fehlt der Strahl
 #     ganz, die Torschuetzenzeile aus OpenLigaDB bleibt.
-#   - Daten: ESPN-Scoreboard competitions[0].details, live derselbe Abruf wie
-#     die Spielminute (fb.espn, 45 s), sonst scoreboard?dates= des Anstosstags
-#     (fb.espnSpiel, 15 min). Kein zusaetzlicher Abruf waehrend des Spiels.
+#   - Daten: ESPN-Scoreboard competitions[0].details. Laeuft das Spiel, derselbe
+#     Abruf wie die Spielminute (fb.espn, 45 s), sonst scoreboard?dates= des
+#     Anstosstags (fb.espnSpiel, 15 min). Kein zusaetzlicher Abruf waehrend des
+#     Spiels. Entscheidend ist der Status dieses Spiels, nicht der Liga: das
+#     Live-Scoreboard fuehrt nur die Spiele des Tages, ein beendetes Spiel vom
+#     Vortag fehlt dort (gesehen 25.10.2026, 14:13 Uhr: Strahl des Spiels vom
+#     24.10. fehlte, weil drei andere Spiele der 2. Liga liefen).
 #   - Gemessen 25.10.2026 an den 4 Spielen der 2. Liga vom 24.10.2026 (beendet):
 #     26 details (15 Gelb, 8 Tore, 3 Elfmetertore), Tore je Verein = Endstand,
 #     keine Wechsel. Felder: clock.displayValue ("58'", "90'+6'"), clock.value
@@ -225,8 +229,10 @@
 #     athletesInvolved[0].id. Gelb-Rot hat keinen eigenen Typ: Rot fuer einen
 #     Spieler mit Gelb im selben Spiel (Typ 93 nach 94, siehe Kopf von
 #     fussball-view.yaml). Status: period (1/2), displayClock "90'+7'" am Ende.
-#   - Ungemessen: ob das Live-Scoreboard details schon waehrend des Spiels
-#     fuellt; Rot und Eigentor im Scoreboard (kein Fall am 24.10.); die
+#   - Gemessen 25.10.2026, 14:13 Uhr, an 3 laufenden Spielen der 2. Liga (44'):
+#     das Live-Scoreboard fuellt details schon waehrend des Spiels (7 Eintraege:
+#     3 Gelb, 4 Tore, Tore je Verein = Zwischenstand 1:0, 1:0, 2:0).
+#   - Ungemessen: Rot und Eigentor im Scoreboard (kein Fall am 24.10.); die
 #     Nachspielzeit der 1. Halbzeit nach der Pause (nur, solange die Seite offen
 #     war, sonst 45 min).
 #   - Ueberlappung: Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit
@@ -248,7 +254,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 17, alt = window.__fussball;
+          const VERSION = 18, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -890,8 +896,8 @@ button_card_templates:
           // Nachspielzeit der 1. Halbzeit, solange die Seite offen ist (je Spiel). Nach der Pause
           // nennt das Scoreboard sie nicht mehr; ohne Ereignis darin hat die Hälfte sonst 45 min.
           fb.zsNach = {};
-          // Tore und Karten aus dem ESPN-Scoreboard (competitions[0].details): live derselbe Abruf
-          // wie fb.minute, sonst das Scoreboard des Anstosstags (fb.espnSpiel). Gemessen 25.10.2026
+          // Tore und Karten aus dem ESPN-Scoreboard (competitions[0].details): laeuft das Spiel,
+          // derselbe Abruf wie fb.minute, sonst das Scoreboard des Anstosstags (fb.espnSpiel). Gemessen 25.10.2026
           // an den 4 Spielen der 2. Liga vom 24.10.: 26 Eintraege (15 Gelb, 8 Tore, 3 Elfmetertore),
           // Tore je Verein = Endstand, keine Wechsel. Nur bei Status live oder post (nicht "offen");
           // ohne ESPN-Daten kein Strahl ('').
@@ -909,7 +915,9 @@ button_card_templates:
           const zeitstrahl = (L, m, ID) => {
             const k = fb.status(m);
             if (k !== 'live' && k !== 'post') return '';
-            const e = m.quelle === 'espn' ? m.ev : fb.live[L] ? paar(fb.espn(L), m) : fb.espnSpiel(L, m).e;
+            // Live-Scoreboard nur, wenn dieses Spiel laeuft: es fuehrt nur die Spiele des Tages, ein
+            // beendetes Spiel vom Vortag fehlt dort, solange andere Spiele der Liga laufen (25.10.2026)
+            const e = m.quelle === 'espn' ? m.ev : k === 'live' && fb.live[L] ? paar(fb.espn(L), m) : fb.espnSpiel(L, m).e;
             const c = e?.roh?.competitions?.[0];
             if (!c || !Array.isArray(c.details)) return '';
             const cs = c.competitors || [], hc = cs.find(x => x.homeAway === 'home') || {}, gc = cs.find(x => x.homeAway === 'away') || {};
