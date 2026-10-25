@@ -33,7 +33,15 @@
 #     Kaiserslautern = "130"); steht im Scoreboard eines Spieltags unter
 #     events[].competitions[0].competitors[].team.id
 #   - variables.ligen: ESPN-Ligapfade, in denen gesucht wird ("ger.1",
-#     "ger.2"); nach einem Auf- oder Abstieg anpassen
+#     "ger.2", DFB-Pokal "ger.dfb_pokal"); nach einem Auf- oder Abstieg
+#     anpassen. Pokalspiele haben dieselben Ereignistypen wie die Liga
+#     (gemessen 25.10.2026 an summary?event=401875179, 1. Runde). Bei
+#     Pokalspielen nennt die Anpfiff-Meldung den Wettbewerb, die
+#     Abpfiff-Meldung "n. V." bzw. "i. E." mit dem Ergebnis des
+#     Elfmeterschiessens (Status STATUS_FINAL_AET / STATUS_FINAL_PEN,
+#     shootoutScore im Kopf der Spieldetails). Einzelne Elfmeter im
+#     Elfmeterschiessen stehen nicht in den Spieldetails und werden deshalb
+#     nicht gemeldet.
 #   - /dashboard-home/fussball: Pfad, den das Tippen auf die Meldung oeffnet
 #
 # Einbinden als Paket in configuration.yaml:
@@ -83,7 +91,7 @@ input_text:
 script:
   fussball_meldungen_auswerten:
     alias: 'Fussball: Meldungen auswerten'
-    description: 'Fussball-View, Meldungen zum Lieblingsverein: holt die ESPN-Spieldetails (rest_command.espn_fussball, Paket fussball-espn-konfig.yaml) eines Spiels und erzeugt Meldungen fuer alle Ereignisse mit einer ID ueber stand.m, je nach Schalter input_boolean.fussball_meldung_*. Anpfiff/Abpfiff aus dem Spielstatus (pre/in/post). Gelb-Rot = Rot (93) nach Gelb (94) desselben Spielers; verschossener Elfmeter 113, gehalten 174 in derselben Minute; Eigentor 97 traegt den beguenstigten Verein. Mit senden: false nur Rueckgabe (Test). Gibt den neuen Stand zurueck; gespeichert wird er von der Automation.'
+    description: 'Fussball-View, Meldungen zum Lieblingsverein: holt die ESPN-Spieldetails (rest_command.espn_fussball, Paket fussball-espn-konfig.yaml) eines Spiels und erzeugt Meldungen fuer alle Ereignisse mit einer ID ueber stand.m, je nach Schalter input_boolean.fussball_meldung_*. Anpfiff/Abpfiff aus dem Spielstatus (pre/in/post). Gelb-Rot = Rot (93) nach Gelb (94) desselben Spielers; verschossener Elfmeter 113, gehalten 174 in derselben Minute; Eigentor 97 traegt den beguenstigten Verein. Abpfiff mit n. V. (STATUS_FINAL_AET) bzw. i. E. und shootoutScore (STATUS_FINAL_PEN); bei liga ger.dfb_pokal nennt der Anpfiff den Wettbewerb. Mit senden: false nur Rueckgabe (Test). Gibt den neuen Stand zurueck; gespeichert wird er von der Automation.'
     mode: queued
     max: 3
     fields:
@@ -144,8 +152,9 @@ script:
           {%- set hid = heim.team.id -%}{%- set ha = heim.team.abbreviation -%}{%- set ga = gast.team.abbreviation -%}
           {%- set hn = heim.team.displayName -%}{%- set gn = gast.team.displayName -%}
           {%- set ns = namespace(h=0, g=0, l=[], gelb=[]) -%}
+          {%- set wb = ' · DFB-Pokal' if liga == 'ger.dfb_pokal' else '' -%}
           {%- if z_alt == 'pre' and zust != 'pre' and schalter.anpfiff -%}
-            {%- set ns.l = ns.l + [{'titel': 'Anpfiff: ' ~ ha ~ ' – ' ~ ga, 'text': hn ~ ' gegen ' ~ gn}] -%}
+            {%- set ns.l = ns.l + [{'titel': 'Anpfiff: ' ~ ha ~ ' – ' ~ ga, 'text': hn ~ ' gegen ' ~ gn ~ wb}] -%}
           {%- endif -%}
           {%- for e in ev -%}
             {%- set typ = e.type.id | string -%}
@@ -180,7 +189,10 @@ script:
             {%- if typ == '94' -%}{%- set ns.gelb = ns.gelb + [wer] -%}{%- endif -%}
           {%- endfor -%}
           {%- if z_alt != 'post' and zust == 'post' and schalter.anpfiff -%}
-            {%- set ns.l = ns.l + [{'titel': 'Abpfiff: ' ~ ha ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ ga, 'text': 'Endstand · ' ~ hn ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ gn}] -%}
+            {%- set sn = k.status.type.name | default('') -%}
+            {%- set ie = heim.shootoutScore is defined and heim.shootoutScore is not none and gast.shootoutScore is defined and gast.shootoutScore is not none -%}
+            {%- set zus = (' i. E.' ~ ((' ' ~ heim.shootoutScore ~ ':' ~ gast.shootoutScore) if ie else '')) if sn == 'STATUS_FINAL_PEN' else (' n. V.' if sn == 'STATUS_FINAL_AET' else '') -%}
+            {%- set ns.l = ns.l + [{'titel': 'Abpfiff: ' ~ ha ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ ga ~ ((' ·' ~ zus) if zus else ''), 'text': 'Endstand · ' ~ hn ~ ' ' ~ heim.score ~ ':' ~ gast.score ~ ' ' ~ gn ~ zus ~ wb}] -%}
           {%- endif -%}
           {{ ns.l }}
     - if:
@@ -209,12 +221,13 @@ script:
 automation:
 - id: fussball_meldungen
   alias: 'Fussball: Meldungen'
-  description: 'Fussball-View, Meldungen zum Lieblingsverein (ESPN-Team-ID in variables.verein, 1. FC Kaiserslautern = 130; ESPN-Ligapfade in variables.ligen). Stuendlich (xx:05:30) und beim Start: Spiel des Tages ueber rest_command.espn_fussball (scoreboard?dates=JJJJMMTT, UTC) suchen und in input_text.fussball_meldung_stand merken (e Event-ID, l Liga, a Anstoss, z Status, m hoechste gemeldete Ereignis-ID; m -1 = mitten im Spiel gefunden, Rueckstand nicht melden). Von 5 min vor bis 4 h nach Anstoss jede Minute script.fussball_meldungen_auswerten aufrufen (meldet neue Ereignisse je nach input_boolean.fussball_meldung_*) und den Stand speichern; nach Abpfiff (z post) Ruhe. Ausserhalb dieser Zeiten loest die Automation nicht aus.'
+  description: 'Fussball-View, Meldungen zum Lieblingsverein (ESPN-Team-ID in variables.verein, 1. FC Kaiserslautern = 130; ESPN-Ligapfade in variables.ligen, mit DFB-Pokal ger.dfb_pokal). Stuendlich (xx:05:30) und beim Start: Spiel des Tages ueber rest_command.espn_fussball (scoreboard?dates=JJJJMMTT, UTC) suchen und in input_text.fussball_meldung_stand merken (e Event-ID, l Liga, a Anstoss, z Status, m hoechste gemeldete Ereignis-ID; m -1 = mitten im Spiel gefunden, Rueckstand nicht melden). Von 5 min vor bis 4 h nach Anstoss jede Minute script.fussball_meldungen_auswerten aufrufen (meldet neue Ereignisse je nach input_boolean.fussball_meldung_*) und den Stand speichern; nach Abpfiff (z post) Ruhe. Ausserhalb dieser Zeiten loest die Automation nicht aus.'
   mode: single
   max_exceeded: silent
   variables:
     ligen:
     - ger.2
+    - ger.dfb_pokal
     verein: '130'
   triggers:
   - id: suche
