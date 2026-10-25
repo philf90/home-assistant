@@ -10,9 +10,10 @@
 #                oberste Ebene unter button_card_templates:
 # Platzhalter:   keine
 # ============================================================================
-# Die Karten holen die Daten SELBST im Browser von OpenLigaDB
-# (https://api.openligadb.de, kostenlos, ohne API-Key). Es gibt keine
-# Sensoren, kein Paket und keinen Eintrag in configuration.yaml.
+# Die Karten holen die Daten SELBST im Browser, die Ligen von OpenLigaDB
+# (https://api.openligadb.de, kostenlos, ohne API-Key), den DFB-Pokal von ESPN
+# (inoffiziell, ohne Key). Es gibt keine Sensoren, kein Paket und keinen
+# Eintrag in configuration.yaml.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
 #   3 Punkte -> "Raw-Konfigurationseditor" -> diesen "button_card_templates:"
@@ -27,14 +28,18 @@
 #                        mit Zeitstrahl (Z1, siehe unten)
 #   fussball_spieltag_kopf / fussball_spieltag    Spieltag als Liste (S1)
 #   fussball_tabelle_kopf / fussball_tabelle      Tabelle mit Zonen (T1)
+#   fussball_pokal_kopf / fussball_pokal          laufende Pokalrunde (S1)
+#   fussball_pokalweg_kopf / fussball_pokalweg    Pokalweg des Vereins
 #   fussball_spiel       Inhalt des Bubble-Card-Popups #fussball-spiel
 #                        (Ticker, Kommentar, Statistik, Messung)
 #   fussball_meldungen_kopf / fussball_meldungen  Schalter der Meldungen
 #   Hervorhebung des Lieblingsvereins in Liste und Tabelle nach H1
 #   (FCK-Rot als Flaeche + Kante, ohne Zonenstrich).
 #
-# Variablen in der View: liga (bl1 | bl2), fav (teamId fuer H1),
-#   verein (teamId fuer die Vereinskarte). 1. FC Kaiserslautern = 76.
+# Variablen in der View: liga (bl1 | bl2), fav (teamId fuer H1; in der
+#   Pokalrunde die ESPN-ID), verein (teamId fuer Vereinskarte und Popup),
+#   verein_espn (ESPN-ID fuer Pokalspiele in Vereinskarte, Popup und
+#   Pokalweg). 1. FC Kaiserslautern = 76 bei OpenLigaDB, 130 bei ESPN.
 #
 # Datenzugriff (window.__fussball, einmal pro Browser-Seite):
 #   - getcurrentgroup/<liga> -> getmatchdata/<liga>/<saison>/<spieltag>.
@@ -68,6 +73,36 @@
 #   Voraussetzung: OpenLigaDB erlaubt Abrufe aus dem Browser (CORS); belegt
 #   durch Web-Apps, die die API direkt per fetch nutzen. Schlaegt der Abruf
 #   fehl, zeigt die Karte den Fehler statt leerer Flaechen.
+#
+# DFB-Pokal (Variante A und V1 der Entwurfsseite "DFB-Pokal in der Fussball-View"):
+#   - Quelle ESPN, Liga ger.dfb_pokal; OpenLigaDB ist fuer den Pokal ungeprueft
+#     (Kuerzel laut Drittquellen "dfb", das Beispiel-Repo nennt es uneinheitlich).
+#   - Runden: leagues[0].calendar[0].entries des Scoreboards ohne dates (value
+#     1-6, label "First Round" bis "Final"). detail nennt die Spieltage, solange
+#     sie feststehen ("Oct 27-28", "Aug 21-Sep 2"), sonst das Zeitfenster der
+#     Runde ("Dec 4-Feb 11"); mehr als 14 Tage gelten als offen. Laufende Runde
+#     = zuletzt begonnene mit festen Tagen, die naechste schon 7 Tage vorher.
+#   - Spiele: scoreboard?dates=JJJJMMTT je Spieltag. Ohne dates kam nur der
+#     naechste Spieltag (gemessen 25.10.2026: 27.10., 8 von 16 Spielen), ein
+#     Datumsbereich liefert HTTP 400 (zweimal gemessen). Abruf live 45 s, sind
+#     alle Spiele beendet 6 h, sonst 15 min.
+#   - Vereinsspiele: teams/<id>/schedule (gespielte, 1. Runde) und
+#     ...?fixture=true (kommende, 2. Runde), alle 30 min. Dort steht status nur
+#     in competitions[0], score als Objekt und logos statt logo. Von 6 h vor
+#     bis 36 h nach Anstoss kommt das Scoreboard des Tages dazu (Tore, Karten).
+#   - Vereinskarte V1 (fb.vereinAuswahl): laufendes Spiel aus Liga oder Pokal,
+#     sonst das letzte bis 36 h nach Anstoss (nicht mehr ab 6 h vor dem
+#     naechsten), sonst das naechste. Platz, Punkte und Form bleiben Liga.
+#   - Status: STATUS_FINAL_AET (id 45, period 4) = "n. V.", STATUS_FINAL_PEN
+#     (id 47, period 5) = "i. E." mit shootoutScore je Verein; winner markiert den
+#     Sieger (an 3 Spielen mit Elfmeterschiessen und dem FCK in Mannheim
+#     geprueft). Live gilt state "in"; ohne Zustand das Fenster POKAL_DAUER
+#     (210 min, gerechnet aus 164 min mit Annahmen fuer Pausen und
+#     Elfmeterschiessen). Die Statusnamen live in Verlaengerung und
+#     Elfmeterschiessen sind ungemessen; die Messung im Popup schreibt sie mit.
+#   - Namen: ESPN schreibt einige Vereine englisch ("Bayern Munich", "FC
+#     Cologne"), NAME_DE uebersetzt die gemessenen. team.logo ist bei
+#     Amateurvereinen leer (SV Waldhof Mannheim), dann stehen die Initialen.
 #
 # Spiel-Popup (#fussball-spiel), Muster wie #flug im Flugradar:
 #   - Antippen von Spielstand (Vereinskarte) oder Spielzeile (Spieltag) merkt
@@ -146,6 +181,12 @@
 #     (englisch). athlete liefert lastName, fullName, displayName, shortName,
 #     kein firstName; der Kurzname auf dem Feld ist deshalb lastName.
 #     keyEvents enthalten "Start Delay"/"End Delay" (Unterbrechung/Fortsetzung).
+#   - Pokalspiele (L 'pokal'): Spiel aus fb.pokalSpiele, Tore aus ESPN, Kopf
+#     "DFB-Pokal · <Runde>", Ergebnis mit "n. V." bzw. "i. E. x:y"; die Messung
+#     zeigt statt OpenLigaDB den Pokalstatus und die Statusfolge (Status,
+#     Periode, Uhr, Zahl der details und der Elfmeterschiessen-Treffer je
+#     Wechsel, solange die View offen ist) und wann der Endstand zuerst zu
+#     sehen war.
 #   - Text im Popup steht links: button-card zentriert Custom Fields, die
 #     Huelle setzt deshalb text-align: left.
 #   - Klickbarkeit und Touch wie im Flugradar: button-card setzt bei Karten
@@ -163,6 +204,13 @@
 #     beguenstigten Verein), Gelb, Gelb-Rot, Rot, wie im Ticker des Popups.
 #     Gespielte Zeit hell, live ein Punkt an der aktuellen Minute. Antippen
 #     oeffnet das Spiel-Popup.
+#   - Verlaengerung (Pokal) als dritter und vierter Abschnitt (91.-105.,
+#     106.-120. Minute, je 15 min plus Nachspielzeit), erst wenn sie gespielt
+#     wird. Elfmeterschiessen nicht auf dem Strahl: ESPN fuehrt nur die Treffer
+#     (shootout: true, Typ 104, Minute 121'-125'), ohne Fehlschuesse; rechts
+#     steht stattdessen das Ergebnis (shootoutScore) je Spur, der Sieger hell.
+#     Geprueft 25.10.2026 an Mannheim-Kaiserslautern (0:1 n. V., Ereignisse bis
+#     120'+1', Schlussuhr 120'+3') und Saarbruecken-Hertha (1:1 n. V., 2:4 i. E.).
 #   - Nur bei Status live oder post; bei "Ergebnis offen" und vor Anstoss nicht.
 #     Ohne ESPN-Daten (Fehler, CORS, Spiel nicht gefunden) fehlt der Strahl
 #     ganz, die Torschuetzenzeile aus OpenLigaDB bleibt.
@@ -200,12 +248,13 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 16, alt = window.__fussball;
+          const VERSION = 17, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
           const MIN = 60e3;
-          // OpenLigaDB: Spielplan, Stand, Tabelle. ESPN (inoffiziell): nur die Spielminute.
+          // OpenLigaDB: Spielplan, Stand, Tabelle der Ligen. ESPN (inoffiziell): Spielminute, Zeitstrahl,
+          // Spieldetails und der ganze DFB-Pokal.
           const BASIS = { oldb: 'https://api.openligadb.de/', espn: 'https://site.api.espn.com/apis/site/v2/sports/soccer/' };
           const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
           const fb = { version: VERSION, F, hass, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
@@ -232,10 +281,14 @@ button_card_templates:
             }
             return c ? c.d : undefined;
           };
-          // Status: pre / live / post / offen (vorbei, aber noch kein Endergebnis)
+          // Status: pre / live / post / offen (vorbei, aber noch kein Endergebnis). Pokalspiele (ESPN)
+          // bringen ihren Zustand mit ("in" auch in Verlaengerung und Elfmeterschiessen); fehlt er, gilt
+          // das Zeitfenster ab Anstoss, im Pokal POKAL_DAUER (210 min) statt 3 h.
           fb.status = m => {
             const a = Date.parse(m.anstoss), now = Date.now();
-            return m.beendet ? 'post' : (isNaN(a) || now < a ? 'pre' : (now <= a + 3 * 3600e3 ? 'live' : 'offen'));
+            if (m.beendet) return 'post';
+            if (m.zustand === 'in') return 'live';
+            return isNaN(a) || now < a ? 'pre' : (now <= a + (m.quelle === 'espn' ? POKAL_DAUER : 3 * 3600e3) ? 'live' : 'offen');
           };
           // Spiel kompakt. Stand: Endergebnis (resultTypeID 2) oder letztes Tor,
           // je nachdem, was mehr Tore zaehlt (= aktueller).
@@ -286,7 +339,10 @@ button_card_templates:
           // Spielminute laufender Spiele von ESPN (ger.1 / ger.2), nur solange die Liga live ist.
           // Zuordnung zu OpenLigaDB ueber Anstoss (+-10 min) und Vereinsnamen; ESPN benennt
           // einige Vereine englisch (gemessen 11.10.2026: "FC Cologne"), daher Aliasse.
-          const SLUG = { bl1: 'ger.1', bl2: 'ger.2' };
+          const SLUG = { bl1: 'ger.1', bl2: 'ger.2', pokal: 'ger.dfb_pokal' };
+          // Laengste Dauer eines Pokalspiels fuer das Live-Fenster: 2 x 45 + 15 Pause + Verlaengerung
+          // 2 x 15 + Pausen + Elfmeterschiessen, gerechnet rund 164 min (mit Annahmen), dazu Reserve.
+          const POKAL_DAUER = 210 * MIN;
           const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss');
           const ALIAS = { cologne: 'koln', munich: 'munchen', nuremberg: 'nurnberg', hanover: 'hannover', brunswick: 'braunschweig' };
           const STOPP = new Set(['fc', 'sc', 'sv', 'vfl', 'vfb', 'tsg', 'fsv', 'ssv', 'spvgg', 'sg', 'tsv', 'bsc', 'dsc', 'borussia', 'eintracht', 'rb', 'de', 'der']);
@@ -306,8 +362,9 @@ button_card_templates:
               const h = hc.team || {}, g = gc.team || {};
               return {
                 id: e.id, roh: e, sh: tor(hc.score), sg: tor(gc.score),
-                anstoss: Date.parse(e.date), status: e.status?.type?.name || '', zustand: e.status?.type?.state || '',
-                uhr: e.status?.displayClock || '', kurz: e.status?.type?.shortDetail || '',
+                // Vereins-Spielplan (teams/<id>/schedule) fuehrt status nur in competitions[0]
+                anstoss: Date.parse(e.date), status: (e.status || c.status)?.type?.name || '', zustand: (e.status || c.status)?.type?.state || '',
+                uhr: (e.status || c.status)?.displayClock || '', kurz: (e.status || c.status)?.type?.shortDetail || '',
                 heim: woerter([h.displayName, h.shortDisplayName, h.location]), gast: woerter([g.displayName, g.shortDisplayName, g.location])
               };
             });
@@ -331,8 +388,12 @@ button_card_templates:
             if (e.status === 'STATUS_HALFTIME' || /^(HT|HZ)$/i.test(e.kurz)) return 'HZ';
             return e.zustand === 'in' && /\d/.test(e.uhr) ? e.uhr : null;
           };
-          // Minute fuer ein OpenLigaDB-Spiel: "67'", "45'+2'" oder "HZ"; null, wenn unbekannt
-          fb.minute = (L, m) => uhr(paar(fb.espn(L), m));
+          // Minute: "67'", "45'+2'", "HZ" oder im Elfmeterschiessen (period 5) "i. E."; null, wenn
+          // unbekannt. Pokalspiele lesen sie aus ihrem eigenen ESPN-Spiel.
+          fb.minute = (L, m) => {
+            if (m.quelle !== 'espn') return uhr(paar(fb.espn(L), m));
+            return m.zustand === 'in' && m.periode >= 5 ? 'i. E.' : uhr(m.ev);
+          };
           // Tabelle einer Liga
           fb.tabelle = L => {
             const d = fb.get(`getbltable/${L}/${fb.saison()}`, fb.live[L] ? MIN : 15 * MIN);
@@ -359,6 +420,201 @@ button_card_templates:
               });
             return { form: form.slice(-5), naechstes };
           };
+          // ---------- DFB-Pokal (ESPN ger.dfb_pokal, gemessen 25.10.2026, siehe Kopf) ----------
+          const RUNDEN = ['1. Runde', '2. Runde', 'Achtelfinale', 'Viertelfinale', 'Halbfinale', 'Finale'];
+          // Runde aus slug ("second-round"), Name ("Second Round") oder Kalender-Label ("Rd of 16")
+          const rundeNr = t => { t = String(t || '').toLowerCase(); return /first|1st/.test(t) ? 1 : /second|2nd/.test(t) ? 2 : /16/.test(t) ? 3 : /quarter/.test(t) ? 4 : /semi/.test(t) ? 5 : /final/.test(t) ? 6 : 0; };
+          // ESPN schreibt einige Vereine englisch (gemessen in der 1. und 2. Runde 2026/27)
+          const NAME_DE = { 'Bayern Munich': 'FC Bayern München', 'FC Cologne': '1. FC Köln', 'TSV 1860 Munich': 'TSV 1860 München', 'Hertha Berlin': 'Hertha BSC', 'Mainz': '1. FSV Mainz 05' };
+          const tagUtc = ms => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '');
+          const datum = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+          fb.pokalSpiele = {}; fb.statusVerlauf = {};
+          // Messung (Popup): Verlauf von Status und Periode je Pokalspiel, solange die View offen ist.
+          // Ein neuer Eintrag entsteht, wenn sich Status oder Periode aendern; sonst werden Uhr und
+          // Zaehler des letzten aktualisiert. Genauigkeit etwa ein Abruf (live 45 s).
+          const notiere = (m, c) => {
+            if (m.zustand === 'pre') return;
+            const l = fb.statusVerlauf[m.id] = fb.statusVerlauf[m.id] || [], z = l[l.length - 1];
+            const det = Array.isArray(c.details) ? c.details : [];
+            const neu = { t: Date.now(), status: m.statusName, periode: m.periode, uhr: m.ev?.uhr || '', details: det.length,
+              shootout: det.filter(d => d.shootout).length, ie: m.ie ? m.ie.join(':') : null };
+            if (!z || z.status !== neu.status || z.periode !== neu.periode) l.push(neu);
+            else Object.assign(z, { uhr: neu.uhr, details: neu.details, shootout: neu.shootout, ie: neu.ie, zuletzt: neu.t });
+          };
+          // Pokalspiel kompakt, gleiche Felder wie fb.kompakt (OpenLigaDB) plus quelle 'espn', zustand,
+          // periode, ie (Elfmeterschiessen), zusatz ('n. V.' / 'i. E.'), sieger, runde, ort und ev
+          // (ESPN-Spiel fuer Minute und Zeitstrahl). vomTag: aus dem Scoreboard eines Spieltags (mit
+          // details), sonst aus dem Vereins-Spielplan (ohne details).
+          const pokalKompakt = (e, vomTag) => {
+            const c = e.competitions?.[0] || {}, cs = c.competitors || [];
+            const hc = cs.find(x => x.homeAway === 'home') || {}, gc = cs.find(x => x.homeAway === 'away') || {};
+            const st = c.status || e.status || {}, typ = st.type || {};
+            const name = t => NAME_DE[t?.displayName] || t?.displayName || t?.shortDisplayName || t?.name || '?';
+            const logo = t => t?.logo || t?.logos?.[0]?.href || '';
+            const hid = String(hc.team?.id ?? hc.id ?? ''), zahl = x => { const n = Number(tor(x)); return x != null && isFinite(n) ? n : null; };
+            const vor = typ.state === 'pre';
+            // Tore aus details ohne Elfmeterschiessen; ein Eigentor zaehlt fuer den Verein in team.id
+            // (in den Spieldetails so gemessen, im Scoreboard noch ohne Fall)
+            let h = 0, g = 0;
+            const tore = (Array.isArray(c.details) ? c.details : []).filter(d => d.scoringPlay && !d.shootout)
+              .map(d => ({ d, sort: minSort(d.clock?.displayValue, d.clock?.value) })).sort((p, q) => p.sort - q.sort)
+              .map(({ d, sort }) => {
+                if (String(d.team?.id ?? '') === hid) h++; else g++;
+                const sp = d.athletesInvolved?.[0] || {};
+                return { min: String(d.clock?.displayValue || '').replace(/'/g, ''), sort, name: sp.displayName || sp.shortName || '', h, g, et: !!d.ownGoal, elf: !!d.penaltyKick };
+              });
+            const ie = hc.shootoutScore != null && gc.shootoutScore != null ? [Number(hc.shootoutScore), Number(gc.shootoutScore)] : null;
+            const m = {
+              id: Number(e.id), quelle: 'espn', vomTag: !!vomTag, anstoss: e.date, beendet: !!typ.completed, zustand: typ.state || '',
+              statusName: typ.name || '', periode: Number(st.period) || 0,
+              heim: name(hc.team), heim_id: hid, heim_logo: logo(hc.team), heim_voll: name(hc.team),
+              gast: name(gc.team), gast_id: String(gc.team?.id ?? gc.id ?? ''), gast_logo: logo(gc.team), gast_voll: name(gc.team),
+              th: vor ? null : zahl(hc.score), tg: vor ? null : zahl(gc.score), tore, ie,
+              sieger: hc.winner === true ? 'heim' : gc.winner === true ? 'gast' : null,
+              zusatz: typ.name === 'STATUS_FINAL_PEN' ? 'i. E.' : typ.name === 'STATUS_FINAL_AET' ? 'n. V.' : '',
+              runde: RUNDEN[rundeNr(e.season?.slug || e.seasonType?.name) - 1] || 'DFB-Pokal',
+              ort: c.venue?.fullName || e.venue?.fullName || '', ev: espnEvents({ events: [e] })[0]
+            };
+            if (vomTag) notiere(m, c);
+            return m;
+          };
+          const pokalLive = e => {
+            const t = (e.competitions?.[0]?.status || e.status || {}).type || {}, a = Date.parse(e.date), now = Date.now();
+            return t.state === 'in' || (!t.completed && now >= a - 5 * MIN && now <= a + POKAL_DAUER);
+          };
+          // Spiele eines Pokal-Spieltags (UTC-Datum JJJJMMTT, wie fb.espnSpiel). Abruf alle 45 s, solange
+          // ein Spiel laeuft; sind alle beendet oder ist ein vergangener Tag leer, alle 6 h; sonst 15 min.
+          fb.pokalTagPfad = tag => `${SLUG.pokal}/scoreboard?dates=${tag}`;
+          fb.pokalTag = tag => {
+            const pfad = fb.pokalTagPfad(tag), c = fb.cache['espn:' + pfad], alt = c && Array.isArray(c.d?.events) ? c.d.events : null;
+            const fertig = alt && (alt.length ? alt.every(e => (e.competitions?.[0]?.status || e.status || {}).type?.completed) : tag < tagUtc(Date.now()));
+            const d = fb.get(pfad, !alt ? 15 * MIN : alt.some(pokalLive) ? 45e3 : fertig ? 360 * MIN : 15 * MIN, 'espn');
+            if (!d || !Array.isArray(d.events)) return null;
+            return d.events.map(e => (fb.pokalSpiele[Number(e.id)] = pokalKompakt(e, true)));
+          };
+          // Spieltage einer Runde aus dem Kalender: detail "Oct 27-28" oder "Aug 21-Sep 2", Jahr aus
+          // startDate. Mehr als 14 Tage gelten als Zeitfenster ohne feste Termine ("Dec 4-Feb 11"): null.
+          const MONAT = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+          const tageAus = (detail, start) => {
+            const t = /^([A-Za-z]{3})[a-z]*\.? (\d{1,2})(?:\s*-\s*(?:([A-Za-z]{3})[a-z]*\.? )?(\d{1,2}))?$/.exec(String(detail || '').trim()), s = new Date(start);
+            if (!t || isNaN(s)) return null;
+            const m1 = MONAT[t[1].toLowerCase()], m2 = t[3] ? MONAT[t[3].toLowerCase()] : m1;
+            if (m1 === undefined || m2 === undefined) return null;
+            const j1 = s.getUTCFullYear() + (m1 < s.getUTCMonth() ? 1 : 0), j2 = j1 + (m2 < m1 ? 1 : 0);
+            const von = Date.UTC(j1, m1, Number(t[2])), n = Math.round((Date.UTC(j2, m2, Number(t[4] || t[2])) - von) / 86400e3);
+            return n < 0 || n > 14 ? null : Array.from({ length: n + 1 }, (_, i) => tagUtc(von + i * 86400e3));
+          };
+          // Laufende Runde: die zuletzt begonnene mit festen Spieltagen, die naechste schon 7 Tage vor
+          // ihrem ersten Spieltag. Kalender aus dem Scoreboard ohne dates (leagues[0].calendar).
+          fb.pokalRundePfad = `${SLUG.pokal}/scoreboard`;
+          fb.pokalRunde = () => {
+            const sb = fb.get(fb.pokalRundePfad, 15 * MIN, 'espn');
+            if (!sb) return null;
+            const kal = (sb.leagues?.[0]?.calendar?.[0]?.entries || []).map((x, i) => {
+              const nr = rundeNr(x.label) || Number(x.value) || i + 1;
+              return { nr, name: RUNDEN[nr - 1] || String(x.label || ''), tage: tageAus(x.detail, x.startDate) };
+            });
+            const grenze = tagUtc(Date.now() + 7 * 86400e3);
+            let runde = null;
+            kal.forEach(r => { if (r.tage && r.tage[0] <= grenze) runde = r; });
+            if (!runde) return { kal, runde: null, spiele: [], laedt: false };
+            let laedt = false;
+            const spiele = [];
+            runde.tage.forEach(t => { const l = fb.pokalTag(t); if (l) spiele.push(...l); else laedt = true; });
+            spiele.sort((p, q) => Date.parse(p.anstoss) - Date.parse(q.anstoss) || p.id - q.id);
+            return { kal, runde, spiele, laedt };
+          };
+          // Pokalspiele eines Vereins (ESPN-Team-ID): gespielte (teams/<id>/schedule) und kommende
+          // (...?fixture=true) alle 30 min; von 6 h vor bis 36 h nach Anstoss dazu das Scoreboard des
+          // Tages fuer Live-Stand, Tore und Karten. Spiele bereits geladener Spieltage zaehlen mit,
+          // falls ein laufendes Spiel kurz in keinem der beiden Spielplaene steht (ungemessen).
+          fb.pokalVereinPfad = IDE => `${SLUG.pokal}/teams/${IDE}/schedule`;
+          fb.pokalVerein = IDE => {
+            const basis = fb.pokalVereinPfad(IDE), a = fb.get(basis, 30 * MIN, 'espn'), b = fb.get(basis + '?fixture=true', 30 * MIN, 'espn');
+            if (!a && !b) return null;
+            const now = Date.now(), ids = new Set();
+            [a, b].forEach(d => (d && Array.isArray(d.events) ? d.events : []).forEach(e => {
+              const id = Number(e.id), an = Date.parse(e.date);
+              ids.add(id);
+              if (now >= an - 6 * 3600e3 && now <= an + 36 * 3600e3) fb.pokalTag(tagUtc(an));
+              if (!fb.pokalSpiele[id]?.vomTag) fb.pokalSpiele[id] = pokalKompakt(e, false);
+            }));
+            Object.values(fb.pokalSpiele).forEach(m => { if (m.heim_id == IDE || m.gast_id == IDE) ids.add(m.id); });
+            const team = (a || b)?.team || {};
+            return { spiele: [...ids].map(id => fb.pokalSpiele[id]).filter(Boolean).sort((p, q) => Date.parse(p.anstoss) - Date.parse(q.anstoss)),
+              team: NAME_DE[team.displayName] || team.displayName || '' };
+          };
+          // Spiel der Vereinskarte ueber Liga und Pokal (Variante V1): das laufende Spiel, sonst das
+          // letzte bis 36 h nach Anstoss (nicht mehr ab 6 h vor dem naechsten), sonst das naechste.
+          // L/ID: Liga und OpenLigaDB-ID; IDE: ESPN-ID des Vereins, ohne IDE nur die Liga wie bisher.
+          // Liefert L ('pokal' bei einem Pokalspiel), m (Spiel) oder nx (naechstes Ligaspiel), s, v.
+          fb.vereinAuswahl = (L, ID, IDE) => {
+            const s = fb.spieltag(L), v = fb.verein(ID, L), now = Date.now(), k = [];
+            const lm = s ? s.spiele.find(x => x.heim_id == ID || x.gast_id == ID) : null;
+            if (lm) k.push({ L, m: lm, a: Date.parse(lm.anstoss) });
+            if (v?.naechstes && (!lm || Date.parse(v.naechstes.anstoss) !== Date.parse(lm.anstoss))) k.push({ L, nx: v.naechstes, a: Date.parse(v.naechstes.anstoss) });
+            const p = IDE ? fb.pokalVerein(IDE) : null;
+            (p ? p.spiele : []).forEach(m => k.push({ L: 'pokal', m, a: Date.parse(m.anstoss) }));
+            const st = x => x.m ? fb.status(x.m) : (now < x.a ? 'pre' : 'offen');
+            const live = k.find(x => st(x) === 'live');
+            const vor = k.filter(x => st(x) === 'pre').sort((p1, p2) => p1.a - p2.a)[0];
+            const nach = k.filter(x => x.m && st(x) !== 'pre' && x.a <= now).sort((p1, p2) => p2.a - p1.a)[0];
+            const nachGilt = nach && now <= nach.a + 36 * 3600e3 && !(vor && now >= vor.a - 6 * 3600e3);
+            return Object.assign({ L, m: null, nx: null }, live || (nachGilt ? nach : null) || vor || nach || {}, { s, v });
+          };
+          fb.warteEspn = (was, pfad) => {
+            const f = fb.fehlerPfad['espn:' + pfad];
+            return f ? fb.hinweis('ESPN nicht erreichbar (' + fb.esc(f) + ') – neuer Versuch in 5 Min.') : fb.hinweis(was + ' wird geladen …');
+          };
+          fb.pokalIcon = g => `<svg viewBox="0 0 24 24" width="${g}" height="${g}" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4.5v1.5A3 3 0 0 0 7.5 10.5M17 6h2.5v1.5a3 3 0 0 1-3 3"/><path d="M12 14v3.5M8.5 20.5h7M9.5 17.5h5"/></svg>`;
+          // Pokalweg (Variante A, rechte Spalte): je Runde das Spiel des Vereins mit Ergebnis oder Termin
+          fb.pokalwegDaten = IDE => {
+            const p = fb.pokalVerein(IDE), r = fb.pokalRunde();
+            if (!p) return null;
+            const wir = m => m.heim_id == IDE ? 'heim' : 'gast';
+            const kal = r && r.kal && r.kal.length ? r.kal : RUNDEN.map((name, i) => ({ nr: i + 1, name }));
+            const runden = kal.map(rd => ({ rd, m: p.spiele.filter(m => m.runde === rd.name).pop() || null }));
+            let aus = null, sieger = false;
+            runden.forEach(({ rd, m }) => {
+              if (!m || !m.beendet || !m.sieger) return;
+              if (m.sieger !== wir(m)) aus = aus || rd; else if (rd.nr === 6) sieger = true;
+            });
+            return { p, runden, aus, sieger, wir };
+          };
+          fb.pokalweg = IDE => {
+            const d = fb.pokalwegDaten(IDE);
+            if (!d) return fb.warteEspn('Pokalweg', fb.pokalVereinPfad(IDE));
+            const letzteMitSpiel = Math.max(0, ...d.runden.filter(x => x.m).map(x => x.rd.nr));
+            const kreis = (art, inhalt) => {
+              const stil = { ok: 'background:var(--owlet-gruen, #a6d49e);color:#1d3320;', aus: 'color:var(--owlet-rot, #f0736a);border:1.5px solid var(--owlet-rot, #f0736a);',
+                jetzt: 'background:#e30613;color:#ffffff;', live: 'color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));',
+                leer: 'border:1.5px solid var(--owlet-aus, #3a4453);' }[art];
+              return `<span style="width:20px;height:20px;border-radius:50%;box-sizing:border-box;display:grid;place-items:center;font-size:10.5px;font-weight:800;${stil}">${inhalt}</span>`;
+            };
+            const zeilen = d.runden.map(({ rd, m }, i) => {
+              const gedimmt = d.aus && rd.nr > d.aus.nr;
+              let art = 'leer', inhalt = '', unter = '', rechts = '', klick = '';
+              if (m) {
+                const k = fb.status(m), a = new Date(m.anstoss), w = d.wir(m), gegner = w === 'heim' ? m.gast : m.heim;
+                unter = `${fb.tag(a)} ${datum(a)} · ${w === 'heim' ? 'gegen' : 'bei'} ${fb.esc(gegner)}`;
+                if (k === 'pre') { art = 'jetzt'; inhalt = rd.nr; rechts = fb.zeit(a); }
+                else {
+                  art = k === 'live' ? 'live' : !m.sieger ? 'leer' : m.sieger === w ? 'ok' : 'aus';
+                  inhalt = art === 'live' ? '<span class="pulse"></span>' : art === 'ok' ? '✓' : art === 'aus' ? '✕' : '';
+                  rechts = `${m.th ?? '–'}:${m.tg ?? '–'}${m.zusatz ? ' ' + m.zusatz : ''}${m.zusatz === 'i. E.' && m.ie ? ' ' + m.ie.join(':') : ''}`;
+                }
+                if (fb.antippbar(m)) klick = `role="button" tabindex="0" aria-label="${fb.esc(m.heim + ' gegen ' + m.gast)} öffnen" ${fb.tippAttr(`window.__fussball.waehle('pokal',${Number(m.id)})`)}`;
+              } else if (!d.aus && rd.nr === letzteMitSpiel + 1) unter = 'Auslosung folgt';
+              const farbe = gedimmt || (!m && !unter) ? 'var(--owlet-text-sekundaer, #8794a5)' : 'var(--owlet-text, #f2f5f8)';
+              return `<div ${klick} style="display:grid;grid-template-columns:20px minmax(0,1fr) auto 12px;gap:10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}">
+                  ${kreis(art, inhalt)}
+                  <span style="min-width:0;display:flex;flex-direction:column;"><b style="font-size:13.5px;font-weight:${m ? 700 : 600};color:${farbe};">${fb.esc(rd.name)}</b>${unter ? `<small style="font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</small>` : ''}</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--owlet-label, #b4c0cf);font-variant-numeric:tabular-nums;white-space:nowrap;">${rechts}</span>
+                  <span style="color:var(--owlet-muted, #6e7988);">${klick ? fb.pfeil : ''}</span></div>`;
+            }).join('');
+            return `<div style="${F}display:flex;flex-direction:column;text-align:left;">${zeilen}</div>`;
+          };
+
           // ---------- Spiel-Popup (#fussball-spiel), Muster wie #flug im Flugradar ----------
           const HASH = '#fussball-spiel';
           fb.sel = null; fb.tab = 'ticker'; fb.kopiert = ''; fb.messwerte = null;
@@ -612,13 +868,16 @@ button_card_templates:
           const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
 
           // ---------- Zeitstrahl der Vereinskarte (Variante Z1 der Entwurfsseite "FCK-Zeitstrahl") ----------
-          // Minute aus displayValue ("58'", "90'+6'"), Lage in der Halbzeit in Minuten. In der
+          // Minute aus displayValue ("58'", "90'+6'"), Lage im Abschnitt in Minuten. In der
           // Nachspielzeit bleibt clock.value bei 5400 stehen (gemessen 25.10.2026 an 90'+2' bis 90'+6'),
           // dort zaehlt deshalb nur displayValue; sonst die Sekunden fuer die genaue Lage.
+          // Abschnitte: 1./2. Halbzeit, im Pokal dazu die Verlaengerung (91.-105., 106.-120. Minute);
+          // clock.value laeuft dort weiter (gemessen 25.10.2026: 98' = 5829 s, 117' = 7009 s).
+          const ZS_BASIS = [0, 45, 90, 105], ZS_LANG = [45, 45, 15, 15];
           const zsZeit = (dv, sek) => {
             const t = /(\d+)'?\s*(?:\+\s*(\d+))?/.exec(String(dv || '')), s = Number(sek);
             const b = t ? Number(t[1]) : (s > 0 ? Math.ceil(s / 60) : 0), x = t && t[2] ? Number(t[2]) : 0;
-            const h = b <= 45 ? 1 : 2, basis = h === 1 ? 0 : 45;
+            const h = b <= 45 ? 1 : b <= 90 ? 2 : b <= 105 ? 3 : 4, basis = ZS_BASIS[h - 1];
             return { h, b, x, pos: Math.max(0, x ? b - basis + x - 0.5 : (s > 0 ? s / 60 - basis : b - basis - 0.5)) };
           };
           const zsKarte = () => `<svg viewBox="0 0 24 24" width="16" height="16" style="display:block;"><rect x="4.5" y="3" width="8.5" height="15.5" rx="1.25" fill="#e6b566" style="stroke:var(--owlet-amber, #e6b566);" stroke-width="1.5"/><rect x="11" y="5.5" width="8.5" height="15.5" rx="1.25" fill="#f0736a" style="stroke:var(--owlet-rot, #f0736a);" stroke-width="1.5"/></svg>`;
@@ -636,7 +895,13 @@ button_card_templates:
           // an den 4 Spielen der 2. Liga vom 24.10.: 26 Eintraege (15 Gelb, 8 Tore, 3 Elfmetertore),
           // Tore je Verein = Endstand, keine Wechsel. Nur bei Status live oder post (nicht "offen");
           // ohne ESPN-Daten kein Strahl ('').
-          // ID = teamId des Lieblingsvereins (OpenLigaDB); dessen Kuerzel steht in Vereinsrot.
+          // Pokalspiele (m.quelle 'espn') bringen ihr ESPN-Spiel selbst mit (m.ev). Verlaengerung als
+          // Abschnitt 3 und 4 (period 3/4, gemessen am FCK in Mannheim), Elfmeterschiessen nicht auf
+          // dem Strahl: ESPN fuehrt dort nur die Treffer (shootout: true, Minute 121'-125', gemessen
+          // 25.10.2026 an 3 Spielen der 1. Runde), also ohne Fehlschuesse und vollstaendige Reihenfolge.
+          // Das Ergebnis (shootoutScore) steht rechts neben dem Strahl.
+          // ID = Team-ID des Lieblingsvereins in der Quelle des Spiels (OpenLigaDB bzw. ESPN); dessen
+          // Kuerzel steht in Vereinsrot.
           // Ein Fehler hier (etwa geaenderte ESPN-Felder) laesst nur den Strahl weg, nicht die Karte.
           fb.zeitstrahl = (L, m, ID) => {
             try { return zeitstrahl(L, m, ID); } catch (err) { console.warn('Fussball-Zeitstrahl:', err); return ''; }
@@ -644,14 +909,14 @@ button_card_templates:
           const zeitstrahl = (L, m, ID) => {
             const k = fb.status(m);
             if (k !== 'live' && k !== 'post') return '';
-            const e = fb.live[L] ? paar(fb.espn(L), m) : fb.espnSpiel(L, m).e;
+            const e = m.quelle === 'espn' ? m.ev : fb.live[L] ? paar(fb.espn(L), m) : fb.espnSpiel(L, m).e;
             const c = e?.roh?.competitions?.[0];
             if (!c || !Array.isArray(c.details)) return '';
             const cs = c.competitors || [], hc = cs.find(x => x.homeAway === 'home') || {}, gc = cs.find(x => x.homeAway === 'away') || {};
             const heimId = String(hc.team?.id ?? hc.id ?? '');
             // Gelb-Rot: Rot fuer einen Spieler, der im Spiel schon Gelb hatte (ESPN hat keinen eigenen Typ)
             const gelb = new Set();
-            const ev = c.details.map(d => Object.assign({ d }, zsZeit(d.clock?.displayValue, d.clock?.value)))
+            const ev = c.details.filter(d => !d.shootout).map(d => Object.assign({ d }, zsZeit(d.clock?.displayValue, d.clock?.value)))
               .sort((p, q) => p.h - q.h || p.pos - q.pos)
               .map(z => {
                 const d = z.d, sp = d.athletesInvolved?.[0] || {}, sid = String(sp.id ?? '');
@@ -660,19 +925,33 @@ button_card_templates:
                 return art && { art, h: z.h, b: z.b, x: z.x, pos: z.pos, oben: String(d.team?.id ?? '') === heimId,
                   elf: !!d.penaltyKick, et: !!d.ownGoal, name: sp.displayName || sp.shortName || '' };
               }).filter(Boolean);
-            // Spielphase: Uhr "67'" bzw. "45'+2'", Halbzeit (uhr() = 'HZ'), Ende; period 1/2 aus status
-            const u = zsZeit(e.uhr, 0), per = Number(c.status?.period ?? e.roh.status?.period);
-            const phase = e.zustand === 'post' ? 'ende' : uhr(e) === 'HZ' ? 'hz' : e.zustand === 'in' ? (per === 2 || u.h === 2 ? 'h2' : 'h1') : 'h1';
-            if (phase === 'h1' || phase === 'hz') fb.zsNach[m.id] = Math.max(fb.zsNach[m.id] || 0, u.h === 1 ? u.x : 0);
+            // Spielphase: Uhr "67'" bzw. "45'+2'", Halbzeit (uhr() = 'HZ'), Ende; period aus status
+            // (1/2, Verlaengerung 3/4, Elfmeterschiessen 5). ab = laufender Abschnitt.
+            const st = c.status || e.roh.status || {}, u = zsZeit(e.uhr, 0), per = Number(st.period) || 0;
+            const voll = e.zustand === 'post' || per >= 5, hz = !voll && uhr(e) === 'HZ';
+            const ab = voll ? 5 : hz ? 1 : e.zustand === 'in' ? Math.min(4, Math.max(per, u.h, 1)) : 1;
+            const zahl = per >= 3 || u.h >= 3 || ev.some(x => x.h >= 3) ? 4 : 2;
+            if (ab === 1) fb.zsNach[m.id] = Math.max(fb.zsNach[m.id] || 0, u.h === 1 ? u.x : 0);
             const nEv = h => Math.max(0, ...ev.filter(x => x.h === h).map(x => x.x));
-            const n1 = Math.max(nEv(1), fb.zsNach[m.id] || 0), n2 = Math.max(nEv(2), (phase === 'h2' || phase === 'ende') && u.h === 2 ? u.x : 0);
-            const len = [45 + n1, 45 + n2];
-            const p1 = phase === 'h1' ? Math.min(1, Math.max(0, ((u.b >= 45 ? 45 + u.x : u.b) - 0.5) / len[0])) : 1;
-            const p2 = phase === 'h2' ? Math.min(1, Math.max(0, ((u.b >= 90 ? 45 + u.x : u.b - 45) - 0.5) / len[1])) : (phase === 'ende' ? 1 : 0);
+            const n = [1, 2, 3, 4].map(h => Math.max(nEv(h), h === 1 ? fb.zsNach[m.id] || 0 : 0, h >= 2 && u.h === h && ab >= h ? u.x : 0));
+            const len = n.map((x, i) => ZS_LANG[i] + x);
+            // Gespielter Anteil je Abschnitt (0..1)
+            const anteil = h => {
+              if (voll) return 1;
+              if (hz) return h === 1 ? 1 : 0;
+              if (h !== ab) return h < ab ? 1 : 0;
+              if (u.h !== h) return 0;
+              const b = ZS_BASIS[h - 1], r = ZS_LANG[h - 1];
+              return Math.min(1, Math.max(0, ((u.b >= b + r ? r + u.x : u.b - b) - 0.5) / len[h - 1]));
+            };
+            // Elfmeterschiessen: Ergebnis je Verein (shootoutScore), nur bei period 5 bzw. Status STATUS_FINAL_PEN
+            const ie = (per >= 5 || /PEN/.test(st.type?.name || '')) && hc.shootoutScore != null && gc.shootoutScore != null
+              ? [Number(hc.shootoutScore), Number(gc.shootoutScore)] : null;
             // Ebenen je Spur: liegt ein Symbol naeher als seine Breite am vorigen, rueckt es nach aussen.
-            // Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit 280 px (eher eng).
-            const pxMin = 271 / (len[0] + len[1]), lage = new Map(), tief = { o: 0, u: 0 };
-            [1, 2].forEach(h => [true, false].forEach(oben => {
+            // Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit 280 px (eher eng), abzueglich
+            // der Abstaende zwischen den Abschnitten und der Spalte fuer das Elfmeterschiessen.
+            const pxMin = (280 - 9 * (zahl - 1) - (ie ? 34 : 0)) / len.slice(0, zahl).reduce((p, q) => p + q, 0), lage = new Map(), tief = { o: 0, u: 0 };
+            [1, 2, 3, 4].forEach(h => [true, false].forEach(oben => {
               const rechts = [];
               ev.filter(x => x.h === h && x.oben === oben).forEach(x => {
                 // "E"/"ET" steht rechts am Tor und verbreitert das Symbol nur nach rechts
@@ -691,13 +970,14 @@ button_card_templates:
               const teil = (a, z, f) => z > a ? `<div style="position:absolute;left:${a}%;width:${z - a}%;top:${Y}px;height:2px;background:${nach ? `repeating-linear-gradient(90deg, ${f} 0 4px, transparent 4px 7px)` : f};"></div>` : '';
               return teil(von, g, VOLL) + teil(g, bis, LEER);
             };
+            const achseStil = 'position:relative;height:13px;margin-top:2px;font-size:10px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;white-space:nowrap;';
             const seg = h => {
-              const Lh = len[h - 1], p = h === 1 ? p1 : p2, reg = 45 / Lh * 100, n = h === 1 ? n1 : n2;
+              const Lh = len[h - 1], p = anteil(h), reg = ZS_LANG[h - 1] / Lh * 100, nh = n[h - 1];
               let s = linie(0, reg, p, false) + (reg < 100 ? linie(reg, 100, p, true) : '');
               s += `<div style="position:absolute;left:0;top:${Y - 4}px;width:2px;height:10px;border-radius:1px;background:${p > 0 ? VOLL : LEER};"></div>`;
               s += `<div style="position:absolute;right:0;top:${Y - 4}px;width:2px;height:10px;border-radius:1px;background:${p >= 1 ? VOLL : LEER};"></div>`;
               if (reg < 100) s += `<div style="position:absolute;left:${reg}%;top:${Y + 3}px;width:1px;height:6px;background:var(--owlet-muted, #6e7988);"></div>`;
-              if ((phase === 'h1' && h === 1) || (phase === 'h2' && h === 2)) s += `<span class="pulse" style="position:absolute;left:${p * 100}%;top:${Y + 1}px;width:8px;height:8px;transform:translate(-50%,-50%);color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"></span>`;
+              if (!voll && !hz && h === ab) s += `<span class="pulse" style="position:absolute;left:${p * 100}%;top:${Y + 1}px;width:8px;height:8px;transform:translate(-50%,-50%);color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"></span>`;
               ev.filter(x => x.h === h).forEach(x => {
                 const [farbe, sym, titel] = ZS_SYM[x.art], l = lage.get(x), left = Math.min(100, x.pos / Lh * 100);
                 const top = x.oben ? Y - 5 - 16 - l * 18 : Y + 7 + l * 18;
@@ -705,32 +985,58 @@ button_card_templates:
                 const min = x.x ? `${x.b}'+${x.x}'` : `${x.b}'`;
                 s += `<span title="${fb.esc(`${min} ${titel}${x.elf ? ' (Elfmeter)' : ''}${x.et ? ' (Eigentor)' : ''} · ${x.name}`)}" style="position:absolute;left:${left}%;top:${top}px;transform:translateX(-50%);color:${farbe};line-height:0;">${sym}${zusatz}</span>`;
               });
-              const achse = `<div style="position:relative;height:13px;margin-top:2px;font-size:10px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;white-space:nowrap;"><span style="position:absolute;left:0;">${h === 1 ? "0'" : "46'"}</span><span style="position:absolute;right:0;">${h === 1 ? '45' : '90'}'${n ? '+' + n : ''}</span></div>`;
-              return `<div style="position:relative;min-width:0;flex:${Lh} 1 0;"><div style="position:relative;height:${H}px;">${s}</div>${achse}</div>`;
+              // Achse: Beginn und Ende je Halbzeit; die Verlaengerung nur 91' links und 120' rechts (wenig Platz)
+              const ende = `${ZS_BASIS[h - 1] + ZS_LANG[h - 1]}'${nh ? '+' + nh : ''}`;
+              const achse = h === 3 ? `<span style="position:absolute;left:0;">91'</span>`
+                : h === 4 ? `<span style="position:absolute;right:0;">${ende}</span>`
+                : `<span style="position:absolute;left:0;">${h === 1 ? "0'" : "46'"}</span><span style="position:absolute;right:0;">${ende}</span>`;
+              return `<div style="position:relative;min-width:0;flex:${Lh} 1 0;${h === 3 ? 'margin-left:5px;' : ''}"><div style="position:relative;height:${H}px;">${s}</div><div style="${achseStil}">${achse}</div></div>`;
             };
+            // Ergebnis des Elfmeterschiessens je Spur, der Sieger in Textfarbe
+            const ieSpalte = !ie ? '' : (() => {
+              const zahlHtml = (w, y, sieg) => `<b style="position:absolute;left:50%;top:${y}px;transform:translate(-50%,-50%);font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:${sieg ? 'var(--owlet-text, #f2f5f8)' : 'var(--owlet-label, #b4c0cf)'};">${w}</b>`;
+              return `<div style="position:relative;flex:0 0 30px;margin-left:4px;"><div style="position:relative;height:${H}px;"><span style="position:absolute;inset:0 2px;border:1px dashed var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:8px;"></span>${zahlHtml(ie[0], hO / 2 + 2, ie[0] > ie[1])}${zahlHtml(ie[1], Y + 4 + hU / 2, ie[1] > ie[0])}</div><div style="${achseStil}"><span style="position:absolute;left:50%;transform:translateX(-50%);">i. E.</span></div></div>`;
+            })();
             // Vereinskuerzel von ESPN (FCN, FCK); der Lieblingsverein in Vereinsrot
             const favOben = m.heim_id == ID, favUnten = m.gast_id == ID;
-            const kuerzel = (t, n, fav, y) => {
-              const k3 = fb.esc(t.team?.abbreviation || String(n || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
+            const kuerzel = (t, nm, fav, y) => {
+              const k3 = fb.esc(t.team?.abbreviation || String(nm || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
               return `<span style="position:absolute;left:0;top:${y}px;width:34px;transform:translateY(-50%);text-align:center;font-size:10.5px;font-weight:800;letter-spacing:0.02em;padding:2px 0;border-radius:6px;${fav ? 'color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));background:rgba(227,6,19,0.16);box-shadow:inset 0 0 0 1px rgba(227,6,19,0.24);' : 'color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));'}">${k3}</span>`;
             };
             const namen = `<div style="position:relative;">${kuerzel(hc, m.heim, favOben, hO / 2)}<div style="position:absolute;left:4px;right:4px;top:${Y}px;height:1px;background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>${kuerzel(gc, m.gast, favUnten, Y + 4 + hU / 2)}</div>`;
-            const text = ev.length ? ev.map(x => `${x.x ? `${x.b}'+${x.x}'` : `${x.b}'`} ${ZS_SYM[x.art][2]} ${x.oben ? m.heim : m.gast}`).join(', ') : 'keine Tore und Karten';
+            const text = (ev.length ? ev.map(x => `${x.x ? `${x.b}'+${x.x}'` : `${x.b}'`} ${ZS_SYM[x.art][2]} ${x.oben ? m.heim : m.gast}`).join(', ') : 'keine Tore und Karten')
+              + (ie ? `, Elfmeterschießen ${ie[0]}:${ie[1]}` : '');
             return `<div role="button" tabindex="0" aria-label="${fb.esc('Zeitstrahl: ' + text + '. Spiel öffnen')}" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)} style="pointer-events:auto;cursor:pointer;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:8px 10px 6px;">
-                <div style="display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:8px;">${namen}<div style="display:flex;gap:9px;min-width:0;">${seg(1)}${seg(2)}</div></div></div>`;
+                <div style="display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:8px;">${namen}<div style="display:flex;gap:9px;min-width:0;">${[1, 2, 3, 4].slice(0, zahl).map(seg).join('')}${ieSpalte}</div></div></div>`;
           };
 
-          fb.spielPopup = FAV => {
+          // FAV / FAVE: Team-ID des Lieblingsvereins bei OpenLigaDB (Liga) bzw. ESPN (Pokal)
+          fb.spielPopup = (FAV, FAVE) => {
             const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
             const kopf = t => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:10px;align-items:center;"><div style="font-size:12.5px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);min-width:0;">${t}</div>${fb.zuKnopf()}</div>`;
             const s = fb.sel;
             if (!s) return huelle(kopf('Spiel') + fb.hinweis('Spielstand der Vereinskarte oder ein Spiel im Spieltag antippen.'));
-            const sp = fb.spieltag(s.L), m = sp ? sp.spiele.find(x => x.id === s.id) : null;
-            if (!sp) return huelle(kopf('Spiel') + fb.warte('Spieltag'));
-            if (!m) return huelle(kopf('Spiel') + fb.hinweis('Spiel nicht mehr im aktuellen Spieltag.'));
-            const offen = fb.offen(), k = fb.status(m), a = new Date(m.anstoss);
-            // ESPN nur bei offenem Popup abrufen
-            const es = offen ? fb.espnSpiel(s.L, m) : { e: null, pfad: '', geladen: false, fehler: '' }, e = es.e;
+            // Pokalspiele (L 'pokal') stehen in fb.pokalSpiele; bei offenem Popup haelt das Scoreboard
+            // ihres Spieltags den Stand frisch (live 45 s)
+            const pokal = s.L === 'pokal', offen = fb.offen();
+            let sp = null, m = null, tagPfad = '';
+            if (pokal) {
+              const m0 = fb.pokalSpiele[s.id];
+              if (!m0) return huelle(kopf('Spiel') + fb.hinweis('Pokalspiel nicht mehr geladen. Bitte erneut antippen.'));
+              tagPfad = fb.pokalTagPfad(tagUtc(Date.parse(m0.anstoss)));
+              if (offen) fb.pokalTag(tagUtc(Date.parse(m0.anstoss)));
+              m = fb.pokalSpiele[s.id];
+              if (FAVE) FAV = FAVE;
+            } else {
+              sp = fb.spieltag(s.L); m = sp ? sp.spiele.find(x => x.id === s.id) : null;
+              if (!sp) return huelle(kopf('Spiel') + fb.warte('Spieltag'));
+              if (!m) return huelle(kopf('Spiel') + fb.hinweis('Spiel nicht mehr im aktuellen Spieltag.'));
+            }
+            const k = fb.status(m), a = new Date(m.anstoss);
+            // ESPN nur bei offenem Popup abrufen; ein Pokalspiel bringt sein ESPN-Spiel selbst mit
+            const es = !offen ? { e: null, pfad: '', geladen: false, fehler: '' }
+              : pokal ? { e: m.ev, pfad: tagPfad, geladen: !!fb.cache['espn:' + tagPfad] || !!m.ev, fehler: fb.fehlerPfad['espn:' + tagPfad] || '' }
+              : fb.espnSpiel(s.L, m), e = es.e;
             const sumPfad = e ? fb.summaryPfad(s.L, e.id) : '', sumKey = 'espn:' + sumPfad;
             const sum = e ? fb.get(sumPfad, k === 'live' ? 45e3 : 5 * MIN, 'espn') : undefined;
             const det = fb.espnDetails(sum, e);
@@ -738,16 +1044,16 @@ button_card_templates:
             let th = m.th, tg = m.tg, standEspn = false;
             if (k === 'live' && th == null) { th = 0; tg = 0; }
             // Laufendes Spiel: hat ESPN mehr Tore als OpenLigaDB, gilt der ESPN-Stand (wie im Ticker)
-            if (k === 'live' && e) {
+            if (k === 'live' && e && !pokal) {
               const eh = Number(e.sh), eg = Number(e.sg);
               if (e.sh !== '' && e.sg !== '' && isFinite(eh) && isFinite(eg) && eh + eg > (th || 0) + (tg || 0)) { th = eh; tg = eg; standEspn = true; }
             }
 
             // ----- Kopf und Spielstand -----
-            const min = k === 'live' ? uhr(e) : null;
+            const min = k === 'live' ? (pokal ? fb.minute('pokal', m) : uhr(e)) : null;
             const status = k === 'live'
               ? `<span style="display:inline-flex;align-items:center;gap:5px;color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"><span class="pulse"></span>LIVE${min ? ' · ' + (min === 'HZ' ? 'Halbzeit' : fb.esc(min)) : ''}</span>`
-              : `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+              : `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}${m.zusatz ? ' · ' + m.zusatz + (m.zusatz === 'i. E.' && m.ie ? ' ' + m.ie[0] + ':' + m.ie[1] : '') : ''}</span>`;
             const seite = (n, l) => `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;font-size:13px;font-weight:700;color:var(--owlet-text, #f2f5f8);min-width:0;">${fb.wappen(l, n, 42)}<span style="max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fb.esc(n)}</span></div>`;
             const stand = `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:12px 8px;border-radius:16px;${fav ? 'background:rgba(227,6,19,0.12);border:1px solid rgba(227,6,19,0.24);' : 'background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));'}">
                 ${seite(m.heim, m.heim_logo)}
@@ -780,19 +1086,22 @@ button_card_templates:
               let ph = 0;
               (m.tore || []).forEach((x, i) => {
                 const heimTor = x.h > ph; ph = x.h;
-                z.push({ sort: (Number(x.min) || 0) * 100, i, typ: 'tor', min: x.min ? x.min + "'" : '',
+                z.push({ sort: x.sort ?? (Number(x.min) || 0) * 100, i, typ: 'tor', min: x.min ? x.min + "'" : '',
                   titel: `${x.et ? 'Eigentor' : 'Tor'} · ${x.h}:${x.g} ${heimTor ? m.heim : m.gast}`,
-                  d: (x.name || '') + (x.elf ? ' (Elfmeter)' : ''), q: 'OpenLigaDB', unser: FAV && (heimTor ? m.heim_id : m.gast_id) == FAV });
+                  d: (x.name || '') + (x.elf ? ' (Elfmeter)' : ''), q: pokal ? 'ESPN' : 'OpenLigaDB', unser: FAV && (heimTor ? m.heim_id : m.gast_id) == FAV });
               });
               if (det) {
                 const espnTore = det.ev.filter(x => x.typ === 'tor');
                 espnTore.slice((m.tore || []).length).forEach(x => z.push({ sort: x.sort, i: 1000 + x.i, typ: 'tor', min: x.min,
-                  titel: `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`, d: x.namen.join(' · '), q: 'ESPN, bei OpenLigaDB noch nicht eingetragen',
+                  titel: `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`, d: x.namen.join(' · '), q: pokal ? 'ESPN, Spieldetails' : 'ESPN, bei OpenLigaDB noch nicht eingetragen',
                   unser: FAV && ((x.seite === 'heim' && m.heim_id == FAV) || (x.seite === 'gast' && m.gast_id == FAV)) }));
                 det.ev.filter(x => x.typ !== 'tor').forEach(x => z.push({ sort: x.sort, i: 1000 + x.i, typ: x.typ, min: x.min,
                   titel: x.typ === 'phase' ? x.label : `${x.label}${teamName(x) ? ' · ' + teamName(x) : ''}`,
                   d: x.typ === 'phase' ? '' : (x.wechsel ? `${x.wechsel.ein} für ${x.wechsel.aus}` : x.namen.join(' · ')), q: 'ESPN' }));
               }
+              // Elfmeterschiessen (Pokal): nur das Ergebnis, einzelne Schuesse liefert ESPN nicht vollstaendig
+              if (m.ie && (m.zusatz === 'i. E.' || m.periode >= 5)) z.push({ sort: 99999, i: 9999, typ: 'phase', min: '',
+                titel: `Elfmeterschießen ${m.ie[0]}:${m.ie[1]}`, d: '', q: 'ESPN, ohne einzelne Schüsse' });
               z.sort((p, q) => q.sort - p.sort || q.i - p.i);
               const zeilen = z.map(x => {
                 const c = FARBE[x.typ] || 'var(--owlet-text-sekundaer, #8794a5)';
@@ -910,7 +1219,10 @@ button_card_templates:
 
             // ----- Messung -----
             const messung = () => {
-              const roh = fb.rohSpiel(s.L, sp.nr, m.id) || {}, tore = Array.isArray(roh.goals) ? roh.goals : [];
+              const roh = pokal ? {} : fb.rohSpiel(s.L, sp.nr, m.id) || {}, tore = Array.isArray(roh.goals) ? roh.goals : [];
+              // Pokal: Verlauf von Status und Periode (fb.statusVerlauf, nur solange die View offen war)
+              const verlauf = pokal ? (fb.statusVerlauf[m.id] || []).map(x => ({ zeit: uhrzeit(x.t), status: x.status, periode: x.periode, uhr: x.uhr,
+                details: x.details, shootout: x.shootout, ie: x.ie, zuletzt: x.zuletzt ? uhrzeit(x.zuletzt) : null })) : null;
               const sumFehler = fb.fehlerPfad[sumKey] || '';
               const probe = x => x ? kurz((x.kom[0] && x.kom[0].text) || (x.ev[0] && x.ev[0].text) || '', 160) : '';
               const gesehen = Object.entries(fb.gesehen).filter(([kk]) => kk.startsWith(m.id + ':')).map(([kk, v]) => {
@@ -919,8 +1231,10 @@ button_card_templates:
               });
               const w = fb.messwerte = {
                 version: VERSION, gemessen: new Date().toISOString(),
-                spiel: { liga: s.L, oldb_id: m.id, heim: m.heim, gast: m.gast, anstoss: m.anstoss, status: k },
-                oldb: {
+                spiel: { liga: s.L, [pokal ? 'espn_id' : 'oldb_id']: m.id, heim: m.heim, gast: m.gast, anstoss: m.anstoss, status: k },
+                pokal: pokal ? { runde: m.runde, status_name: m.statusName, periode: m.periode, zusatz: m.zusatz || null, elfmeterschiessen: m.ie ? m.ie.join(':') : null,
+                  sieger: m.sieger, status_verlauf: verlauf } : null,
+                oldb: pokal ? null : {
                   // Stand laut OpenLigaDB selbst, nicht der ggf. von ESPN uebernommene Kopf-Stand
                   stand: m.th == null ? (k === 'live' ? '0:0' : null) : `${m.th}:${m.tg}`, tore: tore.length,
                   tore_ohne_minute: tore.filter(x => x.matchMinute == null).length,
@@ -964,13 +1278,22 @@ button_card_templates:
               const zeile = (st, t, v) => `<div style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;align-items:start;padding:6px 2px;border-top:1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05));"><span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${farbe[st]};"></span><span style="min-width:0;font-size:12.5px;color:var(--owlet-text, #f2f5f8);"><b style="font-weight:700;">${t}</b><span style="display:block;color:var(--owlet-label, #b4c0cf);overflow-wrap:anywhere;">${v}</span></span></div>`;
               const titel = t => `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding-top:8px;">${t}</div>`;
               const liste = o => o && Object.keys(o).length ? Object.entries(o).map(([n, z]) => `${fb.esc(n)} ${z}`).join(' · ') : '–';
-              const S = w.espn_summary, B = w.espn_scoreboard, O = w.oldb;
+              const S = w.espn_summary, B = w.espn_scoreboard, O = w.oldb || {};
               const nichtOffen = !offen ? zeile('offen', 'Popup geschlossen', 'ESPN wird nur bei offenem Popup abgerufen.') : '';
               const sbZeile = B.fehler ? zeile('fehler', 'Abruf', fb.esc(B.fehler))
                 : !B.geladen ? zeile('offen', 'Abruf', 'läuft …')
                 : !e ? zeile('leer', 'Zuordnung', 'kein ESPN-Spiel mit Anstoß ±10 min und passenden Vereinsnamen')
                 : zeile('ok', 'Spiel', `${fb.esc(B.name || '')} · Event ${fb.esc(B.event_id)} · ${fb.esc(B.status)}${B.uhr ? ' · ' + fb.esc(B.uhr) : ''}`);
-              const standZeile = e ? zeile(O.stand === B.stand ? 'ok' : 'leer', 'Stand ESPN / OpenLigaDB', `${fb.esc(B.stand)} / ${fb.esc(O.stand ?? '–')}`) : '';
+              const standZeile = e && !pokal ? zeile(O.stand === B.stand ? 'ok' : 'leer', 'Stand ESPN / OpenLigaDB', `${fb.esc(B.stand)} / ${fb.esc(O.stand ?? '–')}`) : '';
+              // Pokal: Statusfolge (welche Namen ESPN live in Verlaengerung und Elfmeterschiessen schickt)
+              // und wann der Endstand zuerst zu sehen war
+              const P = w.pokal, endeGesehen = P && P.status_verlauf ? P.status_verlauf.find(x => /FINAL|FULL_TIME/.test(x.status || '')) : null;
+              const pokalZeilen = !P ? '' : [
+                zeile('ok', `Status ${fb.esc(P.status_name || '–')} · Periode ${P.periode}`, `${fb.esc(P.runde)}${P.zusatz ? ' · ' + fb.esc(P.zusatz) : ''}${P.elfmeterschiessen ? ' · Elfmeterschießen ' + fb.esc(P.elfmeterschiessen) : ''}${P.sieger ? ' · Sieger ' + (P.sieger === 'heim' ? fb.esc(m.heim) : fb.esc(m.gast)) : ''}`),
+                P.status_verlauf && P.status_verlauf.length
+                  ? zeile('ok', `Statusfolge (${P.status_verlauf.length})`, P.status_verlauf.map(x => `${x.zeit} ${fb.esc(x.status)} P${x.periode}${x.uhr ? ' ' + fb.esc(x.uhr) : ''} · ${x.details} details${x.shootout ? `, ${x.shootout} i. E.` : ''}${x.ie ? ' · i. E. ' + fb.esc(x.ie) : ''}${x.zuletzt ? ' (bis ' + x.zuletzt + ')' : ''}`).join(' → '))
+                  : zeile('offen', 'Statusfolge', 'Noch nichts gesehen: gezählt wird nur, solange die View offen ist.'),
+                zeile(endeGesehen ? 'ok' : 'offen', 'Endstand zuerst gesehen', endeGesehen ? `${endeGesehen.zeit} (${fb.esc(endeGesehen.status)})` : '–')].join('');
               const sumZeilen = !e ? zeile('offen', 'Abruf', 'wartet auf die Event-ID') : S.fehler
                 ? zeile('fehler', 'Abruf', fb.esc(S.fehler) + (/TypeError/.test(S.fehler) ? ' – ohne HTTP-Status: Netzwerk oder CORS' : ''))
                 : !det ? zeile('offen', 'Abruf', 'läuft …')
@@ -993,8 +1316,7 @@ button_card_templates:
                 : fb.kopiert === 'nein' ? '<span style="font-size:12px;color:var(--owlet-amber, #e6b566);">Zwischenablage gesperrt – Text unten markieren</span>' : '';
               return `<div style="display:flex;flex-direction:column;">
                 ${nichtOffen}
-                ${titel('OpenLigaDB')}
-                ${zeile(O.fehler ? 'fehler' : 'ok', 'Spiel ' + m.id, `${O.tore} ${O.tore === 1 ? 'Tor' : 'Tore'} · ${O.tore_ohne_minute} ohne Minute · ${O.tore_mit_kommentar} mit Kommentar${O.kommentar_beispiel ? ' („' + fb.esc(O.kommentar_beispiel) + '“)' : ''}${O.letzte_aenderung ? ' · letzte Änderung ' + fb.esc(O.letzte_aenderung) : ''}`)}
+                ${pokal ? titel('DFB-Pokal (ESPN)') + pokalZeilen : titel('OpenLigaDB') + zeile(O.fehler ? 'fehler' : 'ok', 'Spiel ' + m.id, `${O.tore} ${O.tore === 1 ? 'Tor' : 'Tore'} · ${O.tore_ohne_minute} ohne Minute · ${O.tore_mit_kommentar} mit Kommentar${O.kommentar_beispiel ? ' („' + fb.esc(O.kommentar_beispiel) + '“)' : ''}${O.letzte_aenderung ? ' · letzte Änderung ' + fb.esc(O.letzte_aenderung) : ''}`)}
                 ${titel('ESPN Scoreboard')}
                 ${sbZeile}${standZeile}
                 ${e ? zeile(B.details && Object.keys(B.details).length ? 'ok' : 'leer', 'Ereignisse im Scoreboard', liste(B.details)) : ''}
@@ -1009,15 +1331,16 @@ button_card_templates:
 
             const inhalt = tab === 'aufstellung' ? aufstellung() : tab === 'kommentar' ? kommentar() : tab === 'statistik' ? statistik() : tab === 'messung' ? messung() : ticker();
             const link = e ? fb.espnLink(e) : '';
-            const cO = fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`], cE = fb.cache[sumKey];
+            const cO = sp ? fb.cache[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`] : null, cT = pokal ? fb.cache['espn:' + tagPfad] : null, cE = fb.cache[sumKey];
             const fuss = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));font-size:11.5px;color:var(--owlet-text-sekundaer, #8794a5);">
-                <span>Stand${cO ? ' OpenLigaDB ' + fb.zeit(new Date(cO.t)) : ''}${cE ? ' · ESPN ' + fb.zeit(new Date(cE.t)) : ''}</span>
+                <span>Stand${cO ? ' OpenLigaDB ' + fb.zeit(new Date(cO.t)) : ''}${cT ? ' ESPN ' + fb.zeit(new Date(cT.t)) : ''}${cE ? (cT ? ' · Details ' : ' · ESPN ') + fb.zeit(new Date(cE.t)) : ''}</span>
                 <span style="display:flex;gap:6px;flex-wrap:wrap;">
                   <button type="button" aria-pressed="${tab === 'messung'}" ${fb.tippAttr(`window.__fussball.zeige('${tab === 'messung' ? 'ticker' : 'messung'}')`)} style="font:inherit;font-size:12px;font-weight:700;color:${tab === 'messung' ? 'var(--owlet-blau, #7fb3d5)' : 'var(--owlet-label, #b4c0cf)'};padding:6px 10px;border-radius:10px;cursor:pointer;pointer-events:auto;background:${tab === 'messung' ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 16%, transparent)' : 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'};border:1px solid ${tab === 'messung' ? 'color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent)' : 'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">${tab === 'messung' ? 'Messung schließen' : 'Messung'}</button>
                   ${link ? `<a href="${fb.esc(link)}" target="_blank" rel="noopener" ${fb.tippAttr('window.open(this.href)')} style="font-size:12px;font-weight:700;color:var(--owlet-blau, #7fb3d5);text-decoration:none;padding:6px 10px;border-radius:10px;background:color-mix(in srgb, var(--owlet-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--owlet-blau, #7fb3d5) 24%, transparent);pointer-events:auto;">Spiel bei ESPN</a>` : ''}
                 </span>
               </div>`;
-            return huelle(kopf(`${s.L === 'bl1' ? '1.' : '2.'} Bundesliga · ${sp.nr}. Spieltag · ${fb.tag(a)} ${fb.zeit(a)}`) + stand + reiterHtml + inhalt + fuss);
+            const titelZeile = pokal ? `DFB-Pokal · ${fb.esc(m.runde)}` : `${s.L === 'bl1' ? '1.' : '2.'} Bundesliga · ${sp.nr}. Spieltag`;
+            return huelle(kopf(`${titelZeile} · ${fb.tag(a)} ${fb.zeit(a)}`) + stand + reiterHtml + inhalt + fuss);
           };
           // Bereich einer Karte, der nach jedem Abruf und alle 30 s neu gezeichnet wird
           fb.bereich = (el, key, render) => {
@@ -1054,6 +1377,41 @@ button_card_templates:
             return `<span style="position:relative;flex:0 0 auto;width:${px}px;height:${px}px;border-radius:50%;background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));display:inline-grid;place-items:center;"><span style="font-size:${Math.round(px * 0.33)}px;font-weight:800;color:var(--owlet-text-sekundaer, #8794a5);">${ini}</span>${img}</span>`;
           };
           fb.badge = (c, t, puls) => `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${puls ? '<span class="pulse"></span>' : ''}${t}</span>`;
+          // Spielliste S1 (Liga-Spieltag und Pokalrunde): nach Anstoss gruppiert, Heim/Gast untereinander,
+          // Tore rechts. FAV = Team-ID des Lieblingsvereins in der Quelle der Spiele (Hervorhebung H1).
+          // Pokal: "n. V." bzw. "i. E." statt "Ende", Sieger im Elfmeterschiessen fett.
+          fb.spielListe = (L, liste, FAV) => {
+            const spiele = [...liste].sort((x, y) => Date.parse(x.anstoss) - Date.parse(y.anstoss) || x.id - y.id);
+            // Spiele mehr als 4 Tage neben der Mitte (Nachholspiele) mit Datum
+            const mitte = spiele.length ? Date.parse(spiele[Math.floor(spiele.length / 2)].anstoss) : 0;
+            let html = '', grp = '', ohneMinute = 0;
+            spiele.forEach(m => {
+              const a = Date.parse(m.anstoss), d = new Date(a), k = fb.status(m);
+              const g = Math.abs(a - mitte) > 4 * 86400e3 ? `${fb.tag(d)} ${datum(d)} · ${fb.zeit(d)}` : `${fb.tag(d)} · ${fb.zeit(d)}`;
+              if (g !== grp) { html += `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding:${grp ? '8px' : '0'} 2px 2px;">${g}</div>`; grp = g; }
+              const fav = FAV && (m.heim_id == FAV || m.gast_id == FAV);
+              let th = m.th, tg = m.tg;
+              if (k === 'live' && (th === null || th === undefined)) { th = 0; tg = 0; }
+              // Sieger nach Toren, bei Gleichstand nach Elfmeterschiessen
+              const ie = m.ie, sieg = k !== 'post' ? '' : th > tg || (th === tg && ie && ie[0] > ie[1]) ? 'heim' : tg > th || (th === tg && ie && ie[1] > ie[0]) ? 'gast' : '';
+              const zeile = (n, l, x, seite) => {
+                const r = sieg ? (sieg === seite ? 'w' : 'l') : '', c = r === 'l' ? 'var(--owlet-text-sekundaer, #8794a5)' : 'var(--owlet-text, #f2f5f8)';
+                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(l, n, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r === 'w' ? 700 : 500};">${fb.esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k === 'pre' || x === null || x === undefined ? '' : x}</span></div>`;
+              };
+              // Laufend: Minute von ESPN ("67'", "HZ", im Pokal auch "i. E."), sonst "LIVE"
+              const min = k === 'live' ? fb.minute(L, m) : null;
+              if (k === 'live' && !min && m.quelle !== 'espn') ohneMinute++;
+              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--owlet-rot, #f0736a);"><span class="pulse"></span>${min || 'LIVE'}</span>`
+                : k === 'post' ? (m.zusatz ? (m.zusatz === 'i. E.' && ie ? `i. E. ${ie[0]}:${ie[1]}` : m.zusatz) : 'Ende') : (k === 'offen' ? 'offen' : fb.zeit(d));
+              const bg = fav ? 'background:rgba(227,6,19,0.12);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent);' : '');
+              // Ab Anstoss oeffnet die Zeile das Spiel-Popup
+              const klick = fb.antippbar(m) ? `role="button" tabindex="0" aria-label="${fb.esc(m.heim + ' gegen ' + m.gast)} öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
+              html += `<div ${klick} style="display:grid;grid-template-columns:60px minmax(0,1fr) 12px;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}"><span style="font-size:11.5px;font-weight:700;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, 'heim')}${zeile(m.gast, m.gast_logo, tg, 'gast')}</div><span style="color:var(--owlet-muted, #6e7988);">${klick ? fb.pfeil : ''}</span></div>`;
+            });
+            // Hinweis nur, wenn ESPN beim Abruf scheitert (Minute fehlt dann)
+            const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
+            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}${notiz}</div>`;
+          };
           // ---------- Meldungen (Schalter; gemeldet wird von der Automation "Fussball: Meldungen") ----------
           fb.zustand = id => fb.hass && fb.hass.states[id] ? fb.hass.states[id].state : undefined;
           fb.dienst = (domain, service, data) => fb.hass.callService(domain, service, data).catch(e => console.warn('Fussball:', e));
@@ -1190,20 +1548,20 @@ button_card_templates:
     custom_fields:
       unter: |
         [[[
-          const fb = variables.fb, L = variables.liga;
+          // Wettbewerb des gezeigten Spiels (fb.vereinAuswahl): Liga mit Spieltag oder DFB-Pokal mit Runde
+          const fb = variables.fb, L = variables.liga, ID = variables.verein, IDE = variables.verein_espn;
           return fb.bereich(this, 'unter', () => {
-            const s = fb.spieltag(L);
-            return fb.teile((L === 'bl1' ? '1.' : '2.') + ' Bundesliga', s ? `${s.nr}. Spieltag` : '');
+            const w = fb.vereinAuswahl(L, ID, IDE);
+            if (w.L === 'pokal' && w.m) return fb.teile(`${fb.pokalIcon(13)} DFB-Pokal`, fb.esc(w.m.runde));
+            return fb.teile((L === 'bl1' ? '1.' : '2.') + ' Bundesliga', w.s ? `${w.s.nr}. Spieltag` : '');
           });
         ]]]
       badge: |
         [[[
-          // LIVE / Anstoss / Endstand des aktuellen Vereinsspiels
-          const fb = variables.fb, L = variables.liga, ID = variables.verein;
+          // LIVE / Anstoss / Endstand des gezeigten Spiels (Liga oder Pokal)
+          const fb = variables.fb, L = variables.liga, ID = variables.verein, IDE = variables.verein_espn;
           return fb.bereich(this, 'badge', () => {
-            const s = fb.spieltag(L), v = fb.verein(ID, L), now = Date.now();
-            let m = s ? s.spiele.find(x => x.heim_id == ID || x.gast_id == ID) : null;
-            if (m && m.beendet && v?.naechstes && now > Date.parse(m.anstoss) + 36 * 3600e3) m = null;
+            const w = fb.vereinAuswahl(L, ID, IDE), m = w.m;
             const anstoss = d => fb.tag(d) + ' ' + fb.zeit(d);
             if (m) {
               const k = fb.status(m);
@@ -1212,7 +1570,7 @@ button_card_templates:
               if (k === 'offen') return fb.badge('var(--owlet-text-sekundaer, #8794a5)', 'offen');
               return fb.badge('var(--owlet-blau, #7fb3d5)', anstoss(new Date(m.anstoss)));
             }
-            return v?.naechstes ? fb.badge('var(--owlet-blau, #7fb3d5)', anstoss(new Date(v.naechstes.anstoss))) : '';
+            return w.nx ? fb.badge('var(--owlet-blau, #7fb3d5)', anstoss(new Date(w.nx.anstoss))) : '';
           });
         ]]]
 
@@ -1224,15 +1582,14 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[
-          // Spiel (live / naechstes / letztes), Torschuetzen, Zeitstrahl, Platz, Punkte, Form
-          const fb = variables.fb, L = variables.liga, ID = variables.verein, F = fb.F;
+          // Spiel (live / naechstes / letztes, Liga oder DFB-Pokal nach fb.vereinAuswahl),
+          // Torschuetzen, Zeitstrahl, Platz, Punkte, Form (Liga)
+          const fb = variables.fb, L = variables.liga, ID = variables.verein, IDE = variables.verein_espn, F = fb.F;
           return fb.bereich(this, 'inhalt', () => {
-            const s = fb.spieltag(L), v = fb.verein(ID, L), t = fb.tabelle(L);
+            const w = fb.vereinAuswahl(L, ID, IDE), s = w.s, v = w.v, t = fb.tabelle(L);
             if (!s || !v || !t) return fb.warte('Vereinsdaten');
-            const z = t.find(r => r.id == ID) || {}, now = Date.now();
-            let m = s.spiele.find(x => x.heim_id == ID || x.gast_id == ID);
-            const nx = v.naechstes;
-            if (m && m.beendet && nx && now > Date.parse(m.anstoss) + 36 * 3600e3) m = null;
+            // SL/SID: Wettbewerb und Vereins-ID in der Quelle des gezeigten Spiels
+            const z = t.find(r => r.id == ID) || {}, now = Date.now(), m = w.m, nx = w.nx, SL = w.L, SID = SL === 'pokal' ? IDE : ID;
             let heim, gast, hl, gl, th = null, tg = null, k = 'pre', a, tore = [], heimId = null;
             if (m) {
               a = Date.parse(m.anstoss); heim = m.heim; gast = m.gast; hl = m.heim_logo; gl = m.gast_logo;
@@ -1243,18 +1600,20 @@ button_card_templates:
               hl = nx.heim ? z.logo : nx.gegner_logo; gl = nx.heim ? nx.gegner_logo : z.logo;
             } else return fb.hinweis('Kein Spiel gefunden.');
             if (k === 'live' && th === null) { th = 0; tg = 0; }
+            // Kennung nach Verlaengerung bzw. Elfmeterschiessen (Pokal)
+            const zusatz = m && m.zusatz ? `<span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:7px;padding:1px 6px;">${m.zusatz}${m.zusatz === 'i. E.' && m.ie ? ' ' + m.ie[0] + ':' + m.ie[1] : ''}</span>` : '';
             let sub;
             if (k === 'live') {
               // Minute von ESPN; ohne ESPN die Minute des letzten Tors
-              const min = fb.minute(L, m), lt = tore.length ? tore[tore.length - 1] : null;
-              const zusatz = min ? (min === 'HZ' ? ' · Halbzeit' : ' · ' + min) : (lt && lt.min ? ` · Tor ${lt.min}'` : '');
-              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"><span class="pulse"></span>LIVE${zusatz}</span>`;
+              const min = fb.minute(SL, m), lt = tore.length ? tore[tore.length - 1] : null;
+              const zusatzMin = min ? (min === 'HZ' ? ' · Halbzeit' : ' · ' + min) : (lt && lt.min ? ` · Tor ${lt.min}'` : '');
+              sub = `<span style="display:inline-flex;align-items:center;gap:5px;color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"><span class="pulse"></span>LIVE${zusatzMin}</span>`;
             } else if (k === 'pre') {
               const diff = a - now, h = Math.round(diff / 3600e3), d = Math.round(diff / 86400e3);
               sub = `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${diff < 3600e3 ? 'in ' + Math.max(1, Math.round(diff / 60e3)) + ' Min.' : (h < 24 ? 'in ' + h + ' Std.' : 'in ' + d + ' Tag' + (d === 1 ? '' : 'en'))}</span>`;
-            } else sub = `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
+            } else sub = `${zusatz}<span style="color:var(--owlet-text-sekundaer, #8794a5);">${k === 'post' ? 'Endstand' : 'Ergebnis offen'}</span>`;
             // Spielstand oeffnet das Spiel-Popup, sobald das Spiel angepfiffen ist
-            const klick = m && k !== 'pre' ? `role="button" tabindex="0" aria-label="Spiel öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
+            const klick = m && k !== 'pre' ? `role="button" tabindex="0" aria-label="Spiel öffnen" ${fb.tippAttr(`window.__fussball.waehle('${SL}',${Number(m.id)})`)}` : '';
             const score = k === 'pre'
               ? `<b style="font-size:24px;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;">${fb.zeit(new Date(a))}</b>`
               : `<b style="font-size:36px;letter-spacing:-0.03em;line-height:1;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${th ?? '–'} : ${tg ?? '–'}</b>`;
@@ -1263,20 +1622,23 @@ button_card_templates:
             let ph = 0;
             const tl = tore.map(x => {
               const heimTor = x.h > ph; ph = x.h;
-              const unser = heimTor === (heimId == ID);
+              const unser = heimTor === (heimId == SID);
               return `<span style="color:${unser ? 'var(--owlet-text, #f2f5f8)' : 'var(--owlet-text-sekundaer, #8794a5)'};">⚽ ${x.min ? x.min + "' " : ''}${fb.esc(x.name || '')}${x.elf ? ' (E)' : ''}${x.et ? ' (ET)' : ''}</span>`;
             }).join('');
+            // Pokalspiel vor Anpfiff: Wettbewerb und Stadion als Marke unter dem Spielstand
+            const marke = m && SL === 'pokal' && k === 'pre' ? `<div style="display:flex;justify-content:center;"><span style="display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11.5px;font-weight:700;color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:9px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.pokalIcon(13)} DFB-Pokal${m.ort ? ' · ' + fb.esc(m.ort) : ''}</span></div>` : '';
             const form = v.form.map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#10151d;background:${f === 'S' ? 'var(--owlet-gruen, #a6d49e)' : (f === 'N' ? 'var(--owlet-rot, #f0736a)' : 'var(--owlet-text-sekundaer, #8794a5)')};">${f}</i>`).join('');
             const zelle = (n, inhalt) => `<div style="background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);">${n}</div>${inhalt}</div>`;
-            const wert = (w, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${w}${e ? `<span style="font-size:0.62em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;"> ${e}</span>` : ''}</div>`;
+            const wert = (wt, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--owlet-text, #f2f5f8);">${wt}${e ? `<span style="font-size:0.62em;color:var(--owlet-text-sekundaer, #8794a5);font-weight:600;"> ${e}</span>` : ''}</div>`;
             return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
               <div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;">
                 ${seite(heim, hl, 'Heim')}
-                <div ${klick} style="display:flex;flex-direction:column;align-items:center;gap:4px;${klick ? 'pointer-events:auto;cursor:pointer;padding:6px 10px;margin:-6px -10px;border-radius:16px;' : ''}">${score}<span style="display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:700;">${sub}${klick ? `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${fb.pfeil}</span>` : ''}</span></div>
+                <div ${klick} style="display:flex;flex-direction:column;align-items:center;gap:4px;${klick ? 'pointer-events:auto;cursor:pointer;padding:6px 10px;margin:-6px -10px;border-radius:16px;' : ''}">${score}<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;">${sub}${klick ? `<span style="color:var(--owlet-text-sekundaer, #8794a5);">${fb.pfeil}</span>` : ''}</span></div>
                 ${seite(gast, gl, 'Gast')}
               </div>
+              ${marke}
               ${tl ? `<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>` : ''}
-              ${m ? fb.zeitstrahl(L, m, ID) : ''}
+              ${m ? fb.zeitstrahl(SL, m, SID) : ''}
               <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
                 ${zelle('Platz', wert(z.platz ?? '–'))}
                 ${zelle('Punkte', wert(z.pkt ?? '–', z.sp != null ? z.sp + ' Sp' : ''))}
@@ -1326,40 +1688,13 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[
-          // S1: nach Anstoss gruppiert, Heim/Gast untereinander, Tore rechts
-          const fb = variables.fb, L = variables.liga, FAV = variables.fav, F = fb.F;
+          // S1: nach Anstoss gruppiert, Heim/Gast untereinander, Tore rechts (fb.spielListe)
+          const fb = variables.fb, L = variables.liga, FAV = variables.fav;
           return fb.bereich(this, 'inhalt', () => {
             const s = fb.spieltag(L);
             if (!s) return fb.warte('Spieltag');
             if (!s.spiele.length) return fb.hinweis('Keine Spiele für diesen Spieltag gemeldet.');
-            const spiele = [...s.spiele].sort((x, y) => Date.parse(x.anstoss) - Date.parse(y.anstoss) || x.id - y.id);
-            // Spiele mehr als 4 Tage neben der Mitte (Nachholspiele) mit Datum
-            const mitte = spiele.length ? Date.parse(spiele[Math.floor(spiele.length / 2)].anstoss) : 0;
-            const datum = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-            let html = '', grp = '', ohneMinute = 0;
-            spiele.forEach(m => {
-              const a = Date.parse(m.anstoss), d = new Date(a), k = fb.status(m);
-              const g = Math.abs(a - mitte) > 4 * 86400e3 ? `${fb.tag(d)} ${datum(d)} · ${fb.zeit(d)}` : `${fb.tag(d)} · ${fb.zeit(d)}`;
-              if (g !== grp) { html += `<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--owlet-text-sekundaer, #8794a5);padding:${grp ? '8px' : '0'} 2px 2px;">${g}</div>`; grp = g; }
-              const fav = FAV && (m.heim_id == FAV || m.gast_id == FAV);
-              let th = m.th, tg = m.tg;
-              if (k === 'live' && (th === null || th === undefined)) { th = 0; tg = 0; }
-              const zeile = (n, l, x, y) => {
-                const r = (k === 'post' && x !== y) ? (x > y ? 'w' : 'l') : '', c = r === 'l' ? 'var(--owlet-text-sekundaer, #8794a5)' : 'var(--owlet-text, #f2f5f8)';
-                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:8px;align-items:center;"><span style="display:flex;align-items:center;gap:8px;min-width:0;">${fb.wappen(l, n, 20)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${c};font-weight:${r === 'w' ? 700 : 500};">${fb.esc(n)}</span></span><span style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${c};">${k === 'pre' || x === null || x === undefined ? '' : x}</span></div>`;
-              };
-              // Laufend: Minute von ESPN ("67'", "HZ"), sonst "LIVE"
-              const min = k === 'live' ? fb.minute(L, m) : null;
-              if (k === 'live' && !min) ohneMinute++;
-              const st = k === 'live' ? `<span style="display:inline-flex;align-items:center;gap:5px;color:var(--owlet-rot, #f0736a);"><span class="pulse"></span>${min || 'LIVE'}</span>` : (k === 'post' ? 'Ende' : (k === 'offen' ? 'offen' : fb.zeit(d)));
-              const bg = fav ? 'background:rgba(227,6,19,0.12);box-shadow:inset 3px 0 0 #e30613;' : (k === 'live' ? 'background:color-mix(in srgb, var(--owlet-rot, #f0736a) 12%, transparent);' : '');
-              // Ab Anstoss oeffnet die Zeile das Spiel-Popup
-              const klick = fb.antippbar(m) ? `role="button" tabindex="0" aria-label="${fb.esc(m.heim + ' gegen ' + m.gast)} öffnen" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)}` : '';
-              html += `<div ${klick} style="display:grid;grid-template-columns:60px minmax(0,1fr) 12px;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;font-size:13.5px;${bg}${klick ? 'pointer-events:auto;cursor:pointer;' : ''}"><span style="font-size:11.5px;font-weight:700;color:var(--owlet-text-sekundaer, #8794a5);white-space:nowrap;font-variant-numeric:tabular-nums;">${st}</span><div style="display:flex;flex-direction:column;gap:4px;min-width:0;">${zeile(m.heim, m.heim_logo, th, tg)}${zeile(m.gast, m.gast_logo, tg, th)}</div><span style="color:var(--owlet-muted, #6e7988);">${klick ? fb.pfeil : ''}</span></div>`;
-            });
-            // Hinweis nur, wenn ESPN beim Abruf scheitert (Minute fehlt dann)
-            const notiz = ohneMinute && fb.fehlerEspn ? `<div style="font-size:11px;color:var(--owlet-text-sekundaer, #8794a5);padding:6px 2px 0;">Spielminute nicht verfügbar (ESPN: ${fb.esc(fb.fehlerEspn)})</div>` : '';
-            return `<div style="${F}display:flex;flex-direction:column;gap:2px;">${html}${notiz}</div>`;
+            return fb.spielListe(L, s.spiele, FAV);
           });
         ]]]
 
@@ -1430,8 +1765,106 @@ button_card_templates:
           });
         ]]]
 
+  # ======================= DFB-Pokal: Runde (S1) und Pokalweg (Variante A) =======================
+  # Daten von ESPN (fb.pokalRunde, fb.pokalVerein), Darstellung der Runde wie der Liga-Spieltag
+  # (fb.spielListe). Pokal-Icon neutral: der Pokal hat keine eigene Farbe (DESIGN.md).
+  fussball_pokal_kopf:
+    template: fussball_kopf
+    icon: mdi:trophy-outline
+    styles: &pokal_kopf_stil
+      icon:
+      - color: 'var(--owlet-label, #b4c0cf)'
+      img_cell:
+      - background: 'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))'
+      - border: '1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+    custom_fields:
+      unter: |
+        [[[
+          const fb = variables.fb;
+          return fb.bereich(this, 'unter', () => {
+            const r = fb.pokalRunde();
+            if (!r) return 'Runde';
+            if (!r.runde) return 'kein Spieltermin bekannt';
+            const post = r.spiele.filter(m => fb.status(m) === 'post').length;
+            return fb.teile(fb.esc(r.runde.name), `${r.spiele.length} Spiele`, `${post} beendet`);
+          });
+        ]]]
+      badge: |
+        [[[
+          // Laufende Spiele (rot), "beendet" (gruen) oder naechster Anstoss (blau), wie im Spieltag
+          const fb = variables.fb;
+          return fb.bereich(this, 'badge', () => {
+            const r = fb.pokalRunde();
+            if (!r || !r.spiele.length) return '';
+            let live = 0, post = 0, next = null;
+            r.spiele.forEach(m => {
+              const k = fb.status(m), a = Date.parse(m.anstoss);
+              if (k === 'live') live++; else if (k === 'post') post++;
+              else if (k === 'pre' && (next === null || a < next)) next = a;
+            });
+            if (live) return fb.badge('var(--owlet-rot, #f0736a)', live + ' live', true);
+            if (post === r.spiele.length) return fb.badge('var(--owlet-gruen, #a6d49e)', 'beendet');
+            if (next) { const d = new Date(next); return fb.badge('var(--owlet-blau, #7fb3d5)', fb.tag(d) + ' ' + fb.zeit(d)); }
+            return '';
+          });
+        ]]]
+
+  fussball_pokal:
+    template: fussball_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          // Alle Spiele der laufenden Runde; Variable fav = ESPN-ID des Lieblingsvereins (H1)
+          const fb = variables.fb, FAV = variables.fav;
+          return fb.bereich(this, 'inhalt', () => {
+            const r = fb.pokalRunde();
+            if (!r) return fb.warteEspn('DFB-Pokal', fb.pokalRundePfad);
+            if (!r.runde) return fb.hinweis('ESPN nennt noch keine Spieltage für die nächste Runde.');
+            if (!r.spiele.length) return r.laedt ? fb.warteEspn('Runde', fb.pokalTagPfad(r.runde.tage[0])) : fb.hinweis('Keine Spiele für diese Runde gemeldet.');
+            return fb.spielListe('pokal', r.spiele, FAV);
+          });
+        ]]]
+
+  fussball_pokalweg_kopf:
+    template: fussball_kopf
+    icon: mdi:trophy-outline
+    styles: *pokal_kopf_stil
+    custom_fields:
+      unter: |
+        [[[
+          // Verein und Saison; Variable verein_espn = ESPN-ID des Vereins
+          const fb = variables.fb, IDE = variables.verein_espn;
+          return fb.bereich(this, 'unter', () => {
+            const p = fb.pokalVerein(IDE), sn = fb.saison();
+            return fb.teile(p && p.team ? fb.esc(p.team) : 'Verein', `Saison ${sn}/${String(sn + 1).slice(2)}`);
+          });
+        ]]]
+      badge: |
+        [[[
+          // im Wettbewerb (gruen), ausgeschieden (grau) oder Pokalsieger (gruen)
+          const fb = variables.fb, IDE = variables.verein_espn;
+          return fb.bereich(this, 'badge', () => {
+            const d = fb.pokalwegDaten(IDE);
+            if (!d) return '';
+            if (d.sieger) return fb.badge('var(--owlet-gruen, #a6d49e)', 'Pokalsieger');
+            if (d.aus) return fb.badge('var(--owlet-text-sekundaer, #8794a5)', 'ausgeschieden');
+            return d.p.spiele.length ? fb.badge('var(--owlet-gruen, #a6d49e)', 'im Wettbewerb') : '';
+          });
+        ]]]
+
+  fussball_pokalweg:
+    template: fussball_inhalt
+    custom_fields:
+      inhalt: |
+        [[[
+          // Je Runde Gegner, Termin oder Ergebnis; Antippen eines Spiels oeffnet das Spiel-Popup
+          const fb = variables.fb, IDE = variables.verein_espn;
+          return fb.bereich(this, 'inhalt', () => fb.pokalweg(IDE));
+        ]]]
+
   # ======================= Spiel-Popup (Inhalt der Bubble Card #fussball-spiel) =======================
-  # Variable verein: teamId des Lieblingsvereins (Hervorhebung nach H1).
+  # Variablen verein / verein_espn: Team-ID des Lieblingsvereins bei OpenLigaDB bzw. ESPN
+  # (Hervorhebung nach H1; ESPN fuer Pokalspiele).
   fussball_spiel:
     template: fussball_inhalt
     hold_action:
@@ -1444,7 +1877,7 @@ button_card_templates:
       inhalt: |
         [[[
           const fb = variables.fb;
-          return fb.bereich(this, 'spiel', () => fb.spielPopup(variables.verein));
+          return fb.bereich(this, 'spiel', () => fb.spielPopup(variables.verein, variables.verein_espn));
         ]]]
 
   # ======================= Meldungen zum Lieblingsverein =======================

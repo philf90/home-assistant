@@ -10,6 +10,10 @@
 #                fussball_fck_kopf (fussball-templates.yaml),
 #                fussball_meldungen (fussball-templates.yaml),
 #                fussball_meldungen_kopf (fussball-templates.yaml),
+#                fussball_pokal (fussball-templates.yaml),
+#                fussball_pokal_kopf (fussball-templates.yaml),
+#                fussball_pokalweg (fussball-templates.yaml),
+#                fussball_pokalweg_kopf (fussball-templates.yaml),
 #                fussball_spiel (fussball-templates.yaml),
 #                fussball_spieltag (fussball-templates.yaml),
 #                fussball_spieltag_kopf (fussball-templates.yaml),
@@ -22,25 +26,30 @@
 # ============================================================================
 # Fussball – komplette Ansicht (View) im Owlet-Stil
 #
-# 1. und 2. Bundesliga: aktueller Spieltag (live) und Tabelle, dazu eine
-# Karte fuer den Lieblingsverein 1. FC Kaiserslautern. Entwurf und Varianten:
-# Artefakt "Bundesliga-View"; gewaehlt sind
-#   Layout C  Liga-Umschalter (input_select.fussball_liga)
+# 1. und 2. Bundesliga: aktueller Spieltag (live) und Tabelle, DFB-Pokal: laufende
+# Runde und Pokalweg, dazu eine Karte fuer den Lieblingsverein 1. FC
+# Kaiserslautern. Entwurf und Varianten: Artefakt "Bundesliga-View"; gewaehlt sind
+#   Layout C  Umschalter (input_select.fussball_liga) mit 1. Liga, 2. Liga und
+#             DFB-Pokal (Variante A des Artefakts "DFB-Pokal in der
+#             Fussball-View")
 #   F1        Vereinskarte mit Spiel, Platz, Punkten und Form (rote Huelle),
 #             dazu Zeitstrahl Z1 mit Toren und Karten, solange das Spiel
-#             laeuft oder der Endstand steht (Artefakt "FCK-Zeitstrahl")
+#             laeuft oder der Endstand steht (Artefakt "FCK-Zeitstrahl").
+#             Das Spiel kommt aus Liga und Pokal (Variante V1): das laufende,
+#             sonst das letzte bis 36 h nach Anstoss, sonst das naechste.
 #   S1        Spieltag als Liste nach Anstosszeit, Heim/Gast untereinander
 #   T1        volle Tabelle mit Zonenstrich (Sp, TD, Pkt)
 #   H1        FCK in Listen: FCK-Rot als Flaeche + Kante, ohne Zonenstrich
 #
-# Die Karten holen die Daten selbst im Browser von OpenLigaDB; Logik und
-# Darstellung stehen in fussball-templates.yaml. Nur die Meldungen (unten)
+# Die Karten holen die Daten selbst im Browser, die Ligen von OpenLigaDB, den
+# DFB-Pokal von ESPN (inoffiziell, Liga ger.dfb_pokal); Logik und Darstellung
+# stehen in fussball-templates.yaml. Nur die Meldungen (unten)
 # brauchen ein Paket (fussball-espn-konfig.yaml), Helfer und eine Automation.
 #
 # Aufbau (sections, max_columns 2):
-#   Sektion 1: Top-Navigation, FCK-Karte, Liga-Umschalter, Spieltag,
+#   Sektion 1: Top-Navigation, FCK-Karte, Umschalter, Spieltag bzw. Pokalrunde,
 #              Popup #fussball-spiel (unsichtbar bis zum Antippen)
-#   Sektion 2: Tabelle, Meldungen (Schalter), Floating-Navbar
+#   Sektion 2: Tabelle bzw. Pokalweg, Meldungen (Schalter), Floating-Navbar
 #   Am Handy liegen beide Sektionen untereinander (= Wireframe Layout C).
 #
 # Passt zur Route /dashboard-home/fussball (Eintrag im "More"-Menue von
@@ -52,9 +61,10 @@
 # Champions-League-Plaetze der 1. Liga blau.
 #
 # Spiel-Popup (#fussball-spiel, Bubble Card): Spielstand der FCK-Karte oder eine
-# Spielzeile im Spieltag antippen (ab Anstoss). Ticker mit Toren (OpenLigaDB)
-# sowie Karten, Wechsel, Kommentar und Statistik (ESPN, inoffiziell), dazu der
-# Reiter "Messung", der zeigt, was beide Quellen fuer das Spiel liefern.
+# Spielzeile im Spieltag, in der Pokalrunde oder im Pokalweg antippen (ab
+# Anstoss). Ticker mit Toren (OpenLigaDB, bei Pokalspielen ESPN) sowie Karten,
+# Wechsel, Kommentar und Statistik (ESPN, inoffiziell), dazu der Reiter
+# "Messung", der zeigt, was die Quellen fuer das Spiel liefern.
 # Aufbau und Grenzen: Kopf von fussball-templates.yaml.
 #
 # Hell und dunkel: alles folgt dem Theme ausser der Vereinskarte; ihre Huelle
@@ -71,8 +81,19 @@
 #   - button_card_templates aus fussball-templates.yaml im
 #     Raw-Konfigurationseditor des Dashboards
 #   - Helfer input_select.fussball_liga (Einstellungen > Geraete & Dienste >
-#     Helfer > Dropdown), Optionen "1. Bundesliga" und "2. Bundesliga",
-#     ohne "initial"
+#     Helfer > Dropdown), Optionen "1. Bundesliga", "2. Bundesliga" und
+#     "DFB-Pokal", ohne "initial". Die Karten der 2. Liga erscheinen bei jedem
+#     anderen Wert (auch ohne Helfer), wie bisher.
+#   - Variablen der Vereinskarte und des Popups: verein (OpenLigaDB, FCK = 76)
+#     und verein_espn (ESPN, FCK = 130, wie in der Automation "Fussball:
+#     Meldungen"); ohne verein_espn zeigt die Vereinskarte nur die Liga
+#
+# DFB-POKAL (gemessen 25.10.2026, Einzelheiten im Kopf von fussball-templates.yaml):
+#   Runde aus dem ESPN-Kalender, je Spieltag ein Abruf (scoreboard?dates=), der
+#   Pokalweg aus dem Vereins-Spielplan. Verlaengerung erscheint im Zeitstrahl
+#   als dritter und vierter Abschnitt, Elfmeterschiessen nur als Ergebnis
+#   (einzelne Fehlschuesse liefert ESPN nicht). Der Pokal hat keine eigene
+#   Farbe, nur das Pokal-Icon (DESIGN.md).
 #
 # MELDUNGEN ZUM LIEBLINGSVEREIN (Karte "Meldungen", Schalter je Ereignis):
 #   - Paket fussball-espn-konfig.yaml (rest_command.espn_fussball, ESPN-API)
@@ -86,8 +107,9 @@
 #     Felder liga, event, stand; senden: false und alle: true zum Testen.
 #   - Automation "Fussball: Meldungen": sucht stuendlich (xx:05:30) und
 #     beim Start das Spiel des Tages (scoreboard?dates=JJJJMMTT, UTC; Verein
-#     ueber die ESPN-Team-ID, FCK = 130, Liga ger.2) und ruft von 5 min vor
-#     bis 4 h nach Anstoss jede Minute das Skript auf, bis Abpfiff. Sonst
+#     ueber die ESPN-Team-ID, FCK = 130, Ligen ger.2 und ger.dfb_pokal) und
+#     ruft von 5 min vor bis 4 h nach Anstoss jede Minute das Skript auf, bis
+#     Abpfiff. Sonst
 #     loest sie nicht aus. Alle Schalter aus = keine Abfrage.
 #   Gemessen 18.10.2026 an allen 25 Spieltagen der 2. Liga (keyEvents der
 #   Spieldetails): 70 Goal, 97 Own Goal, 98 Penalty - Scored, 94 Yellow Card,
@@ -103,9 +125,13 @@
 #   Neue Ereignisse erkennt die Automation an der ID (keyEvents stehen nach
 #   Spielminute, nicht nach Eingang). Wird ein Spiel erst waehrend des Spiels
 #   gefunden (z. B. Neustart), meldet sie nur, was danach passiert.
-#   Grenzen: ESPN ist inoffiziell und kann sich aendern; DFB-Pokal ist nicht
-#   eingerichtet (Ligapfad ungemessen). Abfrage einmal je Minute, die
-#   Spieldetails sind komprimiert ca. 26 KB.
+#   DFB-Pokal: Ligapfad ger.dfb_pokal, gemessen 25.10.2026 (Spieldetails der
+#   1. Runde mit denselben Typen 70, 94, 76). Anpfiff nennt den Wettbewerb,
+#   Abpfiff "n. V." (STATUS_FINAL_AET) bzw. "i. E." mit shootoutScore
+#   (STATUS_FINAL_PEN). Einzelne Elfmeter im Elfmeterschiessen stehen nicht in
+#   den Spieldetails und werden nicht gemeldet.
+#   Grenzen: ESPN ist inoffiziell und kann sich aendern. Abfrage einmal je
+#   Minute, die Spieldetails sind komprimiert ca. 26 KB.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
 #                + custom:bubble-card (alle via HACS).
@@ -195,19 +221,23 @@ sections:
       variables:
         liga: bl2
         verein: 76
+        verein_espn: 130
     - type: custom:button-card
       template: fussball_fck
       variables:
         liga: bl2
         verein: 76
+        verein_espn: 130
 
-  # ======================= Liga-Umschalter (Layout C) =======================
+  # ======================= Umschalter (Layout C) =======================
+  # Kurze Namen, damit drei Knoepfe am Handy nebeneinander passen; der Wert des
+  # Helfers bleibt der volle Name (variables.option).
   - type: grid
-    columns: 2
+    columns: 3
     square: false
     cards:
     - type: custom:button-card
-      name: 1. Bundesliga
+      name: 1. Liga
       show_icon: false
       variables:
         option: 1. Bundesliga
@@ -235,10 +265,18 @@ sections:
       triggers_update: &liga_update
       - input_select.fussball_liga
     - type: custom:button-card
-      name: 2. Bundesliga
+      name: 2. Liga
       show_icon: false
       variables:
         option: 2. Bundesliga
+      tap_action: *liga_tap
+      styles: *liga_styles
+      triggers_update: *liga_update
+    - type: custom:button-card
+      name: DFB-Pokal
+      show_icon: false
+      variables:
+        option: DFB-Pokal
       tap_action: *liga_tap
       styles: *liga_styles
       triggers_update: *liga_update
@@ -275,7 +313,9 @@ sections:
     visibility:
     - condition: state
       entity: input_select.fussball_liga
-      state_not: 1. Bundesliga
+      state_not: &nicht_bl2
+      - 1. Bundesliga
+      - DFB-Pokal
     card_mod: *huelle
     cards:
     - type: custom:button-card
@@ -289,8 +329,25 @@ sections:
         liga: bl2
         fav: 76
 
+  # ======================= DFB-Pokal: laufende Runde (S1) =======================
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state: DFB-Pokal
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: fussball_pokal_kopf
+      name: DFB-Pokal
+    - type: custom:button-card
+      template: fussball_pokal
+      variables:
+        fav: 130
+
   # ======================= Spiel-Popup =======================
-  # Unsichtbar, bis Vereinskarte oder Spieltag den Hash #fussball-spiel setzen.
+  # Unsichtbar, bis Vereinskarte, Spieltag, Pokalrunde oder Pokalweg den Hash
+  # #fussball-spiel setzen.
   - type: custom:bubble-card
     card_type: pop-up
     hash: '#fussball-spiel'
@@ -312,6 +369,7 @@ sections:
       template: fussball_spiel
       variables:
         verein: 76
+        verein_espn: 130
 
 - type: grid
   cards:
@@ -338,7 +396,7 @@ sections:
     visibility:
     - condition: state
       entity: input_select.fussball_liga
-      state_not: 1. Bundesliga
+      state_not: *nicht_bl2
     card_mod: *huelle
     cards:
     - type: custom:button-card
@@ -351,6 +409,24 @@ sections:
       variables:
         liga: bl2
         fav: 76
+
+  # ======================= DFB-Pokal: Pokalweg des Vereins =======================
+  - type: vertical-stack
+    visibility:
+    - condition: state
+      entity: input_select.fussball_liga
+      state: DFB-Pokal
+    card_mod: *huelle
+    cards:
+    - type: custom:button-card
+      template: fussball_pokalweg_kopf
+      name: Pokalweg
+      variables:
+        verein_espn: 130
+    - type: custom:button-card
+      template: fussball_pokalweg
+      variables:
+        verein_espn: 130
 
   # ======================= Meldungen zum Lieblingsverein =======================
   - type: vertical-stack
