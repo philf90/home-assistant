@@ -23,7 +23,8 @@
 #   fussball_kopf        Kopfzeile im Owlet-Stil (Icon-Kachel, Name, Unterzeile,
 #                        Badge rechts)
 #   fussball_inhalt      randloser Inhaltsbereich unter der Kopfzeile
-#   fussball_fck_kopf / fussball_fck              Lieblingsverein (F1)
+#   fussball_fck_kopf / fussball_fck              Lieblingsverein (F1),
+#                        mit Zeitstrahl (Z1, siehe unten)
 #   fussball_spieltag_kopf / fussball_spieltag    Spieltag als Liste (S1)
 #   fussball_tabelle_kopf / fussball_tabelle      Tabelle mit Zonen (T1)
 #   fussball_spiel       Inhalt des Bubble-Card-Popups #fussball-spiel
@@ -154,6 +155,36 @@
 #   - Kopf und Schliessen-Knopf rendert fussball_spiel selbst (Bubble zeigt
 #     keinen Kopf, weil die Auswahl im Browser liegt).
 #
+# Zeitstrahl der Vereinskarte (Variante Z1 der Entwurfsseite "FCK-Zeitstrahl"):
+#   - Zwei Spuren wie ein Ticker: Heimverein ueber, Gastverein unter der Linie,
+#     Kuerzel von ESPN links (Lieblingsverein in Vereinsrot). Beide Halbzeiten
+#     getrennt, Breite je Haelfte proportional zu 45 min + Nachspielzeit (Bereich
+#     gestrichelt). Symbole: Tor (Elfmeter mit "E", Eigentor mit "ET" beim
+#     beguenstigten Verein), Gelb, Gelb-Rot, Rot, wie im Ticker des Popups.
+#     Gespielte Zeit hell, live ein Punkt an der aktuellen Minute. Antippen
+#     oeffnet das Spiel-Popup.
+#   - Nur bei Status live oder post; bei "Ergebnis offen" und vor Anstoss nicht.
+#     Ohne ESPN-Daten (Fehler, CORS, Spiel nicht gefunden) fehlt der Strahl
+#     ganz, die Torschuetzenzeile aus OpenLigaDB bleibt.
+#   - Daten: ESPN-Scoreboard competitions[0].details, live derselbe Abruf wie
+#     die Spielminute (fb.espn, 45 s), sonst scoreboard?dates= des Anstosstags
+#     (fb.espnSpiel, 15 min). Kein zusaetzlicher Abruf waehrend des Spiels.
+#   - Gemessen 25.10.2026 an den 4 Spielen der 2. Liga vom 24.10.2026 (beendet):
+#     26 details (15 Gelb, 8 Tore, 3 Elfmetertore), Tore je Verein = Endstand,
+#     keine Wechsel. Felder: clock.displayValue ("58'", "90'+6'"), clock.value
+#     (Sekunden; in der Nachspielzeit stets 5400, deshalb dort displayValue),
+#     team.id, scoringPlay, penaltyKick, ownGoal, yellowCard, redCard,
+#     athletesInvolved[0].id. Gelb-Rot hat keinen eigenen Typ: Rot fuer einen
+#     Spieler mit Gelb im selben Spiel (Typ 93 nach 94, siehe Kopf von
+#     fussball-view.yaml). Status: period (1/2), displayClock "90'+7'" am Ende.
+#   - Ungemessen: ob das Live-Scoreboard details schon waehrend des Spiels
+#     fuellt; Rot und Eigentor im Scoreboard (kein Fall am 24.10.); die
+#     Nachspielzeit der 1. Halbzeit nach der Pause (nur, solange die Seite offen
+#     war, sonst 45 min).
+#   - Ueberlappung: Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit
+#     280 px. Liegen zwei Symbole einer Spur naeher, rueckt das spaetere eine
+#     Ebene nach aussen.
+#
 # Wappen: teamIconUrl aus OpenLigaDB (meist Wikimedia-SVG). Bis das Bild
 # geladen ist bzw. falls es fehlt, stehen die Initialen im Kreis.
 #
@@ -169,7 +200,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 15, alt = window.__fussball;
+          const VERSION = 16, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -579,6 +610,115 @@ button_card_templates:
           const kurz = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
           const uhrzeit = t => t ? new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
           const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
+
+          // ---------- Zeitstrahl der Vereinskarte (Variante Z1 der Entwurfsseite "FCK-Zeitstrahl") ----------
+          // Minute aus displayValue ("58'", "90'+6'"), Lage in der Halbzeit in Minuten. In der
+          // Nachspielzeit bleibt clock.value bei 5400 stehen (gemessen 25.10.2026 an 90'+2' bis 90'+6'),
+          // dort zaehlt deshalb nur displayValue; sonst die Sekunden fuer die genaue Lage.
+          const zsZeit = (dv, sek) => {
+            const t = /(\d+)'?\s*(?:\+\s*(\d+))?/.exec(String(dv || '')), s = Number(sek);
+            const b = t ? Number(t[1]) : (s > 0 ? Math.ceil(s / 60) : 0), x = t && t[2] ? Number(t[2]) : 0;
+            const h = b <= 45 ? 1 : 2, basis = h === 1 ? 0 : 45;
+            return { h, b, x, pos: Math.max(0, x ? b - basis + x - 0.5 : (s > 0 ? s / 60 - basis : b - basis - 0.5)) };
+          };
+          const zsKarte = () => `<svg viewBox="0 0 24 24" width="16" height="16" style="display:block;"><rect x="4.5" y="3" width="8.5" height="15.5" rx="1.25" fill="#e6b566" style="stroke:var(--owlet-amber, #e6b566);" stroke-width="1.5"/><rect x="11" y="5.5" width="8.5" height="15.5" rx="1.25" fill="#f0736a" style="stroke:var(--owlet-rot, #f0736a);" stroke-width="1.5"/></svg>`;
+          const ZS_SYM = {
+            tor: [FARBE.tor, '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" style="display:block;"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>', 'Tor'],
+            gelb: [FARBE.gelb, karte('#e6b566', 16), 'Gelbe Karte'],
+            gelbrot: [FARBE.rot, zsKarte(), 'Gelb-Rote Karte'],
+            rot: [FARBE.rot, karte('#f0736a', 16), 'Rote Karte']
+          };
+          // Nachspielzeit der 1. Halbzeit, solange die Seite offen ist (je Spiel). Nach der Pause
+          // nennt das Scoreboard sie nicht mehr; ohne Ereignis darin hat die Hälfte sonst 45 min.
+          fb.zsNach = {};
+          // Tore und Karten aus dem ESPN-Scoreboard (competitions[0].details): live derselbe Abruf
+          // wie fb.minute, sonst das Scoreboard des Anstosstags (fb.espnSpiel). Gemessen 25.10.2026
+          // an den 4 Spielen der 2. Liga vom 24.10.: 26 Eintraege (15 Gelb, 8 Tore, 3 Elfmetertore),
+          // Tore je Verein = Endstand, keine Wechsel. Nur bei Status live oder post (nicht "offen");
+          // ohne ESPN-Daten kein Strahl ('').
+          // ID = teamId des Lieblingsvereins (OpenLigaDB); dessen Kuerzel steht in Vereinsrot.
+          // Ein Fehler hier (etwa geaenderte ESPN-Felder) laesst nur den Strahl weg, nicht die Karte.
+          fb.zeitstrahl = (L, m, ID) => {
+            try { return zeitstrahl(L, m, ID); } catch (err) { console.warn('Fussball-Zeitstrahl:', err); return ''; }
+          };
+          const zeitstrahl = (L, m, ID) => {
+            const k = fb.status(m);
+            if (k !== 'live' && k !== 'post') return '';
+            const e = fb.live[L] ? paar(fb.espn(L), m) : fb.espnSpiel(L, m).e;
+            const c = e?.roh?.competitions?.[0];
+            if (!c || !Array.isArray(c.details)) return '';
+            const cs = c.competitors || [], hc = cs.find(x => x.homeAway === 'home') || {}, gc = cs.find(x => x.homeAway === 'away') || {};
+            const heimId = String(hc.team?.id ?? hc.id ?? '');
+            // Gelb-Rot: Rot fuer einen Spieler, der im Spiel schon Gelb hatte (ESPN hat keinen eigenen Typ)
+            const gelb = new Set();
+            const ev = c.details.map(d => Object.assign({ d }, zsZeit(d.clock?.displayValue, d.clock?.value)))
+              .sort((p, q) => p.h - q.h || p.pos - q.pos)
+              .map(z => {
+                const d = z.d, sp = d.athletesInvolved?.[0] || {}, sid = String(sp.id ?? '');
+                const art = d.scoringPlay ? 'tor' : d.redCard ? (sid && gelb.has(sid) ? 'gelbrot' : 'rot') : d.yellowCard ? 'gelb' : null;
+                if (art === 'gelb' && sid) gelb.add(sid);
+                return art && { art, h: z.h, b: z.b, x: z.x, pos: z.pos, oben: String(d.team?.id ?? '') === heimId,
+                  elf: !!d.penaltyKick, et: !!d.ownGoal, name: sp.displayName || sp.shortName || '' };
+              }).filter(Boolean);
+            // Spielphase: Uhr "67'" bzw. "45'+2'", Halbzeit (uhr() = 'HZ'), Ende; period 1/2 aus status
+            const u = zsZeit(e.uhr, 0), per = Number(c.status?.period ?? e.roh.status?.period);
+            const phase = e.zustand === 'post' ? 'ende' : uhr(e) === 'HZ' ? 'hz' : e.zustand === 'in' ? (per === 2 || u.h === 2 ? 'h2' : 'h1') : 'h1';
+            if (phase === 'h1' || phase === 'hz') fb.zsNach[m.id] = Math.max(fb.zsNach[m.id] || 0, u.h === 1 ? u.x : 0);
+            const nEv = h => Math.max(0, ...ev.filter(x => x.h === h).map(x => x.x));
+            const n1 = Math.max(nEv(1), fb.zsNach[m.id] || 0), n2 = Math.max(nEv(2), (phase === 'h2' || phase === 'ende') && u.h === 2 ? u.x : 0);
+            const len = [45 + n1, 45 + n2];
+            const p1 = phase === 'h1' ? Math.min(1, Math.max(0, ((u.b >= 45 ? 45 + u.x : u.b) - 0.5) / len[0])) : 1;
+            const p2 = phase === 'h2' ? Math.min(1, Math.max(0, ((u.b >= 90 ? 45 + u.x : u.b - 45) - 0.5) / len[1])) : (phase === 'ende' ? 1 : 0);
+            // Ebenen je Spur: liegt ein Symbol naeher als seine Breite am vorigen, rueckt es nach aussen.
+            // Die Breite ist beim Zeichnen unbekannt; gerechnet wird mit 280 px (eher eng).
+            const pxMin = 271 / (len[0] + len[1]), lage = new Map(), tief = { o: 0, u: 0 };
+            [1, 2].forEach(h => [true, false].forEach(oben => {
+              const rechts = [];
+              ev.filter(x => x.h === h && x.oben === oben).forEach(x => {
+                // "E"/"ET" steht rechts am Tor und verbreitert das Symbol nur nach rechts
+                const w = 16 + (x.art === 'tor' && (x.elf || x.et) ? 9 : 0), li = x.pos * pxMin - 8;
+                let l = 0;
+                while (rechts[l] !== undefined && rechts[l] + 3 > li) l++;
+                rechts[l] = li + w; lage.set(x, l);
+                tief[oben ? 'o' : 'u'] = Math.max(tief[oben ? 'o' : 'u'], l);
+              });
+            }));
+            const hO = 6 + (tief.o + 1) * 18, hU = 6 + (tief.u + 1) * 18, Y = hO + 1, H = hO + hU + 4;
+            const VOLL = 'var(--owlet-label, #b4c0cf)', LEER = 'var(--owlet-aus, #3a4453)';
+            // Linie von..bis (in %), gespielt bis p; Nachspielzeit gestrichelt
+            const linie = (von, bis, p, nach) => {
+              const g = Math.max(von, Math.min(bis, p * 100));
+              const teil = (a, z, f) => z > a ? `<div style="position:absolute;left:${a}%;width:${z - a}%;top:${Y}px;height:2px;background:${nach ? `repeating-linear-gradient(90deg, ${f} 0 4px, transparent 4px 7px)` : f};"></div>` : '';
+              return teil(von, g, VOLL) + teil(g, bis, LEER);
+            };
+            const seg = h => {
+              const Lh = len[h - 1], p = h === 1 ? p1 : p2, reg = 45 / Lh * 100, n = h === 1 ? n1 : n2;
+              let s = linie(0, reg, p, false) + (reg < 100 ? linie(reg, 100, p, true) : '');
+              s += `<div style="position:absolute;left:0;top:${Y - 4}px;width:2px;height:10px;border-radius:1px;background:${p > 0 ? VOLL : LEER};"></div>`;
+              s += `<div style="position:absolute;right:0;top:${Y - 4}px;width:2px;height:10px;border-radius:1px;background:${p >= 1 ? VOLL : LEER};"></div>`;
+              if (reg < 100) s += `<div style="position:absolute;left:${reg}%;top:${Y + 3}px;width:1px;height:6px;background:var(--owlet-muted, #6e7988);"></div>`;
+              if ((phase === 'h1' && h === 1) || (phase === 'h2' && h === 2)) s += `<span class="pulse" style="position:absolute;left:${p * 100}%;top:${Y + 1}px;width:8px;height:8px;transform:translate(-50%,-50%);color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));"></span>`;
+              ev.filter(x => x.h === h).forEach(x => {
+                const [farbe, sym, titel] = ZS_SYM[x.art], l = lage.get(x), left = Math.min(100, x.pos / Lh * 100);
+                const top = x.oben ? Y - 5 - 16 - l * 18 : Y + 7 + l * 18;
+                const zusatz = x.art === 'tor' && (x.elf || x.et) ? `<span style="position:absolute;left:13px;top:-3px;font-size:8.5px;font-weight:800;color:${FARBE.tor};">${x.et ? 'ET' : 'E'}</span>` : '';
+                const min = x.x ? `${x.b}'+${x.x}'` : `${x.b}'`;
+                s += `<span title="${fb.esc(`${min} ${titel}${x.elf ? ' (Elfmeter)' : ''}${x.et ? ' (Eigentor)' : ''} · ${x.name}`)}" style="position:absolute;left:${left}%;top:${top}px;transform:translateX(-50%);color:${farbe};line-height:0;">${sym}${zusatz}</span>`;
+              });
+              const achse = `<div style="position:relative;height:13px;margin-top:2px;font-size:10px;font-weight:600;color:var(--owlet-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;white-space:nowrap;"><span style="position:absolute;left:0;">${h === 1 ? "0'" : "46'"}</span><span style="position:absolute;right:0;">${h === 1 ? '45' : '90'}'${n ? '+' + n : ''}</span></div>`;
+              return `<div style="position:relative;min-width:0;flex:${Lh} 1 0;"><div style="position:relative;height:${H}px;">${s}</div>${achse}</div>`;
+            };
+            // Vereinskuerzel von ESPN (FCN, FCK); der Lieblingsverein in Vereinsrot
+            const favOben = m.heim_id == ID, favUnten = m.gast_id == ID;
+            const kuerzel = (t, n, fav, y) => {
+              const k3 = fb.esc(t.team?.abbreviation || String(n || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
+              return `<span style="position:absolute;left:0;top:${y}px;width:34px;transform:translateY(-50%);text-align:center;font-size:10.5px;font-weight:800;letter-spacing:0.02em;padding:2px 0;border-radius:6px;${fav ? 'color:color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a));background:rgba(227,6,19,0.16);box-shadow:inset 0 0 0 1px rgba(227,6,19,0.24);' : 'color:var(--owlet-label, #b4c0cf);background:var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05));'}">${k3}</span>`;
+            };
+            const namen = `<div style="position:relative;">${kuerzel(hc, m.heim, favOben, hO / 2)}<div style="position:absolute;left:4px;right:4px;top:${Y}px;height:1px;background:var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>${kuerzel(gc, m.gast, favUnten, Y + 4 + hU / 2)}</div>`;
+            const text = ev.length ? ev.map(x => `${x.x ? `${x.b}'+${x.x}'` : `${x.b}'`} ${ZS_SYM[x.art][2]} ${x.oben ? m.heim : m.gast}`).join(', ') : 'keine Tore und Karten';
+            return `<div role="button" tabindex="0" aria-label="${fb.esc('Zeitstrahl: ' + text + '. Spiel öffnen')}" ${fb.tippAttr(`window.__fussball.waehle('${L}',${Number(m.id)})`)} style="pointer-events:auto;cursor:pointer;background:var(--owlet-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:8px 10px 6px;">
+                <div style="display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:8px;">${namen}<div style="display:flex;gap:9px;min-width:0;">${seg(1)}${seg(2)}</div></div></div>`;
+          };
 
           fb.spielPopup = FAV => {
             const huelle = innen => `<div ${fb.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:12px;cursor:default;">${innen}</div>`;
@@ -1084,7 +1224,7 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[
-          // Spiel (live / naechstes / letztes), Torschuetzen, Platz, Punkte, Form
+          // Spiel (live / naechstes / letztes), Torschuetzen, Zeitstrahl, Platz, Punkte, Form
           const fb = variables.fb, L = variables.liga, ID = variables.verein, F = fb.F;
           return fb.bereich(this, 'inhalt', () => {
             const s = fb.spieltag(L), v = fb.verein(ID, L), t = fb.tabelle(L);
@@ -1136,6 +1276,7 @@ button_card_templates:
                 ${seite(gast, gl, 'Gast')}
               </div>
               ${tl ? `<div style="font-size:12px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;">${tl}</div>` : ''}
+              ${m ? fb.zeitstrahl(L, m, ID) : ''}
               <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
                 ${zelle('Platz', wert(z.platz ?? '–'))}
                 ${zelle('Punkte', wert(z.pkt ?? '–', z.sp != null ? z.sp + ' Sp' : ''))}
