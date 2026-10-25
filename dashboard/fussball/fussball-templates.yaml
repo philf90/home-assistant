@@ -200,10 +200,12 @@
 #   - Zwei Spuren wie ein Ticker: Heimverein ueber, Gastverein unter der Linie,
 #     Kuerzel von ESPN links (Lieblingsverein in Vereinsrot). Beide Halbzeiten
 #     getrennt, Breite je Haelfte proportional zu 45 min + Nachspielzeit (Bereich
-#     gestrichelt). Symbole: Tor als Fussball (weiss mit dunklen Flecken,
-#     #f2f5f8 und #10151d; das Kreis-Symbol des Tickers las sich auf dem Strahl
-#     nicht als Tor), Elfmeter mit "E", Eigentor mit "ET" beim beguenstigten
-#     Verein; Gelb, Gelb-Rot, Rot wie im Ticker des Popups.
+#     gestrichelt). Symbole wie im Popup: Tor als Fussball (weiss mit dunklen
+#     Flecken, #f2f5f8 und #10151d, Funktion ball(); das fruehere Kreis-Symbol
+#     las sich nicht als Tor), Elfmeter mit "E", Eigentor mit "ET" beim
+#     beguenstigten Verein; Gelb, Gelb-Rot, Rot. Im Popup steht der Ball auch im
+#     Ticker und an den Spielern der Aufstellung; ein vergebener Elfmeter behaelt
+#     dort das Kreis-Symbol in Amber, damit er nicht wie ein Tor aussieht.
 #     Gespielte Zeit hell, live ein Punkt an der aktuellen Minute. Antippen
 #     oeffnet das Spiel-Popup.
 #   - Verlaengerung (Pokal) als dritter und vierter Abschnitt (91.-105.,
@@ -260,7 +262,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 20, alt = window.__fussball;
+          const VERSION = 21, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -867,14 +869,19 @@ button_card_templates:
           // (hell der Tiefton). Wie die PV-Flaechen in DESIGN.md: die helle Statusfarbe
           // ist ein Textton, als Flaeche wirkte Gelb sonst ocker bis rot.
           const karte = (f, g) => `<svg viewBox="0 0 24 24" width="${g}" height="${g}"><rect x="7.75" y="4.25" width="8.5" height="15.5" rx="1.25" fill="${f}" stroke="currentColor" stroke-width="1.5"/></svg>`;
+          // Fussball fuer Tore (Zeitstrahl, Ticker, Aufstellung): weisser Ball mit Fuenfeck in der Mitte
+          // und fuenf angeschnittenen am Rand; #f2f5f8 und #10151d bleiben in beiden Modi (Fuellung)
+          const ball = g => `<svg viewBox="0 0 24 24" width="${g}" height="${g}" style="display:block;"><circle cx="12" cy="12" r="10.2" fill="#f2f5f8"/><g fill="#10151d" stroke="#10151d" stroke-width="0.9" stroke-linejoin="round"><polygon points="12.00,8.30 15.52,10.86 14.17,14.99 9.83,14.99 8.48,10.86"/><polygon points="12.00,5.70 14.90,4.44 14.16,2.65 9.84,2.65 9.10,4.44"/><polygon points="17.99,10.05 20.09,12.42 21.56,11.16 20.23,7.06 18.29,6.90"/><polygon points="15.70,17.10 14.10,19.82 15.75,20.84 19.25,18.30 18.79,16.41"/><polygon points="8.30,17.10 5.21,16.41 4.75,18.30 8.25,20.84 9.90,19.82"/><polygon points="6.01,10.05 5.71,6.90 3.77,7.06 2.44,11.16 3.91,12.42"/><path d="M12.00 8.30L12.00 5.70M15.52 10.86L17.99 10.05M14.17 14.99L15.70 17.10M9.83 14.99L8.30 17.10M8.48 10.86L6.01 10.05" fill="none"/></g><circle cx="12" cy="12" r="10.2" fill="none" stroke="#10151d" stroke-width="0.8"/></svg>`;
           const ICON = {
-            tor: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>',
+            tor: ball(17),
+            // vergebener Elfmeter: Kreis mit Fuenfeck, kein Ball, damit er nicht wie ein Tor aussieht
+            elf: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>',
             gelb: karte('#e6b566', 17),
             rot: karte('#f0736a', 17),
             wechsel: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg>',
             phase: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="14" r="5"/><path d="M13 11.5 21 8v3l-6 2.2M9 4v3M5 5.5l1.5 2M13 5.5l-1.5 2"/></svg>'
           };
-          ICON.elf = ICON.tor; ICON.sonst = ICON.phase;
+          ICON.sonst = ICON.phase;
           const kurz = (t, n) => { t = String(t ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
           const uhrzeit = t => t ? new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '–';
           const zaehle = l => { const z = {}; l.forEach(x => { z[x] = (z[x] || 0) + 1; }); return z; };
@@ -894,8 +901,7 @@ button_card_templates:
           };
           const zsKarte = () => `<svg viewBox="0 0 24 24" width="16" height="16" style="display:block;"><rect x="4.5" y="3" width="8.5" height="15.5" rx="1.25" fill="#e6b566" style="stroke:var(--owlet-amber, #e6b566);" stroke-width="1.5"/><rect x="11" y="5.5" width="8.5" height="15.5" rx="1.25" fill="#f0736a" style="stroke:var(--owlet-rot, #f0736a);" stroke-width="1.5"/></svg>`;
           const ZS_SYM = {
-            // Fussball: weisser Ball mit Fuenfeck in der Mitte und fuenf angeschnittenen am Rand
-            tor: [FARBE.tor, '<svg viewBox="0 0 24 24" width="16" height="16" style="display:block;"><circle cx="12" cy="12" r="10.2" fill="#f2f5f8"/><g fill="#10151d" stroke="#10151d" stroke-width="0.9" stroke-linejoin="round"><polygon points="12.00,8.30 15.52,10.86 14.17,14.99 9.83,14.99 8.48,10.86"/><polygon points="12.00,5.70 14.90,4.44 14.16,2.65 9.84,2.65 9.10,4.44"/><polygon points="17.99,10.05 20.09,12.42 21.56,11.16 20.23,7.06 18.29,6.90"/><polygon points="15.70,17.10 14.10,19.82 15.75,20.84 19.25,18.30 18.79,16.41"/><polygon points="8.30,17.10 5.21,16.41 4.75,18.30 8.25,20.84 9.90,19.82"/><polygon points="6.01,10.05 5.71,6.90 3.77,7.06 2.44,11.16 3.91,12.42"/><path d="M12.00 8.30L12.00 5.70M15.52 10.86L17.99 10.05M14.17 14.99L15.70 17.10M9.83 14.99L8.30 17.10M8.48 10.86L6.01 10.05" fill="none"/></g><circle cx="12" cy="12" r="10.2" fill="none" stroke="#10151d" stroke-width="0.8"/></svg>', 'Tor'],
+            tor: [FARBE.tor, ball(16), 'Tor'],
             gelb: [FARBE.gelb, karte('#e6b566', 16), 'Gelbe Karte'],
             gelbrot: [FARBE.rot, zsKarte(), 'Gelb-Rote Karte'],
             rot: [FARBE.rot, karte('#f0736a', 16), 'Rote Karte']
@@ -1149,7 +1155,7 @@ button_card_templates:
               if (!seiten.includes(sw)) sw = FAV && m.gast_id == FAV && seiten.includes('gast') ? 'gast' : seiten[0];
               const T = det.teams[sw], unser = FAV && (sw === 'heim' ? m.heim_id : m.gast_id) == FAV;
               const MK = {
-                tor: ['color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a))', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m12 7.5 3.6 2.6-1.4 4.3H9.8l-1.4-4.3L12 7.5Z" fill="currentColor"/></svg>'],
+                tor: ['color-mix(in srgb, #ff8a80 var(--owlet-dunkel-anteil, 100%), var(--owlet-rot, #f0736a))', ball(11)],
                 gelb: ['var(--owlet-amber, #e6b566)', karte('#e6b566', 11)],
                 rot: ['var(--owlet-rot, #f0736a)', karte('#f0736a', 11)],
                 aus: ['var(--owlet-text-sekundaer, #8794a5)', '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'],
