@@ -71,6 +71,83 @@ deshalb ohne Verlauf.
 | Violett `#b399d4` | `#2a1b3d` | 6,4:1 |
 | Türkis `#7fd0d5` | `#103436` | 7,6:1 |
 
+## Bildschirmbreiten
+
+Das Dashboard läuft auf zwei Handys. Gemessen in der Home-Assistant-App
+(browser_mod-Sensoren) und im Frontend, Stand 25.10.2026:
+
+| | Galaxy S25 | iPhone 17 Pro |
+|---|---|---|
+| Bildschirm (CSS-Pixel) | 360 × 697 | 402 × 874 |
+| Karte in der Spalte (Sections-View) | 344 px | 386 px |
+| Inhalt in der Kartenhülle (18 px Innenabstand, 1 px Rand) | 306 px | 348 px |
+| Kachel in halber Breite der Hülle | ca. 149 px | ca. 170 px |
+| Popup: Höhe unter dem Dialogkopf | 629 px (Kopf 68 px) | nicht gemessen, größer |
+
+**Gebaut wird für 360 px, geprüft bei beiden Breiten** (Prüfschritte in
+[`CONTRIBUTING.md`](CONTRIBUTING.md)). Die 42 px Unterschied landen in jeder
+Zeile aus festen Pixelwerten vollständig beim einzigen flexiblen Element, meist
+beim Namen: In der Temperaturliste blieben aus 62 px Platz 20 px.
+
+### Text
+
+- Untertitel, Labels und Namen brechen in bis zu zwei Zeilen um, statt
+  abgeschnitten zu werden:
+  `overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; text-wrap:balance;`.
+  Einzeilig mit „…“ bleiben nur Werte, Zahlen und Uhrzeiten.
+- Lange Einzelwörter bekommen eine weiche Trennstelle (`Luft&shy;feuchtigkeit`);
+  ein Umbruch allein hilft bei einem Wort nicht.
+- Texte, deren Länge vom Zustand abhängt (Wetter, Wind, Warnungen), mit der
+  längsten Form prüfen und für schmale Kacheln eine Kurzform vorsehen
+  (Windrichtung „SSW“ statt „Süd-Südwest“).
+- Laufweiten mit Roboto rechnen: Android zeigt den Schriftstapel
+  `-apple-system, …, system-ui` in Roboto.
+
+### Nach Platz anpassen, nicht nach Gerät
+
+- Container Query auf die Kachel: `:host { container-type: inline-size; }` in
+  `extra_styles`, dann `@container (max-width: …px)`. Eine eigene Fassung je
+  Gerät gibt es nicht.
+- Die Schwelle liegt zwischen den gemessenen Breiten beider Geräte, mit
+  mindestens 5 px Abstand zu jeder. Beide Werte stehen im Kommentar direkt
+  davor. Gemessen wird der Container: bei `:host` die button-card, bei einem
+  Element mit Innenabstand dessen Inhalt.
+- Media Queries nur für Bildschirmmerkmale: die Höhe (`max-height: 760px` für
+  Menüs) oder ein ganzes Raster (`max-width: 380px`, zwei Spalten zu einer).
+- Popups und Menüs passen in 629 px Höhe.
+
+| Container | S25 | iPhone | Schwelle | Datei |
+|---|---|---|---|---|
+| Zeile der Temperaturliste | 306 px | 348 px | 330 px | `temperaturen-karte-v2.yaml` |
+| Kennzahl-Kachel Auto | 149 px | 170 px | 155 px | `autos-karte-v4.yaml` |
+| Licht-Chip | 133 px | 154 px | 145 px | `lichter-raum-karte.yaml` |
+| Wetter-Kachel (Inhalt) | 122 px | 143 px | 130 px | `wetter-karte-v2.yaml` |
+
+### Icons
+
+- `--ha-icon-display: block` in `styles.icon` jeder button-card. Ohne steht
+  das Icon in einer Textzeile und sitzt 1 bis 1,3 px zu tief.
+- Die Icon-Zelle hat eine feste Höhe.
+- Liegt die Mitte einer Glyphe im 24er-Raster mehr als 0,4 Einheiten neben
+  (12, 12), wird sie per `variables.glyph` und `transform` ausgeglichen
+  (Muster: More-Menü in `navigation-templates.yaml`).
+
+### Bekannte Fallen
+
+- apexcharts-card: kein `labels.formatter` auf der Zeitachse. ApexCharts
+  erzeugt damit nur noch wenige Teilstriche (Monatsbilanz: „D J D“ statt zwölf
+  Monaten). Kleinere Beschriftung per card_mod:
+  `@media (max-width: 380px) { .apexcharts-xaxis-label { font-size: 10px !important; } }`.
+- Unten fest stehende Leisten: auf Android um den Sicherheitsabstand anheben,
+  auf dem iPhone bündig lassen:
+  `@supports not (-webkit-touch-callout: none) { … bottom: var(--safe-area-inset-bottom, 0px) !important; }`.
+
+**Geprüft** werden in der CI (`ci/check_mobil.py`): Icons ohne
+`--ha-icon-display: block` (für Karten von vor der Regel gilt der Bestand im
+Skript, er darf nur sinken), `labels.formatter` auf der Zeitachse und Container
+Queries ohne Breitenkommentar. Ob ein Text umbrechen sollte, wo eine Schwelle
+liegt und wie die Karte aussieht, prüft nur der Blick auf beide Breiten.
+
 ## Farbrollen
 
 ### Flächen
