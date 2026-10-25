@@ -102,6 +102,21 @@ button_card_templates:
     show_name: false
     show_state: false
     show_label: false
+    extra_styles: |
+      :host { container-type: inline-size; }
+      /* Zeile: 306 px auf dem 360 px breiten Handy, 348 px auf dem iPhone 17 Pro.
+         Neben dem Namen blieben schmal fuer Name und Update-Pille zusammen 110 px:
+         Die Pille steht dann unter dem Status. */
+      @container (max-width: 327px) {
+        #container {
+          grid-template-areas: "i titel neustart schalter" "i info neustart schalter" "i upd neustart schalter" !important;
+          grid-template-columns: 36px minmax(0, 1fr) 40px 52px !important;
+          grid-template-rows: min-content min-content min-content !important;
+          row-gap: 0 !important;
+        }
+        #info { margin-top: 8px !important; }
+        #upd { margin: 5px 0 0 !important; align-self: start !important; }
+      }
     variables:
       basis: '[[[ return entity ? entity.entity_id.split(".")[1] : ""; ]]]'
       anzeige: |
@@ -201,9 +216,9 @@ button_card_templates:
       titel: |
         [[[
           const pille = (txt, farbe) => `<span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:2px 7px;border-radius:8px;">${txt}</span>`;
-          let h = `<span style="min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${variables.anzeige}</span>`;
+          let h = `<span style="min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;overflow-wrap:anywhere;">${variables.anzeige}</span>`;
           if (variables.ungesund) h += pille('ungesund', 'var(--owlet-rot, #f0736a)');
-          return `<div style="display:flex;align-items:center;gap:6px;min-width:0;">${h}</div>`;
+          return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;min-width:0;">${h}</div>`;
         ]]]
       upd:
         card:
@@ -325,11 +340,13 @@ button_card_templates:
         - background: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))'
         - border: 1px solid var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
-        # titel waechst bis zur Breite des Namens, upd (auto) bekommt zuerst
-        # die Breite der Pille und den Rest der Zeile; ohne Update ist upd
-        # ausgeblendet und 0 px breit. Lange Namen kuerzt titel mit "…".
-        - grid-template-areas: '"i titel upd neustart schalter" "i info info neustart schalter"'
-        - grid-template-columns: 36px minmax(0, max-content) auto 40px 52px
+        # Mit Update waechst titel bis zur Breite des Namens, upd (auto) bekommt
+        # die Breite der Pille und den Rest der Zeile. Ohne Update entfaellt
+        # die Spalte upd: Die Statuszeile unter titel und upd zog sonst Breite
+        # in die leere Spalte, auf dem 360 px breiten Handy blieben dem Namen
+        # zum Teil 78 von 122 px. Lange Namen brechen in bis zu zwei Zeilen um.
+        - grid-template-areas: '[[[ return variables.update ? `"i titel upd neustart schalter" "i info info neustart schalter"` : `"i titel neustart schalter" "i info neustart schalter"`; ]]]'
+        - grid-template-columns: '[[[ return variables.update ? "36px minmax(0, max-content) auto 40px 52px" : "36px minmax(0, 1fr) 40px 52px"; ]]]'
         - grid-template-rows: min-content min-content
         - column-gap: 12px
         - row-gap: 3px
@@ -357,14 +374,23 @@ button_card_templates:
           - align-self: end
           - min-width: 0
           - text-align: left
+        # Status in bis zu zwei Zeilen. 12 px mit 5 px Abstand nach oben halten
+        # einzeilig die bisherige Lage (der 12-px-Text stand vorher in einer
+        # Zeile der Feldschrift von 16,8 px).
         info:
           - justify-self: start
           - align-self: start
           - min-width: 0
           - max-width: 100%
           - overflow: hidden
-          - white-space: nowrap
-          - text-overflow: ellipsis
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - font-size: 12px
+          - line-height: 1.25
+          - margin-top: 5px
           - text-align: left
         upd:
           - display: '[[[ return variables.update ? "block" : "none"; ]]]'
@@ -493,7 +519,7 @@ button_card_templates:
     custom_fields:
       titel: |
         [[[
-          return `<span style="display:block;min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${variables.anzeige}</span>`;
+          return `<span style="min-width:0;font-size:14px;font-weight:700;color:var(--owlet-text, #f2f5f8);overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;overflow-wrap:anywhere;">${variables.anzeige}</span>`;
         ]]]
       info: |
         [[[
@@ -579,14 +605,23 @@ button_card_templates:
           - align-self: end
           - min-width: 0
           - text-align: left
+        # Status in bis zu zwei Zeilen. 12 px mit 5 px Abstand nach oben halten
+        # einzeilig die bisherige Lage (der 12-px-Text stand vorher in einer
+        # Zeile der Feldschrift von 16,8 px).
         info:
           - justify-self: start
           - align-self: start
           - min-width: 0
           - max-width: 100%
           - overflow: hidden
-          - white-space: nowrap
-          - text-overflow: ellipsis
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - font-size: 12px
+          - line-height: 1.25
+          - margin-top: 5px
           - text-align: left
         install:
           - align-self: center
@@ -606,6 +641,15 @@ button_card_templates:
       action: none
     hold_action:
       action: none
+    extra_styles: |
+      :host { container-type: inline-size; }
+      /* Kopf: 306 px auf dem 360 px breiten Handy, 348 px auf dem iPhone 17 Pro.
+         Schmal ruecken Icon-Kachel und Badge zusammen 8 px naeher an den Namen;
+         so passt "Image-Updates" (113 px) neben "Alle aktualisieren" (127 px). */
+      @container (max-width: 327px) {
+        #img-cell { margin-right: 10px !important; }
+        #badge { margin-left: 4px !important; }
+      }
     styles:
       card:
         - background: none
@@ -632,6 +676,14 @@ button_card_templates:
       name:
         - justify-self: start
         - align-self: end
+        - max-width: 100%
+        - overflow: hidden
+        - white-space: normal
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: '2'
+        - text-wrap: balance
+        - text-align: left
         - font-size: 17px
         - font-weight: 700
         - letter-spacing: -0.02em
@@ -640,6 +692,13 @@ button_card_templates:
         - justify-self: start
         - align-self: start
         - max-width: 100%
+        - overflow: hidden
+        - white-space: normal
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: '2'
+        - text-wrap: balance
+        - text-align: left
         - font-size: 12.5px
         - color: 'var(--owlet-text-sekundaer, #8794a5)'
         - margin-top: 2px
@@ -724,9 +783,8 @@ button_card_templates:
   #   variables.warn  Farbe ab 1 (Standard Amber); '' = nie getoent
   #   variables.zusatz  Text unter der Beschriftung, z. B. "11 ungenutzt";
   #                   ohne Text entfaellt die Zeile samt Abstand
-  # Beschriftung: 0,02em und 7 px Innenabstand. Auf dem Handy ist eine von vier
-  # Kacheln ~86 px breit; gemessen (Chromium, Arial-Metrik) braucht "UNGESUND"
-  # mit 0,06em 65,1 px bei 64 px Platz, mit 0,02em 61,8 px bei 70 px Platz.
+  # Beschriftung: 0,02em und 7 px Innenabstand, in der Viererreihe auf dem
+  # 360 px breiten Handy 5 px (extra_styles, Breiten dort).
   # Auf getoenter Flaeche steht die Beschriftung in Label-Grau (DESIGN.md).
   owlet_docker_kpi:
     variables:
@@ -767,6 +825,14 @@ button_card_templates:
           return parseInt(variables.wert, 10) > 0 ? variables.warn : '';
         ]]]
     label: '[[[ return variables.wert; ]]]'
+    extra_styles: |
+      :host { container-type: inline-size; }
+      /* Kachel in der Viererreihe: 70,5 px auf dem 360 px breiten Handy, 81 px auf
+         dem iPhone 17 Pro. "UNGESUND" braucht 57 px; mit 7 px Innenabstand blieben
+         auf dem S25 54,5 px, mit 5 px sind es 58,5 px. */
+      @container (max-width: 76px) {
+        ha-card { padding-left: 5px !important; padding-right: 5px !important; }
+      }
     show_icon: false
     show_name: true
     show_label: true
@@ -842,6 +908,14 @@ button_card_templates:
           return 'var(--owlet-gruen, #a6d49e)';
         ]]]
     label: '[[[ return variables.wert === null ? "–" : variables.wert.toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " %"; ]]]'
+    extra_styles: |
+      :host { container-type: inline-size; }
+      /* Kachel in der Dreierreihe: 96,7 px auf dem 360 px breiten Handy, 110,7 px
+         auf dem iPhone 17 Pro. "38,1 GB belegt" braucht 77,2 px; mit 11 px
+         Innenabstand blieben auf dem S25 72,7 px, mit 8 px sind es 78,7 px. */
+      @container (max-width: 103px) {
+        ha-card { padding-left: 8px !important; padding-right: 8px !important; }
+      }
     show_icon: false
     show_name: true
     show_label: true
