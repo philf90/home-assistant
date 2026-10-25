@@ -17,6 +17,9 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
 
 - Alle Karten folgen dem Owlet-Stil aus `DESIGN.md`. Farben nur aus
   `design/palette.yaml`; `ci/check_palette.py` laesst andere nicht durch.
+- Karten fuer 360 px Breite bauen (Galaxy S25) und bei 402 px (iPhone 17 Pro)
+  gegenpruefen: `DESIGN.md`, Abschnitt "Bildschirmbreiten";
+  `ci/check_mobil.py` prueft einen Teil davon.
 - Eine neue Farbe zuerst in `design/palette.yaml` aufnehmen und in `DESIGN.md`
   begruenden, erst dann verwenden. Beim Bauen oder Umfaerben von Karten gilt
   der Skill `.claude/skills/owlet-design`.

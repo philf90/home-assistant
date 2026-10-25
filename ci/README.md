@@ -22,6 +22,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 | `check-js-templates.js` | Jeden `[[[ ... ]]]`-Block in den Lovelace-YAMLs auf JS-Syntaxfehler. Warnt zusaetzlich vor Verwechslungen wie `state[` statt `states[`. |
 | `check_yaml.py` | YAML parst (inkl. HA-Tags wie `!include`), keine doppelten Schluessel, `type: custom:*` steht in `known_cards.txt`, Entity-IDs sehen wie `domain.objekt` aus (Werte mit Templates oder Decluttering-Variablen `[[name]]` werden uebersprungen). |
 | `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten) und den hellen Modus: `hell_farben` und `theme` (Variablennamen, Werte aus der Palette, kein ungenutzter heller Wert). Werte aus `hell_farben` sind nur in der Theme-Datei erlaubt. Weiss nur mit Deckkraft, deckend nur als Schrift auf einer Farbe aus `deckend_auf` (Vereinsrot) in derselben Zeile. Regeln: `DESIGN.md`. |
+| `check_mobil.py` | Regeln aus `DESIGN.md`, Abschnitt "Bildschirmbreiten" (Galaxy S25 360 px, iPhone 17 Pro 402 px), soweit sie am Text erkennbar sind: jedes button-card-Icon mit `styles.icon` setzt `--ha-icon-display: block` (oder ein genutztes Template tut es, oder `show_icon: false`); kein `labels.formatter` auf der Zeitachse von apexcharts-card; jede Container Query mit Pixel-Schwelle hat direkt davor einen Kommentar mit mindestens zwei px-Werten (die gemessenen Breiten beider Geraete). Fuer Icons von vor der Regel steht der Bestand je Datei in `BESTAND` im Skript; er darf nur sinken und wird im selben Commit gesenkt. `archiv/` ist ausgenommen. |
 | `gen_theme.py` | Erzeugt das Theme `dashboard/allgemein/owlet-theme-konfig.yaml` aus dem Abschnitt `theme` der Palette. Mit `--pruefen` (CI, pre-commit) schlaegt es fehl, wenn die committete Datei nicht aktuell ist. |
 | `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste, Farben nur aus `design/palette.yaml` (`color`, `fixedColor`, `iconColor`, Heatmap-`fill`; keine Grafana-Farbnamen ausser `text`/`transparent`). |
 
@@ -146,6 +147,7 @@ python ci/check_template_version.py
 node ci/check-js-templates.js
 python ci/check_yaml.py
 python ci/check_palette.py
+python ci/check_mobil.py
 python ci/check_grafana.py
 yamllint --strict -c .yamllint.yml .
 ruff check grafana/ ci/
