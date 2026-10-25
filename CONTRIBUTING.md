@@ -46,6 +46,23 @@ pre-commit install
 - Fassungen in `archiv/` bekommen nur noch Änderungen, die alle Dateien
   betreffen (Palette, Anonymisierung, CI-Fehler), keine neuen Funktionen.
 
+## Auf beiden Handys prüfen
+
+Für jede neue oder geänderte Karte und View, nach den Regeln in
+[`DESIGN.md`](DESIGN.md), Abschnitt „Bildschirmbreiten“:
+
+1. **Bei 402 × 874 und 360 × 697 ansehen** (iPhone 17 Pro und Galaxy S25,
+   CSS-Pixel), im Browser per Geräteansicht oder in der App auf beiden Geräten.
+2. **Nichts abgeschnitten:** Texte mit „…“ nur bei Werten. Zustandsabhängige
+   Texte (Wetter, Warnungen, Zeitangaben wie „seit Mo 16:35 · 5 Tage“) in der
+   längsten Form prüfen.
+3. **Vorher und nachher vergleichen,** nicht nur auf Kürzungen achten: Eine
+   Diagrammachse mit drei statt zwölf Beschriftungen kürzt nichts und ist
+   trotzdem falsch.
+4. **Das iPhone ändert sich nur, wo es beabsichtigt ist.** Eine Schwelle, die
+   versehentlich auch 402 px trifft, fällt nur im Vergleich auf.
+5. **Popups und Menüs** passen bei 697 px Höhe ohne Scrollen.
+
 ## Neue Version einer Karte
 
 1. Kopie als `-v<N+1>` im Bereichsordner. Der Text unter dem Kopfblock nennt
@@ -76,5 +93,8 @@ Personenbezug, auch nicht in Commit-Nachrichten, PR-Texten und Kommentaren.
   `ci/check_persoenlich.py` gegen eine eigene Sperrliste in
   `lokal/sperrliste.txt` (ein Begriff pro Zeile, nicht im Repo).
 - Ob die Entitäten in einer Instanz existieren.
+- Wie eine Karte bei 360 und 402 px **aussieht**. `ci/check_mobil.py` prüft
+  nur einzelne Regeln aus „Bildschirmbreiten“; der Rest ist der Blick auf
+  beide Breiten (siehe oben).
 
 Alle Prüfungen mit Erklärung: [`ci/README.md`](ci/README.md).
