@@ -69,6 +69,16 @@ triggers_update:
   - sensor.windrichtung
   - sensor.windstarke_aktuell
   - sensor.garten_wetterstation_pro_windgeschwindigkeit_mittel_10_min
+extra_styles: |
+  /* Windzeile in schmalen Kacheln (z. B. 360 px breites Handy): Richtung als
+     Kuerzel (SSW statt Sued-Suedwest) und bis zu drei Zeilen, damit die
+     Windstaerke ganz lesbar bleibt ("schwacher Wind" passt nicht in eine Zeile) */
+  .wx-ri-kurz { display: none; }
+  @container wx-zelle (max-width: 130px) {
+    .wx-ri-lang { display: none; }
+    .wx-ri-kurz { display: inline; }
+    div:has(> .wx-ri-kurz) { -webkit-line-clamp: 3 !important; }
+  }
 styles:
   card:
     - padding: 16px 18px
@@ -141,11 +151,11 @@ custom_fields:
 
       // Schutzgrund in Huellenfarbe unter der Toenung (0,70, Icon-Kachel 0,50)
       const cell=(iconFn, valueHtml, text, accent, entityId)=>`
-        <div${tap(entityId)} style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:linear-gradient(${tint(accent,12)},${tint(accent,12)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 70%, transparent);border:1px solid ${tint(accent,24)};min-width:0;${entityId?'cursor:pointer;':''}">
+        <div${tap(entityId)} style="container:wx-zelle / inline-size;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:linear-gradient(${tint(accent,12)},${tint(accent,12)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 70%, transparent);border:1px solid ${tint(accent,24)};min-width:0;${entityId?'cursor:pointer;':''}">
           <div style="flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(${tint(accent,16)},${tint(accent,16)}),color-mix(in srgb, var(--owlet-huelle-unten, #171d29) 50%, transparent);border:1px solid ${tint(accent,24)};">${iconFn(accent)}</div>
           <div style="min-width:0;">
             <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;color:${value};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-bottom:1px;">${valueHtml}</div>
-            <div style="font-size:12px;color:${label};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+            <div style="font-size:12px;color:${label};margin-top:1px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${text}</div>
           </div>
         </div>`;
 
@@ -183,7 +193,10 @@ custom_fields:
       const dirRaw=(S('sensor.windrichtung')||{}).state||'';
       const dirName=dirMap[dirRaw.toUpperCase()]||(dirRaw&&dirRaw!=='unavailable'&&dirRaw!=='unknown'?dirRaw:'');
       const stE=S('sensor.windstarke_aktuell');
-      const windText=[dirName,stE?stE.state:''].filter(Boolean).join(' · ')||'Wind';
+      // Richtung lang und als Kuerzel; extra_styles zeigt in schmalen Kacheln das Kuerzel
+      const dirKurz=dirMap[dirRaw.toUpperCase()]?dirRaw.toUpperCase():dirName;
+      const dirHtml=dirName?`<span class="wx-ri-lang">${dirName}</span><span class="wx-ri-kurz">${dirKurz}</span>`:'';
+      const windText=[dirHtml,stE?stE.state:''].filter(Boolean).join(' · ')||'Wind';
 
       // ---- Helligkeit ----
       const lx=num('sensor.wetterstation_pro_beleuchtungsstarke');
@@ -205,11 +218,11 @@ custom_fields:
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:10px;">
             ${cell(iThermo, fmt(t,1)+unit('°C'), 'Temperatur', tColor, 'sensor.wetterstation_pro_temperatur')}
-            ${cell(iDrop, fmt(hum,0)+unit('%'), 'Luftfeuchtigkeit', isNaN(hum)?muted:blue, 'sensor.wetterstation_pro_luftfeuchtigkeit')}
+            ${cell(iDrop, fmt(hum,0)+unit('%'), 'Luft&shy;feuchtigkeit', isNaN(hum)?muted:blue, 'sensor.wetterstation_pro_luftfeuchtigkeit')}
             ${cell(raining?iRain:iDropOff, fmt(isNaN(rm)?0:rm,1)+unit('l/m²'), rmText, rColor, 'sensor.regenmenge')}
             ${cell(iWind, fmt(num('sensor.wetterstation_pro_windgeschwindigkeit'),1)+unit('km/h'), windText, teal, 'sensor.wetterstation_pro_windgeschwindigkeit')}
             ${cell(iHell, (isNaN(lx)?'–':Math.round(lx).toLocaleString('de-DE'))+unit('lx'), 'Helligkeit', cloud, 'sensor.wetterstation_pro_beleuchtungsstarke')}
-            ${cell(oben?iSet:iRise, sunVal+unit('Uhr'), oben?'Sonnenuntergang':'Sonnenaufgang', sun, 'sun.sun')}
+            ${cell(oben?iSet:iRise, sunVal+unit('Uhr'), oben?'Sonnen&shy;untergang':'Sonnen&shy;aufgang', sun, 'sun.sun')}
           </div>
         </div>`;
     ]]]
