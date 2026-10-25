@@ -122,6 +122,9 @@ beim Namen: In der Temperaturliste blieben aus 62 px Platz 20 px.
 | Kennzahl-Kachel Auto | 149 px | 170 px | 155 px | `autos-karte-v4.yaml` |
 | Licht-Chip | 133 px | 154 px | 145 px | `lichter-raum-karte.yaml` |
 | Wetter-Kachel (Inhalt) | 122 px | 143 px | 130 px | `wetter-karte-v2.yaml` |
+| Kartenkopf Docker | 306 px | 348 px | 327 px | `docker-templates.yaml` |
+| Messwert-Kachel Docker (Dreierreihe) | 96,7 px | 110,7 px | 103 px | `docker-templates.yaml` |
+| Kennzahl-Kachel Docker (Viererreihe) | 70,5 px | 81 px | 76 px | `docker-templates.yaml` |
 
 ### Icons
 
