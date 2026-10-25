@@ -50,7 +50,7 @@ BESTAND: dict[str, int] = {
     "dashboard/garten/garten-karte.yaml": 6,
     "dashboard/garten/pflanzen-templates.yaml": 1,
     "dashboard/garten/pflanzen-view.yaml": 1,
-    "dashboard/licht/fenster-lichter-karte.yaml": 3,
+    "dashboard/licht/fenster-lichter-karte.yaml": 1,
     "dashboard/licht/haustuer-lock-karte.yaml": 3,
     "dashboard/licht/lichter-glow-karte.yaml": 15,
     "dashboard/licht/lichter-mushroom-karte.yaml": 1,

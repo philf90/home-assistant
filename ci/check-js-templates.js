@@ -2,11 +2,12 @@
 /*
  * Syntaxpruefung der button-card-JS-Templates in den Lovelace-YAMLs.
  *
- * custom:button-card wertet alles zwischen [[[ und ]]] zur Laufzeit als
- * JavaScript aus. Ein Syntaxfehler darin bricht nicht laut ab, sondern laesst
- * die Kachel leer oder unveraendert -- der haeufigste stille Fehler in diesem
- * Repo. Dieses Skript extrahiert jeden Block und laesst ihn von der
- * JS-Engine parsen (nur parsen, nichts ausfuehren).
+ * custom:button-card wertet alles zwischen [[[ und ]]] (in verschachtelten
+ * Karten [[[[ und ]]]]) zur Laufzeit als JavaScript aus. Ein Syntaxfehler
+ * darin bricht nicht laut ab, sondern laesst die Kachel leer oder
+ * unveraendert -- der haeufigste stille Fehler in diesem Repo. Dieses Skript
+ * extrahiert jeden Block und laesst ihn von der JS-Engine parsen (nur parsen,
+ * nichts ausfuehren).
  *
  * Zusaetzlich wird vor typischen Verwechslungen gewarnt, die syntaktisch
  * gueltig sind, zur Laufzeit aber ins Leere laufen -- etwa "state[...]" statt
@@ -41,11 +42,13 @@ const SUSPICIOUS = [
 
 function findTemplates(source) {
   const templates = [];
-  const re = /\[\[\[([\s\S]*?)\]\]\]/g;
+  // [[[[ ]]]] ist ein Template fuer eine button-card in custom_fields: Die
+  // aeussere Karte nimmt ein Klammerpaar ab, die innere wertet den Rest aus.
+  const re = /\[\[\[\[([\s\S]*?)\]\]\]\]|\[\[\[([\s\S]*?)\]\]\]/g;
   let match;
   while ((match = re.exec(source)) !== null) {
     templates.push({
-      code: match[1],
+      code: match[1] ?? match[2],
       line: source.slice(0, match.index).split('\n').length,
     });
   }
