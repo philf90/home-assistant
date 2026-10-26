@@ -5,7 +5,8 @@
 # Bereich:       sonstiges
 # Status:        aktiv
 # Karten:        button-card
-# Templates:     keine
+# Templates:     wow_basis (wow-templates.yaml),
+#                wow_platz (wow-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   wow_charakter
 #                (vor dem Einfuegen ersetzen, siehe README.md)
@@ -18,7 +19,12 @@
 #   Unten    Kennzahlen: Raid-Fortschritt (hoechste Schwierigkeit mit Kills),
 #            Erfolgspunkte, Reittiere, Ehrenstufe
 # Jeder Platz zeigt das Item-Symbol mit einem Rand in der Qualitaetsfarbe und
-# das Itemlevel. Leere Plaetze (z. B. Hemd) stehen gestrichelt da.
+# das Itemlevel. Leere Plaetze (z. B. Hemd) stehen gestrichelt da. Mit der
+# Maus zeigt ein Platz beim Darueberfahren den Item-Tooltip wie im Spiel;
+# Tippen oeffnet ihn als Popup (Templates wow_platz und wow_tooltip in
+# wow-templates.yaml, dort auch die Farben). Jeder Platz ist dafuer eine
+# eigene button-card in einem custom_field; nur so hat jeder Platz eine
+# eigene Aktion. Die Entitaet setzt die Karte aus variables.prefix.
 #
 # Farben: Die Item-Qualitaet nutzt die offiziellen Spielfarben (Sonderfarben
 # in design/palette.yaml, DESIGN.md "Sonderfarben"). Selten und Episch halten
@@ -33,16 +39,18 @@
 # Mythic+: Die Pille zeigt den Sensorwert der aktuellen Season, sonst das
 # Attribut api_rating -- denselben Wert wie das Arsenal.
 #
-# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
-# "WoW Charakter" (philf90/HA-WOW) ab 0.4.0 mit einem Charakter als
-# Untereintrag. Die Karte liest die Entitaeten ueber variables.prefix; die
+# Voraussetzung: custom:button-card und browser_mod (HACS), die Templates aus
+# wow-templates.yaml im Dashboard und die HACS-Integration "WoW Charakter"
+# (philf90/HA-WOW) ab 0.5.0 mit einem Charakter als Untereintrag. Die Karte liest die Entitaeten ueber variables.prefix; die
 # Endungen (_level, _ausrustung_kopf, ...) sind die Namen, die Home Assistant
 # mit deutscher Oberflaeche vergibt. Mit englischer Oberflaeche heissen sie
 # anders (_equipment_head) und muessen hier angepasst werden.
 type: custom:button-card
+template: wow_basis
 entity: sensor.wow_charakter_level
-# Die Karte liest rund 30 weitere Entitaeten ueber variables.prefix; button-card
-# erkennt sie nicht selbst, deshalb bei jeder Zustandsaenderung neu zeichnen.
+# Kopf und Kennzahlen lesen weitere Entitaeten ueber variables.prefix;
+# button-card erkennt sie nicht selbst, deshalb bei jeder Zustandsaenderung
+# neu zeichnen. Die Plaetze sind eigene Karten und zeichnen sich selbst.
 triggers_update: all
 show_icon: false
 show_name: false
@@ -54,46 +62,13 @@ variables:
   # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
   # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
   prefix: wow_charakter
-  farben: |
-    [[[
-      return {
-        text:   '#f2f5f8',
-        titel:  '#e7ecf3',
-        label:  '#b4c0cf',
-        sek:    '#8794a5',
-        kachel: 'rgba(255, 255, 255, 0.028)',
-        rand:   'rgba(255, 255, 255, 0.06)',
-        pille:  'rgba(255, 255, 255, 0.05)',
-      };
-    ]]]
-  # Offizielle Qualitaetsfarben des Spiels (Feld quality.type der API)
-  qualitaet: |
-    [[[
-      return {
-        POOR:      '#9d9d9d',
-        COMMON:    '#f2f5f8',
-        UNCOMMON:  '#1eff00',
-        RARE:      '#0070dd',
-        EPIC:      '#a335ee',
-        LEGENDARY: '#ff8000',
-        ARTIFACT:  '#e6cc80',
-        HEIRLOOM:  '#00ccff',
-        WOW_TOKEN: '#00ccff',
-      };
-    ]]]
 custom_fields:
-  body: |
+  kopf: |
     [[[
-      const f = variables.farben, q = variables.qualitaet, p = variables.prefix;
+      const w = variables.wow, f = w.farben, esc = w.esc, p = variables.prefix;
       const st = (domain, endung) => states[`${domain}.${p}_${endung}`];
       const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
-      const zahl = (e) => {
-        if (leer(e)) return null;
-        const v = parseFloat(e.state);
-        return isNaN(v) ? null : v;
-      };
-      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zahl = (e) => (leer(e) || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
       const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
 
       const lvl = st('sensor', 'level');
@@ -101,8 +76,7 @@ custom_fields:
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
       }
       const a = lvl.attributes || {};
-
-      // Kopf: Name aus dem Geraetenamen ("Name – Realm Level"), Titel ohne Namen
+      // Name aus dem Geraetenamen ("Name – Realm Level"), Titel ohne Namen
       const geraet = String(a.friendly_name || '').replace(/\s*Level$/, '');
       const name = geraet.split(' – ')[0] || p;
       let titel = a.title || '';
@@ -117,6 +91,7 @@ custom_fields:
       ].filter(Boolean).map(esc).join(' · ');
 
       const ilvl = zahl(st('sensor', 'itemlevel'));
+      // Mythic+: Wert der aktuellen Season, sonst api_rating wie im Arsenal
       const mplus = st('sensor', 'mythic_wertung');
       let wertung = zahl(mplus);
       if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
@@ -130,7 +105,7 @@ custom_fields:
         a.guild ? pille(esc(a.guild)) : '',
       ].join('');
 
-      const kopf = `
+      return `
         <div style="display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 12px;align-items:center;">
           <div style="width:44px;height:44px;border-radius:13px;overflow:hidden;background:${f.pille};border:1px solid ${f.rand};">
             ${avatar ? `<img src="${avatar}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">` : ''}
@@ -142,43 +117,151 @@ custom_fields:
           <div style="grid-column:1 / -1;margin-top:8px;font-size:12.5px;line-height:1.3;color:${f.sek};${zweizeilig}">${zeile}</div>
           ${pillen ? `<div style="grid-column:1 / -1;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">${pillen}</div>` : ''}
         </div>`;
-
-      // Ausruestung: Symbol mit Rand in der Qualitaetsfarbe, Itemlevel daneben
-      const platz = (endung, seite) => {
-        const e = st('sensor', 'ausrustung_' + endung);
-        const ea = e?.attributes || {};
-        const bild = ea.entity_picture;
-        const farbe = q[ea.quality] || f.rand;
-        const stufe = zahl(e);
-        const tipp = esc([ea.name, ea.quality_name].filter(Boolean).join(' · '));
-        const symbol = bild && !leer(e)
-          ? `<div title="${tipp}" style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:2px solid ${farbe};background:${f.kachel};overflow:hidden;flex:none;"><img src="${bild}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>`
-          : `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:1px dashed ${f.rand};background:${f.kachel};flex:none;"></div>`;
-        const zahlText = `<span style="min-width:22px;font-size:11.5px;font-weight:650;color:${f.label};font-variant-numeric:tabular-nums;text-align:${seite === 'links' ? 'left' : 'right'};">${stufe === null ? '' : Math.round(stufe)}</span>`;
-        return `<div style="display:flex;align-items:center;gap:4px;${seite === 'rechts' ? 'justify-content:flex-end;' : ''}">${seite === 'links' ? symbol + zahlText : zahlText + symbol}</div>`;
-      };
-      const links = ['kopf', 'hals', 'schultern', 'rucken', 'brust', 'hemd', 'wappenrock', 'handgelenke'];
-      const rechts = ['hande', 'taille', 'beine', 'fusse', 'finger_1', 'finger_2', 'schmuck_1', 'schmuck_2'];
-      // Ganzkoerperbild (1600 x 1200, transparent): Die Figur fuellt nur gut
-      // die Haelfte der Hoehe, deshalb auf 140 % vergroessert und mittig
-      const koerper = st('image', 'ganzkorperbild')?.attributes?.entity_picture;
-      const mitte = `
-        <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:0 6px;margin-top:14px;">
-          <div style="display:grid;gap:5px;">${links.map((s) => platz(s, 'links')).join('')}</div>
-          <div style="position:relative;min-width:0;border-radius:16px;overflow:hidden;">
-            ${koerper ? `<img src="${koerper}" alt="" style="position:absolute;left:50%;top:50%;height:140%;width:auto;max-width:none;transform:translate(-50%, -52%);">` : ''}
-          </div>
-          <div style="display:grid;gap:5px;">${rechts.map((s) => platz(s, 'rechts')).join('')}</div>
-        </div>
-        <div style="display:flex;justify-content:center;gap:12px;margin-top:6px;">
-          ${platz('waffenhand', 'rechts')}${platz('schildhand', 'links')}
-        </div>`;
-
-      // Kennzahlen: Raid in der hoechsten Schwierigkeit mit Kills
+    ]]]
+  # Ganzkoerperbild (1600 x 1200, transparent): Die Figur fuellt nur gut die
+  # Haelfte der Hoehe, deshalb auf 140 % vergroessert und mittig
+  bild: |
+    [[[
+      const bild = states[`image.${variables.prefix}_ganzkorperbild`]?.attributes?.entity_picture;
+      return bild ? `<img src="${bild}" alt="" style="position:absolute;left:50%;top:50%;height:140%;width:auto;max-width:none;transform:translate(-50%, -52%);">` : '';
+    ]]]
+  l1:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_kopf`; ]]]'
+      variables:
+        seite: links
+  l2:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_hals`; ]]]'
+      variables:
+        seite: links
+  l3:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_schultern`; ]]]'
+      variables:
+        seite: links
+  l4:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_rucken`; ]]]'
+      variables:
+        seite: links
+  l5:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_brust`; ]]]'
+      variables:
+        seite: links
+  l6:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_hemd`; ]]]'
+      variables:
+        seite: links
+  l7:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_wappenrock`; ]]]'
+      variables:
+        seite: links
+  l8:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_handgelenke`; ]]]'
+      variables:
+        seite: links
+  r1:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_hande`; ]]]'
+      variables:
+        seite: rechts
+  r2:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_taille`; ]]]'
+      variables:
+        seite: rechts
+  r3:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_beine`; ]]]'
+      variables:
+        seite: rechts
+  r4:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_fusse`; ]]]'
+      variables:
+        seite: rechts
+  r5:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_finger_1`; ]]]'
+      variables:
+        seite: rechts
+  r6:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_finger_2`; ]]]'
+      variables:
+        seite: rechts
+  r7:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_schmuck_1`; ]]]'
+      variables:
+        seite: rechts
+  r8:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_schmuck_2`; ]]]'
+      variables:
+        seite: rechts
+  w1:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_waffenhand`; ]]]'
+      variables:
+        seite: rechts
+  w2:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return `sensor.${variables.prefix}_ausrustung_schildhand`; ]]]'
+      variables:
+        seite: links
+  leiste: |
+    [[[
+      const w = variables.wow, f = w.farben, p = variables.prefix;
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      // Raid in der hoechsten Schwierigkeit mit Kills
       const stufen = [['mythisch', 'Mythisch'], ['heroisch', 'Heroisch'], ['normal', 'Normal'], ['lfr', 'LFR']];
       let raid = { wert: '–', name: 'Raid' };
       for (const [endung, anzeige] of stufen) {
-        const e = st('sensor', 'raid_fortschritt_' + endung);
+        const e = st('raid_fortschritt_' + endung);
         const n = zahl(e);
         if (n !== null && (n > 0 || endung === 'lfr')) {
           const gesamt = e.attributes?.total_bosses;
@@ -189,20 +272,18 @@ custom_fields:
       const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
       const kennzahlen = [
         raid,
-        { wert: format(zahl(st('sensor', 'erfolgspunkte'))), name: 'Erfolge' },
-        { wert: format(zahl(st('sensor', 'reittiere'))), name: 'Reittiere' },
-        { wert: format(zahl(st('sensor', 'ehrenstufe'))), name: 'Ehren&shy;stufe' },
+        { wert: format(zahl(st('erfolgspunkte'))), name: 'Erfolge' },
+        { wert: format(zahl(st('reittiere'))), name: 'Reittiere' },
+        { wert: format(zahl(st('ehrenstufe'))), name: 'Ehren&shy;stufe' },
       ];
-      const leiste = `
-        <div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:6px;margin-top:14px;">
+      return `
+        <div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:6px;">
           ${kennzahlen.map((k) => `
             <div style="min-width:0;padding:8px 6px;border-radius:13px;background:${f.kachel};border:1px solid ${f.rand};text-align:center;">
               <div style="font-size:15px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${k.wert}</div>
               <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${k.name}</div>
             </div>`).join('')}
         </div>`;
-
-      return kopf + mitte + leiste;
     ]]]
 styles:
   card:
@@ -213,12 +294,78 @@ styles:
     - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
     - box-shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7)
     - color: '#f2f5f8'
+    # Tooltips der Plaetze ragen ueber die Kartenkante
+    - overflow: visible
   grid:
-    - grid-template-areas: '"body"'
-    - grid-template-columns: minmax(0, 1fr)
+    # Plaetze links und rechts, das Bild ueber acht Zeilen in der Mitte,
+    # darunter Waffen- und Schildhand mittig
+    - grid-template-areas: >-
+        "kopf kopf kopf kopf"
+        "l1 bild bild r1" "l2 bild bild r2" "l3 bild bild r3" "l4 bild bild r4"
+        "l5 bild bild r5" "l6 bild bild r6" "l7 bild bild r7" "l8 bild bild r8"
+        ". w1 w2 ."
+        "leiste leiste leiste leiste"
+    - grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto
+    - row-gap: 5px
+    - column-gap: 6px
   custom_fields:
-    body:
+    kopf:
       - justify-self: stretch
       - min-width: 0
-      # button-card zentriert custom_fields; Inhalte sollen links stehen
       - text-align: left
+      # button-card setzt an custom_fields white-space: nowrap (Klasse
+      # ellipsis); Titel und Infozeile brechen sonst nicht zweizeilig um
+      - white-space: normal
+      - margin-bottom: 9px
+    bild:
+      - position: relative
+      - align-self: stretch
+      - justify-self: stretch
+      - min-width: 0
+      - overflow: hidden
+      - border-radius: 16px
+    w1:
+      - justify-self: end
+      - margin-right: 3px
+      - margin-top: 1px
+    w2:
+      - justify-self: start
+      - margin-left: 3px
+      - margin-top: 1px
+    leiste:
+      - justify-self: stretch
+      - min-width: 0
+      - white-space: normal
+      - margin-top: 9px
+    l1:
+      - justify-self: start
+    l2:
+      - justify-self: start
+    l3:
+      - justify-self: start
+    l4:
+      - justify-self: start
+    l5:
+      - justify-self: start
+    l6:
+      - justify-self: start
+    l7:
+      - justify-self: start
+    l8:
+      - justify-self: start
+    r1:
+      - justify-self: end
+    r2:
+      - justify-self: end
+    r3:
+      - justify-self: end
+    r4:
+      - justify-self: end
+    r5:
+      - justify-self: end
+    r6:
+      - justify-self: end
+    r7:
+      - justify-self: end
+    r8:
+      - justify-self: end

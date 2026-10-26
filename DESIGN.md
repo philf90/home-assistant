@@ -356,15 +356,16 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 - **Flugradar:** Hervorhebung `#f2c94c`.
 - **Wetterwarnungen:** offizielle DWD-Stufenfarben (`#7c8ba1`, `#f2c500`,
   `#fb9a12`, `#e6480e`, `#c0392b`) und `#4ade80` für „aktiv“. Nicht anpassen.
-- **World of Warcraft:** offizielle Qualitätsfarben der Items, nur in
-  `wow-arsenal-karte.yaml`: Schlecht `#9d9d9d`, Ungewöhnlich `#1eff00`,
+- **World of Warcraft:** offizielle Qualitätsfarben der Items, nur in der
+  WoW-Karte (`wow-arsenal-karte.yaml`, `wow-templates.yaml`): Schlecht `#9d9d9d`, Ungewöhnlich `#1eff00`,
   Selten `#0070dd`, Episch `#a335ee`, Legendär `#ff8000`, Artefakt
   `#e6cc80`, Erbstück `#00ccff`; Gewöhnlich (im Spiel Weiß) nimmt
   `#f2f5f8`. Nicht anpassen: Spieler erkennen die Qualität an genau diesen
   Farben. Selten und Episch halten auf der Hülle nur 3,06:1 bzw. 3,02:1
   (Unterkachel eingerechnet). Das reicht für Grafiken (3:1), nicht für Text;
   die Farben stehen deshalb nur als 2-px-Rand am Item-Symbol, nie als
-  Schrift. Quelle der Werte: Warcraft Wiki, `GetItemQualityColor`.
+  Schrift, auch im Item-Tooltip nicht (dort Rand an Symbol und
+  Qualitäts-Pille). Quelle der Werte: Warcraft Wiki, `GetItemQualityColor`.
 
 ## Heller Modus
 

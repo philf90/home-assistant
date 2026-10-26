@@ -1,0 +1,274 @@
+# ============================================================================
+# WoW – Bibliothek, Ausruestungsplatz und Item-Tooltip
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Drei button-card-Templates fuer wow-arsenal-karte.yaml:
+#
+#   wow_basis     Nur Variablen: variables.wow mit Farben, Qualitaetsfarben,
+#                 esc() und tooltip(t, optionen), das den Item-Tooltip als
+#                 HTML baut. Hier stehen alle Farben der WoW-Karte einmal.
+#   wow_platz     Ein Ausruestungsplatz: Item-Symbol mit Rand in der
+#                 Qualitaetsfarbe und Itemlevel daneben (variables.seite:
+#                 links oder rechts). Mit der Maus: Tooltip beim Darueber-
+#                 fahren. Tippen: browser_mod-Popup mit dem Tooltip.
+#   wow_tooltip   Inhalt des Popups: der ganze Tooltip zum Item der Entitaet.
+#
+# EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
+#   3 Punkte -> "Raw-Konfigurationseditor" -> die drei Eintraege unter
+#   "button_card_templates:" auf oberster Ebene ergaenzen.
+#
+# Daten: Attribut tooltip der Ausruestungs-Sensoren (Integration WoW Charakter
+# ab 0.5.0). Die Texte kommen fertig uebersetzt aus der API; die Templates
+# ordnen sie nur an und faerben sie.
+#
+# Farben (DESIGN.md, Sonderfarben und Heller Modus): Die WoW-Karte und ihr
+# Popup bleiben in beiden Modi dunkel, alle Werte sind die dunklen Hex-Werte.
+# Die Qualitaetsfarben stehen nur als Rand am Symbol und an der Qualitaets-
+# Pille, nie als Schrift (Selten 3,06:1, Episch 3,02:1). Rollen im Tooltip,
+# angelehnt an die Farben im Spiel:
+#   Zweitwerte, Verzauberungen, Effekte, aktive Set-Boni   Gruen #a6d49e
+#     (im Spiel gruen; in der Palette "positive Werte")
+#   Primaerwerte, angelegte Set-Teile                      Text #f2f5f8
+#   Set-Name, Beschreibung, Sockel                         Label #b4c0cf
+#   wirkungslose Werte (falsche Klasse), fehlende Set-Teile, inaktive
+#   Set-Boni, Haltbarkeit, Anforderungen, Verkaufspreis    Sekundaer #8794a5
+# Popup: Abschnitte als Unterkachel auf #1b2231; dort Gruen 8,80:1,
+# Sekundaer 4,78:1. Tooltip beim Darueberfahren: Grund #222b3c (erhoehte
+# Flaeche); eine Unterkachel darauf liesse Sekundaer auf 4,24:1 fallen, die
+# Abschnitte stehen dort deshalb ohne Kachel (Sekundaer 4,60:1, Gruen 8,47:1).
+#
+# Popup (browser_mod): Oberflaeche wie das DWD-Popup in warnlage-templates.yaml
+# (Erklaerung der Variablen dort), aber fest dunkel und hoechstens 440 px
+# breit. Titel ist der Item-Name; die Hoehe bleibt beim laengsten Item der
+# Testdaten unter 629 px (DESIGN.md, Bildschirmbreiten).
+#
+# Voraussetzung: custom:button-card (HACS), browser_mod (HACS) und die
+# HACS-Integration "WoW Charakter" ab 0.5.0.
+button_card_templates:
+  wow_basis:
+    variables:
+      wow: |
+        [[[
+          const farben = {
+            text:   '#f2f5f8',
+            titel:  '#e7ecf3',
+            label:  '#b4c0cf',
+            sek:    '#8794a5',
+            gruen:  '#a6d49e',
+            kachel: 'rgba(255, 255, 255, 0.028)',
+            rand:   'rgba(255, 255, 255, 0.06)',
+            pille:  'rgba(255, 255, 255, 0.05)',
+          };
+          // Offizielle Qualitaetsfarben des Spiels (Feld quality der API)
+          const qualitaet = {
+            POOR:      '#9d9d9d',
+            COMMON:    '#f2f5f8',
+            UNCOMMON:  '#1eff00',
+            RARE:      '#0070dd',
+            EPIC:      '#a335ee',
+            LEGENDARY: '#ff8000',
+            ARTIFACT:  '#e6cc80',
+            HEIRLOOM:  '#00ccff',
+            WOW_TOKEN: '#00ccff',
+          };
+          const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+          const f = farben;
+
+          // Tooltip als HTML. optionen.name: Name oben zeigen (im Popup steht
+          // er im Titel); optionen.bild: URL des Item-Symbols; optionen.flach:
+          // Abschnitte ohne Unterkachel (Tooltip auf #222b3c, siehe oben).
+          const tooltip = (t, optionen = {}) => {
+            if (!t) return '';
+            const qf = qualitaet[t.quality] || f.rand;
+            const zeile = (links, rechts, farbe = f.text) => `
+              <div style="display:flex;justify-content:space-between;gap:12px;color:${farbe};">
+                <span style="min-width:0;">${esc(links)}</span>${rechts ? `<span style="flex:none;text-align:right;">${esc(rechts)}</span>` : ''}
+              </div>`;
+            const block = (inhalt) => !inhalt.trim() ? ''
+              : optionen.flach
+                ? `<div style="padding-top:6px;border-top:1px solid ${f.rand};display:grid;gap:2px;">${inhalt}</div>`
+                : `<div style="padding:8px 12px;border-radius:14px;background:${f.kachel};border:1px solid ${f.rand};display:grid;gap:2px;">${inhalt}</div>`;
+            const pille = `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:9px;border:1.5px solid ${qf};font-size:12px;font-weight:650;color:${f.label};white-space:nowrap;">${esc(t.quality_name || t.quality || '')}</span>`;
+
+            const kopf = `
+              <div style="display:grid;grid-template-columns:${optionen.bild ? '40px ' : ''}minmax(0,1fr);gap:0 10px;align-items:center;">
+                ${optionen.bild ? `<div style="width:40px;height:40px;box-sizing:border-box;border-radius:9px;border:2px solid ${qf};overflow:hidden;"><img src="${esc(optionen.bild)}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>` : ''}
+                <div style="min-width:0;display:grid;gap:4px;">
+                  ${optionen.name ? `<div style="font-size:15px;font-weight:700;line-height:1.25;color:${f.titel};">${esc(t.name)}</div>` : ''}
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;">${pille}<span style="font-size:13px;font-weight:600;color:${f.text};">${esc(t.level || '')}</span></div>
+                  ${t.name_description ? `<div style="font-size:12px;color:${f.gruen};">${esc(t.name_description)}</div>` : ''}
+                </div>
+              </div>`;
+
+            const grund = [
+              t.binding ? zeile(t.binding) : '',
+              t.unique ? zeile(t.unique) : '',
+              t.slot || t.subclass ? zeile(t.slot || '', t.subclass) : '',
+              t.damage ? zeile(t.damage, t.speed) : '',
+              t.dps ? zeile(t.dps) : '',
+              t.armor ? zeile(t.armor) : '',
+            ].join('');
+
+            const werte = [
+              ...(t.stats || []).map((s) => zeile(s.text, '', s.negated ? f.sek : s.bonus ? f.gruen : f.text)),
+              ...(t.enchantments || []).map((e) => zeile(e, '', f.gruen)),
+              ...(t.sockets || []).map((s) => zeile(s, '', f.label)),
+              ...(t.spells || []).map((s) => zeile(s, '', f.gruen)),
+            ].join('');
+
+            const set = t.set ? [
+              `<div style="font-weight:650;color:${f.label};">${esc(t.set.name)}</div>`,
+              ...(t.set.items || []).map((i) => zeile(i.name, '', i.equipped ? f.text : f.sek)),
+              ...(t.set.effects || []).map((e) => `<div style="margin-top:2px;color:${e.active ? f.gruen : f.sek};">${esc(e.text)}</div>`),
+            ].join('') : '';
+
+            const preis = t.sell_price
+              ? `${t.sell_price.header || ''} ${[[t.sell_price.gold, 'g'], [t.sell_price.silver, 's'], [t.sell_price.copper, 'k']]
+                  .filter(([v]) => v && v !== '0').map(([v, e]) => `${v} ${e}`).join(' ')}`.trim()
+              : '';
+            // Haltbarkeit und Anforderungen in einer Zeile, Preis darunter
+            const fuss = [[t.durability, ...(t.requirements || [])].filter(Boolean).join(' · '), preis]
+              .filter(Boolean).map((s) => `<div>${esc(s)}</div>`).join('');
+
+            return `
+              <div style="display:grid;gap:6px;text-align:left;font-size:13px;line-height:1.35;color:${f.text};font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:break-word;">
+                ${kopf}
+                ${block(grund)}
+                ${block(werte)}
+                ${block(set)}
+                ${t.description ? `<div style="font-style:italic;color:${f.label};">„${esc(t.description)}“</div>` : ''}
+                ${fuss ? `<div style="display:grid;gap:1px;font-size:12px;color:${f.sek};padding:0 2px;">${fuss}</div>` : ''}
+              </div>`;
+          };
+          return { farben, qualitaet, esc, tooltip };
+        ]]]
+
+  wow_platz:
+    template: wow_basis
+    variables:
+      # links: Symbol, dann Itemlevel; rechts: Itemlevel, dann Symbol
+      seite: links
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    hold_action:
+      action: none
+    tooltip:
+      content: |
+        [[[
+          const t = entity?.attributes?.tooltip;
+          if (!t) return 'Kein Item angelegt';
+          return variables.wow.tooltip(t, { name: true, flach: true, bild: entity.attributes.entity_picture });
+        ]]]
+      placement: '[[[ return variables.seite === "links" ? "right-start" : "left-start"; ]]]'
+      delay: 250
+    tap_action:
+      action: '[[[ return entity?.attributes?.tooltip ? "call-service" : "none"; ]]]'
+      service: browser_mod.popup
+      service_data:
+        title: '[[[ return entity?.attributes?.tooltip?.name || ""; ]]]'
+        # Wie das DWD-Popup (warnlage-templates.yaml), fest dunkel
+        style: |
+          --ha-card-background: #1b2231;
+          --card-background-color: #1b2231;
+          --primary-background-color: #171d29;
+          --secondary-background-color: #1b2231;
+          --primary-text-color: #f2f5f8;
+          --secondary-text-color: #8794a5;
+          --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+          --popup-min-width: min(100vw, 440px);
+          --popup-max-width: min(100vw, 440px);
+        content:
+          type: custom:button-card
+          template: wow_tooltip
+          entity: '[[[ return entity.entity_id; ]]]'
+    custom_fields:
+      platz: |
+        [[[
+          const w = variables.wow, f = w.farben;
+          const a = entity?.attributes || {};
+          const leer = !entity || ['unavailable', 'unknown', ''].includes(entity.state);
+          const farbe = w.qualitaet[a.quality] || f.rand;
+          const symbol = a.entity_picture && !leer
+            ? `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:2px solid ${farbe};background:${f.kachel};overflow:hidden;flex:none;"><img src="${a.entity_picture}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>`
+            : `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:1px dashed ${f.rand};background:${f.kachel};flex:none;"></div>`;
+          const stufe = leer ? '' : Math.round(parseFloat(entity.state));
+          const zahl = `<span style="min-width:22px;font-size:11.5px;font-weight:650;color:${f.label};font-variant-numeric:tabular-nums;text-align:${variables.seite === 'links' ? 'left' : 'right'};">${isNaN(stufe) ? '' : stufe}</span>`;
+          return `<div style="display:flex;align-items:center;gap:4px;">${variables.seite === 'links' ? symbol + zahl : zahl + symbol}</div>`;
+        ]]]
+    styles:
+      card:
+        - padding: 0
+        - border: none
+        - border-radius: 8px
+        - background: none
+        - box-shadow: none
+        - overflow: visible
+        # Tooltip auf der erhoehten Flaeche wie Popups (DESIGN.md, Flaechen)
+        - --button-card-tooltip-background-color: '#222b3c'
+        - --button-card-tooltip-content-color: '#f2f5f8'
+        - --button-card-tooltip-max-width: 320px
+        - --button-card-tooltip-padding: 12px
+        - --button-card-tooltip-text-align: left
+        - --button-card-tooltip-border-radius: 14px
+      grid:
+        - grid-template-areas: '"platz"'
+        - grid-template-columns: max-content
+      custom_fields:
+        platz:
+          - justify-self: start
+
+  wow_tooltip:
+    template: wow_basis
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      body: |
+        [[[
+          const t = entity?.attributes?.tooltip;
+          if (!t) return `<div style="color:${variables.wow.farben.sek};">Kein Item angelegt.</div>`;
+          return variables.wow.tooltip(t, { bild: entity.attributes.entity_picture });
+        ]]]
+    styles:
+      # Breiten-Fesseln wie im Pollen-Popup: sonst sizet button-card auf
+      # max-content und lange Zeilen brechen nicht um
+      card:
+        - padding: 4px 8px 12px
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+      grid:
+        - grid-template-areas: '"body"'
+        - grid-template-columns: minmax(0, 1fr)
+        - width: 100%
+        - max-width: 100%
+        - min-width: 0
+      custom_fields:
+        body:
+          - width: 100%
+          - max-width: 100%
+          - min-width: 0
+          - justify-self: stretch
+          - text-align: left
+          # button-card setzt an custom_fields white-space: nowrap (Klasse
+          # ellipsis); ohne das brechen lange Effekttexte nicht um
+          - white-space: normal
