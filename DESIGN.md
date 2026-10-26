@@ -496,6 +496,11 @@ in beiden Modi dunkel.
   Ebenso die WoW-Karte (`wow-arsenal-karte.yaml`) mit der normalen dunklen
   Hülle: Ihre Qualitätsfarben stammen aus dem Spiel und sind nur auf dunklem
   Grund lesbar (Ungewöhnlich `#1eff00` auf der hellen Hülle 1,25:1).
+  Die übrigen WoW-Karten (`wow-charaktere-karte.yaml`,
+  `wow-spielwelt-karte.yaml`, `wow-raid-karte.yaml`, `wow-mythic-karte.yaml`,
+  `wow-berufe-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`,
+  `wow-werte-karte.yaml`) zeigen keine Qualitätsfarben und folgen dem Modus
+  mit den Theme-Variablen; Akzent ist Rosé (Bereich Freizeit).
 
 **Gemessen** wird nach WCAG 2.x im ungünstigsten Fall aus Hülle oben, Hülle
 unten, Unterkachel (Navy 0,03 über der Hülle = `#eceff2`) und Popup

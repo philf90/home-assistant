@@ -1,0 +1,187 @@
+# ============================================================================
+# WoW – Mythic+ der aktuellen Season
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Mythic+ eines Charakters:
+#   Kacheln  Wertung, hoechster Schluessel, Laeufe in Zeit
+#   Liste    bester Lauf je Dungeon: Stufe, in Zeit oder nicht, Dauer,
+#            Wertung des Laufs und Affixe (Attribut runs, Integration ab
+#            0.6.0; aeltere Versionen zeigen nur Stufe und "in Zeit")
+# Hat der Charakter in der aktuellen Season noch nicht gespielt, steht die
+# Wertung aus dem Attribut api_rating da (der Wert, den das Arsenal zeigt),
+# mit dem Hinweis "laut Arsenal".
+#
+# Daten: Sensoren _mythic_wertung, _hochster_mythic_schlussel und
+# _mythic_laufe_in_zeit (Namen bei deutscher Oberflaeche). Die Dauer eines
+# Laufs ist in der API ohne belegte Einheit; die Integration rechnet sie in
+# Sekunden um.
+#
+# Farben: Owlet-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
+# Freizeit). "in Zeit" Gruen, "ueber Zeit" Sekundaertext, beides als Wort.
+# Die Wertungsfarbe der API steht nicht in der Karte: Sie ist beliebig und
+# auf heller Huelle nicht sicher lesbar.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer die Laufdetails ab 0.6.0.
+type: custom:button-card
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:key-variant
+name: |
+  [[[
+    const s = states[`sensor.${variables.prefix}_mythic_wertung`]?.attributes?.season;
+    return s ? `Mythic+ · Season ${s}` : 'Mythic+';
+  ]]]
+label: |
+  [[[
+    const p = variables.prefix;
+    const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0];
+    const runs = states[`sensor.${p}_hochster_mythic_schlussel`]?.attributes?.best_runs || {};
+    const n = Object.keys(runs).length;
+    return [geraet, n ? `${n} Dungeons gelaufen` : 'noch kein Lauf in dieser Season'].filter(Boolean).join(' · ');
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--owlet-rose, #e6a0c4)',
+        gruen:  'var(--owlet-gruen, #a6d49e)',
+        text:   'var(--owlet-text, #f2f5f8)',
+        label:  'var(--owlet-label, #b4c0cf)',
+        sek:    'var(--owlet-text-sekundaer, #8794a5)',
+        kachel: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+      };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
+      const zahl = (e) => (leer(e) || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+
+      const wertung = states[`sensor.${p}_mythic_wertung`];
+      if (!wertung) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Mythic+-Sensoren unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ (Retail) einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+      const schluessel = states[`sensor.${p}_hochster_mythic_schlussel`];
+      const inZeit = states[`sensor.${p}_mythic_laufe_in_zeit`];
+
+      let w = zahl(wertung), wHinweis = `Season ${wertung.attributes?.season ?? '–'}`;
+      if (w === null && wertung.attributes?.api_rating != null) {
+        w = wertung.attributes.api_rating;
+        wHinweis = 'laut Arsenal';
+      }
+      const k = zahl(schluessel), z = zahl(inZeit);
+      const kachel = (titel, wert, hinweis) => `
+        <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 6px;text-align:center;">
+          <div style="font-size:17px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert}</div>
+          <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${titel}</div>
+          ${hinweis ? `<div style="font-size:11.5px;line-height:1.25;color:${f.sek};">${hinweis}</div>` : ''}
+        </div>`;
+      const oben = `<div style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:6px;">
+        ${kachel('Wertung', w === null ? '–' : Math.round(w).toLocaleString('de-DE'), wHinweis)}
+        ${kachel('Höchster Schlüssel', k === null ? '–' : `+${k}`, '')}
+        ${kachel('In Zeit', z === null ? '–' : z, '')}
+      </div>`;
+
+      // Laeufe: ab 0.6.0 mit Details (runs), sonst nur best_runs
+      const dauer = (s) => s == null ? '' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      let runs = schluessel?.attributes?.runs;
+      if (!Array.isArray(runs)) {
+        runs = Object.entries(schluessel?.attributes?.best_runs || {}).map(([dungeon, text]) => ({
+          dungeon, level: parseInt(String(text).replace('+', ''), 10), timed: String(text).includes('in Zeit'),
+        }));
+      }
+      runs = runs.slice().sort((a, b) => (b.level || 0) - (a.level || 0));
+      if (!runs.length) {
+        return `<div style="display:grid;gap:8px;">${oben}<div style="font-size:12.5px;color:${f.sek};padding:0 2px;">Noch kein Lauf in dieser Season.</div></div>`;
+      }
+      const zeilen = runs.map((r, i) => {
+        const pille = r.timed
+          ? `<span style="font-size:11.5px;font-weight:700;color:${f.gruen};background:color-mix(in srgb, ${f.gruen} 12%, transparent);border:1px solid color-mix(in srgb, ${f.gruen} 24%, transparent);padding:2px 7px;border-radius:8px;white-space:nowrap;">in Zeit</span>`
+          : `<span style="font-size:11.5px;font-weight:700;color:${f.sek};padding:2px 0;white-space:nowrap;">über Zeit</span>`;
+        const details = [dauer(r.duration), r.rating != null ? `Wertung ${Math.round(r.rating)}` : '', (r.affixes || []).join(', ')]
+          .filter(Boolean).map(esc).join(' · ');
+        return `
+          <div style="display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 0;${i ? `border-top:1px solid ${f.rand};` : ''}">
+            <span style="grid-row:1 / span 2;font-size:17px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;">+${esc(r.level)}</span>
+            <span style="min-width:0;font-size:13px;font-weight:650;line-height:1.3;color:${f.label};${zweizeilig}">${esc(r.dungeon)}</span>
+            <span style="justify-self:end;">${pille}</span>
+            ${details ? `<span style="grid-column:2 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${details}</span>` : ''}
+          </div>`;
+      }).join('');
+      return `<div style="display:grid;gap:8px;">${oben}<div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:2px 12px;">${zeilen}</div></div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 14px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--owlet-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--owlet-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--owlet-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--owlet-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+    # Name und Hinweis koennen zusammen laenger als eine Zeile sein
+    - white-space: normal
+    - text-align: left
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal

@@ -17,7 +17,8 @@
 #                 HTML baut. Hier stehen alle Farben der WoW-Karte einmal.
 #   wow_platz     Ein Ausruestungsplatz: Item-Symbol mit Rand in der
 #                 Qualitaetsfarbe und Itemlevel daneben (variables.seite:
-#                 links oder rechts). Mit der Maus: Tooltip beim Darueber-
+#                 links oder rechts); ein Amber-Punkt oben rechts am Symbol,
+#                 wenn das Item einen leeren Sockel hat. Mit der Maus: Tooltip beim Darueber-
 #                 fahren. Tippen: browser_mod-Popup mit dem Tooltip.
 #   wow_tooltip   Inhalt des Popups: der ganze Tooltip zum Item der Entitaet.
 #
@@ -26,7 +27,9 @@
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
 # Daten: Attribut tooltip der Ausruestungs-Sensoren (Integration WoW Charakter
-# ab 0.5.0). Die Texte kommen fertig uebersetzt aus der API; die Templates
+# ab 0.5.0); ob ein Sockel leer ist, steht im Attribut sockets (gem leer).
+# Der Tooltip nennt nur den Text je Sockel, deshalb ordnet ihn tooltip()
+# ueber optionen.sockel zu, und nur, wenn beide Listen gleich lang sind. Die Texte kommen fertig uebersetzt aus der API; die Templates
 # ordnen sie nur an und faerben sie.
 #
 # Farben (DESIGN.md, Sonderfarben und Heller Modus): Die WoW-Karte und ihr
@@ -37,7 +40,9 @@
 #   Zweitwerte, Verzauberungen, Effekte, aktive Set-Boni   Gruen #a6d49e
 #     (im Spiel gruen; in der Palette "positive Werte")
 #   Primaerwerte, angelegte Set-Teile                      Text #f2f5f8
-#   Set-Name, Beschreibung, Sockel                         Label #b4c0cf
+#   Set-Name, Beschreibung, Sockel mit Edelstein           Label #b4c0cf
+#   leerer Sockel ("... · leer"), Punkt am Symbol          Amber #e6b566
+#     (Hinweis; auf Huelle 8,46:1, Unterkachel 7,84:1, Hover 7,55:1)
 #   wirkungslose Werte (falsche Klasse), fehlende Set-Teile, inaktive
 #   Set-Boni, Haltbarkeit, Anforderungen, Verkaufspreis    Sekundaer #8794a5
 # Popup: Abschnitte als Unterkachel auf #1b2231; dort Gruen 8,80:1,
@@ -63,6 +68,7 @@ button_card_templates:
             label:  '#b4c0cf',
             sek:    '#8794a5',
             gruen:  '#a6d49e',
+            amber:  '#e6b566',
             kachel: 'rgba(255, 255, 255, 0.028)',
             rand:   'rgba(255, 255, 255, 0.06)',
             pille:  'rgba(255, 255, 255, 0.05)',
@@ -86,10 +92,14 @@ button_card_templates:
           // Tooltip als HTML. optionen.name: Name oben zeigen (im Popup steht
           // er im Titel); optionen.bild: URL des Item-Symbols; optionen.flach:
           // Abschnitte ohne Unterkachel (Tooltip auf #222b3c, siehe oben);
-          // optionen.breite: CSS fuer die Breite (Popup, siehe wow_tooltip).
+          // optionen.breite: CSS fuer die Breite (Popup, siehe wow_tooltip);
+          // optionen.sockel: Attribut sockets der Entitaet (leere markieren).
+          // leereSockel(): Anzahl leerer Sockel aus dem Attribut sockets.
           const tooltip = (t, optionen = {}) => {
             if (!t) return '';
             const qf = qualitaet[t.quality] || f.rand;
+            const sockel = Array.isArray(optionen.sockel) ? optionen.sockel : [];
+            const leer = sockel.length === (t.sockets || []).length ? sockel.map((s) => !s?.gem) : [];
             const zeile = (links, rechts, farbe = f.text) => `
               <div style="display:flex;justify-content:space-between;gap:12px;color:${farbe};">
                 <span style="min-width:0;">${esc(links)}</span>${rechts ? `<span style="flex:none;text-align:right;">${esc(rechts)}</span>` : ''}
@@ -122,7 +132,7 @@ button_card_templates:
             const werte = [
               ...(t.stats || []).map((s) => zeile(s.text, '', s.negated ? f.sek : s.bonus ? f.gruen : f.text)),
               ...(t.enchantments || []).map((e) => zeile(e, '', f.gruen)),
-              ...(t.sockets || []).map((s) => zeile(s, '', f.label)),
+              ...(t.sockets || []).map((s, i) => leer[i] ? zeile(s, 'leer', f.amber) : zeile(s, '', f.label)),
               ...(t.spells || []).map((s) => zeile(s, '', f.gruen)),
             ].join('');
 
@@ -150,7 +160,8 @@ button_card_templates:
                 ${fuss ? `<div style="display:grid;gap:1px;font-size:12px;color:${f.sek};padding:0 2px;">${fuss}</div>` : ''}
               </div>`;
           };
-          return { farben, qualitaet, esc, tooltip };
+          const leereSockel = (sockets) => (Array.isArray(sockets) ? sockets : []).filter((s) => !s?.gem).length;
+          return { farben, qualitaet, esc, tooltip, leereSockel };
         ]]]
 
   wow_platz:
@@ -169,7 +180,7 @@ button_card_templates:
         [[[
           const t = entity?.attributes?.tooltip;
           if (!t) return 'Kein Item angelegt';
-          return variables.wow.tooltip(t, { name: true, flach: true, bild: entity.attributes.entity_picture });
+          return variables.wow.tooltip(t, { name: true, flach: true, bild: entity.attributes.entity_picture, sockel: entity.attributes.sockets });
         ]]]
       placement: '[[[ return variables.seite === "links" ? "right-start" : "left-start"; ]]]'
       delay: 250
@@ -200,8 +211,16 @@ button_card_templates:
           const a = entity?.attributes || {};
           const leer = !entity || ['unavailable', 'unknown', ''].includes(entity.state);
           const farbe = w.qualitaet[a.quality] || f.rand;
+          // Leerer Sockel: Amber-Punkt oben rechts, mit Ring in der Huellfarbe,
+          // damit er sich vom Qualitaetsrand abhebt. Punkt und Ring bleiben
+          // innerhalb des Symbols: button-card setzt an custom_fields
+          // overflow: hidden (Klasse ellipsis), ueberstehende Teile waeren je
+          // nach Lage des Symbols im Feld abgeschnitten.
+          const punkt = !leer && w.leereSockel(a.sockets)
+            ? `<span style="position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:${f.amber};box-shadow:0 0 0 2px #1b2231;"></span>`
+            : '';
           const symbol = a.entity_picture && !leer
-            ? `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:2px solid ${farbe};background:${f.kachel};overflow:hidden;flex:none;"><img src="${a.entity_picture}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>`
+            ? `<div style="position:relative;flex:none;"><div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:2px solid ${farbe};background:${f.kachel};overflow:hidden;"><img src="${a.entity_picture}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>${punkt}</div>`
             : `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:1px dashed ${f.rand};background:${f.kachel};flex:none;"></div>`;
           const stufe = leer ? '' : Math.round(parseFloat(entity.state));
           const zahl = `<span style="min-width:22px;font-size:11.5px;font-weight:650;color:${f.label};font-variant-numeric:tabular-nums;text-align:${variables.seite === 'links' ? 'left' : 'right'};">${isNaN(stufe) ? '' : stufe}</span>`;
@@ -251,7 +270,7 @@ button_card_templates:
           // aelteres WebKit calc() in min() nicht versteht.
           const breite = 'width:94vw;width:min(424px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;';
           if (!t) return `<div style="color:${variables.wow.farben.sek};${breite}">Kein Item angelegt.</div>`;
-          return variables.wow.tooltip(t, { bild: entity.attributes.entity_picture, breite });
+          return variables.wow.tooltip(t, { bild: entity.attributes.entity_picture, breite, sockel: entity.attributes.sockets });
         ]]]
     styles:
       # Breiten-Fesseln wie im Pollen-Popup: sonst sizet button-card auf
