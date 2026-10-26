@@ -85,7 +85,8 @@ button_card_templates:
 
           // Tooltip als HTML. optionen.name: Name oben zeigen (im Popup steht
           // er im Titel); optionen.bild: URL des Item-Symbols; optionen.flach:
-          // Abschnitte ohne Unterkachel (Tooltip auf #222b3c, siehe oben).
+          // Abschnitte ohne Unterkachel (Tooltip auf #222b3c, siehe oben);
+          // optionen.breite: CSS fuer die Breite (Popup, siehe wow_tooltip).
           const tooltip = (t, optionen = {}) => {
             if (!t) return '';
             const qf = qualitaet[t.quality] || f.rand;
@@ -140,7 +141,7 @@ button_card_templates:
               .filter(Boolean).map((s) => `<div>${esc(s)}</div>`).join('');
 
             return `
-              <div style="display:grid;gap:6px;text-align:left;font-size:13px;line-height:1.35;color:${f.text};font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:break-word;">
+              <div style="display:grid;gap:6px;text-align:left;font-size:13px;line-height:1.35;color:${f.text};font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:break-word;${optionen.breite || ''}">
                 ${kopf}
                 ${block(grund)}
                 ${block(werte)}
@@ -242,14 +243,23 @@ button_card_templates:
       body: |
         [[[
           const t = entity?.attributes?.tooltip;
-          if (!t) return `<div style="color:${variables.wow.farben.sek};">Kein Item angelegt.</div>`;
-          return variables.wow.tooltip(t, { bild: entity.attributes.entity_picture });
+          // Feste Breite wie im DWD-Popup (warnlage-templates.yaml, dort die
+          // Erklaerung): Die Karte haengt im Dialog in einer shrink-to-fit-
+          // Kette, mit width: 100% schrumpfte ein kurzer Tooltip auf seinen
+          // Text (Halsschmuck: 276 statt 386 px). Popup 440 px minus das
+          // Padding von browser_mod (2 x 8 px); zwei width-Angaben, falls ein
+          // aelteres WebKit calc() in min() nicht versteht.
+          const breite = 'width:94vw;width:min(424px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;';
+          if (!t) return `<div style="color:${variables.wow.farben.sek};${breite}">Kein Item angelegt.</div>`;
+          return variables.wow.tooltip(t, { bild: entity.attributes.entity_picture, breite });
         ]]]
     styles:
       # Breiten-Fesseln wie im Pollen-Popup: sonst sizet button-card auf
       # max-content und lange Zeilen brechen nicht um
+      # Kein Seitenabstand: die Breite oben rechnet nur mit dem Padding von
+      # browser_mod
       card:
-        - padding: 4px 8px 12px
+        - padding: 4px 0 12px
         - border: none
         - box-shadow: none
         - background: none
