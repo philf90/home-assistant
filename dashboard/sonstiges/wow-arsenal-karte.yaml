@@ -1,0 +1,224 @@
+# ============================================================================
+# WoW – Arsenal eines Charakters
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Charakterseite wie im Arsenal von World of Warcraft, gebaut fuer 360 px:
+#   Kopf     Avatar, Name, Titel, Stufe, Volk, Spezialisierung und Klasse;
+#            Pillen fuer Itemlevel, Mythic+-Wertung, Fraktion und Realm
+#   Mitte    Ganzkoerperbild, links und rechts je 8 Ausruestungsplaetze in
+#            der Reihenfolge des Arsenals, darunter Waffen- und Schildhand
+#   Unten    Kennzahlen: Raid-Fortschritt (hoechste Schwierigkeit mit Kills),
+#            Erfolgspunkte, Reittiere, Ehrenstufe
+# Jeder Platz zeigt das Item-Symbol mit einem Rand in der Qualitaetsfarbe und
+# das Itemlevel. Leere Plaetze (z. B. Hemd) stehen gestrichelt da.
+#
+# Farben: Die Item-Qualitaet nutzt die offiziellen Spielfarben (Sonderfarben
+# in design/palette.yaml, DESIGN.md "Sonderfarben"). Selten und Episch halten
+# auf der Huelle nur 3,06:1 bzw. 3,02:1 -- genug fuer den Rand (3:1 fuer
+# Grafiken), nicht fuer Text. Die Farben stehen deshalb nur als Rand am
+# Symbol, nie als Schrift. Gewoehnlich (im Spiel Weiss) nimmt den Primaertext
+# #f2f5f8, weil Weiss deckend nicht erlaubt ist.
+# Hell und dunkel: Die Karte bleibt in beiden Modi dunkel (Identitaetshuelle,
+# DESIGN.md "Heller Modus"); auf heller Huelle hielte Ungewoehnlich #1eff00
+# nur 1,25:1. Alle Farben stehen deshalb als dunkle Hex-Werte.
+#
+# Mythic+: Die Pille zeigt den Sensorwert der aktuellen Season, sonst das
+# Attribut api_rating -- denselben Wert wie das Arsenal.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.4.0 mit einem Charakter als
+# Untereintrag. Die Karte liest die Entitaeten ueber variables.prefix; die
+# Endungen (_level, _ausrustung_kopf, ...) sind die Namen, die Home Assistant
+# mit deutscher Oberflaeche vergibt. Mit englischer Oberflaeche heissen sie
+# anders (_equipment_head) und muessen hier angepasst werden.
+type: custom:button-card
+entity: sensor.wow_charakter_level
+# Die Karte liest rund 30 weitere Entitaeten ueber variables.prefix; button-card
+# erkennt sie nicht selbst, deshalb bei jeder Zustandsaenderung neu zeichnen.
+triggers_update: all
+show_icon: false
+show_name: false
+show_label: false
+show_state: false
+tap_action:
+  action: more-info
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  farben: |
+    [[[
+      return {
+        text:   '#f2f5f8',
+        titel:  '#e7ecf3',
+        label:  '#b4c0cf',
+        sek:    '#8794a5',
+        kachel: 'rgba(255, 255, 255, 0.028)',
+        rand:   'rgba(255, 255, 255, 0.06)',
+        pille:  'rgba(255, 255, 255, 0.05)',
+      };
+    ]]]
+  # Offizielle Qualitaetsfarben des Spiels (Feld quality.type der API)
+  qualitaet: |
+    [[[
+      return {
+        POOR:      '#9d9d9d',
+        COMMON:    '#f2f5f8',
+        UNCOMMON:  '#1eff00',
+        RARE:      '#0070dd',
+        EPIC:      '#a335ee',
+        LEGENDARY: '#ff8000',
+        ARTIFACT:  '#e6cc80',
+        HEIRLOOM:  '#00ccff',
+        WOW_TOKEN: '#00ccff',
+      };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, q = variables.qualitaet, p = variables.prefix;
+      const st = (domain, endung) => states[`${domain}.${p}_${endung}`];
+      const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
+      const zahl = (e) => {
+        if (leer(e)) return null;
+        const v = parseFloat(e.state);
+        return isNaN(v) ? null : v;
+      };
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+
+      const lvl = st('sensor', 'level');
+      if (!lvl) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+      const a = lvl.attributes || {};
+
+      // Kopf: Name aus dem Geraetenamen ("Name – Realm Level"), Titel ohne Namen
+      const geraet = String(a.friendly_name || '').replace(/\s*Level$/, '');
+      const name = geraet.split(' – ')[0] || p;
+      let titel = a.title || '';
+      if (titel && titel.includes(name)) {
+        titel = titel.replace(name, '').replace(/^[\s,]+|[\s,]+$/g, '');
+      }
+      const avatar = st('image', 'avatar')?.attributes?.entity_picture;
+      const zeile = [
+        leer(lvl) ? null : `Stufe ${esc(lvl.state)}`,
+        a.race,
+        [a.spec, a.class].filter(Boolean).join(' '),
+      ].filter(Boolean).map(esc).join(' · ');
+
+      const ilvl = zahl(st('sensor', 'itemlevel'));
+      const mplus = st('sensor', 'mythic_wertung');
+      let wertung = zahl(mplus);
+      if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
+      const pille = (inhalt) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:10px;background:${f.pille};border:1px solid ${f.rand};font-size:12px;font-weight:600;color:${f.label};white-space:nowrap;">${inhalt}</span>`;
+      const wert = (v) => `<b style="color:${f.text};font-weight:750;font-variant-numeric:tabular-nums;">${v}</b>`;
+      const pillen = [
+        ilvl === null ? '' : pille(`${wert(Math.round(ilvl))} Itemlevel`),
+        wertung === null ? '' : pille(`M+ ${wert(Math.round(wertung))}`),
+        a.faction ? pille(esc(a.faction)) : '',
+        a.realm ? pille(esc(a.realm)) : '',
+        a.guild ? pille(esc(a.guild)) : '',
+      ].join('');
+
+      const kopf = `
+        <div style="display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 12px;align-items:center;">
+          <div style="width:44px;height:44px;border-radius:13px;overflow:hidden;background:${f.pille};border:1px solid ${f.rand};">
+            ${avatar ? `<img src="${avatar}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">` : ''}
+          </div>
+          <div style="min-width:0;">
+            <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;color:${f.titel};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+            ${titel ? `<div style="font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">${esc(titel)}</div>` : ''}
+          </div>
+          <div style="grid-column:1 / -1;margin-top:8px;font-size:12.5px;line-height:1.3;color:${f.sek};${zweizeilig}">${zeile}</div>
+          ${pillen ? `<div style="grid-column:1 / -1;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">${pillen}</div>` : ''}
+        </div>`;
+
+      // Ausruestung: Symbol mit Rand in der Qualitaetsfarbe, Itemlevel daneben
+      const platz = (endung, seite) => {
+        const e = st('sensor', 'ausrustung_' + endung);
+        const ea = e?.attributes || {};
+        const bild = ea.entity_picture;
+        const farbe = q[ea.quality] || f.rand;
+        const stufe = zahl(e);
+        const tipp = esc([ea.name, ea.quality_name].filter(Boolean).join(' · '));
+        const symbol = bild && !leer(e)
+          ? `<div title="${tipp}" style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:2px solid ${farbe};background:${f.kachel};overflow:hidden;flex:none;"><img src="${bild}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;"></div>`
+          : `<div style="width:34px;height:34px;box-sizing:border-box;border-radius:8px;border:1px dashed ${f.rand};background:${f.kachel};flex:none;"></div>`;
+        const zahlText = `<span style="min-width:22px;font-size:11.5px;font-weight:650;color:${f.label};font-variant-numeric:tabular-nums;text-align:${seite === 'links' ? 'left' : 'right'};">${stufe === null ? '' : Math.round(stufe)}</span>`;
+        return `<div style="display:flex;align-items:center;gap:4px;${seite === 'rechts' ? 'justify-content:flex-end;' : ''}">${seite === 'links' ? symbol + zahlText : zahlText + symbol}</div>`;
+      };
+      const links = ['kopf', 'hals', 'schultern', 'rucken', 'brust', 'hemd', 'wappenrock', 'handgelenke'];
+      const rechts = ['hande', 'taille', 'beine', 'fusse', 'finger_1', 'finger_2', 'schmuck_1', 'schmuck_2'];
+      // Ganzkoerperbild (1600 x 1200, transparent): Die Figur fuellt nur gut
+      // die Haelfte der Hoehe, deshalb auf 140 % vergroessert und mittig
+      const koerper = st('image', 'ganzkorperbild')?.attributes?.entity_picture;
+      const mitte = `
+        <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:0 6px;margin-top:14px;">
+          <div style="display:grid;gap:5px;">${links.map((s) => platz(s, 'links')).join('')}</div>
+          <div style="position:relative;min-width:0;border-radius:16px;overflow:hidden;">
+            ${koerper ? `<img src="${koerper}" alt="" style="position:absolute;left:50%;top:50%;height:140%;width:auto;max-width:none;transform:translate(-50%, -52%);">` : ''}
+          </div>
+          <div style="display:grid;gap:5px;">${rechts.map((s) => platz(s, 'rechts')).join('')}</div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:6px;">
+          ${platz('waffenhand', 'rechts')}${platz('schildhand', 'links')}
+        </div>`;
+
+      // Kennzahlen: Raid in der hoechsten Schwierigkeit mit Kills
+      const stufen = [['mythisch', 'Mythisch'], ['heroisch', 'Heroisch'], ['normal', 'Normal'], ['lfr', 'LFR']];
+      let raid = { wert: '–', name: 'Raid' };
+      for (const [endung, anzeige] of stufen) {
+        const e = st('sensor', 'raid_fortschritt_' + endung);
+        const n = zahl(e);
+        if (n !== null && (n > 0 || endung === 'lfr')) {
+          const gesamt = e.attributes?.total_bosses;
+          raid = { wert: gesamt ? `${n}/${gesamt}` : `${n}`, name: `Raid ${anzeige}` };
+          break;
+        }
+      }
+      const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
+      const kennzahlen = [
+        raid,
+        { wert: format(zahl(st('sensor', 'erfolgspunkte'))), name: 'Erfolge' },
+        { wert: format(zahl(st('sensor', 'reittiere'))), name: 'Reittiere' },
+        { wert: format(zahl(st('sensor', 'ehrenstufe'))), name: 'Ehren&shy;stufe' },
+      ];
+      const leiste = `
+        <div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:6px;margin-top:14px;">
+          ${kennzahlen.map((k) => `
+            <div style="min-width:0;padding:8px 6px;border-radius:13px;background:${f.kachel};border:1px solid ${f.rand};text-align:center;">
+              <div style="font-size:15px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${k.wert}</div>
+              <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${k.name}</div>
+            </div>`).join('')}
+        </div>`;
+
+      return kopf + mitte + leiste;
+    ]]]
+styles:
+  card:
+    # Owlet-Huelle mit festen dunklen Werten: bleibt in beiden Modi dunkel
+    - padding: 18px
+    - border-radius: 22px
+    - border: 1px solid rgba(255, 255, 255, 0.05)
+    - background: 'linear-gradient(180deg, #1b2231 0%, #171d29 55%)'
+    - box-shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7)
+    - color: '#f2f5f8'
+  grid:
+    - grid-template-areas: '"body"'
+    - grid-template-columns: minmax(0, 1fr)
+  custom_fields:
+    body:
+      - justify-self: stretch
+      - min-width: 0
+      # button-card zentriert custom_fields; Inhalte sollen links stehen
+      - text-align: left
