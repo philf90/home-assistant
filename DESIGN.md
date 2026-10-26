@@ -356,6 +356,16 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 - **Flugradar:** Hervorhebung `#f2c94c`.
 - **Wetterwarnungen:** offizielle DWD-Stufenfarben (`#7c8ba1`, `#f2c500`,
   `#fb9a12`, `#e6480e`, `#c0392b`) und `#4ade80` für „aktiv“. Nicht anpassen.
+- **World of Warcraft:** offizielle Qualitätsfarben der Items, nur in der
+  WoW-Karte (`wow-arsenal-karte.yaml`, `wow-templates.yaml`): Schlecht `#9d9d9d`, Ungewöhnlich `#1eff00`,
+  Selten `#0070dd`, Episch `#a335ee`, Legendär `#ff8000`, Artefakt
+  `#e6cc80`, Erbstück `#00ccff`; Gewöhnlich (im Spiel Weiß) nimmt
+  `#f2f5f8`. Nicht anpassen: Spieler erkennen die Qualität an genau diesen
+  Farben. Selten und Episch halten auf der Hülle nur 3,06:1 bzw. 3,02:1
+  (Unterkachel eingerechnet). Das reicht für Grafiken (3:1), nicht für Text;
+  die Farben stehen deshalb nur als 2-px-Rand am Item-Symbol, nie als
+  Schrift, auch im Item-Tooltip nicht (dort Rand an Symbol und
+  Qualitäts-Pille). Quelle der Werte: Warcraft Wiki, `GetItemQualityColor`.
 
 ## Heller Modus
 
@@ -483,6 +493,9 @@ in beiden Modi dunkel.
 - Zustände färben Icon, Wert und Kachel, nie die ganze Karte.
 - **Identitätshüllen bleiben dunkel:** Owlet-Karte (Night Violet) und
   Vereinshülle im Fußball-View behalten in beiden Modi Hülle und Farben.
+  Ebenso die WoW-Karte (`wow-arsenal-karte.yaml`) mit der normalen dunklen
+  Hülle: Ihre Qualitätsfarben stammen aus dem Spiel und sind nur auf dunklem
+  Grund lesbar (Ungewöhnlich `#1eff00` auf der hellen Hülle 1,25:1).
 
 **Gemessen** wird nach WCAG 2.x im ungünstigsten Fall aus Hülle oben, Hülle
 unten, Unterkachel (Navy 0,03 über der Hülle = `#eceff2`) und Popup
@@ -601,6 +614,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | Flugradar-Gelb `#f2c94c` | nur auf dunklem Kartengrund | 1,45:1 |
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
+| WoW-Qualitätsfarben | nur in der WoW-Karte, die in beiden Modi dunkel bleibt | Ungewöhnlich auf heller Hülle 1,25:1 |
 | Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `owlet-amber` bzw. `owlet-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
 | Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, auf Vereinsrot in Weiß `#ffffff`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,88:1 (mit `#f2f5f8` wären es 4,46:1) |
 
