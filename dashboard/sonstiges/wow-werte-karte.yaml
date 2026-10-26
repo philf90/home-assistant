@@ -1,0 +1,212 @@
+# ============================================================================
+# WoW – Charakterwerte und Ausruestungs-Check
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Werte wie im Charakterfenster des Spiels, dazu ein Blick auf die Ausruestung:
+#   Kopf        Spezialisierung und Heldentalente
+#   Kacheln     Leben und Primaerwert (Staerke, Beweglichkeit oder Intelligenz)
+#   Zweitwerte  Krit, Tempo, Meisterschaft, Vielseitigkeit in Prozent; die
+#               Balken stehen im Verhaeltnis zum hoechsten der vier Werte
+#   Ausruestung Set-Fortschritt mit aktiven Boni, leere Sockel (mit Platz),
+#               verzauberte Plaetze
+# Leere Sockel sind ein Hinweis (Amber, mit Anzahl als Text). Fehlende
+# Verzauberungen bewertet die Karte nicht: Welche Plaetze verzauberbar sind,
+# liefert die API nicht.
+#
+# Die sechs Werte-Sensoren (_leben, _primarwert, _kritische_trefferchance,
+# _tempo, _meisterschaft, _vielseitigkeit) legt die Integration deaktiviert
+# an. Erst einschalten: Einstellungen -> Geraete & Dienste -> WoW Charakter
+# -> Charakter -> Entitaeten. Sind sie aus, steht dort ein Hinweis.
+# Spezialisierung, Set, Sockel und Verzauberungen (_spezialisierung,
+# _set_fortschritt, _leere_sockel, _verzauberungen) gibt es ab 0.6.0; ohne
+# sie fallen die Zeilen weg, die Spezialisierung kommt dann aus dem
+# Level-Sensor. Namen bei deutscher Oberflaeche.
+#
+# Farben: Owlet-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
+# Freizeit) fuer Icon-Kachel und Balken; aktive Set-Boni Gruen (wie im
+# Spiel), leere Sockel Amber.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer Spezialisierung und
+# Ausruestung ab 0.6.0.
+type: custom:button-card
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:account-star
+name: |
+  [[[
+    const p = variables.prefix;
+    const spec = states[`sensor.${p}_spezialisierung`];
+    const lvl = states[`sensor.${p}_level`]?.attributes || {};
+    const name = spec && !['unknown', 'unavailable'].includes(spec.state) ? spec.state : lvl.spec;
+    return [name, lvl.class].filter(Boolean).join(' ') || 'Charakterwerte';
+  ]]]
+label: |
+  [[[
+    const p = variables.prefix;
+    const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0];
+    const held = states[`sensor.${p}_spezialisierung`]?.attributes?.hero_talents;
+    return [geraet, held].filter(Boolean).join(' · ') || ' ';
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--owlet-rose, #e6a0c4)',
+        gruen:  'var(--owlet-gruen, #a6d49e)',
+        amber:  'var(--owlet-amber, #e6b566)',
+        text:   'var(--owlet-text, #f2f5f8)',
+        label:  'var(--owlet-label, #b4c0cf)',
+        sek:    'var(--owlet-text-sekundaer, #8794a5)',
+        kachel: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:   'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      if (!st('level')) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+      const teile = [];
+      const abschnitt = (ueberschrift, inhalt) => `
+        <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:9px;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">${ueberschrift}</div>
+          ${inhalt}
+        </div>`;
+
+      // Werte: nur, wenn die Sensoren eingeschaltet sind
+      const leben = zahl(st('leben')), primaer = st('primarwert');
+      const zweit = [
+        ['kritische_trefferchance', 'Krit'], ['tempo', 'Tempo'],
+        ['meisterschaft', 'Meisterschaft'], ['vielseitigkeit', 'Vielseitigkeit'],
+      ].map(([endung, name]) => ({ name, wert: zahl(st(endung)) }));
+      if (leben === null && zahl(primaer) === null && zweit.every((z) => z.wert === null)) {
+        teile.push(`<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:0 2px;">Die Werte-Sensoren sind aus. Einschalten unter Einstellungen → Geräte &amp; Dienste → WoW Charakter → Charakter → Entitäten.</div>`);
+      } else {
+        const namen = { strength: 'Stärke', agility: 'Beweglichkeit', intellect: 'Intelligenz' };
+        const kachel = (wert, titel) => `
+          <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 10px;">
+            <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert === null ? '–' : Math.round(wert).toLocaleString('de-DE')}</div>
+            <div style="margin-top:2px;font-size:11.5px;color:${f.sek};">${titel}</div>
+          </div>`;
+        teile.push(`<div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:6px;">
+          ${kachel(leben, 'Leben')}${kachel(zahl(primaer), namen[primaer?.attributes?.stat] || 'Primärwert')}
+        </div>`);
+        const max = Math.max(1, ...zweit.map((z) => z.wert || 0));
+        teile.push(abschnitt('Zweitwerte', zweit.map((z) => `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
+            <span style="font-size:12.5px;color:${f.label};">${z.name}</span>
+            <span style="font-size:13px;font-weight:700;color:${f.text};font-variant-numeric:tabular-nums;">${z.wert === null ? '–' : `${z.wert.toLocaleString('de-DE', { maximumFractionDigits: 1 })}&thinsp;%`}</span>
+            <div style="grid-column:1 / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${z.wert ? Math.max(2, z.wert / max * 100) : 0}%;border-radius:5px;background:${f.akzent};"></div></div>
+          </div>`).join('')));
+      }
+
+      // Ausruestung (ab Integration 0.6.0)
+      const zeile = (titel, wert, zusatz, farbe = f.text) => `
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;">
+          <span style="font-size:12.5px;color:${f.label};">${titel}</span>
+          <span style="font-size:13px;font-weight:700;color:${farbe};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert}</span>
+          ${zusatz ? `<span style="grid-column:1 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${zusatz}</span>` : ''}
+        </div>`;
+      const ausruestung = [];
+      const set = st('set_fortschritt');
+      if (set && set.attributes?.name) {
+        const boni = set.attributes.effects || [];
+        const aktiv = boni.filter((b) => b.active).length;
+        ausruestung.push(zeile(esc(set.attributes.name), `${esc(set.state)}/${esc(set.attributes.total)}`,
+          boni.length ? `<span style="color:${aktiv ? f.gruen : f.sek};">${aktiv} von ${boni.length} Boni aktiv</span>` : ''));
+      } else if (set) {
+        ausruestung.push(zeile('Set', '–', 'kein Set angelegt'));
+      }
+      const sockel = st('leere_sockel');
+      if (sockel) {
+        const n = zahl(sockel) || 0;
+        const plaetze = (sockel.attributes?.sockets || []).map((s) => s.slot_name || s.slot).filter(Boolean);
+        ausruestung.push(n
+          ? zeile('Leere Sockel', `<span style="color:${f.amber};background:color-mix(in srgb, ${f.amber} 12%, transparent);border:1px solid color-mix(in srgb, ${f.amber} 24%, transparent);padding:1px 8px;border-radius:9px;">${n} leer</span>`, esc([...new Set(plaetze)].join(', ')))
+          : zeile('Leere Sockel', 'keine', ''));
+      }
+      const verz = st('verzauberungen');
+      if (verz) {
+        const plaetze = (verz.attributes?.slots || []).map((s) => s.slot_name || s.slot).filter(Boolean);
+        ausruestung.push(zeile('Verzauberte Plätze', zahl(verz) ?? '–', esc(plaetze.join(', '))));
+      }
+      if (ausruestung.length) {
+        teile.push(abschnitt('Ausrüstung', ausruestung.join('')));
+      }
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 16px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--owlet-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--owlet-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--owlet-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--owlet-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal

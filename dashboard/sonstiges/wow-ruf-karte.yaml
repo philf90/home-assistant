@@ -1,0 +1,175 @@
+# ============================================================================
+# WoW – Ruf und Ruhmstufen
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Ruf eines Charakters: je Fraktion Name, Stufe (z. B. "Ruhmstufe 15" oder
+# "Freundlich") und Fortschritt innerhalb der Stufe als Balken, bei Paragon
+# zusaetzlich dessen Fortschritt.
+#
+# Auswahl:
+#   variables.fraktionen leer   die Fraktionen mit Ruhmstufe (renown), die
+#                               neuesten zuerst, hoechstens variables.anzahl
+#   variables.fraktionen        feste Liste von Fraktions-IDs in dieser
+#                               Reihenfolge, z. B. [2710, 2696, 2699]
+# Die API ordnet Fraktionen keiner Erweiterung zu. "Neueste zuerst" heisst
+# hier: hoechste Fraktions-ID zuerst; neue Fraktionen haben bisher hoehere
+# IDs bekommen, belegt ist das nicht. Die IDs stehen im Attribut factions
+# des Ruf-Sensors (Entwicklerwerkzeuge -> Zustaende). Namen sind nicht
+# eindeutig, deshalb die ID.
+#
+# Daten: Sensor _ruf (Zustand = Anzahl der Fraktionen, Attribut factions mit
+# faction, faction_id, standing, value, max, renown, paragon). Name bei
+# deutscher Oberflaeche.
+#
+# Farben: Owlet-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
+# Freizeit) fuer Icon-Kachel und Balken; Paragon in Violett, mit "Paragon"
+# als Text.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.4.1 (Fraktions-ID).
+type: custom:button-card
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:handshake
+name: |
+  [[[
+    return (variables.fraktionen || []).length ? 'Ruf' : 'Ruhmstufen';
+  ]]]
+label: |
+  [[[
+    const p = variables.prefix;
+    const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0];
+    const alle = states[`sensor.${p}_ruf`]?.attributes?.factions || [];
+    return [geraet, `${variables.auswahl.length} von ${alle.length} Fraktionen`].filter(Boolean).join(' · ');
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  # Leer: Fraktionen mit Ruhmstufe; sonst Fraktions-IDs
+  fraktionen: []
+  anzahl: 6
+  farben: |
+    [[[
+      return {
+        akzent:  'var(--owlet-rose, #e6a0c4)',
+        violett: 'var(--owlet-violett, #b399d4)',
+        text:    'var(--owlet-text, #f2f5f8)',
+        label:   'var(--owlet-label, #b4c0cf)',
+        sek:     'var(--owlet-text-sekundaer, #8794a5)',
+        kachel:  'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:    'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:    'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+  # Gezeigte Fraktionen nach der Auswahl oben
+  auswahl: |
+    [[[
+      const alle = states[`sensor.${variables.prefix}_ruf`]?.attributes?.factions || [];
+      const ids = variables.fraktionen || [];
+      if (ids.length) {
+        return ids.map((id) => alle.find((r) => r.faction_id === Number(id))).filter(Boolean);
+      }
+      return alle.filter((r) => r.renown != null)
+        .sort((a, b) => (b.faction_id || 0) - (a.faction_id || 0))
+        .slice(0, variables.anzahl);
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      if (!states[`sensor.${p}_ruf`]) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Kein Ruf-Sensor unter <span style="color:${f.label};">sensor.${esc(p)}_ruf</span> gefunden. Integration „WoW Charakter“ ab 0.4.1 einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+      if (!variables.auswahl.length) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine passenden Fraktionen. Ohne Ruhmstufe die IDs in variables.fraktionen eintragen.</div>`;
+      }
+      const balken = (wert, max, farbe) => `<div style="height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${max ? Math.max(0, Math.min(100, wert / max * 100)) : 0}%;border-radius:5px;background:${farbe};"></div></div>`;
+      const zahl = (v) => Number(v || 0).toLocaleString('de-DE');
+      const zeilen = variables.auswahl.map((r) => {
+        // Stufe ohne Fortschritt (z. B. Ehrfuerchtig 0/0): voller Balken
+        const max = r.max || 0;
+        const stufe = r.renown != null ? `Ruhmstufe ${r.renown}` : r.standing;
+        const fortschritt = max ? `${zahl(r.value)} / ${zahl(max)}` : '';
+        const paragon = r.paragon && r.paragon.max
+          ? `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;color:${f.sek};"><span>Paragon</span><span style="font-variant-numeric:tabular-nums;">${zahl(r.paragon.value)} / ${zahl(r.paragon.max)}</span></div>${balken(r.paragon.value, r.paragon.max, f.violett)}`
+          : '';
+        return `
+          <div style="display:grid;gap:4px;">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;">
+              <span style="min-width:0;font-size:13px;font-weight:700;line-height:1.3;color:${f.text};${zweizeilig}">${esc(r.faction)}</span>
+              <span style="font-size:12.5px;font-weight:650;color:${f.label};white-space:nowrap;">${esc(stufe)}</span>
+            </div>
+            ${balken(max ? r.value : 1, max || 1, f.akzent)}
+            ${fortschritt ? `<div style="font-size:12px;color:${f.sek};font-variant-numeric:tabular-nums;text-align:right;">${fortschritt}</div>` : ''}
+            ${paragon}
+          </div>`;
+      }).join('');
+      return `<div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:12px;">${zeilen}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 16px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--owlet-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--owlet-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--owlet-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--owlet-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal

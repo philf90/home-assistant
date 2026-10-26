@@ -1,0 +1,195 @@
+# ============================================================================
+# WoW – Sammlungen und Erfolge
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Sammlungen und Erfolge eines Charakters:
+#   Kacheln     Reittiere, Haustiere, Spielzeuge, Erfolgspunkte, Erfolge,
+#               Titel (aktiver Titel darunter)
+#   Kategorien  Erfolgspunkte je Kategorie als Balken, die punktstaerksten
+#               zuerst (hoechstens variables.kategorien)
+#   Statistik   optional: Werte aus dem Statistik-Fenster des Spiels, deren
+#               IDs in variables.statistiken stehen (Sensor Spielstatistik,
+#               in der Integration standardmaessig deaktiviert)
+#   Fuss        neuester Erfolg seit dem Start von Home Assistant
+#               (Ereignis "Neuer Erfolg")
+# Kacheln und Abschnitte ohne Sensor (z. B. Erfolge und Titel vor 0.6.0)
+# fallen weg. Die Werte aendern sich erst, wenn sich der Charakter im Spiel
+# ausloggt.
+#
+# Statistik-IDs: Entwicklerwerkzeuge -> Zustaende -> Sensor
+# ..._spielstatistik, Attribut statistics (id, name, category, quantity).
+#
+# Daten: Sensoren _reittiere, _haustiere, _spielzeuge, _erfolgspunkte,
+# _erfolge, _titel, _spielstatistik und event._neuer_erfolg (Namen bei
+# deutscher Oberflaeche).
+#
+# Farben: Owlet-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
+# Freizeit) fuer Icon-Kachel und Balken.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer Erfolge, Kategorien,
+# Titel und Statistik ab 0.6.0.
+type: custom:button-card
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:trophy-variant
+name: Sammlungen & Erfolge
+label: |
+  [[[
+    return String(states[`sensor.${variables.prefix}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0] || ' ';
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  # Anzahl der Erfolgskategorien; 0 blendet den Abschnitt aus
+  kategorien: 5
+  # IDs aus dem Attribut statistics des Sensors Spielstatistik, z. B. [60]
+  statistiken: []
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--owlet-rose, #e6a0c4)',
+        text:   'var(--owlet-text, #f2f5f8)',
+        label:  'var(--owlet-label, #b4c0cf)',
+        sek:    'var(--owlet-text-sekundaer, #8794a5)',
+        kachel: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:   'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
+      if (!st('reittiere') && !st('erfolgspunkte')) {
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+
+      const titel = st('titel');
+      const kacheln = [
+        ['reittiere', 'Reittiere'], ['haustiere', 'Haustiere'], ['spielzeuge', 'Spielzeuge'],
+        ['erfolgspunkte', 'Erfolgs&shy;punkte'], ['erfolge', 'Erfolge'], ['titel', 'Titel'],
+      ].filter(([endung]) => st(endung)).map(([endung, name]) => `
+        <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 6px;text-align:center;">
+          <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${format(zahl(st(endung)))}</div>
+          <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${name}</div>
+        </div>`).join('');
+      const teile = [`<div style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:6px;">${kacheln}</div>`];
+      const aktiv = titel?.attributes?.active;
+      if (aktiv) {
+        teile.push(`<div style="font-size:12px;line-height:1.3;color:${f.sek};padding:0 2px;${zweizeilig}">Aktiver Titel: <span style="color:${f.label};">${esc(aktiv)}</span></div>`);
+      }
+
+      const abschnitt = (ueberschrift, inhalt) => `
+        <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:9px;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">${ueberschrift}</div>
+          ${inhalt}
+        </div>`;
+
+      // Erfolgspunkte je Kategorie, Balken relativ zur staerksten
+      const kat = (st('erfolge')?.attributes?.categories || [])
+        .filter((k) => k.points > 0)
+        .sort((a, b) => b.points - a.points)
+        .slice(0, variables.kategorien);
+      if (kat.length) {
+        const max = kat[0].points;
+        teile.push(abschnitt('Punkte je Kategorie', kat.map((k) => `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
+            <span style="min-width:0;font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">${esc(k.category)}</span>
+            <span style="font-size:12px;color:${f.sek};white-space:nowrap;font-variant-numeric:tabular-nums;"><b style="font-size:13px;font-weight:700;color:${f.text};">${format(k.points)}</b> · ${format(k.quantity)} Erfolge</span>
+            <div style="grid-column:1 / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${Math.max(2, k.points / max * 100)}%;border-radius:5px;background:${f.akzent};"></div></div>
+          </div>`).join('')));
+      }
+
+      // Ausgewaehlte Werte des Statistik-Fensters
+      const ids = (variables.statistiken || []).map(Number);
+      const statistik = st('spielstatistik')?.attributes?.statistics || [];
+      const werte = ids.map((id) => statistik.find((s) => s.id === id)).filter(Boolean);
+      if (werte.length) {
+        teile.push(abschnitt('Statistik', werte.map((s) => `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:baseline;">
+            <span style="min-width:0;font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">${esc(s.name)}</span>
+            <span style="font-size:13px;font-weight:700;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${format(s.quantity)}</span>
+          </div>`).join('')));
+      }
+
+      // Neuester Erfolg: Ereignis-Entitaet, Zustand = Zeitpunkt
+      const ev = states[`event.${p}_neuer_erfolg`];
+      const d = new Date(ev?.state);
+      let fuss = 'Neuester Erfolg: noch keiner seit dem Start von Home Assistant';
+      if (ev && !isNaN(d.getTime()) && ev.attributes?.achievement) {
+        fuss = `Neuester Erfolg: ${esc(ev.attributes.achievement)} · ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`;
+      }
+      teile.push(`<div style="font-size:12px;line-height:1.3;color:${f.sek};padding:0 2px;${zweizeilig}">${fuss}</div>`);
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 14px
+    - border-radius: 22px
+    - border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--owlet-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--owlet-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--owlet-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--owlet-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--owlet-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal

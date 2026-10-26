@@ -178,7 +178,15 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`kameras-view.yaml`](sonstiges/kameras-view.yaml) | view | Kameras – komplette Ansicht | button-card, card-mod, decluttering-card | `kind_1/kind_2`, `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`muellabfuhr-karte-v2.yaml`](sonstiges/muellabfuhr-karte-v2.yaml) | karte | Muellabfuhr v2 – Countdown | button-card, card-mod | `VG Wohnort` | aktiv |
 | [`wow-arsenal-karte.yaml`](sonstiges/wow-arsenal-karte.yaml) | karte | WoW – Arsenal eines Charakters | button-card | `wow_charakter` | aktiv |
+| [`wow-berufe-karte.yaml`](sonstiges/wow-berufe-karte.yaml) | karte | WoW – Berufe | button-card | `wow_charakter` | aktiv |
+| [`wow-charaktere-karte.yaml`](sonstiges/wow-charaktere-karte.yaml) | karte | WoW – Charakterliste | button-card | – | aktiv |
+| [`wow-mythic-karte.yaml`](sonstiges/wow-mythic-karte.yaml) | karte | WoW – Mythic+ der aktuellen Season | button-card | `wow_charakter` | aktiv |
+| [`wow-raid-karte.yaml`](sonstiges/wow-raid-karte.yaml) | karte | WoW – Raid-Fortschritt | button-card | `wow_charakter` | aktiv |
+| [`wow-ruf-karte.yaml`](sonstiges/wow-ruf-karte.yaml) | karte | WoW – Ruf und Ruhmstufen | button-card | `wow_charakter` | aktiv |
+| [`wow-sammlung-karte.yaml`](sonstiges/wow-sammlung-karte.yaml) | karte | WoW – Sammlungen und Erfolge | button-card | `wow_charakter` | aktiv |
+| [`wow-spielwelt-karte.yaml`](sonstiges/wow-spielwelt-karte.yaml) | karte | WoW – Spielwelt und Woche | button-card, apexcharts-card, card-mod | – | aktiv |
 | [`wow-templates.yaml`](sonstiges/wow-templates.yaml) | templates | WoW – Bibliothek, Ausruestungsplatz und Item-Tooltip | button-card | – | aktiv |
+| [`wow-werte-karte.yaml`](sonstiges/wow-werte-karte.yaml) | karte | WoW – Charakterwerte und Ausruestungs-Check | button-card | `wow_charakter` | aktiv |
 | [`claude-nutzung.html`](sonstiges/entwuerfe/claude-nutzung.html) | entwurf | Claude – Nutzungslimits, Entwurf hell und dunkel | – | `sensor.claude_usage_konto_*` | Entwurf zu `claude-nutzung-karte.yaml` |
 | [`kameras-karte.yaml`](sonstiges/archiv/kameras-karte.yaml) | karte | Kameras | button-card, card-mod, webrtc-camera | `benutzer_id_1/benutzer_id_2` | archiv, ersetzt durch `kameras-view.yaml` |
 | [`muellabfuhr-karte.yaml`](sonstiges/archiv/muellabfuhr-karte.yaml) | karte | Muellabfuhr v1 – trash-card | button-card, card-mod, trash-card | `VG Wohnort` | archiv, ersetzt durch `muellabfuhr-karte-v2.yaml` |
