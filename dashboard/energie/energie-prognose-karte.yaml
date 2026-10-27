@@ -1,0 +1,320 @@
+# ============================================================================
+# Solarprognose
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       energie
+# Status:        aktiv
+# Karten:        button-card, card-mod
+# Templates:     energie_kopf (energie-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   sensor.pv_anlage_*
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Solarprognose im Nachtblau-Stil: Ertrag gegen Prognose fuer heute, der
+# Tagesverlauf mit dem Sonnenstand, Ausblick und jedes Panel jetzt.
+#
+#   Kopf     Ertrag heute (Tagessumme der Anlage) von der Prognose heute
+#            (Summe der vier Eintraege), rechts der Anteil in Prozent. Bei
+#            360 px passt "Ertrag 3,04 von 3,95 kWh" in eine Zeile, die
+#            laengere Form mit "Prognose" brach vor "kWh" um.
+#   Verlauf  Prognose als gestrichelte Linie (Attribut "watts" der
+#            Tagessensoren, 15-Minuten-Werte, summiert), Ertrag als Flaeche
+#            (5-Minuten-Mittel der Solarleistung aus der Langzeitstatistik),
+#            senkrechte Linie mit Sonne fuer jetzt. Die Statistik wird einmal
+#            geladen und 5 min gepuffert (window.__nachtblauSolarprognose);
+#            wartende Karten werden wie in energie_mb_daten nach dem Laden
+#            neu gezeichnet. Die Statistik hinkt bis zu 5 min hinterher.
+#   Kacheln  Sonnenhoehe, Richtung, naechster Unter- oder Aufgang (sun.sun),
+#            darunter Rest heute, morgen und uebermorgen (Summe der Panels).
+#   Panels   Leistung jetzt je Eingang gegen die Prognose jetzt: Balken in
+#            Sonnengelb fuer den Ertrag, blauer Strich fuer die Prognose,
+#            beide auf dieselbe Skala (groesster Wert aller Panels).
+#
+# Farben: Sonnengelb fuer Ertrag (PV), Blau fuer die Prognose wie im
+# Energie-Dashboard von Home Assistant, Kopf-Icon gruen wie die anderen
+# Energie-Karten. SVG-Farben als style, damit der helle Modus greift.
+#
+# Panels und Entity-IDs stehen einmal unter variables (YAML-Anker
+# &prognose_variablen). Die Eintraege der Prognose heissen wie die Panels
+# ("PV 1 Sued" -> sensor.pv_1_sud_*); anders benannte Eintraege hier anpassen.
+#
+# Voraussetzung: custom:button-card (getestet v7.0.1) + card-mod (HACS),
+# Template energie_kopf aus energie-templates.yaml, Integration
+# Open-Meteo Solar Forecast (HACS) mit je einem Eintrag pro Panel,
+# Solarbank-Sensoren der Anker-Solix-Integration
+# (sensor.solarbank_3_e2700_pro_solar_pv1 bis pv4, ..._solarleistung) und
+# die Tagessumme sensor.pv_anlage_taglicher_solarertrag.
+type: vertical-stack
+card_mod:
+  style: |
+    #root {
+      background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+      border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+      border-radius: 22px !important;
+      box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+      padding: 16px 18px !important;
+      gap: 12px !important;
+    }
+cards:
+- type: custom:button-card
+  template: energie_kopf
+  entity: sensor.pv_anlage_taglicher_solarertrag
+  icon: mdi:solar-power-variant
+  name: Solarprognose
+  variables: &prognose_variablen
+    leistung: sensor.solarbank_3_e2700_pro_solarleistung
+    panele:
+    - name: PV 1 Süd
+      id: pv_1_sud
+      live: sensor.solarbank_3_e2700_pro_solar_pv1
+    - name: PV 2 Süd
+      id: pv_2_sud
+      live: sensor.solarbank_3_e2700_pro_solar_pv2
+    - name: PV 3 Ost
+      id: pv_3_ost
+      live: sensor.solarbank_3_e2700_pro_solar_pv3
+    - name: PV 4 Ost
+      id: pv_4_ost
+      live: sensor.solarbank_3_e2700_pro_solar_pv4
+  label: |
+    [[[
+      const f=(v)=>isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const ist=(typeof entity!=='undefined'&&entity)?parseFloat(entity.state):NaN;
+      const werte=variables.panele.map((p)=>parseFloat((states['sensor.'+p.id+'_energy_production_today']||{}).state));
+      const prog=werte.some((v)=>!isNaN(v))?werte.reduce((a,v)=>a+(isNaN(v)?0:v),0):NaN;
+      return 'Ertrag '+f(ist)+' von '+f(prog)+' kWh';
+    ]]]
+  triggers_update:
+  - sensor.pv_anlage_taglicher_solarertrag
+  - sensor.pv_1_sud_energy_production_today
+  - sensor.pv_2_sud_energy_production_today
+  - sensor.pv_3_ost_energy_production_today
+  - sensor.pv_4_ost_energy_production_today
+  tap_action:
+    action: more-info
+  custom_fields:
+    badge: |
+      [[[
+        const ist=(typeof entity!=='undefined'&&entity)?parseFloat(entity.state):NaN;
+        const prog=variables.panele.reduce((a,p)=>a+(parseFloat((states['sensor.'+p.id+'_energy_production_today']||{}).state)||0),0);
+        const t=(!isNaN(ist)&&prog>0)?Math.round(ist/prog*100)+' %':'–';
+        const a='var(--nachtblau-sonnengelb, #e6c15a)';
+        return `<span style="display:inline-flex;align-items:center;gap:6px;color:${a};background:color-mix(in srgb, ${a} 12%, transparent);border:1px solid color-mix(in srgb, ${a} 24%, transparent);font-size:12px;font-weight:700;padding:6px 11px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;"><ha-icon icon="mdi:bullseye-arrow" style="--mdc-icon-size:14px;"></ha-icon>${t}</span>`;
+      ]]]
+- type: custom:button-card
+  entity: sun.sun
+  show_icon: false
+  show_name: false
+  show_label: false
+  show_state: false
+  variables: *prognose_variablen
+  triggers_update:
+  - sun.sun
+  - sensor.solarbank_3_e2700_pro_solarleistung
+  - sensor.pv_1_sud_energy_production_today
+  - sensor.pv_2_sud_energy_production_today
+  - sensor.pv_3_ost_energy_production_today
+  - sensor.pv_4_ost_energy_production_today
+  tap_action:
+    action: more-info
+  custom_fields:
+    kurve: |
+      [[[
+        // Prognose: 15-Minuten-Leistung je Panel (Attribut watts), summiert.
+        const prog={};
+        variables.panele.forEach((p)=>{
+          const w=((states['sensor.'+p.id+'_energy_production_today']||{}).attributes||{}).watts||{};
+          Object.keys(w).forEach((k)=>{ const t=new Date(k).getTime(); if(!isNaN(t)) prog[t]=(prog[t]||0)+(parseFloat(w[k])||0); });
+        });
+        const pt=Object.keys(prog).map(Number).sort((a,b)=>a-b);
+        // Ertrag: 5-Minuten-Mittel der Solarleistung aus der Langzeitstatistik, 5 min gepuffert.
+        const heute=new Date(); heute.setHours(0,0,0,0); const tag=heute.getTime();
+        const C=window.__nachtblauSolarprognose=window.__nachtblauSolarprognose||{};
+        if(!(C.tag===tag&&C.daten)){ C.warten=C.warten||new Set(); C.warten.add(this); }
+        const wecken=()=>{ const ws=C.warten; C.warten=new Set(); if(ws) ws.forEach((el)=>{ try{ el.requestUpdate('_config'); }catch(e){} }); };
+        const frisch=!!(C.tag===tag&&C.daten&&Date.now()-C.zeit<300000);
+        const wartet=!!(C.fehler&&Date.now()-C.zeit<60000);
+        if(!frisch&&!C.laedt&&!wartet&&typeof hass!=='undefined'&&hass&&hass.callWS){
+          C.laedt=true;
+          hass.callWS({type:'recorder/statistics_during_period',start_time:heute.toISOString(),
+            statistic_ids:[variables.leistung],period:'5minute',types:['mean']})
+            .then((res)=>{ C.daten=(res[variables.leistung]||[]).filter((r)=>r.mean!==null&&r.mean!==undefined)
+                .map((r)=>[new Date(r.start).getTime()+150000, Math.max(0,r.mean)]);
+              C.tag=tag; C.zeit=Date.now(); C.laedt=false; C.fehler=false; wecken(); })
+            .catch(()=>{ C.laedt=false; C.fehler=true; C.zeit=Date.now(); wecken(); });
+        }
+        const ist=(C.tag===tag&&C.daten)?C.daten:[];
+        // Zeitachse: erste bis letzte Prognose ueber 0, je 30 min Rand.
+        const nz=pt.filter((t)=>prog[t]>0); const iz=ist.filter((d)=>d[1]>0).map((d)=>d[0]);
+        const alle=nz.concat(iz);
+        let x0=tag+6*3600000, x1=tag+18*3600000;
+        if(alle.length){ x0=Math.min(...alle)-1800000; x1=Math.max(...alle)+2700000; }
+        const jetzt=Date.now();
+        const imBereich=(t)=>t>=x0&&t<=x1;
+        let m=50; pt.forEach((t)=>{ if(imBereich(t)) m=Math.max(m,prog[t]); }); ist.forEach((d)=>{ if(imBereich(d[0])) m=Math.max(m,d[1]); });
+        const schritt=m<=400?100:(m<=1000?200:500); const ymax=Math.ceil(m/schritt)*schritt;
+        const W=306, H=128, L=34, R=6, T=12, B=18;
+        const X=(t)=>L+(t-x0)/(x1-x0)*(W-L-R); const Y=(v)=>T+(1-v/ymax)*(H-T-B);
+        const sek='var(--nachtblau-text-sekundaer, #8794a5)';
+        const gelb='var(--nachtblau-sonnengelb-grafik, #e6c15a)'; const blau='var(--nachtblau-blau, #7fb3d5)';
+        const fmt=(v)=>v>=1000?(v/1000).toLocaleString('de-DE',{maximumFractionDigits:1})+' kW':Math.round(v)+' W';
+        let svg='';
+        [0,ymax/2,ymax].forEach((v)=>{
+          svg+=`<line x1="${L}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" style="stroke:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));stroke-width:1"/>`;
+          svg+=`<text x="${L-6}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" style="fill:${sek};font-size:9.5px">${v===0?'0':fmt(v)}</text>`;
+        });
+        const span=(x1-x0)/3600000; const st=span<=11?2:3;
+        const h0=new Date(x0); h0.setMinutes(0,0,0); let h=h0.getTime()+3600000;
+        while(h<x1){ const d=new Date(h); if(d.getHours()%st===0){
+            svg+=`<text x="${X(h).toFixed(1)}" y="${H-4}" text-anchor="middle" style="fill:${sek};font-size:9.5px">${String(d.getHours()).padStart(2,'0')}:00</text>`; }
+          h+=3600000; }
+        const iv=ist.filter((d)=>imBereich(d[0]));
+        if(iv.length>1){
+          const linie=iv.map((d,i)=>(i?'L':'M')+X(d[0]).toFixed(1)+' '+Y(d[1]).toFixed(1)).join(' ');
+          svg+=`<path d="${linie} L${X(iv[iv.length-1][0]).toFixed(1)} ${Y(0)} L${X(iv[0][0]).toFixed(1)} ${Y(0)} Z" style="fill:color-mix(in srgb, ${gelb} 18%, transparent);stroke:none"/>`;
+          svg+=`<path d="${linie}" style="fill:none;stroke:${gelb};stroke-width:2;stroke-linejoin:round;stroke-linecap:round"/>`;
+        }
+        const pv=pt.filter(imBereich);
+        if(pv.length>1){
+          const linie=pv.map((t,i)=>(i?'L':'M')+X(t).toFixed(1)+' '+Y(prog[t]).toFixed(1)).join(' ');
+          svg+=`<path d="${linie}" style="fill:none;stroke:${blau};stroke-width:1.6;stroke-dasharray:4 3;stroke-linejoin:round"/>`;
+        }
+        const s=states['sun.sun']; const el=s?parseFloat((s.attributes||{}).elevation):NaN;
+        const sonne=!!(imBereich(jetzt)&&s&&s.state==='above_horizon');
+        if(imBereich(jetzt)){
+          const xj=X(jetzt).toFixed(1);
+          svg+=`<line x1="${xj}" x2="${xj}" y1="${T}" y2="${Y(0)}" style="stroke:${sek};stroke-width:1;stroke-dasharray:2 3"/>`;
+          if(sonne){
+            svg+=`<circle cx="${xj}" cy="${T}" r="7" style="fill:color-mix(in srgb, var(--nachtblau-sonnengelb, #e6c15a) 18%, transparent)"/><circle cx="${xj}" cy="${T}" r="4" style="fill:var(--nachtblau-sonnengelb, #e6c15a)"/>`;
+          }
+        }
+        const leer=!pv.length&&!iv.length;
+        const hinweis=leer?`<text x="${(L+W-R)/2}" y="${(T+H-B)/2}" text-anchor="middle" style="fill:${sek};font-size:11px">Keine Prognose verfügbar</text>`:'';
+        const legende=`<div style="display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--nachtblau-label, #b4c0cf);margin-top:6px;">
+          <span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:14px;height:3px;border-radius:2px;background:${gelb};"></i>Ertrag</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:14px;border-top:2px dashed ${blau};"></i>Prognose</span>
+          ${sonne?`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--nachtblau-sonnengelb, #e6c15a);"></i>Sonne jetzt${isNaN(el)?'':' · '+el.toLocaleString('de-DE',{maximumFractionDigits:1})+'°'}</span>`:''}</div>`;
+        return `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <span style="font-size:12px;color:${sek};">Tagesverlauf · Leistung</span></div>
+          <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;overflow:visible;">${svg}${hinweis}</svg>${legende}`;
+      ]]]
+  styles:
+    card:
+    - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
+    - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+    - border-radius: 16px
+    - box-shadow: none
+    - padding: 12px 14px
+    custom_fields:
+      kurve:
+      - width: 100%
+      - text-align: left
+    grid:
+    - grid-template-areas: '"kurve"'
+- type: custom:button-card
+  entity: sun.sun
+  show_icon: false
+  show_name: false
+  show_label: false
+  show_state: false
+  variables: *prognose_variablen
+  triggers_update:
+  - sun.sun
+  - sensor.pv_1_sud_energy_production_today_remaining
+  - sensor.pv_2_sud_energy_production_today_remaining
+  - sensor.pv_3_ost_energy_production_today_remaining
+  - sensor.pv_4_ost_energy_production_today_remaining
+  - sensor.pv_1_sud_energy_production_tomorrow
+  - sensor.pv_2_sud_energy_production_tomorrow
+  - sensor.pv_3_ost_energy_production_tomorrow
+  - sensor.pv_4_ost_energy_production_tomorrow
+  tap_action:
+    action: more-info
+  custom_fields:
+    kacheln: |
+      [[[
+        const s=states['sun.sun']; const a=(s&&s.attributes)||{};
+        const oben=!!(s&&s.state==='above_horizon');
+        const hoehe=parseFloat(a.elevation); const az=parseFloat(a.azimuth);
+        const zeit=(iso)=>{ const d=iso?new Date(iso):null; return d&&!isNaN(d)?d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–'; };
+        const himmel=isNaN(az)?'':['N','NO','O','SO','S','SW','W','NW'][Math.round((((az%360)+360)%360)/45)%8];
+        const summe=(suffix)=>{ const w=variables.panele.map((p)=>parseFloat((states['sensor.'+p.id+'_energy_production_'+suffix]||{}).state));
+          return w.some((v)=>!isNaN(v))?w.reduce((x,v)=>x+(isNaN(v)?0:v),0):NaN; };
+        const kwh=(v)=>isNaN(v)?'–':v.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const einheit=(t)=>`<span style="font-size:11px;font-weight:600;color:var(--nachtblau-text-sekundaer, #8794a5);margin-left:3px;">${t}</span>`;
+        const kachel=(wert,name)=>`<div style="min-width:0;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:8px 10px;">
+          <div style="font-size:15px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
+          <div style="font-size:11.5px;color:var(--nachtblau-text-sekundaer, #8794a5);line-height:1.3;margin-top:1px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${name}</div></div>`;
+        const k=[
+          kachel(isNaN(hoehe)?'–':hoehe.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+'°','Sonnen&shy;höhe'),
+          kachel(isNaN(az)?'–':Math.round(az)+'°'+einheit(himmel),'Richtung'),
+          kachel(zeit(oben?a.next_setting:a.next_rising)+einheit('Uhr'),oben?'Untergang':'Aufgang'),
+          kachel(kwh(summe('today_remaining'))+einheit('kWh'),'Rest heute'),
+          kachel(kwh(summe('tomorrow'))+einheit('kWh'),'Morgen'),
+          kachel(kwh(summe('d2'))+einheit('kWh'),'Übermorgen')];
+        return `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">${k.join('')}</div>`;
+      ]]]
+  styles:
+    card:
+    - background: none
+    - border: none
+    - box-shadow: none
+    - padding: 0
+    custom_fields:
+      kacheln:
+      - width: 100%
+      - text-align: left
+    grid:
+    - grid-template-areas: '"kacheln"'
+- type: custom:button-card
+  show_icon: false
+  show_name: false
+  show_label: false
+  show_state: false
+  variables: *prognose_variablen
+  triggers_update:
+  - sensor.solarbank_3_e2700_pro_solar_pv1
+  - sensor.solarbank_3_e2700_pro_solar_pv2
+  - sensor.solarbank_3_e2700_pro_solar_pv3
+  - sensor.solarbank_3_e2700_pro_solar_pv4
+  - sensor.pv_1_sud_power_production_now
+  - sensor.pv_2_sud_power_production_now
+  - sensor.pv_3_ost_power_production_now
+  - sensor.pv_4_ost_power_production_now
+  tap_action:
+    action: none
+  custom_fields:
+    panele: |
+      [[[
+        const g=(id)=>{ const s=states[id]; return s?parseFloat(s.state):NaN; };
+        const zeilen=variables.panele.map((p)=>({n:p.name,i:g(p.live),f:g('sensor.'+p.id+'_power_production_now')}));
+        const max=Math.max(1,...zeilen.map((z)=>Math.max(isNaN(z.i)?0:z.i,isNaN(z.f)?0:z.f)));
+        const w=(v)=>isNaN(v)?'–':Math.round(v);
+        const summe=(k)=>zeilen.reduce((a,z)=>a+(isNaN(z[k])?0:z[k]),0);
+        const sek='var(--nachtblau-text-sekundaer, #8794a5)';
+        const rows=zeilen.map((z)=>{
+          const pi=isNaN(z.i)?0:Math.min(100,z.i/max*100); const pf=(isNaN(z.f)||z.f<=0)?null:Math.min(100,z.f/max*100);
+          const strich=pf===null?'':`<div style="position:absolute;top:-3px;bottom:-3px;left:calc(${pf.toFixed(1)}% - 1px);width:2px;border-radius:1px;background:var(--nachtblau-blau, #7fb3d5);"></div>`;
+          return `<div style="display:grid;grid-template-columns:62px minmax(0,1fr) 76px;gap:10px;align-items:center;font-size:12.5px;color:var(--nachtblau-label, #b4c0cf);font-variant-numeric:tabular-nums;">
+            <span style="white-space:nowrap;">${z.n}</span>
+            <div style="position:relative;height:8px;border-radius:6px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));">
+              <div style="height:100%;width:${pi.toFixed(1)}%;border-radius:6px;background:var(--nachtblau-sonnengelb-grafik, #e6c15a);"></div>${strich}</div>
+            <span style="text-align:right;white-space:nowrap;"><b style="color:var(--nachtblau-text, #f2f5f8);font-weight:700;">${w(z.i)}</b><span style="color:${sek};"> / ${w(z.f)} W</span></span></div>`; }).join('');
+        return `<div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+            <span style="font-size:12px;color:${sek};">Jetzt · Ertrag / Prognose</span>
+            <span style="font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums;"><b style="color:var(--nachtblau-text, #f2f5f8);">${Math.round(summe('i'))}</b><span style="color:${sek};"> / ${Math.round(summe('f'))} W</span></span></div>${rows}</div>`;
+      ]]]
+  styles:
+    card:
+    - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
+    - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+    - border-radius: 16px
+    - box-shadow: none
+    - padding: 12px 14px
+    custom_fields:
+      panele:
+      - width: 100%
+      - text-align: left
+    grid:
+    - grid-template-areas: '"panele"'
