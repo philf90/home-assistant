@@ -12,6 +12,8 @@ sich nach Zustand färben. Die Farben stehen als Palette in
 [`design/palette.yaml`](design/palette.yaml), dazu gibt es ein Theme mit hellem
 und dunklem Modus.
 
+![Karten im Nachtblau-Stil auf drei Handys: Home-Kacheln, Energiefluss mit Hausgeräten und Autokarte](design/vorschau-handys.jpg)
+
 > **Hinweis:** Die Dateien sind auf eine konkrete Instanz zugeschnitten.
 > Entity-IDs, Gerätenamen, Routen und Pfade müssen vor dem Einsatz an die
 > eigene Installation angepasst werden. Persönliche Angaben sind durch
@@ -427,6 +429,11 @@ Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
   `design/social-preview.svg` (Schrift Inter). Hochgeladen wird es von Hand
   unter Settings → Social preview; nach einer Änderung neu rendern und
   hochladen.
+- Vorschaubild oben im README: `design/vorschau-handys.jpg`, 1760 × 1056 px.
+  Die Karten darin sind aus den HTML-Entwürfen in `entwuerfe/` gerendert
+  (Home-Kacheln, Energiefluss, Hausgeräte, Auto-Karten) und zeigen
+  Beispieldaten und Platzhalter. Ändern sich die Karten sichtbar, das Bild neu
+  rendern.
 
 **Eigene Karten im Nachtblau-Stil:** Farben nur aus der Palette und als
 Theme-Variable mit dem dunklen Wert als Rückfall, z. B.
