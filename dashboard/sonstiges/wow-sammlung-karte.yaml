@@ -11,36 +11,38 @@
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Sammlungen und Erfolge eines Charakters:
-#   Kacheln     Reittiere, Haustiere, Spielzeuge, Erfolgspunkte, Erfolge,
-#               Titel (aktiver Titel darunter)
+#   Kacheln     Reittiere, Haustiere, Spielzeuge, Titel; darunter
+#               Erfolgspunkte, Erfolge, Quests (aktiver Titel darunter)
 #   Kategorien  Erfolgspunkte je Kategorie als Balken, die punktstaerksten
 #               zuerst (hoechstens variables.kategorien)
 #   Statistik   Werte aus dem Statistik-Fenster des Spiels, deren IDs in
 #               variables.statistiken stehen; nur wenn der Sensor
 #               Spielstatistik eingeschaltet ist (in der Integration
 #               standardmaessig deaktiviert)
-#   Fuss        neuester Erfolg seit dem Start von Home Assistant
-#               (Ereignis "Neuer Erfolg")
+#   Fuss        neuester Erfolg (mit Symbol) und zuletzt gesammeltes
+#               Reittier, Haustier, Spielzeug oder Titel, je seit dem Start
+#               von Home Assistant (Ereignisse "Neuer Erfolg", "Neu gesammelt")
 # Kacheln und Abschnitte ohne Sensor (z. B. Erfolge und Titel vor 0.6.0)
 # fallen weg. Die Werte aendern sich erst, wenn sich der Charakter im Spiel
 # ausloggt.
 #
 # Statistik-IDs: Entwicklerwerkzeuge -> Zustaende -> Sensor
 # ..._spielstatistik, Attribut statistics (id, name, category, quantity).
-# Vorgabe (live mit Integration 0.6.0 gesehen): 98 Quests abgeschlossen,
-# 107 Kreaturen getoetet, 60 Tode insgesamt, 349 Bereiste Flugrouten. Die
-# Namen kommen aus der API in der Sprache der Region.
+# Vorgabe (live mit Integration 0.6.0 gesehen): 107 Kreaturen getoetet,
+# 60 Tode insgesamt, 349 Bereiste Flugrouten. Die Namen kommen aus der API in
+# der Sprache der Region.
 #
 # Daten: Sensoren _reittiere, _haustiere, _spielzeuge, _erfolgspunkte,
-# _erfolge, _titel, _spielstatistik und event._neuer_erfolg (Namen bei
-# deutscher Oberflaeche).
+# _erfolge, _titel, _abgeschlossene_quests, _spielstatistik und
+# event._neuer_erfolg, event._neu_gesammelt (Namen bei deutscher Oberflaeche).
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
 # Freizeit) fuer Icon-Kachel und Balken.
 #
 # Voraussetzung: custom:button-card (HACS) und die HACS-Integration
 # "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer Erfolge, Kategorien,
-# Titel und Statistik ab 0.6.0.
+# Titel und Statistik ab 0.6.0, fuer Quests, Erfolgssymbol und "Neu
+# gesammelt" ab 0.8.0.
 type: custom:button-card
 triggers_update: all
 show_icon: true
@@ -66,8 +68,10 @@ variables:
   prefix: wow_charakter
   # Anzahl der Erfolgskategorien; 0 blendet den Abschnitt aus
   kategorien: 5
-  # IDs aus dem Attribut statistics des Sensors Spielstatistik
-  statistiken: [98, 107, 60, 349]
+  # IDs aus dem Attribut statistics des Sensors Spielstatistik. 98 (Quests
+  # abgeschlossen) fehlt bewusst: Die Kachel Quests zeigt den Sensor
+  # Abgeschlossene Quests, die Statistik zaehlt anders (live 2.505 statt 2.479).
+  statistiken: [107, 60, 349]
   farben: |
     [[[
       return {
@@ -95,15 +99,21 @@ custom_fields:
       }
 
       const titel = st('titel');
-      const kacheln = [
-        ['reittiere', 'Reittiere'], ['haustiere', 'Haustiere'], ['spielzeuge', 'Spielzeuge'],
-        ['erfolgspunkte', 'Erfolgs&shy;punkte'], ['erfolge', 'Erfolge'], ['titel', 'Titel'],
-      ].filter(([endung]) => st(endung)).map(([endung, name]) => `
-        <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 6px;text-align:center;">
-          <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${format(zahl(st(endung)))}</div>
-          <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${name}</div>
-        </div>`).join('');
-      const teile = [`<div style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:6px;">${kacheln}</div>`];
+      // Zwei Reihen: Gesammeltes (bis 4 Kacheln) und Fortschritt (bis 3);
+      // jede Reihe teilt ihre Breite auf die vorhandenen Kacheln auf.
+      const reihe = (liste) => {
+        const da = liste.filter(([endung]) => st(endung));
+        if (!da.length) return '';
+        return `<div style="display:grid;grid-template-columns:repeat(${da.length}, minmax(0,1fr));gap:6px;">${da.map(([endung, name]) => `
+          <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 4px;text-align:center;">
+            <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${format(zahl(st(endung)))}</div>
+            <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${name}</div>
+          </div>`).join('')}</div>`;
+      };
+      const teile = [
+        reihe([['reittiere', 'Reittiere'], ['haustiere', 'Haustiere'], ['spielzeuge', 'Spiel&shy;zeuge'], ['titel', 'Titel']]),
+        reihe([['erfolgspunkte', 'Erfolgs&shy;punkte'], ['erfolge', 'Erfolge'], ['abgeschlossene_quests', 'Quests']]),
+      ].filter(Boolean);
       const aktiv = titel?.attributes?.active;
       if (aktiv) {
         teile.push(`<div style="font-size:12px;line-height:1.3;color:${f.sek};padding:0 2px;${zweizeilig}">Aktiver Titel: <span style="color:${f.label};">${esc(aktiv)}</span></div>`);
@@ -142,14 +152,29 @@ custom_fields:
           </div>`).join('')));
       }
 
-      // Neuester Erfolg: Ereignis-Entitaet, Zustand = Zeitpunkt
-      const ev = states[`event.${p}_neuer_erfolg`];
-      const d = new Date(ev?.state);
-      let fuss = 'Neuester Erfolg: noch keiner seit dem Start von Home Assistant';
-      if (ev && !isNaN(d.getTime()) && ev.attributes?.achievement) {
-        fuss = `Neuester Erfolg: ${esc(ev.attributes.achievement)} · ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`;
+      // Fusszeilen aus Ereignis-Entitaeten (Zustand = Zeitpunkt), je mit
+      // Symbol, wenn das Ereignis eines mitbringt (Erfolg ab Integration 0.8.0)
+      const tag = (ev) => {
+        const d = new Date(ev?.state);
+        return isNaN(d.getTime()) ? null : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      };
+      const fusszeile = (text, bild) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:0 2px;">
+          ${bild ? `<img src="${esc(bild)}" alt="" style="flex:none;width:20px;height:20px;border-radius:5px;border:1px solid ${f.rand};">` : ''}
+          <span style="min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${text}</span>
+        </div>`;
+      const erfolg = states[`event.${p}_neuer_erfolg`];
+      teile.push(tag(erfolg) && erfolg.attributes?.achievement
+        ? fusszeile(`Neuester Erfolg: ${esc(erfolg.attributes.achievement)} · ${tag(erfolg)}`, erfolg.attributes.icon)
+        : fusszeile('Neuester Erfolg: noch keiner seit dem Start von Home Assistant'));
+      // Neu gesammelt (ab Integration 0.8.0): Reittier, Haustier, Spielzeug, Titel
+      const neu = states[`event.${p}_neu_gesammelt`];
+      if (neu) {
+        const art = { mount: 'Reittier', pet: 'Haustier', toy: 'Spielzeug', title: 'Titel' }[neu.attributes?.event_type];
+        teile.push(tag(neu) && art && neu.attributes?.name
+          ? fusszeile(`Zuletzt gesammelt: ${art} „${esc(neu.attributes.name)}“ · ${tag(neu)}`)
+          : fusszeile('Zuletzt gesammelt: nichts Neues seit dem Start von Home Assistant'));
       }
-      teile.push(`<div style="font-size:12px;line-height:1.3;color:${f.sek};padding:0 2px;${zweizeilig}">${fuss}</div>`);
       return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
     ]]]
 styles:

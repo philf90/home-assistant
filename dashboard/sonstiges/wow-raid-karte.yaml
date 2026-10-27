@@ -13,14 +13,15 @@
 # Raid-Fortschritt eines Charakters in der neuesten Erweiterung:
 #   Kopf     Erweiterung und hoechste Schwierigkeit mit Kills
 #   Je Schwierigkeit (LFR, Normal, Heroisch, Mythisch) eine Unterkachel mit
-#            besiegten Bossen gesamt und je Raid als Balken
+#            besiegten Bossen gesamt und je Raid als Balken, ab Integration
+#            0.8.0 mit dem Bild des Raids davor
 #   Fuss     letzter besiegter Boss seit dem Start von Home Assistant
 #            (Ereignis "Boss besiegt")
 # Schwierigkeiten ohne Bosse in der Antwort (0 von 0) blendet die Karte aus.
 # Raidnamen kommen von der API auf Englisch.
 #
 # Daten: Sensoren _raid_fortschritt_<stufe> (Zustand = besiegte Bosse,
-# Attribute expansion, total_bosses, raids) und event._boss_besiegt. Die
+# Attribute expansion, total_bosses, raids, images) und event._boss_besiegt. Die
 # Endungen sind die Namen bei deutscher Oberflaeche.
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
@@ -98,14 +99,18 @@ custom_fields:
         const gesamt = e?.attributes?.total_bosses;
         if (!e || !gesamt) continue;
         const besiegt = parseFloat(e.state) || 0;
+        const bilder = e.attributes.images || {};
         const raids = Object.entries(e.attributes.raids || {}).map(([raid, text]) => {
           const [n, m] = String(text).split('/').map((v) => parseInt(v, 10));
           const fertig = m > 0 && n >= m;
+          // Bild des Raids (2:1, ab Integration 0.8.0) links neben Name und Balken
+          const bild = bilder[raid];
           return `
-            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:baseline;">
+            <div style="display:grid;grid-template-columns:${bild ? '52px ' : ''}minmax(0,1fr) auto;gap:4px 10px;align-items:baseline;">
+              ${bild ? `<img src="${esc(bild)}" alt="" style="grid-row:1 / span 2;align-self:center;width:52px;height:26px;object-fit:cover;border-radius:6px;border:1px solid ${f.rand};">` : ''}
               <span style="min-width:0;font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">${esc(raid)}</span>
               <span style="font-size:13px;font-weight:700;color:${fertig ? f.gruen : f.text};font-variant-numeric:tabular-nums;">${esc(text)}</span>
-              <div style="grid-column:1 / -1;">${balken(n, m, fertig ? f.gruen : f.akzent)}</div>
+              <div style="grid-column:${bild ? '2' : '1'} / -1;">${balken(n, m, fertig ? f.gruen : f.akzent)}</div>
             </div>`;
         }).join('');
         kacheln.push(`

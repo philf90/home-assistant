@@ -20,6 +20,8 @@
 # Anfang. Den Anzeigenamen nimmt sie aus dem Entitaetsnamen ("Beruf
 # Schneiderei"). Die Stufe kommt ab Integration 0.6.0 in der Sprache der
 # Region, vorher englisch ("Midnight Tailoring").
+# Ab Integration 0.8.0 steht das Symbol des Berufs vor der Zeile (Bild der
+# Entitaet, entity_picture); vorher bleibt es weg.
 # Kochkunst und Angeln koennen eine aeltere Stufe zeigen: Die Integration
 # nimmt die neueste Stufe, die der Charakter gelernt hat.
 #
@@ -82,7 +84,7 @@ custom_fields:
           const skill = parseFloat(e.state);
           const max = parseFloat(e.attributes?.max_skill);
           const name = String(e.attributes?.friendly_name || id).split(' Beruf ').pop();
-          return { name, tier: e.attributes?.tier, skill: isNaN(skill) ? null : skill, max: isNaN(max) ? null : max };
+          return { name, tier: e.attributes?.tier, bild: e.attributes?.entity_picture, skill: isNaN(skill) ? null : skill, max: isNaN(max) ? null : max };
         })
         .sort((a, b) => ((b.max ? (b.skill || 0) / b.max : 0) - (a.max ? (a.skill || 0) / a.max : 0))
           || a.name.localeCompare(b.name, 'de'));
@@ -93,12 +95,17 @@ custom_fields:
         const fertig = b.max && b.skill !== null && b.skill >= b.max;
         const farbe = fertig ? f.gruen : f.akzent;
         const breite = b.max && b.skill !== null ? Math.max(0, Math.min(100, b.skill / b.max * 100)) : 0;
+        // Symbol des Berufs (ab Integration 0.8.0), sonst nur Text
+        const symbol = b.bild
+          ? `<img src="${esc(b.bild)}" alt="" style="grid-row:1 / span 2;align-self:center;width:30px;height:30px;border-radius:8px;border:1px solid ${f.rand};">`
+          : '';
         return `
-          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
+          <div style="display:grid;grid-template-columns:${b.bild ? '30px ' : ''}minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
+            ${symbol}
             <span style="min-width:0;font-size:13px;font-weight:700;color:${f.text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(b.name)}</span>
             <span style="font-size:12px;color:${f.sek};white-space:nowrap;"><b style="font-size:14px;font-weight:750;color:${fertig ? f.gruen : f.text};font-variant-numeric:tabular-nums;">${b.skill === null ? '–' : b.skill}</b>${b.max ? ` / ${b.max}` : ''}</span>
-            ${b.tier ? `<span style="grid-column:1 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${esc(b.tier)}</span>` : ''}
-            <div style="grid-column:1 / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${breite}%;border-radius:5px;background:${farbe};"></div></div>
+            ${b.tier ? `<span style="grid-column:${b.bild ? '2' : '1'} / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${esc(b.tier)}</span>` : ''}
+            <div style="grid-column:${b.bild ? '2' : '1'} / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${breite}%;border-radius:5px;background:${farbe};"></div></div>
           </div>`;
       }).join('');
       return `<div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:12px;">${zeilen}</div>`;
