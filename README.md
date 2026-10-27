@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="design/banner-dunkel.svg">
+  <img alt="Nachtblau-Dashboard: Karten, Views und Grafana-Dashboards für Home Assistant" src="design/banner-hell.svg">
+</picture>
+
 # Home Assistant – Nachtblau-Dashboard
 
 Lovelace-Karten, komplette Dashboard-Views und Grafana-Dashboards für meine
@@ -413,6 +418,10 @@ Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
   [`design/palette.yaml`](design/palette.yaml) und werden in der CI geprüft
 - hieß bis Oktober 2026 „Owlet-Stil“; Umstellung einer bestehenden Instanz:
   [`doku/umbenennung-nachtblau.md`](doku/umbenennung-nachtblau.md)
+- Banner oben im README: `design/banner-dunkel.svg` und `design/banner-hell.svg`,
+  Farben aus der Palette bzw. dem hellen Theme, die Leiste zeigt die
+  Bereichsfarben der oberen Navigation. Die CI prüft SVG-Dateien nicht; ändert
+  sich ein Palettenwert, die Banner von Hand nachziehen.
 
 **Eigene Karten im Nachtblau-Stil:** Farben nur aus der Palette und als
 Theme-Variable mit dem dunklen Wert als Rückfall, z. B.
