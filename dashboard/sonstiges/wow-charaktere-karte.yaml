@@ -11,9 +11,13 @@
 # ============================================================================
 # Alle Charaktere der Integration "WoW Charakter" auf einen Blick, je
 # Charakter eine Zeile:
-#   Avatar, Name, Itemlevel
+#   Avatar mit Symbol der Spezialisierung, Name, Itemlevel
 #   Stufe · Spezialisierung Klasse · Realm, Mythic+-Wertung
-#   Letzter Login als "vor 3 Tagen"
+#   Letzter Login als "vor 3 Tagen", dazu ein Level-Aufstieg der letzten
+#   7 Tage (Ereignis "Level gestiegen")
+# Symbol und Level-Aufstieg gibt es ab Integration 0.8.0 (Attribut
+# spec_icon am Level-Sensor, event.<praefix>_level_gestiegen); ohne sie
+# bleibt die Zeile wie vorher.
 # Sortiert nach Stufe, dann Itemlevel. Ohne Avatar bleibt der Platzhalter.
 #
 # Charaktere: Die Karte sucht selbst alle Sensoren sensor.<praefix>_level mit
@@ -67,6 +71,8 @@ variables:
         kachel: 'var(--owlet-unterkachel, rgba(255, 255, 255, 0.028))',
         rand:   'var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06))',
         spur:   'var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05))',
+        // Ring um das Spec-Symbol, trennt es vom Avatar
+        ring:   'var(--owlet-huelle-oben, #1b2231)',
       };
     ]]]
   # Praefixe der Charaktere, sortiert nach Stufe und Itemlevel
@@ -125,6 +131,12 @@ custom_fields:
         let wertung = zahl(mplus);
         if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
         const login = vor(states[`sensor.${p}_letzter_login`]?.state);
+        // Letzter Level-Aufstieg (Ereignis ab Integration 0.8.0), hoechstens 7 Tage alt
+        const auf = states[`event.${p}_level_gestiegen`];
+        const aufZeit = new Date(auf?.state);
+        const aufstieg = auf?.attributes?.level && !isNaN(aufZeit.getTime())
+          && Date.now() - aufZeit.getTime() < 7 * 86400000
+          ? `Level ${esc(auf.attributes.level)} erreicht ${vor(auf.state)}` : null;
         const info = [
           leer(lvl) ? null : `Stufe ${lvl.state}`,
           [a.spec, a.class].filter(Boolean).join(' '),
@@ -132,14 +144,17 @@ custom_fields:
         ].filter(Boolean).map(esc).join(' · ');
         return `
           <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 10px;align-items:center;">
-            <div style="grid-row:1 / span 3;width:40px;height:40px;border-radius:12px;overflow:hidden;background:${f.spur};border:1px solid ${f.rand};">
-              ${avatar ? `<img src="${avatar}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">` : ''}
+            <div style="grid-row:1 / span 3;position:relative;width:40px;height:40px;">
+              <div style="width:40px;height:40px;border-radius:12px;overflow:hidden;background:${f.spur};border:1px solid ${f.rand};box-sizing:border-box;">
+                ${avatar ? `<img src="${avatar}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">` : ''}
+              </div>
+              ${a.spec_icon ? `<img src="${esc(a.spec_icon)}" alt="" title="${esc(a.spec || '')}" style="position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 2px ${f.ring};">` : ''}
             </div>
             <div style="min-width:0;font-size:14.5px;font-weight:700;color:${f.titel};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
             <div style="justify-self:end;font-size:13px;color:${f.sek};white-space:nowrap;"><b style="font-size:14.5px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;">${ilvl === null ? '–' : Math.round(ilvl)}</b> ilvl</div>
             <div style="min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${info}</div>
             <div style="justify-self:end;align-self:start;font-size:12px;color:${f.sek};white-space:nowrap;">M+ <b style="color:${f.label};font-weight:700;font-variant-numeric:tabular-nums;">${wertung === null ? '–' : Math.round(wertung)}</b></div>
-            <div style="grid-column:2 / -1;font-size:12px;color:${f.sek};">${login ? `Login ${login}` : 'Login unbekannt'}</div>
+            <div style="grid-column:2 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${[login ? `Login ${login}` : 'Login unbekannt', aufstieg].filter(Boolean).join(' · ')}</div>
           </div>`;
       });
       return `<div style="display:grid;gap:8px;">${zeilen.join('')}</div>`;
