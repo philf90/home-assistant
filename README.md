@@ -220,8 +220,9 @@ Kopfblock. Die Zeile `Einfuegen` nennt, wohin die Datei gehört.
      `unifi-netzplan-karte.yaml` als Karte einfügen. Vor Home Assistant
      2026.6 sind die Ressourcen nur mit dem *Erweiterten Modus* im
      Benutzerprofil sichtbar; seit 2026.6 gibt es den Modus nicht mehr.
-6. **Prüfen:** Unter Entwicklerwerkzeuge → Zustände stichprobenartig
-   nachsehen, ob die Entitäten der Karte existieren. Zeigt Lovelace „Custom
+6. **Prüfen:** Unter Einstellungen → Werkzeuge → Zustände stichprobenartig
+   nachsehen, ob die Entitäten der Karte existieren (vor Home Assistant
+   2026.8 hieß der Bereich „Entwicklerwerkzeuge“). Zeigt Lovelace „Custom
    element doesn't exist“, fehlt eine HACS-Karte oder die Ressource.
 
 Die Karten sind für Handys gebaut (360 px Breite wie Galaxy S25, gegengeprüft
@@ -351,8 +352,8 @@ daraus und aus den Kopfblöcken erzeugt.
 |---|---|---|---|
 | `person.bewohner` | Personen-Entity | Einstellungen → Personen | `fahrzeiten-karte.yaml`, `person-presence-karte.yaml`, `sicherheit-templates.yaml`, `wachmodus-konfig.yaml`, `doku/karten-basemap-carto.md` |
 | `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-view.yaml`, `person-presence-karte.yaml` |
-| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Entwicklerwerkzeuge → Aktionen, Suche `notify.mobile_app_` | `docker-konfig.yaml`, `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html`, `wachmodus-konfig.yaml` |
-| `<breite>`, `<laenge>` | Koordinaten von Zuhause | Entwicklerwerkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` |
+| `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Einstellungen → Werkzeuge → Aktionen, Suche `notify.mobile_app_` | `docker-konfig.yaml`, `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `hausgeraete.html`, `wachmodus-konfig.yaml` |
+| `<breite>`, `<laenge>` | Koordinaten von Zuhause | Einstellungen → Werkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` |
 | `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage (in Grafana ohne `sensor.`) | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energiefluss.html`, `grafana/README.md`, `grafana/energie-dashboard.json`; in `archiv/`: `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml` |
 | `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`, `autos-passat-konfig.yaml`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` |
 | `passat_fenster_kombiniert`, `passat_tueren_kombiniert` | `unique_id` der Template-Sensoren | bisherige `unique_id` übernehmen, sonst legt HA neue Entities an | `autos-passat-konfig.yaml` |
@@ -385,8 +386,8 @@ als Variable `spare` in der Karte, weil die Integration ihn nicht meldet.
 
 **Manuell:** Alle Sensoren eines Geräts oder einer Anlage haben denselben
 Präfix. Ein Suchen-und-Ersetzen auf den Präfix genügt, z. B. `sensor.iphone_`
-→ `sensor.<eigener_gerätename>_`. Danach unter Entwicklerwerkzeuge → Zustände
-stichprobenartig prüfen, ob die IDs existieren.
+→ `sensor.<eigener_gerätename>_`. Danach unter Einstellungen → Werkzeuge →
+Zustände stichprobenartig prüfen, ob die IDs existieren.
 
 **Mit Claude:** Claude Code in diesem Repo starten, die Home-Assistant-
 Verbindung (MCP) aktivieren und z. B. sagen: *„Bereite
