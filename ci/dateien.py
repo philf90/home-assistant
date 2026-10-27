@@ -20,6 +20,8 @@ Jede Datei bekommt genau eine Art:
   entwurf    *.html
   meta       Repo-Konfiguration (Punktdateien, LICENSE, pyproject.toml,
              ci/, design/, .claude/, .github/)
+  bild       *.png, *.jpg, *.jpeg, *.gif, *.webp -- Binaerdateien; keine
+             Pruefung liest sie als Text
 
 Eine Datei, die in keine Art passt, ist ein Fehler: Entweder ist sie falsch
 abgelegt, oder die Regeln hier muessen erweitert werden.
@@ -37,7 +39,7 @@ from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-ARTEN = ("lovelace", "ressource", "grafana", "python", "doku", "entwurf", "meta")
+ARTEN = ("lovelace", "ressource", "grafana", "python", "doku", "entwurf", "meta", "bild")
 
 # Themenbereiche unter dashboard/. Ein neuer Bereich wird hier eingetragen,
 # sonst meldet ci/check_struktur.py den Ordner.
@@ -60,6 +62,9 @@ BEREICHE = (
 # Ordner, deren Inhalt Repo-Konfiguration ist, keine Karte.
 META_ORDNER = (".claude", ".github", "ci", "design")
 META_DATEIEN = ("LICENSE", "pyproject.toml")
+
+# Binaere Bilddateien, z. B. die Social Preview in design/.
+BILD_ENDUNGEN = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
 def alle_dateien() -> list[PurePosixPath]:
@@ -84,6 +89,9 @@ def art(pfad: PurePosixPath) -> str | None:
     name = pfad.name
     endung = pfad.suffix
 
+    # Bilder zuerst: Sie sind binaer, auch unter design/ (sonst meta).
+    if endung in BILD_ENDUNGEN:
+        return "bild"
     # Fachliche Dateien vor Konfiguration: Markdown und Python unter ci/ sind
     # trotzdem Doku bzw. Skripte und werden als solche geprueft.
     if endung == ".py":

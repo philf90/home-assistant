@@ -25,8 +25,9 @@ secrets.yaml aus. Nicht geprueft werden URLs, absolute Pfade (/local/...),
 Pfade unter lokal/, Muster mit * oder ... und Platzhalter wie <datei>.
 
 Aufruf: python ci/check_verweise.py [datei ...]
-Ohne Argumente werden alle Dateien ausser den Grafana-Dashboards geprueft
-(JSON ohne Kommentare, die Proxmox-Dashboards sind generiert).
+Ohne Argumente werden alle Dateien ausser den Grafana-Dashboards (JSON ohne
+Kommentare, die Proxmox-Dashboards sind generiert) und den Bildern (binaer)
+geprueft. Bilder koennen aber Ziel eines Verweises sein.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ from pathlib import Path, PurePosixPath
 
 from dateien import REPO_ROOT, alle_dateien, art
 
-ENDUNGEN = r"(?:yaml|yml|md|html|js|json|py|txt|toml)"
+ENDUNGEN = r"(?:yaml|yml|md|html|js|json|py|txt|toml|svg|png|jpe?g|gif|webp)"
 
 # Ein Pfad-Token: optional Ordner, dann ein Dateiname mit bekannter Endung.
 # Davor kein Zeichen, das das Token zu einem laengeren Ausdruck macht ("*",
@@ -124,11 +125,12 @@ def main(argv: list[str]) -> int:
         zu_pruefen = [
             PurePosixPath(Path(a).resolve().relative_to(REPO_ROOT).as_posix()) for a in argv
         ]
+        zu_pruefen = [p for p in zu_pruefen if art(p) != "bild"]
     else:
         zu_pruefen = [
             p
             for p in alle
-            if art(p) != "grafana"
+            if art(p) not in ("grafana", "bild")
             and p.name != "LICENSE"
             and p.as_posix() not in AUSGENOMMENE_DATEIEN
         ]
