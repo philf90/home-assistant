@@ -35,7 +35,7 @@ import json
 DS = {"type": "influxdb", "uid": "${DS}"}
 API = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_API}"}
 
-# Statusstufen der Owlet-Palette (design/palette.yaml, DESIGN.md): ok, Hinweis,
+# Statusstufen der Nachtblau-Palette (design/palette.yaml, DESIGN.md): ok, Hinweis,
 # erhoeht, kritisch. Grafanas Farbnamen ("green", "red", ...) sind nicht erlaubt;
 # ci/check_grafana.py prueft das. Grafana gibt Hex-Werte in beiden Themes
 # unveraendert aus, deshalb Mitteltoene, die auf hellem (#ffffff) und dunklem

@@ -8,9 +8,9 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`nachtblau-theme-konfig.yaml`](allgemein/nachtblau-theme-konfig.yaml) | konfig | Nachtblau-Theme – Farben fuer den hellen und den dunklen Modus | – | – | aktiv |
 | [`navbar-karte.yaml`](allgemein/navbar-karte.yaml) | karte | Navbar – schwebende Navigation unten | button-card, navbar-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`navigation-templates.yaml`](allgemein/navigation-templates.yaml) | templates | Navigation – Decluttering-Templates top_navigation und floating_navbar | button-card, navbar-card | `benutzer_id_1/benutzer_id_2` | aktiv |
-| [`owlet-theme-konfig.yaml`](allgemein/owlet-theme-konfig.yaml) | konfig | Owlet-Theme – Farben fuer den hellen und den dunklen Modus | – | – | aktiv |
 | [`top-navigation-karte.yaml`](allgemein/top-navigation-karte.yaml) | karte | Top-Navigation – Launcher-Raster | button-card | – | aktiv |
 | [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | `weather.wohnort` | aktiv |
 | [`banner-hell.html`](allgemein/entwuerfe/banner-hell.html) | entwurf | Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung | – | – | Entwurf zu `welcome-banner-karte.yaml` |
@@ -38,14 +38,14 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`heizung-templates.yaml`](klima/heizung-templates.yaml) | templates | Heizungs-Animation – button-card-Template owlet_heizung_fx | – | – | aktiv |
+| [`heizung-templates.yaml`](klima/heizung-templates.yaml) | templates | Heizungs-Animation – button-card-Template nachtblau_heizung_fx | – | – | aktiv |
 | [`meteoalarm-karte.yaml`](klima/meteoalarm-karte.yaml) | karte | DWD-Wetterwarnung | button-card | `sensor.warnregion_*` | aktiv |
 | [`pollenflug-karte.yaml`](klima/pollenflug-karte.yaml) | karte | Pollenflug-Index | button-card | – | aktiv |
 | [`temperaturen-karte-v2.yaml`](klima/temperaturen-karte-v2.yaml) | karte | Temperaturen v2 – Raumliste mit 24-h-Sparkline | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
 | [`warnlage-templates.yaml`](klima/warnlage-templates.yaml) | templates | Warnlage – Popups fuer DWD-Warnungen und Pollenflug | button-card | `sensor.warnregion_*` | aktiv |
 | [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind und Sonne | button-card | `weather.wohnort` | aktiv |
-| [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template owlet_wetter_fx | – | – | aktiv |
+| [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template nachtblau_wetter_fx | – | – | aktiv |
 | [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card | `sensor.warnregion_*` | aktiv |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
 | [`temperaturen-karte.yaml`](klima/archiv/temperaturen-karte.yaml) | karte | Raum-Temperaturen v1 | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | archiv, ersetzt durch `temperaturen-karte-v2.yaml` |
@@ -72,7 +72,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`geschirrspueler-karte.yaml`](hausgeraete/geschirrspueler-karte.yaml) | karte | Geschirrspueler (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
-| [`hausgeraete-templates.yaml`](hausgeraete/hausgeraete-templates.yaml) | templates | Hausgeraete-Animation – button-card-Template owlet_geraete_fx | – | – | aktiv |
+| [`hausgeraete-templates.yaml`](hausgeraete/hausgeraete-templates.yaml) | templates | Hausgeraete-Animation – button-card-Template nachtblau_geraete_fx | – | – | aktiv |
 | [`trockner-karte.yaml`](hausgeraete/trockner-karte.yaml) | karte | Trockner (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
 | [`waschmaschine-karte.yaml`](hausgeraete/waschmaschine-karte.yaml) | karte | Waschmaschine (Home Connect) | button-card | `seriennr_<geraet>` | aktiv |
 | [`hausgeraete.html`](hausgeraete/entwuerfe/hausgeraete.html) | entwurf | Hausgeraete-View – Verbindung und Animation | – | `notify.mobile_app_iphone` | Entwurf zu `hausgeraete-templates.yaml` |
@@ -89,7 +89,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`docker-konfig.yaml`](netzwerk/docker-konfig.yaml) | konfig | Docker – Ereignisse, Absturzmeldung und Sammel-Update fuer die Docker-View | – | `notify.mobile_app_iphone` | aktiv |
 | [`docker-projekte-karte.yaml`](netzwerk/docker-projekte-karte.yaml) | karte | Docker-Projekte – Compose-Projekte mit Start/Stop und Neustart | auto-entities, button-card, card-mod, expander-card | – | aktiv |
 | [`docker-speicher-karte.yaml`](netzwerk/docker-speicher-karte.yaml) | karte | Docker-Speicher – Images, Volumes, Netzwerke und Aufraeumen | button-card, card-mod | – | aktiv |
-| [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Templates owlet_docker_* (Zeilen, Kopf, Kennzahlen) | button-card | – | aktiv |
+| [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Templates nachtblau_docker_* (Zeilen, Kopf, Kennzahlen) | button-card | – | aktiv |
 | [`docker-uebersicht-karte.yaml`](netzwerk/docker-uebersicht-karte.yaml) | karte | Docker-Übersicht – Kennzahlen und "Braucht Aufmerksamkeit" | auto-entities, button-card, card-mod | – | aktiv |
 | [`docker-updates-karte.yaml`](netzwerk/docker-updates-karte.yaml) | karte | Docker-Updates – Image-Updates der Container und von Arcane | auto-entities, button-card, card-mod | – | aktiv |
 | [`docker-verlauf-karte.yaml`](netzwerk/docker-verlauf-karte.yaml) | karte | Docker-Verlauf – Container und Image-Speicher ueber 7 Tage | apexcharts-card, button-card, card-mod | – | aktiv |
@@ -116,7 +116,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`autos-karte-v4.yaml`](fahrzeuge/autos-karte-v4.yaml) | karte | Autos v4 – mit Animationen | button-card, card-mod | `kennzeichen`, `fin_*` | aktiv |
 | [`autos-passat-konfig.yaml`](fahrzeuge/autos-passat-konfig.yaml) | konfig | Passat – kombinierte Fenster- und Tueren-Sensoren | – | `kennzeichen`, `passat_*_kombiniert` | aktiv |
-| [`autos-templates.yaml`](fahrzeuge/autos-templates.yaml) | templates | Auto-Animation – button-card-Template owlet_auto_fx | – | – | aktiv |
+| [`autos-templates.yaml`](fahrzeuge/autos-templates.yaml) | templates | Auto-Animation – button-card-Template nachtblau_auto_fx | – | – | aktiv |
 | [`fahrzeiten-karte.yaml`](fahrzeuge/fahrzeiten-karte.yaml) | karte | Fahrzeiten – Waze-Fahrzeit je angemeldeter Person, Route im Popup | button-card | `person.bewohner`, `DEIN_EMBED_KEY` | aktiv |
 | [`fahrzeiten-templates.yaml`](fahrzeuge/fahrzeiten-templates.yaml) | templates | Fahrzeiten – Waze-Fahrzeit je angemeldeter Person, Routen-Popup | button-card | `DEIN_EMBED_KEY` | aktiv |
 | [`tanken-karte.yaml`](fahrzeuge/tanken-karte.yaml) | karte | Tanken – guenstigster Diesel in der Naehe | button-card | – | aktiv |
@@ -132,7 +132,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`garten-karte.yaml`](garten/garten-karte.yaml) | karte | Garten – Pool, Bewaesserung, Maehroboter | button-card, card-mod | `notify.mobile_app_iphone`, `*_seriennr`, `*_mac` | aktiv |
-| [`pflanzen-templates.yaml`](garten/pflanzen-templates.yaml) | templates | Pflanzen – Decluttering-Template owlet_pflanze | apexcharts-card, button-card, card-mod | – | aktiv |
+| [`pflanzen-templates.yaml`](garten/pflanzen-templates.yaml) | templates | Pflanzen – Decluttering-Template nachtblau_pflanze | apexcharts-card, button-card, card-mod | – | aktiv |
 | [`pflanzen-view.yaml`](garten/pflanzen-view.yaml) | view | Pflanzen – komplette Ansicht | button-card, decluttering-card | `ieee_adresse` | aktiv |
 | [`pflanzen-flower-karte.yaml`](garten/archiv/pflanzen-flower-karte.yaml) | karte | Pflanzen mit flower-card | card-mod, flower-card | `ieee_adresse` | archiv, ersetzt durch `pflanzen-view.yaml` |
 | [`pflanzen-status-karte.yaml`](garten/archiv/pflanzen-status-karte.yaml) | karte | Pflanzen-Status – Ampel-Liste | button-card, card-mod | – | archiv, ersetzt durch `pflanzen-view.yaml` |
@@ -142,7 +142,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`gesundheit-view.yaml`](personen/gesundheit-view.yaml) | view | Gesundheit – komplette Ansicht | apexcharts-card, button-card, card-mod, decluttering-card | `sensor.iphone_*`, `benutzer_id_1/benutzer_id_2` | aktiv |
-| [`owlet-smart-sock-karte.yaml`](personen/owlet-smart-sock-karte.yaml) | karte | Owlet Smart Sock – Referenz des Owlet-Stils | button-card, card-mod | `*_seriennr` | aktiv |
+| [`owlet-smart-sock-karte.yaml`](personen/owlet-smart-sock-karte.yaml) | karte | Owlet Smart Sock – Referenz des Nachtblau-Stils | button-card, card-mod | `*_seriennr` | aktiv |
 | [`person-presence-karte.yaml`](personen/person-presence-karte.yaml) | karte | Personen-Praesenz | button-card | `person.bewohner`, `sensor.iphone_*` | aktiv |
 
 ## flugradar
@@ -174,7 +174,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`claude-nutzung-karte.yaml`](sonstiges/claude-nutzung-karte.yaml) | karte | Claude – Nutzungslimits des Abos | button-card | `sensor.claude_usage_konto_*` | aktiv |
-| [`kameras-templates.yaml`](sonstiges/kameras-templates.yaml) | templates | Kameras – Decluttering-Template owlet_kamera_kachel | button-card, webrtc-camera | – | aktiv |
+| [`kameras-templates.yaml`](sonstiges/kameras-templates.yaml) | templates | Kameras – Decluttering-Template nachtblau_kamera_kachel | button-card, webrtc-camera | – | aktiv |
 | [`kameras-view.yaml`](sonstiges/kameras-view.yaml) | view | Kameras – komplette Ansicht | button-card, card-mod, decluttering-card | `kind_1/kind_2`, `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`muellabfuhr-karte-v2.yaml`](sonstiges/muellabfuhr-karte-v2.yaml) | karte | Muellabfuhr v2 – Countdown | button-card, card-mod | `VG Wohnort` | aktiv |
 | [`wow-arsenal-karte.yaml`](sonstiges/wow-arsenal-karte.yaml) | karte | WoW – Arsenal eines Charakters | button-card | `wow_charakter` | aktiv |

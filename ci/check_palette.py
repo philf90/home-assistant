@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prueft jede Farbangabe in den Karten gegen die Owlet-Palette.
+"""Prueft jede Farbangabe in den Karten gegen die Nachtblau-Palette.
 
 Die Palette steht in design/palette.yaml, die Regeln dazu in DESIGN.md.
 Geprueft wird:
@@ -186,8 +186,8 @@ def lade_hell(
             continue
         name = str(v["name"])
         ort = f"theme.variablen {name}"
-        if not name.startswith("owlet-") or not VARIABLE_RE.match(name):
-            fehler.append(f"{ort}: Name muss mit 'owlet-' beginnen (a-z, 0-9, Bindestrich)")
+        if not name.startswith("nachtblau-") or not VARIABLE_RE.match(name):
+            fehler.append(f"{ort}: Name muss mit 'nachtblau-' beginnen (a-z, 0-9, Bindestrich)")
         for ha in v.get("ha") or []:
             if not VARIABLE_RE.match(str(ha)):
                 fehler.append(f"{ort}: ha-Variable '{ha}' ist kein gueltiger Name")
@@ -225,8 +225,8 @@ def lade_hell(
             continue
         name = str(s["name"])
         ort = f"theme.schalter {name}"
-        if not name.startswith("owlet-") or not VARIABLE_RE.match(name):
-            fehler.append(f"{ort}: Name muss mit 'owlet-' beginnen (a-z, 0-9, Bindestrich)")
+        if not name.startswith("nachtblau-") or not VARIABLE_RE.match(name):
+            fehler.append(f"{ort}: Name muss mit 'nachtblau-' beginnen (a-z, 0-9, Bindestrich)")
         if name in namen:
             fehler.append(f"{ort}: Name schon vergeben")
         namen.add(name)
@@ -364,13 +364,14 @@ def main(argv: list[str]) -> int:
         for f in fehler:
             print(f)
         print(
-            f"\n{len(fehler)} Farbangabe(n) ausserhalb der Owlet-Palette. Palettenwert verwenden "
-            "oder die Farbe begruendet in design/palette.yaml aufnehmen (siehe DESIGN.md)."
+            f"\n{len(fehler)} Farbangabe(n) ausserhalb der Nachtblau-Palette. "
+            "Palettenwert verwenden oder die Farbe begruendet in design/palette.yaml "
+            "aufnehmen (siehe DESIGN.md)."
         )
         return 1
 
     print(
-        f"{len(dateien)} Datei(en) geprueft, alle Farben aus der Owlet-Palette "
+        f"{len(dateien)} Datei(en) geprueft, alle Farben aus der Nachtblau-Palette "
         f"({len(farben)} Werte, dazu {len(hell)} helle im Theme)."
     )
     return 0

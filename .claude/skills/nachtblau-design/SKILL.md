@@ -1,9 +1,9 @@
 ---
-name: owlet-design
-description: Owlet-Stil fuer Lovelace-Karten und Views in diesem Repo einhalten -- Kartenhuelle, Icon-Kachel, gefuellte Kachel, Farbrollen aus design/palette.yaml, Bildschirmbreiten (Galaxy S25 360 px, iPhone 17 Pro 402 px). Verwenden, bevor eine Karte oder View neu gebaut, umgestaltet oder umgefaerbt wird, wenn eine Farbe gewaehlt werden muss, und wenn ci/check_palette.py eine Farbe ausserhalb der Palette meldet.
+name: nachtblau-design
+description: Nachtblau-Stil fuer Lovelace-Karten und Views in diesem Repo einhalten -- Kartenhuelle, Icon-Kachel, gefuellte Kachel, Farbrollen aus design/palette.yaml, Bildschirmbreiten (Galaxy S25 360 px, iPhone 17 Pro 402 px). Verwenden, bevor eine Karte oder View neu gebaut, umgestaltet oder umgefaerbt wird, wenn eine Farbe gewaehlt werden muss, und wenn ci/check_palette.py eine Farbe ausserhalb der Palette meldet.
 ---
 
-# Owlet-Stil anwenden
+# Nachtblau-Stil anwenden
 
 Die Regeln stehen in `DESIGN.md`, die Farbwerte in `design/palette.yaml`.
 Beide zuerst lesen; diese Datei wiederholt sie nicht, sondern beschreibt den
@@ -23,7 +23,7 @@ Ablauf.
    Icon-Kachel 0,16, Schein 0,18, Rand 0,24, Leuchten 0,5), keine neuen
    dunklen Mischtoene erfinden.
    **Heller Modus:** Helle Hex-Werte gehoeren nie in eine Karte. Karten, die
-   beide Modi koennen sollen, nutzen die Theme-Variablen (`var(--owlet-gruen)`,
+   beide Modi koennen sollen, nutzen die Theme-Variablen (`var(--nachtblau-gruen)`,
    Toenung per `color-mix`), siehe `DESIGN.md`, Abschnitt "Heller Modus".
    Eine neue Farbe braucht dort auch ihren hellen Wert und eine Variable.
 4. **Sonderfarben nur fuer ihren Zweck.** Eintraege mit `status: sonder` sind

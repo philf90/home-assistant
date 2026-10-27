@@ -1,8 +1,8 @@
-# Home Assistant – Owlet-Dashboard
+# Home Assistant – Nachtblau-Dashboard
 
 Lovelace-Karten, komplette Dashboard-Views und Grafana-Dashboards für meine
 Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
-**Owlet-Stil**, abgeleitet von der Owlet-Smart-Sock-Karte
+**Nachtblau-Stil**, abgeleitet von der Owlet-Smart-Sock-Karte
 (`owlet-smart-sock-karte.yaml`).
 
 > **Hinweis:** Die Dateien sind auf eine konkrete Instanz zugeschnitten.
@@ -24,7 +24,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 <!-- index:start -->
 | Bereich | Aktuelle Dateien | `archiv/` | `entwuerfe/` |
 |---|---|---|---|
-| [`allgemein/`](dashboard/allgemein/) | `navbar-karte.yaml`, `navigation-templates.yaml`, `owlet-theme-konfig.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `banner-hell.html`, `home-kacheln.html` |
+| [`allgemein/`](dashboard/allgemein/) | `nachtblau-theme-konfig.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `banner-hell.html`, `home-kacheln.html` |
 | [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energie-zaehler-karte.yaml` | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` |
 | [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `warnlage-templates.yaml`, `wetter-karte-v2.yaml`, `wetter-templates.yaml`, `wetter-view.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml`, `wetter-karte.yaml` | `wetter-animiert.html` |
 | [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | `fenster-lichter-uebersicht-karte.yaml` | – |
@@ -38,7 +38,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
 | [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-mythic-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
-| [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md` | – | – |
+| [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
 <!-- index:end -->
 
 Varianten (`lichter-raum-…`, `lichter-glow-…`) sind gleichwertige
@@ -47,16 +47,18 @@ Vorgängerin liegt dann in `archiv/` und bekommt nur noch Änderungen, die alle
 Dateien betreffen (Palette, Anonymisierung). Der Kommentarkopf der neueren
 Datei erklärt den Unterschied.
 
-## Owlet-Stil
+## Nachtblau-Stil
 
 - gemeinsame Kartenhülle, Palette (Grundtöne `#a6d49e`, `#f2f5f8`, `#6e7988`) und Typografie
 - rundlich-quadratische Icon-Kacheln, die sich nach Zustand färben
 - umgesetzt fast durchgängig mit `custom:button-card`; Styles werden innerhalb
   einer Datei über YAML-Anker geteilt
 - Spezialkarten (Kamera-Stream, Sankey, Power-Flow, Pflanzen …) bleiben
-  funktional erhalten und bekommen nur die Owlet-Hülle
+  funktional erhalten und bekommen nur die Nachtblau-Hülle
 - verbindlich beschrieben in [`DESIGN.md`](DESIGN.md); die Farbwerte stehen in
   [`design/palette.yaml`](design/palette.yaml) und werden in der CI geprüft
+- hieß bis Oktober 2026 „Owlet-Stil“; Umstellung einer bestehenden Instanz:
+  [`doku/umbenennung-nachtblau.md`](doku/umbenennung-nachtblau.md)
 
 ## Voraussetzungen
 

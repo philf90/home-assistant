@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Erzeugt das Owlet-Theme fuer Home Assistant aus design/palette.yaml.
+"""Erzeugt das Nachtblau-Theme fuer Home Assistant aus design/palette.yaml.
 
 Quelle ist der Abschnitt "theme" der Palette: jede Variable mit ihrem Wert im
 dunklen und im hellen Modus, dazu die Schalter (Prozentwerte je Modus). Die
@@ -23,7 +23,7 @@ PALETTE_FILE = REPO_ROOT / "design" / "palette.yaml"
 
 KOPF = """\
 # ============================================================================
-# Owlet-Theme – Farben fuer den hellen und den dunklen Modus
+# Nachtblau-Theme – Farben fuer den hellen und den dunklen Modus
 # ----------------------------------------------------------------------------
 # Art:           konfig
 # Bereich:       allgemein
@@ -38,12 +38,12 @@ KOPF = """\
 #
 # Das Theme hat beide Modi. Welcher gilt, waehlt jeder Benutzer im Profil
 # oder im More-Menue (System, Hell, Dunkel); "System" folgt dem Geraet.
-# Karten lesen die Farben als CSS-Variablen, z. B. var(--owlet-gruen);
-# Toenungen entstehen mit color-mix(in srgb, var(--owlet-gruen) 12%, transparent).
+# Karten lesen die Farben als CSS-Variablen, z. B. var(--nachtblau-gruen);
+# Toenungen entstehen mit color-mix(in srgb, var(--nachtblau-gruen) 12%, transparent).
 # Die Home-Assistant-Variablen (primary-background-color usw.) bekommen
-# dieselben Werte wie die zugehoerigen owlet-Variablen.
+# dieselben Werte wie die zugehoerigen nachtblau-Variablen.
 # Schalter sind keine Farben, sondern Anteile fuer color-mix: Der Wert von
-# owlet-dunkel-anteil (dunkel 100 %, hell 0 %) waehlt zwischen zwei Farben.
+# nachtblau-dunkel-anteil (dunkel 100 %, hell 0 %) waehlt zwischen zwei Farben.
 #
 # Aktivieren: Profil -> Theme "{name}", oder fuer alle als Standard mit der
 # Aktion frontend.set_theme (name: {name}).
@@ -66,7 +66,7 @@ def erzeuge(theme: dict) -> str:
         if ha:
             zeilen.append("      # Home Assistant")
             zeilen += [f"      {h}: {wert(w)}" for h, w in ha]
-            zeilen.append("      # Owlet")
+            zeilen.append("      # Nachtblau")
         zeilen += [f"      {v['name']}: {wert(v[schluessel])}" for v in variablen]
         schalter = theme.get("schalter") or []
         if schalter:
