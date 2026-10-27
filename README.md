@@ -66,9 +66,16 @@ Dazu:
 - **`unifi-netzplan-card.js`** für den UniFi-Netzplan; die Karte liegt im
   Repo und wird als Dashboard-Ressource eingebunden, nicht über HACS
   ([Installation](#installation), Schritt 5)
-- **Icon-Sets** mit den Präfixen `bi:`, `fa6-solid:`, `phu:` und `flat-ui:`
-  für die Navigation sowie einzelne Icons in den Licht-, Garten-, Wetter- und
-  Homematic-Dateien. Aus welchem Paket sie stammen, legt das Repo nicht fest.
+- **Icon-Sets** für die Navigation sowie einzelne Icons in den Licht-,
+  Garten-, Wetter- und Homematic-Dateien:
+  - `phu:` aus [Custom brand icons](https://github.com/elax46/custom-brand-icons)
+    (HACS, Frontend)
+  - `bi:` (Bootstrap Icons), `fa6-solid:` (Font Awesome 6 Solid) und
+    `flat-ui:` (Flat UI Icons) aus [Iconify](https://iconify.design/) über die
+    Integration [Custom Icons](https://github.com/thomasloven/hass-custom_icons)
+    (HACS). Nach der Einrichtung unter Einstellungen → Geräte & Dienste →
+    Custom Icons → *Konfigurieren* einmal *Download* wählen und die drei Sets
+    aktivieren, dann den Browser neu laden.
 - **Home Assistant 2026.7 oder neuer** für `wachmodus-konfig.yaml` (neue
   Trigger und Bedingungen)
 
@@ -85,14 +92,14 @@ Datei; die Übersicht nach Bereich:
 | Bereich | Integrationen |
 |---|---|
 | `allgemein/` | Deutscher Wetterdienst (`dwd_weather`, HACS) für das Wetter im Begrüßungsbanner |
-| `energie/` | Integration der PV-/Solarbank-Anlage |
+| `energie/` | Anker Solix (`thomluther/ha-anker-solix`, HACS) für die PV-/Solarbank-Anlage |
 | `klima/` | Deutscher Wetterdienst (`dwd_weather`, HACS), DWD Weather Warnings (`dwd_weather_warnings`), DWD Pollenflug (HACS), Wetterstation Homematic IP HmIP-SWO-PR |
 | `licht/` | Shelly, Time & Date (`sensor.time`) |
-| `hausgeraete/` | Home Connect |
+| `hausgeraete/` | Home Connect Alt (`ekutner/home-connect-hass`, HACS), nicht das offizielle Home Connect: die Entity-IDs mit `bsh_common` stammen von ihr |
 | `netzwerk/` | UniFi Network, [UniFi WAN](#unifi-wan) (optional), [UniFi UNAS](#unifi-unas-pro), [Arcane](#arcane-docker), Homematic(IP) Local for OpenCCU (HACS), Uptime Kuma |
 | `fahrzeuge/` | VW Group Connect (`vag_connect`), Tankerkönig, Waze Travel Time, Time & Date |
 | `garten/` | Home Assistant Plant (`Olen/homeassistant-plant`, HACS), Zigbee, Shelly |
-| `personen/` | Owlet, Companion App |
+| `personen/` | Owlet Smart Sock (`LucasVollebergh/owlet`, HACS), Companion App |
 | `flugradar/` | Flightradar24 (HACS) |
 | `fussball/` | keine: Daten von OpenLigaDB direkt im Browser, ESPN über das Paket `fussball-espn-konfig.yaml`; Companion App für die Meldungen |
 | `sicherheit/` | Homematic(IP) Local, UniFi Protect, UniFi Access, UniFi Network, Backup, Telegram Bot, Companion App |
@@ -210,7 +217,9 @@ Kopfblock. Die Zeile `Einfuegen` nennt, wohin die Datei gehört.
      `/config/www/unifi-netzplan-card.js` kopieren, dann Einstellungen →
      Dashboards → *Ressourcen* → Ressource hinzufügen: URL
      `/local/unifi-netzplan-card.js`, Typ *JavaScript-Modul*. Danach
-     `unifi-netzplan-karte.yaml` als Karte einfügen.
+     `unifi-netzplan-karte.yaml` als Karte einfügen. Vor Home Assistant
+     2026.6 sind die Ressourcen nur mit dem *Erweiterten Modus* im
+     Benutzerprofil sichtbar; seit 2026.6 gibt es den Modus nicht mehr.
 6. **Prüfen:** Unter Entwicklerwerkzeuge → Zustände stichprobenartig
    nachsehen, ob die Entitäten der Karte existieren. Zeigt Lovelace „Custom
    element doesn't exist“, fehlt eine HACS-Karte oder die Ressource.
@@ -347,7 +356,7 @@ daraus und aus den Kopfblöcken erzeugt.
 | `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage (in Grafana ohne `sensor.`) | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energiefluss.html`, `grafana/README.md`, `grafana/energie-dashboard.json`; in `archiv/`: `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml` |
 | `AB - CD 123`, `AB - EF 456` | Kennzeichen, reiner Anzeigetext | – | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`, `autos-passat-konfig.yaml`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` |
 | `passat_fenster_kombiniert`, `passat_tueren_kombiniert` | `unique_id` der Template-Sensoren | bisherige `unique_id` übernehmen, sonst legt HA neue Entities an | `autos-passat-konfig.yaml` |
-| `seriennr_geschirrspueler`, `seriennr_waschmaschine`, `seriennr_trockner` | Seriennummer des Home-Connect-Geräts am Anfang der Entity-ID (`sensor.seriennr_…_bsh_common_…`) | Einstellungen → Geräte & Dienste → Home-Connect-Integration → Gerät → Entitäten | `geschirrspueler-karte.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` |
+| `seriennr_geschirrspueler`, `seriennr_waschmaschine`, `seriennr_trockner` | Seriennummer des Home-Connect-Geräts am Anfang der Entity-ID (`sensor.seriennr_…_bsh_common_…`) | Einstellungen → Geräte & Dienste → Home Connect Alt → Gerät → Entitäten | `geschirrspueler-karte.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` |
 | `*_seriennr`, `*_seriennr_1`, `*_seriennr_2` | Seriennummer des Geräts in der Entity-ID (Homematic IP, Owlet); `_1`/`_2` trennen zwei Geräte desselben Modells | Einstellungen → Geräte & Dienste → Integration → Gerät → Entitäten | `garten-karte.yaml`, `homematic-view.yaml`, `owlet-smart-sock-karte.yaml`, `sicherheit-templates.yaml`, `temperaturen-karte-v2.yaml`, `wachmodus-konfig.yaml`; in `archiv/`: `homematic-karte.yaml`, `temperaturen-karte.yaml` |
 | `*_mac` | MAC-Adresse des Shelly-Geräts in der Entity-ID | Einstellungen → Geräte & Dienste → Shelly → Gerät → Entitäten | `garten-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`; in `archiv/`: `fenster-lichter-uebersicht-karte.yaml` |
 | `fin_passat`, `fin_touran` | Fahrgestellnummer in der Entity-ID: V2 (`volkswagencarnet`) mit voller FIN, V3 (`vag_connect`) mit deren letzten 6 Stellen | Einstellungen → Geräte & Dienste → Integration des Fahrzeugs → Gerät → Entitäten | `autos-animation.html`, `autos-karte-v4.yaml`, `autos-karten-v2.html`; in `archiv/`: `autos-karte-v2.yaml`, `autos-karte-v3.yaml` |
@@ -357,7 +366,7 @@ daraus und aus den Kopfblöcken erzeugt.
 | `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml`, `warnlage-templates.yaml`, `wetter-view.yaml` |
 | `wow_charakter` | Charaktername und Realm in den Entity-IDs der HACS-Integration WoW Charakter (`sensor.<charakter>_<realm>_level`, `image.<charakter>_<realm>_avatar`) | Einstellungen → Geräte & Dienste → WoW Charakter → Charakter → Entitäten | `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-mythic-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-werte-karte.yaml` |
 | `sensor.claude_usage_konto_*` | Sensoren der HACS-Integration Claude Usage (`…_session_usage`, `…_weekly_reset_time`, `…_weekly_<modell>_limit_usage`); `konto` steht für Kontoname und Plan aus dem Gerätenamen (`claude_usage_<name>_<plan>`) | Einstellungen → Geräte & Dienste → Claude Usage → Gerät → Entitäten | `claude-nutzung-karte.yaml`, `claude-nutzung.html` |
-| `VG Wohnort` | Verbandsgemeinde im Titel der Abfuhrtermine (`Restmüll in VG Wohnort`); die trash-card ordnet die Termine über diesen Text den Tonnen zu | Kalender des Abfallentsorgers (`calendar.mull`) → Titel eines Termins, der Teil nach „in“ | `muellabfuhr-karte-v2.yaml`; in `archiv/`: `muellabfuhr-karte.yaml` |
+| `VG Wohnort` | Verbandsgemeinde im Titel der Abfuhrtermine (`Restmüll in VG Wohnort`). Die trash-card in `muellabfuhr-karte.yaml` (archiv) ordnet die Termine über den vollen Titel den Tonnen zu; `muellabfuhr-karte-v2.yaml` erkennt die Tonne am Stichwort (Bio, Papier, Restmüll …) und nennt den Platzhalter nur im Beispiel im Kopfkommentar | Kalender des Abfallentsorgers (`calendar.mull`) → Titel eines Termins, der Teil nach „in“ | `muellabfuhr-karte-v2.yaml`; in `archiv/`: `muellabfuhr-karte.yaml` |
 | `telegram_eintrag` | Config-Entry-ID des Telegram-Bots (`config_entry_id` bei `telegram_bot.send_message`) | Automationseditor → Aktion „Telegram Bot: Nachricht senden“ → Bot auswählen; Home Assistant setzt die ID selbst ein | `wachmodus-konfig.yaml` |
 | `sensor.tankstelle_1_*` bis `sensor.tankstelle_4_*`, Name `Tankstelle 1` bis `Tankstelle 4` | Tankstelle aus der Tankerkönig-Integration. HA bildet die Entity-ID aus Marke und Adresse (`sensor.…_diesel`, `…_super`, `…_super_e10`, `binary_sensor.…_status`); der Anzeigename steht frei im Template | Einstellungen → Geräte & Dienste → Tankerkönig → Tankstelle → Entitäten | `tanken-templates.yaml` |
 | `benutzer_id_1`, `benutzer_id_2` | ID eines Home-Assistant-Benutzers in `visible:` (View) und `condition: user` (Karte); `1` und `2` trennen zwei Benutzer. Unersetzt sind die betroffenen Views und Karten für niemanden sichtbar | View- bzw. Karteneditor → *Sichtbarkeit* → Benutzer auswählen, Home Assistant setzt die ID selbst ein | `docker-view.yaml`, `gesundheit-view.yaml`, `kameras-view.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `netzwerk-view.yaml`; in `archiv/`: `kameras-karte.yaml` |
