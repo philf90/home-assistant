@@ -62,8 +62,8 @@ Das Repo ist nach Themenbereichen gegliedert. `check_struktur.py --streng` pruef
   Ziffern, Bindestriche.
 - Je Ordner hoechstens eine aktive Version einer Karte.
 - `doku/` enthaelt nur Markdown.
-- Bilder (PNG, JPG, GIF, WebP) liegen in `design/`. Im Wurzelverzeichnis,
-  unter `dashboard/` und in `doku/` meldet die Pruefung sie mit diesem Hinweis.
+- Bilder (PNG, JPG, GIF, WebP) liegen nur unter `design/`, auch nicht in
+  `grafana/`, `ci/`, `.claude/` oder `.github/`.
 
 Ohne `--streng` meldet das Skript Verstoesse nur als Warnung; CI und
 pre-commit laufen mit `--streng`.

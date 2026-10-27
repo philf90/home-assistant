@@ -12,10 +12,9 @@ Die Regeln stehen kurz hier und ausfuehrlich in ci/README.md:
 4. Lovelace-YAML heisst <thema>[-<variante>]-<art>[-vN].yaml mit der Art
    karte, view, templates oder konfig; JS-Module <name>.js; alles klein,
    ASCII, Bindestriche.
-5. In entwuerfe/ nur HTML und Markdown, in doku/ nur Markdown. Bilder
-   (Art "bild" in ci/dateien.py) im Wurzelverzeichnis, unter dashboard/ oder
-   in doku/ werden mit dem Hinweis auf design/ gemeldet.
-6. Je Ordner hoechstens eine aktive Version einer Karte: abgeloeste
+5. In entwuerfe/ nur HTML und Markdown, in doku/ nur Markdown.
+6. Bilder (Art "bild" in ci/dateien.py) liegen nur unter design/.
+7. Je Ordner hoechstens eine aktive Version einer Karte: abgeloeste
    Fassungen gehoeren nach archiv/.
 
 Aufruf: python ci/check_struktur.py [--streng]
@@ -48,7 +47,7 @@ LOVELACE_NAME = re.compile(
     r"(?:-v(?P<version>[2-9]|[1-9][0-9]))?\.yaml$"
 )
 EINFACHER_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z]+$")
-BILD_HINWEIS = "Bilder liegen in design/"
+BILD_HINWEIS = "Bilder liegen nur in design/"
 
 
 def pruefe(pfad: PurePosixPath) -> list[str]:
@@ -73,6 +72,11 @@ def pruefe(pfad: PurePosixPath) -> list[str]:
         if pfad.suffix != ".md" or len(teile) != 2:
             return [f"{pfad}: in doku/ liegt nur Markdown, ohne Unterordner"]
         return []
+
+    if ist_bild and teile[0] != "dashboard":
+        if teile[0] == "design":
+            return []
+        return [f"{pfad}: Bild ausserhalb von design/ ({BILD_HINWEIS})"]
 
     if teile[0] != "dashboard":
         return []
