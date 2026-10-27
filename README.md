@@ -5,6 +5,8 @@
 
 # Home Assistant – Nachtblau-Dashboard
 
+[![Erstellt mit Claude Code](https://img.shields.io/badge/Erstellt%20mit-Claude%20Code-D97757?logo=claude&logoColor=white)](https://claude.com/claude-code)
+
 Lovelace-Karten, komplette Dashboard-Views und Grafana-Dashboards für meine
 Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 **Nachtblau-Stil**: dunkler Navy-Grund, Pastell-Akzente und Icon-Kacheln, die
@@ -19,6 +21,10 @@ und dunklem Modus.
 > eigene Installation angepasst werden. Persönliche Angaben sind durch
 > Platzhalter ersetzt, die in keiner Instanz existieren – siehe
 > [Platzhalter ersetzen](#platzhalter-ersetzen).
+>
+> Die Inhalte dieses Repos sind per KI generiert und erstellt, mit
+> [Claude Code](https://claude.com/claude-code) – siehe
+> [Mit KI erstellt](#mit-ki-erstellt).
 
 **Auf dieser Seite:**
 [Voraussetzungen](#voraussetzungen) ·
@@ -31,6 +37,7 @@ und dunklem Modus.
 [Notizen](#notizen) ·
 [Prüfungen](#prüfungen) ·
 [Mitarbeiten](#mitarbeiten) ·
+[Mit KI erstellt](#mit-ki-erstellt) ·
 [Lizenz](#lizenz)
 
 ## Voraussetzungen
@@ -548,6 +555,29 @@ pip install pre-commit && pre-commit install
 ## Mitarbeiten
 
 Regeln für neue und geänderte Dateien: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Mit KI erstellt
+
+Karten, Views, Templates, Grafana-Dashboards, Dokumentation, Prüfskripte in
+`ci/` und Grafiken in `design/` sind per KI generiert und erstellt, mit
+[Claude Code](https://claude.com/claude-code) von Anthropic. Banner und Social
+Preview sind als SVG geschrieben, das Vorschaubild ist aus den HTML-Entwürfen
+der Karten gerendert; ein Bildgenerator kam nicht zum Einsatz.
+
+Nachvollziehbar ist das in der Git-Historie: Commits mit KI-Anteil tragen die
+Zeilen `Co-Authored-By: Claude …` und `Claude-Session: …`. Der erste Commit
+(`a724d92`, 19.10.2026) bringt den damaligen Gesamtstand mit, frühere Commits
+sind hier nicht enthalten. Stand 27.10.2026 tragen 107 von 108 Commits (ohne
+Merge-Commits) die Zeilen, der eine ohne ist dieser erste Commit. Nachzählen:
+
+```bash
+git log --no-merges --oneline | wc -l
+git log --no-merges --grep='Co-Authored-By: Claude' --oneline | wc -l
+```
+
+Die Prüfungen aus [Prüfungen](#prüfungen) laufen bei jedem Push und Pull
+Request. Sie fangen Formfehler ab, aber nicht jeden inhaltlichen Fehler: Karten
+und Skripte vor dem Einsatz in der eigenen Instanz selbst prüfen.
 
 ## Lizenz
 
