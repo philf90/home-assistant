@@ -17,6 +17,14 @@
 #            in Prozent; fuer kommende Tage nur die Prognose und das Datum.
 #            Bei 360 px passt "Ertrag 3,04 von 3,95 kWh" in eine Zeile, die
 #            laengere Form mit "Prognose" brach vor "kWh" um.
+#            Farbe des Badges: ab 90 % gruen, 60-89 % amber, darunter rot
+#            (gefuellt wie in temperaturen-karte-v2.yaml). Vergangene Tage:
+#            Tagesertrag gegen Vorabend-Prognose. Heute: Ertrag bis jetzt
+#            gegen Prognose bis jetzt (15-Minuten-Werte, laufendes Viertel
+#            anteilig), denn der angezeigte Anteil an der Tagesprognose waere
+#            jeden Morgen niedrig. Unter 0,05 kWh Prognose bis jetzt und fuer
+#            kommende Tage keine Bewertung, Badge in Sonnengelb. Der Tooltip
+#            nennt Grundlage und Wert der Farbe.
 #   Verlauf  Tagesauswahl mit Pfeilen, 9 Tage zurueck bis 7 Tage voraus;
 #            Tippen auf "Heute" springt zurueck. Prognose als gestrichelte
 #            Linie (Attribut "watts", 15-Minuten-Werte, Summe der Panels),
@@ -196,15 +204,29 @@ cards:
   custom_fields:
     badge: |
       [[[
+        // Text: Ertrag gegen Tagesprognose. Farbe: heute Ertrag gegen Prognose bis jetzt, siehe Kopfkommentar.
         const r=variables.tagdaten;
-        let t='–', icon='mdi:bullseye-arrow';
+        let t='–', icon='mdi:bullseye-arrow', q=NaN, basis='';
         if(r.art==='zukunft'){ icon='mdi:calendar'; t=new Date(r.tag).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}); }
         else {
           const ist=r.art==='heute'?((typeof entity!=='undefined'&&entity)?parseFloat(entity.state):NaN):r.istKwh;
           if(!isNaN(ist)&&r.progKwh>0) t=Math.round(ist/r.progKwh*100)+' %';
+          if(r.art==='vergangen'){ if(!isNaN(ist)&&r.progKwh>0){ q=ist/r.progKwh; basis='Tagesertrag gegen Prognose vom Vorabend'; } }
+          else {
+            const jetzt=Date.now(); let bisher=0;
+            Object.keys(r.prog).forEach((k)=>{ const t0=+k; if(t0<jetzt) bisher+=r.prog[k]*Math.min(900000,jetzt-t0)/3600000; });
+            bisher/=1000;
+            if(!isNaN(ist)&&bisher>=0.05){ q=ist/bisher; basis='Ertrag bis jetzt gegen Prognose bis jetzt'; }
+          }
         }
-        const a='var(--nachtblau-sonnengelb, #e6c15a)';
-        return `<span style="display:inline-flex;align-items:center;gap:6px;color:${a};background:color-mix(in srgb, ${a} 12%, transparent);border:1px solid color-mix(in srgb, ${a} 24%, transparent);font-size:12px;font-weight:700;padding:6px 11px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;"><ha-icon icon="${icon}" style="--mdc-icon-size:14px;"></ha-icon>${t}</span>`;
+        const p=Math.round(q*100);
+        const stufe=isNaN(p)?'':(p>=90?'gruen':(p>=60?'amber':'rot'));
+        const a=stufe==='gruen'?'var(--nachtblau-gruen, #a6d49e)':(stufe==='amber'?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-sonnengelb, #e6c15a)');
+        const farbe=stufe==='rot'
+          ?'background:#f0736a;border:1px solid var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5));color:#3d1512;box-shadow:0 0 14px -3px var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5));'
+          :`color:${a};background:color-mix(in srgb, ${a} 12%, transparent);border:1px solid color-mix(in srgb, ${a} 24%, transparent);`;
+        const titel=stufe?`${basis}: ${p} %`:(r.art==='heute'?'Bewertung ab 0,05 kWh Prognose bis jetzt':'');
+        return `<span title="${titel}" style="display:inline-flex;align-items:center;gap:6px;${farbe}font-size:12px;font-weight:700;padding:6px 11px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;"><ha-icon icon="${icon}" style="--mdc-icon-size:14px;"></ha-icon>${t}</span>`;
       ]]]
 - type: custom:button-card
   entity: sun.sun
