@@ -2,8 +2,10 @@
 
 Lovelace-Karten, komplette Dashboard-Views und Grafana-Dashboards für meine
 Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
-**Nachtblau-Stil**, abgeleitet von der Owlet-Smart-Sock-Karte
-(`owlet-smart-sock-karte.yaml`).
+**Nachtblau-Stil**: dunkler Navy-Grund, Pastell-Akzente und Icon-Kacheln, die
+sich nach Zustand färben. Die Farben stehen als Palette in
+[`design/palette.yaml`](design/palette.yaml), dazu gibt es ein Theme mit hellem
+und dunklem Modus.
 
 > **Hinweis:** Die Dateien sind auf eine konkrete Instanz zugeschnitten.
 > Entity-IDs, Gerätenamen, Routen und Pfade müssen vor dem Einsatz an die
@@ -11,188 +13,319 @@ Home-Assistant-Instanz. Alle Karten folgen einem gemeinsamen Design, dem
 > Platzhalter ersetzt, die in keiner Instanz existieren – siehe
 > [Platzhalter ersetzen](#platzhalter-ersetzen).
 
-## Inhalt
-
-Alles, was in Home Assistant landet, liegt unter `dashboard/<bereich>/`. In
-jedem Bereich stehen die aktuellen Dateien direkt im Ordner, abgelöste
-Fassungen in `archiv/` und HTML-Entwürfe in `entwuerfe/`. Die Dateiart steht
-im Namen: `-karte`, `-view`, `-templates` (für den Raw-Konfigurationseditor),
-`-konfig` (für die `configuration.yaml`). Titel, Karten und Status jeder
-Datei stehen in [`dashboard/README.md`](dashboard/README.md); beide Übersichten
-erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
-
-<!-- index:start -->
-| Bereich | Aktuelle Dateien | `archiv/` | `entwuerfe/` |
-|---|---|---|---|
-| [`allgemein/`](dashboard/allgemein/) | `nachtblau-theme-konfig.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `banner-hell.html`, `home-kacheln.html` |
-| [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energie-zaehler-karte.yaml` | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` |
-| [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `warnlage-templates.yaml`, `wetter-karte-v2.yaml`, `wetter-templates.yaml`, `wetter-view.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml`, `wetter-karte.yaml` | `wetter-animiert.html` |
-| [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | `fenster-lichter-uebersicht-karte.yaml` | – |
-| [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | `staubsauger-karte.yaml` | `hausgeraete.html` |
-| [`netzwerk/`](dashboard/netzwerk/) | `docker-container-karte.yaml`, `docker-ereignisse-karte.yaml`, `docker-host-karte.yaml`, `docker-karte.yaml`, `docker-konfig.yaml`, `docker-projekte-karte.yaml`, `docker-speicher-karte.yaml`, `docker-templates.yaml`, `docker-uebersicht-karte.yaml`, `docker-updates-karte.yaml`, `docker-verlauf-karte.yaml`, `docker-view.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte-v2.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml`, `wlan-karte.yaml` | – |
-| [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml`, `fahrzeiten-karte.yaml`, `fahrzeiten-templates.yaml`, `tanken-karte.yaml`, `tanken-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
-| [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
-| [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
-| [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
-| [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
-| [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
-| [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-mythic-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
-| [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
-| [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
-<!-- index:end -->
-
-Varianten (`lichter-raum-…`, `lichter-glow-…`) sind gleichwertige
-Alternativen. Versionen (`-v2`, `-v3`) lösen ihre Vorgängerin ab; die
-Vorgängerin liegt dann in `archiv/` und bekommt nur noch Änderungen, die alle
-Dateien betreffen (Palette, Anonymisierung). Der Kommentarkopf der neueren
-Datei erklärt den Unterschied.
-
-## Nachtblau-Stil
-
-- gemeinsame Kartenhülle, Palette (Grundtöne `#a6d49e`, `#f2f5f8`, `#6e7988`) und Typografie
-- rundlich-quadratische Icon-Kacheln, die sich nach Zustand färben
-- umgesetzt fast durchgängig mit `custom:button-card`; Styles werden innerhalb
-  einer Datei über YAML-Anker geteilt
-- Spezialkarten (Kamera-Stream, Sankey, Power-Flow, Pflanzen …) bleiben
-  funktional erhalten und bekommen nur die Nachtblau-Hülle
-- verbindlich beschrieben in [`DESIGN.md`](DESIGN.md); die Farbwerte stehen in
-  [`design/palette.yaml`](design/palette.yaml) und werden in der CI geprüft
-- hieß bis Oktober 2026 „Owlet-Stil“; Umstellung einer bestehenden Instanz:
-  [`doku/umbenennung-nachtblau.md`](doku/umbenennung-nachtblau.md)
+**Auf dieser Seite:**
+[Voraussetzungen](#voraussetzungen) ·
+[Installation](#installation) ·
+[Integrationen einrichten](#integrationen-einrichten) ·
+[Platzhalter ersetzen](#platzhalter-ersetzen) ·
+[Nachtblau-Stil](#nachtblau-stil) ·
+[Inhalt](#inhalt) ·
+[Grafana](#grafana) ·
+[Notizen](#notizen) ·
+[Prüfungen](#prüfungen) ·
+[Mitarbeiten](#mitarbeiten) ·
+[Lizenz](#lizenz)
 
 ## Voraussetzungen
 
+Welche Karten, Templates und Platzhalter eine Datei braucht, steht in ihrem
+Kopfblock (Zeilen `Karten`, `Templates`, `Platzhalter`), Integrationen, Helfer
+und Sensoren im Kommentar darunter in der Zeile `Voraussetzung`. Die Listen
+hier fassen das für alle aktuellen Dateien zusammen.
+
+### Für alle Karten
+
 - Home Assistant mit [HACS](https://hacs.xyz/)
-- Frontend-Karten aus HACS, je nach Datei: `button-card`, `card-mod`,
-  `apexcharts-card`, `auto-entities`, `bubble-card`, `decluttering-card`, `expander-card`,
-  `flower-card`, `homematicip-system-health-card`, `mushroom` (entity,
-  light), `navbar-card`, `power-flow-card-plus`, `sankey-chart`,
-  `slider-button-card`, `trash-card`, `uptime-card`, `webrtc-camera`
-- die Integrationen der jeweiligen Geräte (z. B. Home Connect, UniFi,
-  Homematic IP, VW Group Connect, Flightradar24)
-- optional für den UniFi-Netzplan: die Integration
-  [UniFi WAN](https://github.com/holdestmade/Unifi-WAN). Sie liefert je
-  Internetleitung IPv4, IPv6 und Erreichbarkeit, die die offizielle
-  UniFi-Integration nicht bereitstellt. Sie steht nicht im HACS-Standardkatalog:
-  in HACS unter *Benutzerdefinierte Repositories* mit Typ *Integration*
-  hinzufügen. Zur Einrichtung braucht sie einen lokalen API-Schlüssel der
-  UniFi-Konsole (Einstellungen → Control Plane → Integrationen). Den
-  automatischen Speedtest in ihren Optionen abschalten, sonst testet sie
-  standardmäßig stündlich.
-- für die UNAS-Pro-Karte: die Integration
-  [UniFi UNAS (non-invasive)](https://github.com/LayerTM/unifi-unas-ha)
-  (HACS-Standardkatalog, ab Home Assistant 2025.8). Die offizielle
-  UniFi-Integration sieht ein UNAS nur als Client. Diese Integration liest
-  Pool, Platten (Temperatur, Zustand, Health-Score, Betriebsstunden, defekte
-  Sektoren), CPU und RAM über die lokale Drive-API des UNAS, ohne SSH und
-  ohne etwas auf dem NAS zu installieren. Die API ist von Ubiquiti nicht
-  dokumentiert und kann sich mit Firmware-Updates ändern. Einrichtung:
-  1. Den API-Schlüssel in der UniFi-OS-Oberfläche des UNAS erzeugen, nicht
-     auf der UDM.
-  2. In HACS *UniFi UNAS (non-invasive)* herunterladen, Home Assistant neu
-     starten.
-  3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *UniFi
-     UNAS*: Host `<IP-des-UNAS>`, Port `443`, TLS-Modus und Anmeldung auf
-     der Vorgabe lassen (Zertifikat beim ersten Kontakt hinterlegen,
-     API-Schlüssel), Schlüssel `<API-Schlüssel des UNAS>`.
+- aus HACS die Frontend-Karten **`button-card`** (Version 7, getestet mit
+  7.0.1) und **`card-mod`**. Fast jede Karte nutzt `button-card`, die meisten
+  auch `card-mod`.
+- ein Browser bzw. eine App-WebView mit `color-mix()`: ab Chrome/WebView 111,
+  Safari 16.2 oder Firefox 113
 
-  Der Schlüssel liegt danach nur im Config-Entry von Home Assistant, nicht
-  in einer Datei des Repos. Mit API-Schlüssel ist die Integration rein
-  lesend. Freigaben, Firmware-Updates, Speicherdurchsatz und Steuerung
-  (Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
-  Passwort); die Karte braucht davon nichts.
-- für die Claude-Nutzungskarte (`claude-nutzung-karte.yaml`): die Integration
-  [Claude Usage](https://github.com/trickv/hass-claude-usage)
-  (HACS-Standardkatalog). Sie liest die Limits eines Claude-Abos (Pro/Max):
-  Session (5 h), Woche über alle Modelle, Wochenlimits je Modell und
-  Extra-Nutzung, jeweils mit Auslastung in Prozent und Reset-Zeitpunkt.
-  Einrichtung: in HACS *Claude Usage* herunterladen, Home Assistant neu
-  starten, Einstellungen → Geräte & Dienste → Integration hinzufügen →
-  *Claude Usage*; der angezeigte Link öffnet die Anmeldung bei Anthropic,
-  danach den Code (Form `xxxx#yyyy`) in den Dialog einfügen. Der
-  Gerätename trägt Kontoname und Plan, deshalb stehen die Entity-IDs im
-  Repo als Platzhalter `sensor.claude_usage_konto_*`.
-  Die Integration fragt den inoffiziellen Endpunkt ab, den auch Claude Code
-  für `/usage` nutzt; Anthropic dokumentiert ihn nicht, eine offizielle
-  Schnittstelle für Abo-Limits gibt es nicht. Das Abfrageintervall bei den
-  voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
-  von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
-  anzeigen.
-- für die Docker-Karte (`docker-karte.yaml`) und die Docker-View
-  (`docker-view.yaml`): die Integration
-  [Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
-  (HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
-  [Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
-  Docker-Host. Home Assistant spricht nur mit der Arcane-API; der
-  Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
-  1. In Arcane unter *Settings → API keys* einen Schlüssel anlegen und der
-     Rolle dahinter (*Settings → Roles*) die Rechte geben. Anzeigen:
-     `environments:list`, `containers:list`, `projects:list`,
-     `images:list`, `volumes:list`, `networks:list`, `system:read`;
-     Steuern zusätzlich `containers:start`, `containers:stop`,
-     `containers:restart`, `containers:redeploy` (Image-Updates
-     installieren), `projects:deploy`, `projects:down`,
-     `projects:restart`. Für die Docker-View außerdem `system:upgrade`
-     (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
-     aufräumen). Welche Rechte fehlen, zeigt die Integration unter
-     *Konfigurieren → Berechtigungen des API-Keys*.
-  2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
-  3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
-     die Adresse, unter der Arcane direkt erreichbar ist (die Integration
-     folgt keinen Weiterleitungen), und den Schlüssel.
-  4. Nur für die Docker-View: unter *Konfigurieren → Abfrage* „CPU, RAM
-     und Festplatte des Hosts“ einschalten und unter *Steuerung* den Prune
-     Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
-     stellen; die Diagnose-Sensoren
-     Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
-     aktivieren. Ereignisse, Absturzmeldung und „Alle aktualisieren“
-     kommen aus dem Paket `docker-konfig.yaml`.
+### Je nach Datei
 
-  CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
-  für den ganzen Host.
-- optional für Kabel-Clients im UniFi-Netzplan: das Paket
-  `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten die Controller-API ab
-  und legt `sensor.unifi_kabel_clients` mit Switch und Port je Kabel-Client
-  an, was die offizielle Integration nicht liefert. Einbinden unter
-  `homeassistant: packages:` in der `configuration.yaml`; URL und lokaler
-  API-Schlüssel stehen in der `secrets.yaml` (Details im Dateikopf).
+| HACS-Frontend-Karte | genutzt von (aktuelle Dateien) |
+|---|---|
+| `decluttering-card` | allen Views (Templates aus `navigation-templates.yaml`), Pflanzen und Kameras |
+| `apexcharts-card` (ab v2.0, getestet 2.2.3) | Energie-Monatsbilanz, Tanken, Flugradar, Gesundheit, Pflanzen, UniFi-Leitungen und -Verlauf, Docker-Verlauf, WoW-Spielwelt |
+| `auto-entities` | Docker-Karten, Energie-Monatsbilanz |
+| `bubble-card` | Flugradar- und Fußball-View, `wlan-karte-v2.yaml` |
+| `expander-card` | Docker-Karten, `unifi-verlauf-karte.yaml` |
+| `uptime-card` | `system-karte.yaml`, `unifi-verlauf-karte.yaml` |
+| `navbar-card` | `navbar-karte.yaml`, `navigation-templates.yaml` |
+| `mushroom` (entity, light) | `lichter-mushroom-karte.yaml` |
+| `slider-button-card` | `lichter-slider-karte.yaml` |
 
-Jede Datei beginnt mit einem festen Kopfblock: Art, Bereich, Status, die
-genutzten HACS-Karten (**Karten**), die nötigen Templates mit ihrer Datei
-(**Templates**), wie sie eingefügt wird (**Einfuegen**) und ihre
-**Platzhalter**. Integrationen und weitere Voraussetzungen stehen im Text
-darunter unter **Voraussetzung**.
+Dazu:
 
-## Verwendung
+- **`browser_mod`** (HACS-Integration) für Popups und das More-Menü der
+  Navigationsleiste: Navigation, Wetter, Warnlage und Pollen, Tanken und
+  Fahrzeiten, Pflanzen, Kameras, WoW
+- **WebRTC Camera** (HACS-Integration, bringt die Karte `webrtc-camera` mit)
+  für die Kamera-View
+- **`unifi-netzplan-card.js`** für den UniFi-Netzplan; die Karte liegt im
+  Repo und wird als Dashboard-Ressource eingebunden, nicht über HACS
+  ([Installation](#installation), Schritt 5)
+- **Icon-Sets** mit den Präfixen `bi:`, `fa6-solid:`, `phu:` und `flat-ui:`
+  für die Navigation sowie einzelne Icons in den Licht-, Garten-, Wetter- und
+  Homematic-Dateien. Aus welchem Paket sie stammen, legt das Repo nicht fest.
+- **Home Assistant 2026.7 oder neuer** für `wachmodus-konfig.yaml` (neue
+  Trigger und Bedingungen)
 
-**Einzelne Karte:** Dashboard bearbeiten → Karte hinzufügen → *Manuell* →
-Inhalt der YAML-Datei einfügen.
+Nur noch Fassungen in `archiv/` nutzen `flower-card`,
+`homematicip-system-health-card`, `mushroom-vacuum-card`,
+`power-flow-card-plus`, `sankey-chart`, `trash-card` und
+`xiaomi-vacuum-map-card`.
 
-**Komplette View:** in einem YAML-Dashboard per `!include` einbinden. Die
-View zusammen mit den Karten, die sie einbindet, in einen Ordner im
-Konfigurationsordner kopieren, z. B. `dashboard/netzwerk/`:
+### Integrationen
 
-```yaml
-views:
-  - !include dashboard/netzwerk/netzwerk-view.yaml
-```
+Jede Karte zeigt die Daten einer Integration. Welche, steht im Kopf der
+Datei; die Übersicht nach Bereich:
 
-Der Pfad ist relativ zur Datei, die das `!include` enthält; die Includes in
-der View selbst zeigen auf Dateien im selben Ordner.
+| Bereich | Integrationen |
+|---|---|
+| `allgemein/` | Deutscher Wetterdienst (`dwd_weather`, HACS) für das Wetter im Begrüßungsbanner |
+| `energie/` | Integration der PV-/Solarbank-Anlage |
+| `klima/` | Deutscher Wetterdienst (`dwd_weather`, HACS), DWD Weather Warnings (`dwd_weather_warnings`), DWD Pollenflug (HACS), Wetterstation Homematic IP HmIP-SWO-PR |
+| `licht/` | Shelly, Time & Date (`sensor.time`) |
+| `hausgeraete/` | Home Connect |
+| `netzwerk/` | UniFi Network, [UniFi WAN](#unifi-wan) (optional), [UniFi UNAS](#unifi-unas-pro), [Arcane](#arcane-docker), Homematic(IP) Local for OpenCCU (HACS), Uptime Kuma |
+| `fahrzeuge/` | VW Group Connect (`vag_connect`), Tankerkönig, Waze Travel Time, Time & Date |
+| `garten/` | Home Assistant Plant (`Olen/homeassistant-plant`, HACS), Zigbee, Shelly |
+| `personen/` | Owlet, Companion App |
+| `flugradar/` | Flightradar24 (HACS) |
+| `fussball/` | keine: Daten von OpenLigaDB direkt im Browser, ESPN über das Paket `fussball-espn-konfig.yaml`; Companion App für die Meldungen |
+| `sicherheit/` | Homematic(IP) Local, UniFi Protect, UniFi Access, UniFi Network, Backup, Telegram Bot, Companion App |
+| `sonstiges/` | UniFi Protect und WebRTC Camera (Kameras), [Claude Usage](#claude-usage) (HACS), WoW Charakter (`philf90/HA-WOW`, HACS, ab 0.3.0; welche Karte eine neuere Version braucht, steht in ihrem Kopf), Kalender des Abfallentsorgers (Müllabfuhr) |
 
-**Templates:** einmalig im Raw-Konfigurationseditor des Dashboards auf
-oberster Ebene (neben `views:`) einfügen – `decluttering_templates:` aus
-`navigation-templates.yaml` und `pflanzen-templates.yaml`,
-`button_card_templates:` aus den
-Flugradar-, Fußball-, Wetter-, Hausgeräte-, Heizungs- und Docker-Templates. Existiert der Block schon, nur die Einträge
-darunter ergänzen.
+Einige Karten brauchen zusätzlich Helfer, Template-Sensoren oder
+Automationen. Sie stehen im Kopfkommentar der Datei, meist zum Kopieren.
 
-**Template-Sensoren:** `autos-passat-konfig.yaml` gehört in die
-`configuration.yaml`:
+## Installation
 
-```yaml
-template: !include dashboard/fahrzeuge/autos-passat-konfig.yaml
-```
+Die Schritte gelten für jede Datei; welche davon nötig sind, zeigt ihr
+Kopfblock. Die Zeile `Einfuegen` nennt, wohin die Datei gehört.
+
+1. **HACS-Karten und -Integrationen installieren**, die die Datei in
+   `Karten` und `Voraussetzung` nennt (siehe [Voraussetzungen](#voraussetzungen)).
+   Die Integrationen der Geräte einrichten; Hinweise zu einzelnen stehen
+   unter [Integrationen einrichten](#integrationen-einrichten).
+2. **Theme einrichten (empfohlen).** Die Karten lesen ihre Farben als
+   CSS-Variablen (`var(--nachtblau-gruen, #a6d49e)`) mit dem dunklen
+   Palettenwert als Rückfall. Ohne Theme sind sie also dunkel; erst das
+   Theme `nachtblau` bringt den hellen Modus und färbt auch den
+   Seitenhintergrund passend.
+   1. [`nachtblau-theme-konfig.yaml`](dashboard/allgemein/nachtblau-theme-konfig.yaml)
+      als `/config/themes/nachtblau.yaml` ablegen.
+   2. In der `configuration.yaml` die Themes einbinden, falls noch nicht
+      geschehen:
+
+      ```yaml
+      frontend:
+        themes: !include_dir_merge_named themes
+      ```
+
+   3. Aktion `frontend.reload_themes` ausführen oder Home Assistant neu
+      starten.
+   4. Im Profil das Theme „nachtblau“ wählen oder für alle mit der Aktion
+      `frontend.set_theme` (`name: nachtblau`) als Standard setzen. Hell
+      oder dunkel wählt jeder Benutzer im Profil (System, Hell, Dunkel).
+
+   Nicht umgestellt und damit in beiden Modi dunkel sind nur die
+   Lichter-Varianten `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`
+   und `lichter-slider-karte.yaml`.
+3. **Templates einfügen.** Viele Karten und alle Views nutzen gemeinsame
+   Templates. Sie gehören einmalig in den Raw-Konfigurationseditor des
+   Dashboards (Dashboard bearbeiten → ⋮ → *Raw-Konfigurationseditor*), auf
+   oberster Ebene neben `views:`. Existiert der Block schon, nur die Einträge
+   darunter ergänzen.
+   - unter `decluttering_templates:` aus `navigation-templates.yaml`,
+     `pflanzen-templates.yaml` und `kameras-templates.yaml`
+   - unter `button_card_templates:` aus allen übrigen `*-templates.yaml`:
+     `energie-templates.yaml`, `autos-templates.yaml`,
+     `fahrzeiten-templates.yaml`, `tanken-templates.yaml`,
+     `flugradar-templates.yaml`, `fussball-templates.yaml`,
+     `hausgeraete-templates.yaml`, `heizung-templates.yaml`,
+     `warnlage-templates.yaml`, `wetter-templates.yaml`,
+     `docker-templates.yaml`, `sicherheit-templates.yaml`,
+     `wow-templates.yaml`
+
+   Welche Templates eine Karte braucht, steht in ihrer Zeile `Templates`.
+4. **Platzhalter ersetzen.** Unverändert eingefügt bleibt eine Karte leer
+   oder meldet „Entität nicht verfügbar“. Vorgehen von Hand oder mit Claude:
+   [Platzhalter ersetzen](#platzhalter-ersetzen).
+5. **Datei einfügen**, je nach Art:
+   - **Karte** (`-karte`): Dashboard bearbeiten → Karte hinzufügen →
+     *Manuell* → Inhalt der YAML-Datei einfügen.
+   - **View** (`-view`): im Raw-Konfigurationseditor unter `views:`
+     einfügen. `wetter-view.yaml`, `docker-view.yaml` und
+     `netzwerk-view.yaml` binden ihre Karten per `!include` ein; das
+     versteht nur ein Dashboard im YAML-Modus. Dafür die View zusammen mit
+     den Karten, die sie einbindet, in einen Ordner im Konfigurationsordner
+     kopieren, z. B. `dashboard/netzwerk/`, und das Dashboard in der
+     `configuration.yaml` anlegen (der Schlüssel muss einen Bindestrich
+     enthalten):
+
+     ```yaml
+     lovelace:
+       dashboards:
+         heim-dashboard:
+           mode: yaml
+           filename: heim.yaml
+           title: Heim
+     ```
+
+     In `heim.yaml` stehen dann die Templates aus Schritt 3 und die Views:
+
+     ```yaml
+     views:
+       - !include dashboard/netzwerk/netzwerk-view.yaml
+     ```
+
+     Der Pfad ist relativ zur Datei, die das `!include` enthält; die
+     Includes in der View selbst zeigen auf Dateien im selben Ordner.
+     Alternativ die eingebundenen Karten an Stelle der `!include`-Zeilen
+     einsetzen.
+   - **Konfiguration** (`-konfig`): gehört in die `configuration.yaml`. Die
+     Pakete `docker-konfig.yaml`, `unifi-kabel-clients-konfig.yaml`,
+     `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml` und
+     `wachmodus-konfig.yaml` unter `homeassistant: packages:`, z. B.:
+
+     ```yaml
+     homeassistant:
+       packages:
+         docker: !include dashboard/netzwerk/docker-konfig.yaml
+     ```
+
+     Die Template-Sensoren aus `autos-passat-konfig.yaml` direkt unter
+     `template:`:
+
+     ```yaml
+     template: !include dashboard/fahrzeuge/autos-passat-konfig.yaml
+     ```
+
+     Danach Home Assistant neu starten. Das Theme
+     `nachtblau-theme-konfig.yaml` ist in Schritt 2 beschrieben.
+   - **Ressource** (`unifi-netzplan-card.js`): nach
+     `/config/www/unifi-netzplan-card.js` kopieren, dann Einstellungen →
+     Dashboards → *Ressourcen* → Ressource hinzufügen: URL
+     `/local/unifi-netzplan-card.js`, Typ *JavaScript-Modul*. Danach
+     `unifi-netzplan-karte.yaml` als Karte einfügen.
+6. **Prüfen:** Unter Entwicklerwerkzeuge → Zustände stichprobenartig
+   nachsehen, ob die Entitäten der Karte existieren. Zeigt Lovelace „Custom
+   element doesn't exist“, fehlt eine HACS-Karte oder die Ressource.
+
+Die Karten sind für Handys gebaut (360 px Breite wie Galaxy S25, gegengeprüft
+bei 402 px wie iPhone 17 Pro, siehe [`DESIGN.md`](DESIGN.md), Abschnitt
+„Bildschirmbreiten“).
+
+## Integrationen einrichten
+
+Hinweise zu Integrationen, deren Einrichtung über den Standarddialog
+hinausgeht.
+
+### UniFi WAN
+
+Optional für den UniFi-Netzplan und `unifi-leitungen-karte.yaml`: die
+Integration [UniFi WAN](https://github.com/holdestmade/Unifi-WAN). Sie liefert
+je Internetleitung IPv4, IPv6 und Erreichbarkeit, die die offizielle
+UniFi-Integration nicht bereitstellt. Sie steht nicht im HACS-Standardkatalog:
+in HACS unter *Benutzerdefinierte Repositories* mit Typ *Integration*
+hinzufügen. Zur Einrichtung braucht sie einen lokalen API-Schlüssel der
+UniFi-Konsole (Einstellungen → Control Plane → Integrationen). Den
+automatischen Speedtest in ihren Optionen abschalten, sonst testet sie
+standardmäßig stündlich.
+
+### Kabel-Clients im UniFi-Netzplan
+
+Optional: das Paket `unifi-kabel-clients-konfig.yaml`. Es fragt alle 5 Minuten
+die Controller-API ab und legt `sensor.unifi_kabel_clients` mit Switch und Port
+je Kabel-Client an, was die offizielle Integration nicht liefert. Einbinden
+unter `homeassistant: packages:` in der `configuration.yaml`; URL und lokaler
+API-Schlüssel stehen in der `secrets.yaml` (Details im Dateikopf).
+
+### UniFi UNAS Pro
+
+Für `unifi-unas-pro-karte.yaml`: die Integration
+[UniFi UNAS (non-invasive)](https://github.com/LayerTM/unifi-unas-ha)
+(HACS-Standardkatalog, ab Home Assistant 2025.8). Die offizielle
+UniFi-Integration sieht ein UNAS nur als Client. Diese Integration liest
+Pool, Platten (Temperatur, Zustand, Health-Score, Betriebsstunden, defekte
+Sektoren), CPU und RAM über die lokale Drive-API des UNAS, ohne SSH und
+ohne etwas auf dem NAS zu installieren. Die API ist von Ubiquiti nicht
+dokumentiert und kann sich mit Firmware-Updates ändern. Einrichtung:
+
+1. Den API-Schlüssel in der UniFi-OS-Oberfläche des UNAS erzeugen, nicht
+   auf der UDM.
+2. In HACS *UniFi UNAS (non-invasive)* herunterladen, Home Assistant neu
+   starten.
+3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *UniFi
+   UNAS*: Host `<IP-des-UNAS>`, Port `443`, TLS-Modus und Anmeldung auf
+   der Vorgabe lassen (Zertifikat beim ersten Kontakt hinterlegen,
+   API-Schlüssel), Schlüssel `<API-Schlüssel des UNAS>`.
+
+Der Schlüssel liegt danach nur im Config-Entry von Home Assistant, nicht
+in einer Datei des Repos. Mit API-Schlüssel ist die Integration rein
+lesend. Freigaben, Firmware-Updates, Speicherdurchsatz und Steuerung
+(Neustart, Lüftermodus) gibt es nur mit lokalem Konto (Benutzer und
+Passwort); die Karte braucht davon nichts.
+
+### Arcane (Docker)
+
+Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
+und die Docker-View (`docker-view.yaml`): die Integration
+[Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
+(HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
+[Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
+Docker-Host. Home Assistant spricht nur mit der Arcane-API; der
+Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
+
+1. In Arcane unter *Settings → API keys* einen Schlüssel anlegen und der
+   Rolle dahinter (*Settings → Roles*) die Rechte geben. Anzeigen:
+   `environments:list`, `containers:list`, `projects:list`,
+   `images:list`, `volumes:list`, `networks:list`, `system:read`;
+   Steuern zusätzlich `containers:start`, `containers:stop`,
+   `containers:restart`, `containers:redeploy` (Image-Updates
+   installieren), `projects:deploy`, `projects:down`,
+   `projects:restart`. Für die Docker-View außerdem `system:upgrade`
+   (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
+   aufräumen). Welche Rechte fehlen, zeigt die Integration unter
+   *Konfigurieren → Berechtigungen des API-Keys*.
+2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
+3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
+   die Adresse, unter der Arcane direkt erreichbar ist (die Integration
+   folgt keinen Weiterleitungen), und den Schlüssel.
+4. Nur für die Docker-View: unter *Konfigurieren → Abfrage* „CPU, RAM
+   und Festplatte des Hosts“ einschalten und unter *Steuerung* den Prune
+   Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
+   stellen; die Diagnose-Sensoren
+   Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
+   aktivieren. Ereignisse, Absturzmeldung und „Alle aktualisieren“
+   kommen aus dem Paket `docker-konfig.yaml`.
+
+CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
+für den ganzen Host.
+
+### Claude Usage
+
+Für die Claude-Nutzungskarte (`claude-nutzung-karte.yaml`): die Integration
+[Claude Usage](https://github.com/trickv/hass-claude-usage)
+(HACS-Standardkatalog). Sie liest die Limits eines Claude-Abos (Pro/Max):
+Session (5 h), Woche über alle Modelle, Wochenlimits je Modell und
+Extra-Nutzung, jeweils mit Auslastung in Prozent und Reset-Zeitpunkt.
+Einrichtung: in HACS *Claude Usage* herunterladen, Home Assistant neu
+starten, Einstellungen → Geräte & Dienste → Integration hinzufügen →
+*Claude Usage*; der angezeigte Link öffnet die Anmeldung bei Anthropic,
+danach den Code (Form `xxxx#yyyy`) in den Dialog einfügen. Der
+Gerätename trägt Kontoname und Plan, deshalb stehen die Entity-IDs im
+Repo als Platzhalter `sensor.claude_usage_konto_*`.
+
+Die Integration fragt den inoffiziellen Endpunkt ab, den auch Claude Code
+für `/usage` nutzt; Anthropic dokumentiert ihn nicht, eine offizielle
+Schnittstelle für Abo-Limits gibt es nicht. Das Abfrageintervall bei den
+voreingestellten 300 s lassen: häufigere Abfragen führen zu einer Sperre
+von etwa 24 h, in der auch claude.ai und Claude Code keine Nutzung mehr
+anzeigen.
 
 ## Platzhalter ersetzen
 
@@ -257,6 +390,75 @@ nur nach ausdrücklicher Freigabe.
 Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
 `.gitignore` eingetragen.
 
+## Nachtblau-Stil
+
+- abgeleitet von der Owlet-Smart-Sock-Karte (`owlet-smart-sock-karte.yaml`)
+- gemeinsame Kartenhülle, Palette (Grundtöne `#a6d49e`, `#f2f5f8`, `#6e7988`) und Typografie
+- rundlich-quadratische Icon-Kacheln, die sich nach Zustand färben
+- umgesetzt fast durchgängig mit `custom:button-card`; Styles werden innerhalb
+  einer Datei über YAML-Anker geteilt
+- Spezialkarten (Kamera-Stream, Diagramme, Pflanzen …) bleiben
+  funktional erhalten und bekommen nur die Nachtblau-Hülle
+- verbindlich beschrieben in [`DESIGN.md`](DESIGN.md); die Farbwerte stehen in
+  [`design/palette.yaml`](design/palette.yaml) und werden in der CI geprüft
+- hieß bis Oktober 2026 „Owlet-Stil“; Umstellung einer bestehenden Instanz:
+  [`doku/umbenennung-nachtblau.md`](doku/umbenennung-nachtblau.md)
+
+**Eigene Karten im Nachtblau-Stil:** Farben nur aus der Palette und als
+Theme-Variable mit dem dunklen Wert als Rückfall, z. B.
+`var(--nachtblau-gruen, #a6d49e)`; Tönungen mit
+`color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 12%, transparent)`.
+Welche Farbe welche Rolle hat (Flächen, Text, Status, Akzente) und wie Hülle
+und Kacheln aufgebaut sind, steht in [`DESIGN.md`](DESIGN.md). Das Theme
+erzeugt `python ci/gen_theme.py` aus der Palette; es wird nicht von Hand
+geändert.
+
+## Inhalt
+
+Alles, was in Home Assistant landet, liegt unter `dashboard/<bereich>/`. In
+jedem Bereich stehen die aktuellen Dateien direkt im Ordner, abgelöste
+Fassungen in `archiv/` und HTML-Entwürfe in `entwuerfe/`. Die Dateiart steht
+im Namen: `-karte`, `-view`, `-templates` (für den Raw-Konfigurationseditor),
+`-konfig` (für die `configuration.yaml`). Titel, Karten und Status jeder
+Datei stehen in [`dashboard/README.md`](dashboard/README.md); beide Übersichten
+erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
+
+<!-- index:start -->
+| Bereich | Aktuelle Dateien | `archiv/` | `entwuerfe/` |
+|---|---|---|---|
+| [`allgemein/`](dashboard/allgemein/) | `nachtblau-theme-konfig.yaml`, `navbar-karte.yaml`, `navigation-templates.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml` | – | `banner-hell.html`, `home-kacheln.html` |
+| [`energie/`](dashboard/energie/) | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energie-zaehler-karte.yaml` | `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml`, `energie-verbrauch-uebersicht-karte.yaml`, `gas-wasser-karte.yaml` | `energiefluss.html` |
+| [`klima/`](dashboard/klima/) | `heizung-templates.yaml`, `meteoalarm-karte.yaml`, `pollenflug-karte.yaml`, `temperaturen-karte-v2.yaml`, `thermostate-karte-v3.yaml`, `warnlage-templates.yaml`, `wetter-karte-v2.yaml`, `wetter-templates.yaml`, `wetter-view.yaml` | `temperaturen-karte.yaml`, `thermostate-karte-v2.yaml`, `thermostate-karte.yaml`, `wetter-karte.yaml` | `wetter-animiert.html` |
+| [`licht/`](dashboard/licht/) | `fenster-karte.yaml`, `fenster-lichter-karte.yaml`, `haustuer-ereignis-karte.yaml`, `haustuer-lock-karte.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml` | `fenster-lichter-uebersicht-karte.yaml` | – |
+| [`hausgeraete/`](dashboard/hausgeraete/) | `geschirrspueler-karte.yaml`, `hausgeraete-templates.yaml`, `trockner-karte.yaml`, `waschmaschine-karte.yaml` | `staubsauger-karte.yaml` | `hausgeraete.html` |
+| [`netzwerk/`](dashboard/netzwerk/) | `docker-container-karte.yaml`, `docker-ereignisse-karte.yaml`, `docker-host-karte.yaml`, `docker-karte.yaml`, `docker-konfig.yaml`, `docker-projekte-karte.yaml`, `docker-speicher-karte.yaml`, `docker-templates.yaml`, `docker-uebersicht-karte.yaml`, `docker-updates-karte.yaml`, `docker-verlauf-karte.yaml`, `docker-view.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte-v2.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml`, `wlan-karte.yaml` | – |
+| [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml`, `fahrzeiten-karte.yaml`, `fahrzeiten-templates.yaml`, `tanken-karte.yaml`, `tanken-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
+| [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
+| [`personen/`](dashboard/personen/) | `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
+| [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
+| [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
+| [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
+| [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-mythic-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
+| [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
+| [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
+<!-- index:end -->
+
+Varianten (`lichter-raum-…`, `lichter-glow-…`) sind gleichwertige
+Alternativen. Versionen (`-v2`, `-v3`) lösen ihre Vorgängerin ab; die
+Vorgängerin liegt dann in `archiv/` und bekommt nur noch Änderungen, die alle
+Dateien betreffen (Palette, Anonymisierung). Der Kommentarkopf der neueren
+Datei erklärt den Unterschied.
+
+Die HTML-Dateien in den Ordnern `entwuerfe/` sind Design-Entwürfe und werden
+direkt im Browser geöffnet.
+
+Jede Datei beginnt mit einem festen Kopfblock: Art, Bereich, Status, die
+genutzten HACS-Karten (**Karten**), die nötigen Templates mit ihrer Datei
+(**Templates**), wie sie eingefügt wird (**Einfuegen**) und ihre
+**Platzhalter**. Integrationen und weitere Voraussetzungen stehen im Text
+darunter unter **Voraussetzung**. Aufbau: [`ci/README.md`](ci/README.md),
+Abschnitt „Dateikopf“.
+
 ## Grafana
 
 | Dashboard | UID | Datenquelle | Doku |
@@ -265,7 +467,7 @@ Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
 | `proxmox-ve-dashboard.json` | `proxmox-ve` | InfluxDB 2 | [grafana/proxmox-dashboards.md](grafana/proxmox-dashboards.md) |
 | `proxmox-pbs-dashboard.json` | `proxmox-pbs` | InfluxDB 2 + PBS-API (Infinity) | [grafana/proxmox-dashboards.md](grafana/proxmox-dashboards.md) |
 
-Dazu:
+Voraussetzungen und Import beschreibt die Doku je Dashboard. Dazu:
 
 - `ha_statistics_backfill.py` überträgt vorhandene Langzeitstatistiken aus
   Home Assistant nach InfluxDB 2, damit das Energie-Dashboard auch rückwirkend
@@ -277,15 +479,14 @@ Dazu:
 
 - [`umbenennung-2026-10.md`](doku/umbenennung-2026-10.md) – alte Dateinamen
   und ihr neuer Ort nach dem Umzug in die Bereichsordner
+- [`umbenennung-nachtblau.md`](doku/umbenennung-nachtblau.md) – Umstellung
+  einer bestehenden Instanz vom Owlet- auf den Nachtblau-Stil
 - [`karten-basemap-carto.md`](doku/karten-basemap-carto.md) – „API KEY REQUIRED“
   auf allen Karten im Frontend
 - [`proxmox-haos-secure-boot-warnung.md`](doku/proxmox-haos-secure-boot-warnung.md) –
   Proxmox-Warnung `ms-cert=2023k` beim Start der HA-VM
 - [`proxmox-haos-speicher-erweitern.md`](doku/proxmox-haos-speicher-erweitern.md) –
   Festplatte von Home Assistant OS unter Proxmox vergrößern
-
-Die HTML-Dateien in den Ordnern `entwuerfe/` sind Design-Entwürfe und werden
-direkt im Browser geöffnet.
 
 ## Prüfungen
 
@@ -299,6 +500,8 @@ Der Workflow `Validate` läuft bei jedem Push und Pull Request und prüft:
 - den Kopfblock jeder Datei: Karten, Templates und Platzhalter müssen zum Inhalt passen (`ci/check_kopf.py`)
 - Ablage und Dateinamen nach der Ordnerstruktur (`ci/check_struktur.py`)
 - dass die Übersichten im README und in `dashboard/README.md` zu den Kopfblöcken passen (`ci/gen_index.py`)
+- dass das Theme zur Palette passt (`ci/gen_theme.py`)
+- Farben nur aus der Palette (`ci/check_palette.py`) und einen Teil der Regeln für Handybreiten (`ci/check_mobil.py`)
 - dass geänderte Template-Bibliotheken ihre `VERSION` erhöhen (`ci/check_template_version.py`)
 - Grafana-JSON sowie den Abgleich mit `proxmox_dashboards.py`
 - Secrets mit `gitleaks`
