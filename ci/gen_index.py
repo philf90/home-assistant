@@ -26,7 +26,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 from check_kopf import ERSETZEN_HINWEIS, kopfzeilen, liste, parse_kopf
-from dateien import BEREICHE, REPO_ROOT, alle_dateien
+from dateien import BEREICHE, REPO_ROOT, alle_dateien, art
 
 README = REPO_ROOT / "README.md"
 DASHBOARD_README = REPO_ROOT / "dashboard" / "README.md"
@@ -56,6 +56,8 @@ def koepfe() -> dict[PurePosixPath, dict[str, str]]:
         if p.parts[0] not in ("dashboard", "grafana") or p.name == "README.md":
             continue
         if p.parts[0] == "grafana" and "entwuerfe" not in p.parts:
+            continue
+        if art(p) == "bild":
             continue
         text = (REPO_ROOT / p).read_text(encoding="utf-8")
         zeilen = kopfzeilen(p, text)

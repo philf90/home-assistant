@@ -198,7 +198,7 @@ def main() -> int:
 
     dateien = alle_dateien()
     namen = {p.name for p in dateien}
-    texte = {p: (REPO_ROOT / p).read_text(encoding="utf-8") for p in dateien}
+    texte = {p: (REPO_ROOT / p).read_text(encoding="utf-8") for p in dateien if art(p) != "bild"}
 
     # Wo ist welches Template definiert?
     definiert_in: dict[str, str] = {}
