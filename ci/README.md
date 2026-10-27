@@ -24,6 +24,7 @@ Pull Request. Alle Skripte laufen aber genauso lokal.
 | `check_palette.py` | Jede Farbangabe (Hex, `rgb()`, `rgba()`) in den Karten steht in `design/palette.yaml`. Meldet sonst Fundstelle und naechsten Palettenwert. Prueft auch die Palette selbst (Format, Pflichtfelder, Dubletten) und den hellen Modus: `hell_farben` und `theme` (Variablennamen, Werte aus der Palette, kein ungenutzter heller Wert). Werte aus `hell_farben` sind nur in der Theme-Datei erlaubt. Weiss nur mit Deckkraft, deckend nur als Schrift auf einer Farbe aus `deckend_auf` (Vereinsrot) in derselben Zeile. Regeln: `DESIGN.md`. |
 | `check_mobil.py` | Regeln aus `DESIGN.md`, Abschnitt "Bildschirmbreiten" (Galaxy S25 360 px, iPhone 17 Pro 402 px), soweit sie am Text erkennbar sind: jedes button-card-Icon mit `styles.icon` setzt `--ha-icon-display: block` (oder ein genutztes Template tut es, oder `show_icon: false`); kein `labels.formatter` auf der Zeitachse von apexcharts-card; jede Container Query mit Pixel-Schwelle hat direkt davor einen Kommentar mit mindestens zwei px-Werten (die gemessenen Breiten beider Geraete). Fuer Icons von vor der Regel steht der Bestand je Datei in `BESTAND` im Skript; er darf nur sinken und wird im selben Commit gesenkt. `archiv/` ist ausgenommen. |
 | `gen_theme.py` | Erzeugt das Theme `dashboard/allgemein/nachtblau-theme-konfig.yaml` aus dem Abschnitt `theme` der Palette. Mit `--pruefen` (CI, pre-commit) schlaegt es fehl, wenn die committete Datei nicht aktuell ist. |
+| `gen_palette_bild.py` | Nur lokal, nicht in der CI: erzeugt das Paletten-Schaubild im README (`design/palette-rollen-dunkel.png`, `design/palette-rollen-hell.png`) aus dem Abschnitt `theme` der Palette. Rendert mit Playwright (Node, Chromium) und der Schrift Inter, reduziert danach auf 256 Farben, wobei jeder Palettenwert im Bild exakt bleibt. Braucht zusaetzlich numpy und Pillow. |
 | `check_grafana.py` | Dashboards sind gueltiges JSON mit Pflichtfeldern, Panel-IDs eindeutig, Dashboard-UIDs repo-weit eindeutig, Datasources ueber `${DS}` statt fester UID, keine `__inputs`-Reste, Farben nur aus `design/palette.yaml` (`color`, `fixedColor`, `iconColor`, Heatmap-`fill`; keine Grafana-Farbnamen ausser `text`/`transparent`). |
 
 Dazu im Workflow:
@@ -185,7 +186,8 @@ naechsten. Ist die Farbe wirklich neu: Eintrag in der Palette und Begruendung
 in `DESIGN.md`, Abschnitt "Eine neue Farbe aufnehmen". Aendert sie sich im
 hellen Modus, gehoert auch ihr heller Wert in die Palette (`hell_farben`,
 `theme.variablen`); danach `python ci/gen_theme.py` und das Theme mit
-committen. Meldet `check_palette.py` einen Wert "des hellen Modus" in einer
+committen. Aendert sich ein Wert einer Rolle im Paletten-Schaubild, auch
+`python ci/gen_palette_bild.py` laufen lassen und beide Bilder mit committen. Meldet `check_palette.py` einen Wert "des hellen Modus" in einer
 Karte, ist dort die Theme-Variable gemeint (`var(--nachtblau-...)`).
 
 ## Bewusst nicht geprueft
