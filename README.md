@@ -441,6 +441,18 @@ Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
   (Home-Kacheln, Energiefluss, Hausgeräte, Auto-Karten) und zeigen
   Beispieldaten und Platzhalter. Ändern sich die Karten sichtbar, das Bild neu
   rendern.
+- Paletten-Schaubild unten: `design/palette-rollen-dunkel.png` und
+  `design/palette-rollen-hell.png`, 1760 × 1770 px, erzeugt von
+  `python ci/gen_palette_bild.py` aus dem Abschnitt `theme` der Palette. Ändert
+  sich dort ein Wert, das Skript laufen lassen und beide Bilder mit
+  committen; die CI prüft die Bilder nicht.
+
+Die Farbrollen im Überblick, jede mit ihrem Wert im dunklen und im hellen Modus:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="design/palette-rollen-dunkel.png">
+  <img alt="Nachtblau-Palette: Status-, Text-, Flächen- und Akzentfarben mit Verwendungszweck und Hex-Wert im dunklen und hellen Modus" src="design/palette-rollen-hell.png">
+</picture>
 
 **Eigene Karten im Nachtblau-Stil:** Farben nur aus der Palette und als
 Theme-Variable mit dem dunklen Wert als Rückfall, z. B.
