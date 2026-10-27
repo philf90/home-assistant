@@ -422,6 +422,10 @@ Die echten Werte gehören nicht ins Repo. `lokal/` ist deshalb in
   in der Kartenhülle, Farben aus der Palette bzw. dem hellen Theme, die Leiste
   zeigt die Bereichsfarben der oberen Navigation. Die CI prüft SVG-Dateien nicht; ändert
   sich ein Palettenwert, die Banner von Hand nachziehen.
+- Social Preview des Repos (Bild für geteilte Links): Quelle
+  `design/social-preview.svg`, daraus ein PNG mit 1280 × 640 px rendern
+  (Schrift Inter) und von Hand unter Settings → Social preview hochladen. Das
+  PNG liegt nicht im Repo, weil die Prüfungen jede Datei als Text lesen.
 
 **Eigene Karten im Nachtblau-Stil:** Farben nur aus der Palette und als
 Theme-Variable mit dem dunklen Wert als Rückfall, z. B.
