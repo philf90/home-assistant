@@ -76,8 +76,8 @@ ROLLEN = [
 ]
 
 # Bildaufbau (Hintergrund, Huelle, Schrift) aus diesen Theme-Variablen
-BASIS = ("seite", "huelle-oben", "huelle-unten", "huelle-rand", "schatten", "unterkachel",
-         "unterkachel-rand", "titel", "label", "text-sekundaer")
+BASIS = ("seite", "huelle-oben", "huelle-unten", "huelle-rand", "schatten", "titel", "label",
+         "text-sekundaer")
 
 # Rand der Muster: Weiss bzw. Kartenhuelle-Schwarz mit Deckkraft (DESIGN.md)
 MUSTER_RAND = {"dunkel": "rgba(255, 255, 255, 0.14)", "hell": "rgba(23, 29, 41, 0.16)"}
@@ -147,7 +147,11 @@ def seite(modus: str, w: dict) -> str:
     spalten = ["", ""]
     for name, spalte, rollen in ROLLEN:
         spalten[spalte] += gruppe_html(name, rollen, w)
-    titel_modus = "Dunkler Modus" if modus == "dunkel" else "Heller Modus"
+    # Legende: je Modus ein Badge im Look seiner Muster (Huelle, Label, Rand)
+    badges = "".join(
+        f'<div class="modus" style="background:{w["huelle-oben"][m]};color:{w["label"][m]};'
+        f'border:1px solid {CHIP_RAND[m]}">{name}</div>'
+        for m, name in (("dunkel", "Dunkler Modus"), ("hell", "Heller Modus")))
     return f"""<!doctype html><meta charset="utf-8"><style>
 *{{box-sizing:border-box;margin:0}}
 body{{background:{t['seite']};font-family:Inter,sans-serif;-webkit-font-smoothing:antialiased}}
@@ -160,8 +164,8 @@ body{{background:{t['seite']};font-family:Inter,sans-serif;-webkit-font-smoothin
   text-transform:uppercase}}
 h1{{font-family:'Inter Display',Inter,sans-serif;font-size:26px;font-weight:700;
   letter-spacing:-0.3px;color:{t['titel']};margin-top:4px}}
-.modus{{font-size:13px;font-weight:600;color:{t['label']};padding:5px 11px;border-radius:999px;
-  background:{t['unterkachel']};border:1px solid {t['unterkachel-rand']}}}
+.badges{{display:flex;gap:8px}}
+.modus{{font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px}}
 .spalten{{display:grid;grid-template-columns:1fr 1fr;gap:0 32px}}
 .gkopf{{display:grid;grid-template-columns:46px 46px 1fr;gap:10px;align-items:baseline;
   margin:20px 0 10px}}
@@ -180,7 +184,7 @@ h2{{font-size:11.5px;font-weight:600;letter-spacing:1.4px;text-transform:upperca
 .fuss{{margin-top:20px;font-size:12px;color:{t['text-sekundaer']}}}
 </style><div class="buehne"><div class="huelle">
 <div class="kopf"><div><div class="eyebrow">Nachtblau-Palette</div>
-<h1>Jede Rolle in beiden Modi</h1></div><div class="modus">{titel_modus}</div></div>
+<h1>Jede Rolle in beiden Modi</h1></div><div class="badges">{badges}</div></div>
 <div class="spalten"><div>{spalten[0]}</div><div>{spalten[1]}</div></div>
 <div class="fuss">Werte aus design/palette.yaml · Sonderfarben und Grafana-Töne dort im
 Abschnitt farben</div></div></div>"""
