@@ -22,6 +22,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`energie-flow-karte.yaml`](energie/energie-flow-karte.yaml) | karte | Energiefluss – animiertes Diagramm mit Autarkie | button-card, card-mod | `sensor.pv_anlage_*` | aktiv |
 | [`energie-monatsbilanz-karte.yaml`](energie/energie-monatsbilanz-karte.yaml) | karte | Monatsbilanz Strom – Netzbezug, Solarertrag, Autarkie je Monat | apexcharts-card, auto-entities, button-card, card-mod | `sensor.pv_anlage_*` | aktiv |
+| [`energie-prognose-karte.yaml`](energie/energie-prognose-karte.yaml) | karte | Solarprognose | button-card, card-mod | `sensor.pv_anlage_*` | aktiv |
 | [`energie-solarbank-pv-karte.yaml`](energie/energie-solarbank-pv-karte.yaml) | karte | Solarbank & PV | button-card, card-mod | `sensor.pv_anlage_*` | aktiv |
 | [`energie-templates.yaml`](energie/energie-templates.yaml) | templates | Energie – button-card-Templates der Energie-View | – | `sensor.pv_anlage_*` | aktiv |
 | [`energie-verbraucher-karte.yaml`](energie/energie-verbraucher-karte.yaml) | karte | Verbraucher – Leistung, kWh heute und Anteil | button-card, card-mod | `sensor.pv_anlage_*` | aktiv |
