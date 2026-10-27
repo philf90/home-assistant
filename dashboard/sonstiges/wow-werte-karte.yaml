@@ -5,7 +5,7 @@
 # Bereich:       sonstiges
 # Status:        aktiv
 # Karten:        button-card
-# Templates:     keine
+# Templates:     wow_platz (wow-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   wow_charakter
 #                (vor dem Einfuegen ersetzen, siehe README.md)
@@ -15,11 +15,26 @@
 #   Kacheln     Leben und Primaerwert (Staerke, Beweglichkeit oder Intelligenz)
 #   Zweitwerte  Krit, Tempo, Meisterschaft, Vielseitigkeit in Prozent; die
 #               Balken stehen im Verhaeltnis zum hoechsten der vier Werte
-#   Ausruestung Set-Fortschritt mit aktiven Boni, leere Sockel (mit Platz),
-#               verzauberte Plaetze
+#   Ausruestung Set wie im Item-Tooltip des Arsenals: Teile (angelegt hell,
+#               fehlend grau) und alle Boni (aktiv gruen, inaktiv grau);
+#               die Zahl der Teile (3/5) als Pille: gruen, wenn alle Boni
+#               aktiv sind, Amber, wenn ein Teil der Boni aktiv ist, grau
+#               ohne aktiven Bonus (ohne Boni in den Daten: gruen bei allen
+#               Teilen, Amber bei einigen);
+#               darunter die Plaetze mit leerem Sockel und die verzauberten
+#               Plaetze als Item-Symbole wie im Arsenal
 # Leere Sockel sind ein Hinweis (Amber, mit Anzahl als Text). Fehlende
 # Verzauberungen bewertet die Karte nicht: Welche Plaetze verzauberbar sind,
 # liefert die API nicht.
+#
+# Item-Symbole: Jeder Platz ist eine eigene button-card mit dem Template
+# wow_platz (wow-templates.yaml), genau wie im Arsenal: Rand in der
+# Qualitaetsfarbe, Amber-Punkt bei leerem Sockel, Tooltip beim Darueber-
+# fahren, Popup beim Tippen. Daneben steht der Name des Platzes, das Itemlevel
+# klein darunter. Die Plaetze stehen in einer Raster-Karte (grid, zwei Spalten), die
+# nur so viele Karten enthaelt wie Plaetze; ohne Plaetze faellt sie weg. Die
+# Entitaet je Platz (_ausrustung_kopf, ...) setzt variables.ausruestung aus
+# dem Feld slot der API zusammen; fehlt sie, steht nur der Name als Text da.
 #
 # Die sechs Werte-Sensoren (_leben, _primarwert, _kritische_trefferchance,
 # _tempo, _meisterschaft, _vielseitigkeit) legt die Integration deaktiviert
@@ -32,11 +47,20 @@
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
 # Freizeit) fuer Icon-Kachel und Balken; aktive Set-Boni Gruen (wie im
-# Spiel), leere Sockel Amber.
+# Spiel), fehlende Set-Teile und inaktive Boni Sekundaer, leere Sockel Amber.
+# Set-Pille: Status-Farben Gruen (alle Boni) und Amber (Hinweis: weitere Boni
+# moeglich), ohne aktiven Bonus Label-Grau ohne Bewertung. Die Zahl der
+# verzauberten Plaetze steht ebenfalls als Pille in Label-Grau, ohne
+# Bewertung (siehe oben: welche Plaetze verzauberbar sind, ist unbekannt).
+# Die Item-Symbole kommen aus wow_platz und behalten dessen feste Farben
+# (Qualitaetsrand, Amber-Punkt); Namen und Itemlevel daneben faerbt die Karte
+# selbst (variables.textfarbe, variables.unterfarbe), damit sie auch im hellen
+# Modus lesbar bleiben.
 #
-# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
-# "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer Spezialisierung und
-# Ausruestung ab 0.6.0.
+# Voraussetzung: custom:button-card und browser_mod (HACS), die Templates aus
+# wow-templates.yaml im Dashboard (fuer die Item-Symbole) und die
+# HACS-Integration "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer
+# Spezialisierung und Ausruestung ab 0.6.0.
 type: custom:button-card
 triggers_update: all
 show_icon: true
@@ -84,13 +108,73 @@ variables:
         spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
       };
     ]]]
+  # Karte je Item-Symbol (wie ein Platz im Arsenal); Entitaet und Name des
+  # Platzes setzt variables.ausruestung
+  platz:
+    type: custom:button-card
+    template: wow_platz
+    variables:
+      seite: links
+      textfarbe: 'var(--nachtblau-label, #b4c0cf)'
+      unterfarbe: 'var(--nachtblau-text-sekundaer, #8794a5)'
+  # Daten fuer den Abschnitt Ausruestung (ab Integration 0.6.0); null, wenn
+  # keiner der drei Sensoren da ist
+  ausruestung: |
+    [[[
+      const p = variables.prefix, platz = variables.platz;
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      if (!st('level')) return null;
+      const set = st('set_fortschritt'), sockel = st('leere_sockel'), verz = st('verzauberungen');
+      if (!set && !sockel && !verz) return null;
+      // Platz der API -> Endung der Ausruestungs-Entitaet (deutsche Oberflaeche,
+      // dieselben Endungen wie in wow-arsenal-karte.yaml)
+      const endungen = {
+        HEAD: 'kopf', NECK: 'hals', SHOULDER: 'schultern', BACK: 'rucken',
+        CHEST: 'brust', SHIRT: 'hemd', TABARD: 'wappenrock', WRIST: 'handgelenke',
+        HANDS: 'hande', WAIST: 'taille', LEGS: 'beine', FEET: 'fusse',
+        FINGER_1: 'finger_1', FINGER_2: 'finger_2', TRINKET_1: 'schmuck_1',
+        TRINKET_2: 'schmuck_2', MAIN_HAND: 'waffenhand', OFF_HAND: 'schildhand',
+      };
+      // Je Platz eine Karte wie im Arsenal; zwei leere Sockel im selben Item
+      // zaehlen als ein Platz. Ohne Entitaet bleibt nur der Name.
+      const plaetze = (liste) => {
+        const gesehen = new Set(), karten = [], ohne = [];
+        for (const s of Array.isArray(liste) ? liste : []) {
+          if (!s?.slot || gesehen.has(s.slot)) continue;
+          gesehen.add(s.slot);
+          const name = s.slot_name || s.slot;
+          const id = endungen[s.slot] ? `sensor.${p}_ausrustung_${endungen[s.slot]}` : null;
+          if (id && states[id]) {
+            karten.push({ ...platz, entity: id, variables: { ...platz.variables, text: name } });
+          } else {
+            ohne.push(name);
+          }
+        }
+        return { karten, ohne };
+      };
+      return { set, sockel, verz,
+        sockelPlaetze: plaetze(sockel?.attributes?.sockets),
+        verzPlaetze: plaetze(verz?.attributes?.slots) };
+    ]]]
+  # Getoente Pille (Flaeche 0,12, Rand 0,24) fuer Zahlen im Abschnitt
+  # Ausruestung
+  pille: |
+    [[[
+      return (farbe, text) => `<span style="color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:1px 8px;border-radius:9px;">${text}</span>`;
+    ]]]
+  # Raster-Karte fuer die Item-Symbole; null, wenn es keine gibt
+  raster: |
+    [[[
+      return (karten) => karten.length
+        ? { type: 'grid', columns: 2, square: false, cards: karten }
+        : null;
+    ]]]
 custom_fields:
   body: |
     [[[
       const f = variables.farben, p = variables.prefix;
       const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
         (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
       const st = (endung) => states[`sensor.${p}_${endung}`];
       const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
       if (!st('level')) {
@@ -130,41 +214,84 @@ custom_fields:
           </div>`).join('')));
       }
 
-      // Ausruestung (ab Integration 0.6.0)
-      const zeile = (titel, wert, zusatz, farbe = f.text) => `
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+  # Abschnitt Ausruestung: eine Unterkachel ueber fuenf Felder (Kopf mit Set
+  # und Zeile "Leere Sockel", Raster, Zeile "Verzauberte Plaetze", Raster,
+  # Abschluss). Rand und Hintergrund setzen die Felder selbst (styles unten),
+  # damit die Raster-Karten innerhalb der Kachel stehen.
+  aus_kopf: |
+    [[[
+      const a = variables.ausruestung;
+      if (!a) return null;
+      const f = variables.farben;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const zeile = (titel, wert, farbe = f.text) => `
         <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;">
           <span style="font-size:12.5px;color:${f.label};">${titel}</span>
           <span style="font-size:13px;font-weight:700;color:${farbe};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert}</span>
-          ${zusatz ? `<span style="grid-column:1 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${zusatz}</span>` : ''}
         </div>`;
-      const ausruestung = [];
-      const set = st('set_fortschritt');
-      if (set && set.attributes?.name) {
-        const boni = set.attributes.effects || [];
+      const pille = variables.pille;
+      // Zeile mit grauem Zusatz darunter (Plaetze ohne Entitaet, kein Set)
+      const mitZusatz = (html, zusatz) => zusatz
+        ? `<div style="display:grid;gap:2px;">${html}<div style="font-size:12px;line-height:1.3;color:${f.sek};">${esc(zusatz)}</div></div>`
+        : html;
+      const teile = [`<div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">Ausrüstung</div>`];
+      // Set wie im Item-Tooltip des Arsenals (wow-templates.yaml)
+      if (a.set && a.set.attributes?.name) {
+        const s = a.set.attributes;
+        // Farbe der Pille: alle Boni aktiv gruen, einige Amber, keiner grau;
+        // ohne Boni in den Daten nach der Zahl der Teile
+        const n = parseFloat(a.set.state) || 0, boni = Array.isArray(s.effects) ? s.effects : [];
         const aktiv = boni.filter((b) => b.active).length;
-        ausruestung.push(zeile(esc(set.attributes.name), `${esc(set.state)}/${esc(set.attributes.total)}`,
-          boni.length ? `<span style="color:${aktiv ? f.gruen : f.sek};">${aktiv} von ${boni.length} Boni aktiv</span>` : ''));
-      } else if (set) {
-        ausruestung.push(zeile('Set', '–', 'kein Set angelegt'));
+        const farbe = boni.length
+          ? (aktiv === boni.length ? f.gruen : aktiv ? f.amber : f.label)
+          : (n >= s.total ? f.gruen : n ? f.amber : f.label);
+        const liste = (eintraege, farbe) => eintraege.map((e) =>
+          `<div style="font-size:12.5px;line-height:1.35;color:${farbe(e)};">${esc(e.name ?? e.text)}</div>`).join('');
+        teile.push(`<div style="display:grid;gap:2px;">
+          ${zeile(`<span style="font-weight:650;">${esc(s.name)}</span>`, pille(farbe, `${esc(a.set.state)}/${esc(s.total)}`))}
+          ${liste(Array.isArray(s.items) ? s.items : [], (i) => i.equipped ? f.text : f.sek)}
+          ${Array.isArray(s.effects) && s.effects.length
+            ? `<div style="margin-top:4px;display:grid;gap:4px;">${liste(s.effects, (e) => e.active ? f.gruen : f.sek)}</div>` : ''}
+        </div>`);
+      } else if (a.set) {
+        teile.push(mitZusatz(zeile('Set', '–'), 'kein Set angelegt'));
       }
-      const sockel = st('leere_sockel');
-      if (sockel) {
-        const n = zahl(sockel) || 0;
-        const plaetze = (sockel.attributes?.sockets || []).map((s) => s.slot_name || s.slot).filter(Boolean);
-        ausruestung.push(n
-          ? zeile('Leere Sockel', `<span style="color:${f.amber};background:color-mix(in srgb, ${f.amber} 12%, transparent);border:1px solid color-mix(in srgb, ${f.amber} 24%, transparent);padding:1px 8px;border-radius:9px;">${n} leer</span>`, esc([...new Set(plaetze)].join(', ')))
-          : zeile('Leere Sockel', 'keine', ''));
+      if (a.sockel) {
+        const n = zahl(a.sockel) || 0;
+        teile.push(mitZusatz(n
+          ? zeile('Leere Sockel', pille(f.amber, `${n} leer`))
+          : zeile('Leere Sockel', 'keine'), a.sockelPlaetze.ohne.join(', ')));
       }
-      const verz = st('verzauberungen');
-      if (verz) {
-        const plaetze = (verz.attributes?.slots || []).map((s) => s.slot_name || s.slot).filter(Boolean);
-        ausruestung.push(zeile('Verzauberte Plätze', zahl(verz) ?? '–', esc(plaetze.join(', '))));
-      }
-      if (ausruestung.length) {
-        teile.push(abschnitt('Ausrüstung', ausruestung.join('')));
-      }
-      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+      return `<div style="display:grid;gap:9px;">${teile.join('')}</div>`;
     ]]]
+  sockel:
+    card: '[[[ return variables.ausruestung ? variables.raster(variables.ausruestung.sockelPlaetze.karten) : null; ]]]'
+  aus_verz: |
+    [[[
+      const a = variables.ausruestung;
+      if (!a?.verz) return null;
+      const f = variables.farben;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const n = parseFloat(a.verz.state);
+      const ohne = a.verzPlaetze.ohne.length
+        ? `<div style="font-size:12px;line-height:1.3;color:${f.sek};">${esc(a.verzPlaetze.ohne.join(', '))}</div>` : '';
+      return `
+        <div style="display:grid;gap:2px;">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;">
+            <span style="font-size:12.5px;color:${f.label};">Verzauberte Plätze</span>
+            <span style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">${variables.pille(f.label, isNaN(n) ? '–' : n)}</span>
+          </div>
+          ${ohne}
+        </div>`;
+    ]]]
+  verz:
+    card: '[[[ return variables.ausruestung ? variables.raster(variables.ausruestung.verzPlaetze.karten) : null; ]]]'
+  aus_ende: '[[[ return variables.ausruestung ? "" : null; ]]]'
 styles:
   card:
     - padding: 14px 16px 16px
@@ -174,7 +301,7 @@ styles:
     - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
     - cursor: default
   grid:
-    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-areas: '"i n" "i l" "body body" "aus_kopf aus_kopf" "sockel sockel" "aus_verz aus_verz" "verz verz" "aus_ende aus_ende"'
     - grid-template-columns: min-content minmax(0, 1fr)
     - grid-template-rows: min-content min-content auto
   img_cell:
@@ -210,3 +337,47 @@ styles:
       - min-width: 0
       - text-align: left
       - white-space: normal
+    # Die fuenf Felder der Ausruestung bilden zusammen eine Unterkachel
+    aus_kopf:
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal
+      - box-sizing: border-box
+      - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+      - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - border-bottom: none
+      - border-radius: 14px 14px 0 0
+      - margin-top: 8px
+      # unten 2 px, sonst schneidet overflow: hidden den Rand der Pille ab
+      - padding: 10px 12px 2px
+    sockel: &aus_mitte
+      - justify-self: stretch
+      - min-width: 0
+      - box-sizing: border-box
+      - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+      - border-left: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - border-right: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - padding: 8px 12px 0
+      # Abstand der Item-Symbole in der Raster-Karte
+      - --grid-card-gap: 6px 8px
+    aus_verz:
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal
+      - box-sizing: border-box
+      - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+      - border-left: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - border-right: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      # unten 2 px fuer den Rand der Pille (overflow: hidden, siehe aus_kopf)
+      - padding: 9px 12px 2px
+    verz: *aus_mitte
+    aus_ende:
+      - justify-self: stretch
+      - box-sizing: border-box
+      - height: 10px
+      - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+      - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      - border-top: none
+      - border-radius: 0 0 14px 14px
