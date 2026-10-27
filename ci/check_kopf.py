@@ -11,7 +11,7 @@ beginnt mit einem festen Block:
     # Bereich:       hausgeraete
     # Status:        aktiv
     # Karten:        button-card
-    # Templates:     owlet_geraete_fx (hausgeraete-templates.yaml)
+    # Templates:     nachtblau_geraete_fx (hausgeraete-templates.yaml)
     # Einfuegen:     Karte hinzufuegen -> Manuell
     # Platzhalter:   seriennr_<geraet> (vor dem Einfuegen ersetzen, siehe README.md)
     # ============================================================================

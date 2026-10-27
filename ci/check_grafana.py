@@ -15,7 +15,7 @@ Geprueft wird, was den Import in eine fremde Grafana-Instanz brechen wuerde:
 6. Keine "__inputs"/"__requires"-Reste aus dem "Export for sharing"-Dialog --
    die verlangen beim Import eine manuelle Zuordnung.
 7. Farben ("color", "fixedColor", "iconColor", bei der Heatmap auch "fill" im
-   Farbobjekt) stammen aus der Owlet-Palette (design/palette.yaml). Grafanas
+   Farbobjekt) stammen aus der Nachtblau-Palette (design/palette.yaml). Grafanas
    Farbnamen wie "green" oder "dark-red" sehen je nach Grafana-Theme anders
    aus; erlaubt sind nur "text" und "transparent".
 

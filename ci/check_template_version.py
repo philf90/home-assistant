@@ -2,7 +2,7 @@
 """Prueft, dass geaenderte Template-Bibliotheken ihre VERSION erhoehen.
 
 Einige button-card-Templates legen eine Bibliothek einmal pro Seite in window
-ab (window.__owletWx, window.__fussball, ...) und verwenden sie wieder, solange
+ab (window.__nachtblauWx, window.__fussball, ...) und verwenden sie wieder, solange
 die VERSION gleich ist:
 
     const VERSION = 10, alt = window.__fussball;

@@ -54,6 +54,7 @@ GROSS_DATEIEN = {"README.md", "DESIGN.md", "CLAUDE.md", "CONTRIBUTING.md", "SKIL
 # Dateien, die absichtlich alte Namen auflisten, und deshalb nicht geprueft werden.
 AUSGENOMMENE_DATEIEN = {
     "doku/umbenennung-2026-10.md": "Liste alter Dateinamen nach dem Umzug",
+    "doku/umbenennung-nachtblau.md": "Liste alter Namen aus dem Owlet-Stil",
 }
 
 # Bewusst genannte Dateien, die es im Repo nicht (mehr) gibt.

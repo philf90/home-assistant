@@ -593,16 +593,16 @@ class UnifiNetzplanCard extends HTMLElement {
 
 UnifiNetzplanCard.styles = `
   :host {
-    /* Farben aus dem Theme owlet (hell/dunkel), dunkler Palettenwert als Rueckfall.
+    /* Farben aus dem Theme nachtblau (hell/dunkel), dunkler Palettenwert als Rueckfall.
        Weiss mit Deckkraft ueber 0,08 bleibt dunkel unveraendert und nimmt hell
-       ueber den Schalter owlet-dunkel-anteil die passende Variable. */
-    --unp-bg: linear-gradient(180deg, var(--owlet-huelle-oben, #1b2231) 0%, var(--owlet-huelle-unten, #171d29) 55%);
-    --unp-fg: var(--owlet-text, #f2f5f8); --unp-muted: var(--owlet-text-sekundaer, #8794a5);
-    --unp-line: color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--owlet-dunkel-anteil, 100%), var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06)));
-    --unp-tile: var(--owlet-unterkachel, rgba(255, 255, 255, 0.028)); --unp-tile-line: var(--owlet-unterkachel-rand, rgba(255, 255, 255, 0.06));
-    --unp-ok: var(--owlet-gruen, #a6d49e); --unp-warn: var(--owlet-amber, #e6b566); --unp-bad: var(--owlet-rot, #f0736a); --unp-info: var(--owlet-blau, #7fb3d5);
-    --unp-edge: color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--owlet-dunkel-anteil, 100%), var(--owlet-aus, #3a4453));
-    --unp-hover: color-mix(in srgb, rgba(255, 255, 255, 0.16) var(--owlet-dunkel-anteil, 100%), var(--owlet-aus, #3a4453));
+       ueber den Schalter nachtblau-dunkel-anteil die passende Variable. */
+    --unp-bg: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%);
+    --unp-fg: var(--nachtblau-text, #f2f5f8); --unp-muted: var(--nachtblau-text-sekundaer, #8794a5);
+    --unp-line: color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)));
+    --unp-tile: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)); --unp-tile-line: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));
+    --unp-ok: var(--nachtblau-gruen, #a6d49e); --unp-warn: var(--nachtblau-amber, #e6b566); --unp-bad: var(--nachtblau-rot, #f0736a); --unp-info: var(--nachtblau-blau, #7fb3d5);
+    --unp-edge: color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-aus, #3a4453));
+    --unp-hover: color-mix(in srgb, rgba(255, 255, 255, 0.16) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-aus, #3a4453));
     --unp-ico: 34px; --unp-pad: 6px; --unp-indent: 18px;
     container-type: inline-size; display: block;
   }
@@ -615,8 +615,8 @@ UnifiNetzplanCard.styles = `
   ha-card {
     display: block;
     background: var(--unp-bg); color: var(--unp-fg);
-    border: 1px solid var(--owlet-huelle-rand, rgba(255, 255, 255, 0.05)); border-radius: 22px;
-    box-shadow: 0 18px 44px -22px var(--owlet-schatten, rgba(0, 0, 0, 0.7));
+    border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)); border-radius: 22px;
+    box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7));
     padding: 16px 18px 12px; overflow: hidden;
   }
   ha-icon { --mdc-icon-size: 20px; display: inline-flex; }
@@ -674,7 +674,7 @@ UnifiNetzplanCard.styles = `
   .s-ok .ico { color: var(--unp-ok); background: color-mix(in srgb, var(--unp-ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-ok) 24%, transparent); }
   .s-warn .ico { color: var(--unp-warn); background: color-mix(in srgb, var(--unp-warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-warn) 24%, transparent); }
   .s-bad .ico { color: var(--unp-bad); background: color-mix(in srgb, var(--unp-bad) 12%, transparent); border: 1px solid color-mix(in srgb, var(--unp-bad) 24%, transparent); }
-  .s-off .ico, .s-none .ico { color: var(--unp-muted); background: var(--owlet-neutral-kachel, rgba(255, 255, 255, 0.05)); border: 1px dashed var(--unp-line); }
+  .s-off .ico, .s-none .ico { color: var(--unp-muted); background: var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05)); border: 1px dashed var(--unp-line); }
   .s-off { opacity: 0.65; border-style: dashed; }
   .k-cluster { border-style: dashed; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--unp-muted); }

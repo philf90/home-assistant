@@ -1,7 +1,7 @@
 # Mitarbeiten
 
 Dieses Repo sammelt Lovelace-Karten, Views und Grafana-Dashboards im
-Owlet-Stil. Die Regeln hier gelten für jede neue und jede geänderte Datei. Die
+Nachtblau-Stil. Die Regeln hier gelten für jede neue und jede geänderte Datei. Die
 meisten prüft die CI; was sie nicht prüfen kann, steht ausdrücklich dabei.
 
 Einmal einrichten, dann laufen alle Prüfungen vor jedem Commit:

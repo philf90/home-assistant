@@ -1,4 +1,4 @@
-# Owlet-Stil – Design-Guide
+# Nachtblau-Stil – Design-Guide
 
 Verbindliche Regeln für alle Karten und Views in diesem Repo. Die Farbwerte
 selbst stehen in [`design/palette.yaml`](design/palette.yaml); diese Datei
@@ -181,7 +181,7 @@ grauer Text für „aus“ oder „keine Daten“, steht deshalb immer in `#8794
 Färbt eine Variable Text und Icon zugleich, bekommt sie `#8794a5`.
 Auf einer getönten Fläche (Tönung 0,12) hält `#8794a5` dunkel keine 4,5:1
 mehr (3,94–4,36:1 über allen Akzenten); kleine Schrift steht dort in
-`#b4c0cf` (`owlet-label`), etwa Datum und „Tage“ im Hero der Müllkarte
+`#b4c0cf` (`nachtblau-label`), etwa Datum und „Tage“ im Hero der Müllkarte
 (dunkel mindestens 6,58:1, hell 7,57:1).
 
 Weiß kommt nur mit Deckkraft vor (`rgba(255,255,255,…)`); deckend ist das
@@ -259,7 +259,7 @@ raus“ nicht wie „Zustand in Ordnung“ aussieht.
 
 Das More-Menü der Navigationsleiste färbt seine Kacheln je Bereich, nicht je
 Ziel: Zuhause Blau, Draußen Limette, Freizeit Rosé, Technik Violett, Verwaltung
-neutral (Label-Grau auf `owlet-neutral-kachel`). Für Fußball und Flüge gibt es
+neutral (Label-Grau auf `nachtblau-neutral-kachel`). Für Fußball und Flüge gibt es
 keine eigene Bereichsfarbe; Rosé steht dort für den ganzen Bereich Freizeit.
 Neustart bleibt als einzige Kachel rot. Kamera, Pflanzen und Wetter sehen im
 Menü deshalb anders aus als in der oberen Navigation. Die Farbe setzt jede Kachel
@@ -373,7 +373,7 @@ Jede Rolle der Palette hat einen Wert für den hellen Modus. Die Werte stehen
 in `design/palette.yaml` unter `hell_farben` (neue Werte mit Name und Zweck)
 und `theme` (jede Variable mit ihrem dunklen und hellen Wert). Daraus erzeugt
 `python ci/gen_theme.py` das Theme
-[`owlet-theme-konfig.yaml`](dashboard/allgemein/owlet-theme-konfig.yaml) mit
+[`nachtblau-theme-konfig.yaml`](dashboard/allgemein/nachtblau-theme-konfig.yaml) mit
 `modes: dark` und `modes: light`. Welcher Modus gilt, wählt jeder Benutzer im
 Profil oder im More-Menü (System, Hell, Dunkel).
 
@@ -388,8 +388,8 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-view.yaml`,
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)
 und die Lichter-View mit ihren beiden Karten `fenster-karte.yaml` und
-`lichter-raum-karte.yaml` (erste gefüllte Kachel mit `owlet-fuellung-rand-amber` und
-`owlet-leuchten-amber`), von der Energie-View die Templates
+`lichter-raum-karte.yaml` (erste gefüllte Kachel mit `nachtblau-fuellung-rand-amber` und
+`nachtblau-leuchten-amber`), von der Energie-View die Templates
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
 `energie-zaehler-karte.yaml`, `energie-solarbank-pv-karte.yaml` und
 `energie-monatsbilanz-karte.yaml` (Diagrammfarben per card-mod-CSS, weil
@@ -403,17 +403,17 @@ Hausgeräte-View sind `hausgeraete-templates.yaml` (Animation),
 `waschmaschine-karte.yaml`, `trockner-karte.yaml` und
 `geschirrspueler-karte.yaml` umgestellt, also die ganze View (die
 Staubsauger-Karte ist archiviert). Ebenso umgestellt ist die Auto-View
-(`autos-karte-v4.yaml` mit dem Template `owlet_auto_fx` in
+(`autos-karte-v4.yaml` mit dem Template `nachtblau_auto_fx` in
 `autos-templates.yaml`, dazu seit 19.10.2026 die Spritpreise in
 `tanken-karte.yaml` und `tanken-templates.yaml`: Grün für den günstigsten
 Preis, Amber für das Tank-Symbol wie in der Tank-Kachel, Diagrammserien
 Blau, Violett, Türkis und Limette per card-mod-CSS; gerendert mit den
 Theme-Werten liegt der kleinste Textkontrast hell bei 4,81:1, dunkel bei
 4,85:1), die Garten-View (`garten-karte.yaml`) und die
-Pflanzen-View (`pflanzen-view.yaml` mit dem Template `owlet_pflanze` in
+Pflanzen-View (`pflanzen-view.yaml` mit dem Template `nachtblau_pflanze` in
 `pflanzen-templates.yaml`; das Popup-Diagramm färbt wie die Monatsbilanz
 per card-mod-CSS) und die neu gebaute Kamera-View (`kameras-view.yaml` mit
-dem Template `owlet_kamera_kachel` in `kameras-templates.yaml`) und
+dem Template `nachtblau_kamera_kachel` in `kameras-templates.yaml`) und
 Homematic-IP-View (`homematic-view.yaml`), dazu die Netzwerk-View mit den
 sechs UniFi-Karten und der Ressource `unifi-netzplan-card.js` (Diagramm- und
 uptime-Balkenfarben per card-mod-CSS, siehe Kopfkommentare). Ebenso die
@@ -422,13 +422,13 @@ Gesundheit-View (`gesundheit-view.yaml`) sowie die Flüge-View
 (`flugradar-view.yaml` mit `flugradar-templates.yaml`); deren
 Kartenausschnitt mit Legende bleibt mit Flugradar-Gelb in beiden Modi dunkel.
 Ebenso die Fußball-View (`fussball-view.yaml` mit `fussball-templates.yaml`);
-ihre Vereinskarte setzt in der Hülle die Owlet-Variablen auf die dunklen
+ihre Vereinskarte setzt in der Hülle die Nachtblau-Variablen auf die dunklen
 Werte und bleibt so wie die Owlet-Karte als Identitätshülle dunkel.
 
 Damit ist das ganze Dashboard umgestellt. Geprüft am 19.10.2026 an der
 Live-Konfiguration (alle 17 Views, Templates und die Ressource
 `unifi-netzplan-card.js`): Jede feste Farbe ist dort dunkler Rückfall in
-`var()`, ein Zweig über `owlet-dunkel-anteil` oder eine der Ausnahmen unten.
+`var()`, ein Zweig über `nachtblau-dunkel-anteil` oder eine der Ausnahmen unten.
 Feste dunkle Werte tragen nur noch Kartenvarianten, die das Dashboard nicht
 verwendet: `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml` und
 `lichter-slider-karte.yaml` (Alternativen zur Lichter-View), dazu die seit
@@ -438,26 +438,26 @@ in beiden Modi dunkel.
 ### Karten umstellen
 
 - Jede Farbe als Theme-Variable mit dem **dunklen Palettenwert als
-  Rückfall**: `var(--owlet-gruen, #a6d49e)`. Ohne Theme `owlet` sieht die
+  Rückfall**: `var(--nachtblau-gruen, #a6d49e)`. Ohne Theme `nachtblau` sieht die
   Karte so aus wie bisher.
 - Tönungen über `color-mix`:
-  `color-mix(in srgb, var(--owlet-gruen, #a6d49e) 12%, transparent)`.
+  `color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 12%, transparent)`.
 - Weiß mit Deckkraft wird nach seiner Rolle zur Flächenvariable, Rückfall
   ist deren dunkler Wert. Abweichende Deckkräfte rücken auf die nächste Stufe
   (im Dunklen höchstens 0,02 Unterschied):
 
   | Weiß mit Deckkraft als | Deckkraft | Variable |
   |---|---|---|
-  | Rand | bis 0,055 | `owlet-huelle-rand` (0,05) |
-  | Rand, Trennlinie | darüber (0,06–0,08) | `owlet-unterkachel-rand` (0,06) |
-  | Fläche | unter 0,04 | `owlet-unterkachel` (0,028) |
-  | Fläche | ab 0,04 | `owlet-neutral-kachel` (0,05) |
-  | Schrift (0,55–0,66) | – | dunkel unverändert, hell `owlet-text-sekundaer` über den Schalter (unten) |
+  | Rand | bis 0,055 | `nachtblau-huelle-rand` (0,05) |
+  | Rand, Trennlinie | darüber (0,06–0,08) | `nachtblau-unterkachel-rand` (0,06) |
+  | Fläche | unter 0,04 | `nachtblau-unterkachel` (0,028) |
+  | Fläche | ab 0,04 | `nachtblau-neutral-kachel` (0,05) |
+  | Schrift (0,55–0,66) | – | dunkel unverändert, hell `nachtblau-text-sekundaer` über den Schalter (unten) |
 
   Schrift aus Navy mit Deckkraft hielte hell keine 4,5:1 (Navy 0,55 auf der
   Hülle 3,9:1), deshalb dort der Sekundärtext.
-- **Schalter `owlet-dunkel-anteil`** (dunkel `100%`, hell `0%`, Abschnitt
-  `theme.schalter` der Palette): `color-mix(in srgb, A var(--owlet-dunkel-anteil, 100%), B)`
+- **Schalter `nachtblau-dunkel-anteil`** (dunkel `100%`, hell `0%`, Abschnitt
+  `theme.schalter` der Palette): `color-mix(in srgb, A var(--nachtblau-dunkel-anteil, 100%), B)`
   ist dunkel A und hell B. Für Farben, die nur dunkel als Ton taugen, etwa ein
   Ton als Schrift auf doppelter Tönung (Müll: „abends rausstellen“, sonst
   4,13:1) oder die DWD-Farben.
@@ -468,8 +468,8 @@ in beiden Modi dunkel.
 - **Diagramme (apexcharts-card):** Farben unter `series` und `apex_config`
   bleiben die dunklen; card-mod-CSS färbt nach Modus, weil das Diagramm bei
   einem Themewechsel nicht neu zeichnet. Das gilt auch für die Tooltips:
-  Haupt- und Achsen-Tooltip stehen wie Popups auf `owlet-flaeche-erhoeht`
-  mit `owlet-text` und Rand `owlet-unterkachel-rand` (hell Weiß mit
+  Haupt- und Achsen-Tooltip stehen wie Popups auf `nachtblau-flaeche-erhoeht`
+  mit `nachtblau-text` und Rand `nachtblau-unterkachel-rand` (hell Weiß mit
   `#171d29`, dunkel `#222b3c` statt des ApexCharts-Dunkels), der Punkt je
   Serie (`.apexcharts-tooltip-series-group-N`) in der Variable der
   Serienfarbe.
@@ -512,20 +512,20 @@ gemessen.
 
 | Rolle | Dunkel | Hell | Hell, Kontrast | Variable |
 |---|---|---|---|---|
-| Seitengrund | `#171d29` | `#e6eaf0` | – | `owlet-seite` |
-| Kartenhülle oben / unten | `#1b2231` / `#171d29` | `#fafbfd` / `#f3f5f8` | – | `owlet-huelle-oben`, `-unten` |
-| Rand der Hülle | Weiß 0,05 | Navy 0,06 | – | `owlet-huelle-rand` |
-| Schatten | Schwarz 0,7 | Navy 0,30 | – | `owlet-schatten` |
-| Unterkachel / Rand | Weiß 0,028 / 0,06 | Navy 0,03 / 0,07 | – | `owlet-unterkachel`, `-rand` |
-| Neutrale Icon-Kachel | Weiß 0,05 | Navy 0,05 | – | `owlet-neutral-kachel` |
-| Erhöhte Fläche | `#222b3c` | `#ffffff` | – | `owlet-flaeche-erhoeht` |
-| Vertiefte Fläche | `#10151d` | `#e9edf2` | – | `owlet-flaeche-vertieft` |
-| Zustand aus | `#3a4453` | `#b4c0cf` | 1,69:1 (dunkel 1,62:1) | `owlet-aus` |
-| Primärtext | `#f2f5f8` | `#171d29` | 14,62:1 | `owlet-text` |
-| Titel | `#e7ecf3` | `#1b2231` | 13,79:1 | `owlet-titel` |
-| Labels | `#b4c0cf` | `#3a4453` | 8,54:1 | `owlet-label` |
-| Sekundärtext, jede kleine Schrift | `#8794a5` | `#586475` | 5,21:1 | `owlet-text-sekundaer` |
-| Muted, **nie Text** | `#6e7988` | `#6e7988` | 3,83:1 | `owlet-muted` |
+| Seitengrund | `#171d29` | `#e6eaf0` | – | `nachtblau-seite` |
+| Kartenhülle oben / unten | `#1b2231` / `#171d29` | `#fafbfd` / `#f3f5f8` | – | `nachtblau-huelle-oben`, `-unten` |
+| Rand der Hülle | Weiß 0,05 | Navy 0,06 | – | `nachtblau-huelle-rand` |
+| Schatten | Schwarz 0,7 | Navy 0,30 | – | `nachtblau-schatten` |
+| Unterkachel / Rand | Weiß 0,028 / 0,06 | Navy 0,03 / 0,07 | – | `nachtblau-unterkachel`, `-rand` |
+| Neutrale Icon-Kachel | Weiß 0,05 | Navy 0,05 | – | `nachtblau-neutral-kachel` |
+| Erhöhte Fläche | `#222b3c` | `#ffffff` | – | `nachtblau-flaeche-erhoeht` |
+| Vertiefte Fläche | `#10151d` | `#e9edf2` | – | `nachtblau-flaeche-vertieft` |
+| Zustand aus | `#3a4453` | `#b4c0cf` | 1,69:1 (dunkel 1,62:1) | `nachtblau-aus` |
+| Primärtext | `#f2f5f8` | `#171d29` | 14,62:1 | `nachtblau-text` |
+| Titel | `#e7ecf3` | `#1b2231` | 13,79:1 | `nachtblau-titel` |
+| Labels | `#b4c0cf` | `#3a4453` | 8,54:1 | `nachtblau-label` |
+| Sekundärtext, jede kleine Schrift | `#8794a5` | `#586475` | 5,21:1 | `nachtblau-text-sekundaer` |
+| Muted, **nie Text** | `#6e7988` | `#6e7988` | 3,83:1 | `nachtblau-muted` |
 
 Primärtext, Titel, Labels, Zustand aus und Muted sind vorhandene
 Palettenwerte; neu sind nur die Flächen und der Sekundärtext. Auf dem
@@ -553,11 +553,11 @@ Seitengrund hält der Sekundärtext 4,98:1.
 | Nachtgrau | `#9aa7bd` | `#35435c` | 7,51:1 | 9,12:1 | 7,03:1 |
 | Sonnengelb | `#e6c15a` | `#776202` | 4,61:1 | 5,44:1 | 4,36:1 |
 
-Die Variablen heißen wie die Farbe: `owlet-gruen`, `owlet-amber`,
-`owlet-koralle`, `owlet-rot`, `owlet-blau` usw. Alle Tieftöne dürfen Text
+Die Variablen heißen wie die Farbe: `nachtblau-gruen`, `nachtblau-amber`,
+`nachtblau-koralle`, `nachtblau-rot`, `nachtblau-blau` usw. Alle Tieftöne dürfen Text
 färben.
 
-- **Sonnengelb in Grafiken** (`owlet-sonnengelb-grafik`, hell `#a47800`):
+- **Sonnengelb in Grafiken** (`nachtblau-sonnengelb-grafik`, hell `#a47800`):
   Der Tiefton `#776202` ist genau so hell wie Rot `#ae3c38` (1,01:1). Wo PV
   und Netz nebeneinander stehen (Energiefluss, Monatsbilanz), waren sie im
   hellen Modus kaum zu trennen, bei Rot-Grün-Schwäche ΔE 14,9. `#a47800`
@@ -565,20 +565,20 @@ färben.
   Deuteranopie 27,1 (dunkel Pastell: 26,4). Es hält 3:1 für Grafiken
   (Hülle 3,65:1, Balkenspur 3,13:1, Sonnen-Icon auf Tönung 3,36:1), aber
   nicht 4,5:1: nur für Leitungen, Ringe, Balken, Säulen und Icons, Text in
-  Sonnengelb bleibt `owlet-sonnengelb`. Dunkel ist es Sonnengelb `#e6c15a`.
+  Sonnengelb bleibt `nachtblau-sonnengelb`. Dunkel ist es Sonnengelb `#e6c15a`.
   Für Flächen direkt neben Rot reicht 1,50:1 nicht (im Gerät geprüft):
   PV-Säulen der Monatsbilanz sowie PV im Hausring und im Tagesbalken des
   Energieflusses sind in beiden Modi hellgelb `#e6c15a` gefüllt und haben
-  einen Rand in `owlet-sonnengelb-grafik`. Hell sind Fläche und Rot dann
+  einen Rand in `nachtblau-sonnengelb-grafik`. Hell sind Fläche und Rot dann
   3,47:1 auseinander (ΔE 64,5, bei Deuteranopie 41,9); die Kante zur Hülle
   trägt der Rand mit 3,65:1, die Fläche allein hätte 1,58:1. Dunkel sind
   Fläche und Rand gleichfarbig. Linien bleiben im Grafik-Ton, eine
   hellgelbe Linie verschwände auf heller Hülle.
 
-- **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `owlet-licht-an`
+- **Licht an** (`#f0c274`) hat keinen eigenen hellen Wert: `nachtblau-licht-an`
   ist hell Amber `#855c04`. Schon dunkel liegen beide nur ΔE00 3,2
   auseinander.
-- **Türkis hell** hat keinen eigenen hellen Wert: `owlet-tuerkis-hell` ist
+- **Türkis hell** hat keinen eigenen hellen Wert: `nachtblau-tuerkis-hell` ist
   hell `#016f74` wie Türkis. Getrennt lägen beide nur ΔE00 3,2 auseinander
   (dunkel 4,0).
 - **Nachtgrau** ist bewusst tiefer gesetzt. Im Tiefband allein läge es nur
@@ -593,15 +593,15 @@ färben.
 Die Deckkraft-Stufen gelten unverändert (Fläche 0,12, Icon-Kachel 0,16,
 Schein 0,18, Rand 0,24, Leuchten 0,5), angewendet auf den Tiefton. Mit
 Variablen entsteht die Tönung über `color-mix`:
-`color-mix(in srgb, var(--owlet-gruen) 12%, transparent)`.
+`color-mix(in srgb, var(--nachtblau-gruen) 12%, transparent)`.
 
 Gefüllte Kacheln behalten Füllung und Schrift auf Füllung, damit auch deren
 Kontrast (5,6–8,1:1). Anders sind nur Rand und Leuchten:
 
 | | Dunkel | Hell | Variable |
 |---|---|---|---|
-| Rand | Pastell 0,5 | Tiefton deckend | `owlet-fuellung-rand-<farbe>` |
-| Leuchten (`0 0 14px -3px`) | Pastell 0,5 | Tiefton 0,5 | `owlet-leuchten-<farbe>` |
+| Rand | Pastell 0,5 | Tiefton deckend | `nachtblau-fuellung-rand-<farbe>` |
+| Leuchten (`0 0 14px -3px`) | Pastell 0,5 | Tiefton 0,5 | `nachtblau-leuchten-<farbe>` |
 
 Der dunkle Rand erreicht auf heller Hülle nur 2,10–2,23:1, der deckende
 Tiefton 5,42–5,49:1. Die Füllung allein hebt sich nur mit 1,53–2,61:1 von
@@ -620,7 +620,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
 | WoW-Qualitätsfarben | nur in der WoW-Karte, die in beiden Modi dunkel bleibt | Ungewöhnlich auf heller Hülle 1,25:1 |
-| Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `owlet-amber` bzw. `owlet-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
+| Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `nachtblau-amber` bzw. `nachtblau-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
 | Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, auf Vereinsrot in Weiß `#ffffff`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,88:1 (mit `#f2f5f8` wären es 4,46:1) |
 
 **DWD-Karte** (`meteoalarm-karte.yaml`): Die Integration liefert eigene
@@ -631,7 +631,7 @@ gilt hell über den Schalter:
   `#f2f5f8`, je nachdem was gegen die Farbe mehr Kontrast hat (gerechnet in
   der Karte).
 - Stufen- und „aktiv“-Pille: Tönung 0,12 und Rand 0,24 der DWD-Farbe,
-  Schrift `owlet-text`.
+  Schrift `nachtblau-text`.
 - Gemessen (Chromium, Stufen `#ffeb3b`, `#fb9a12`, `#e6480e`, `#c0392b`):
   Icon 13,82 · 7,82 · 4,26 · 4,97:1, Pillenschrift 13,63–16,45:1.
 - Dunkel stehen Icon und Schrift im DWD-Ton auf seiner Tönung, solange er
@@ -642,7 +642,7 @@ gilt hell über den Schalter:
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
 
-**Pollenflug** (`pollenflug-karte.yaml`, Popup `owlet_pollen_popup` in
+**Pollenflug** (`pollenflug-karte.yaml`, Popup `nachtblau_pollen_popup` in
 `warnlage-templates.yaml`): in Chromium mit allen Stufen (gering, mittel,
 hoch, keine, keine Daten) gemessen, 49 Elemente je Modus. Schrift in der
 Stufenfarbe auf ihrer Tönung 0,12 mindestens 4,57:1 hell und 4,63:1 dunkel
@@ -654,15 +654,15 @@ sie dort dunkel auf 4,35:1 (jetzt 7,28:1, hell 8,49:1).
 ## Animierte Hintergründe
 
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
-hinter dem Inhalt (Template `owlet_wetter_fx` in
+hinter dem Inhalt (Template `nachtblau_wetter_fx` in
 `wetter-templates.yaml`, Entwurf und Rechnung in
 `wetter-animiert.html`). Die Hausgeräte-Karten haben sie nur,
 solange ein Programm läuft, pausiert (eingefroren) oder gerade fertig ist
-(Template `owlet_geraete_fx` in `hausgeraete-templates.yaml`,
+(Template `nachtblau_geraete_fx` in `hausgeraete-templates.yaml`,
 Entwurf in `hausgeraete.html`): Wasser in Blau, Luft in Weiß mit
 Deckkraft, „Fertig“ in Türkis; die Wasserwelle der Waschmaschine bleibt im
 unteren Innenabstand und liegt damit nie hinter Text. Die Thermostat-Kacheln
-der Heizung (Template `owlet_heizung_fx` in
+der Heizung (Template `nachtblau_heizung_fx` in
 `heizung-templates.yaml`, genutzt von
 `thermostate-karte-v3.yaml`) bewegen sich nur in der Lücke unten im
 Bogen (50 × 32 px), also nie hinter Text: Wärmewellen in Amber, solange der
@@ -670,7 +670,7 @@ Raum heizt, in drei Stufen nach Ventilöffnung; bei offenem Fenster ein
 Luftzug in Wolkengrau, der dreimal durchläuft und dann steht. „Fenster offen“
 steht als Zustand in Blau (6,54:1 auf der Kachel). Eine Ebene hinter der
 ganzen Karte gibt es dort bewusst nicht: 8 Kacheln mit je drei Textzeilen
-würden überladen. Die Auto-Karte (Template `owlet_auto_fx` in
+würden überladen. Die Auto-Karte (Template `nachtblau_auto_fx` in
 `autos-templates.yaml`, genutzt von
 `autos-karte-v4.yaml`, Entwurf und Datenlage in
 `autos-animation.html`) bewegt aus demselben Grund nur
@@ -703,7 +703,7 @@ sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlic
   übereinander) 4,5:1 halten. Wo das nicht reicht, wird die Animation hinter
   der Schrift gedämpft: im Banner die ganze Wetterspalte rechts (Icon,
   Temperatur, Datum) auf 45 %, in den Kacheln der Wetter-Karte über einen
-  Schutzgrund in Hüllenfarbe (`owlet-huelle-unten`), 0,70 in beiden Modi,
+  Schutzgrund in Hüllenfarbe (`nachtblau-huelle-unten`), 0,70 in beiden Modi,
   in der Icon-Kachel zusätzlich 0,50 (Animation in der Kachel zu 30 %, in
   der Icon-Kachel zu 15 % sichtbar). Gerechnet in jeder Kombination aus
   Szene und Kachelfarbe, Blitz und Unwetter-Schein in voller Stärke: Icon
@@ -748,7 +748,7 @@ Element zu Hülle, dunkel auf `#1b2231`, hell auf `#fafbfd`).
   1,78:1; deckend wären höchstens 1,68:1 möglich.
 - **Umschalten nur mit Opt-in:** Das Template liest `--wx-dunkel`
   (Rückfall 100 %). Eine Karte schaltet die hellen Regeln ein, indem sie in
-  `styles.card` `--wx-dunkel: var(--owlet-dunkel-anteil, 100%)` setzt. Ohne
+  `styles.card` `--wx-dunkel: var(--nachtblau-dunkel-anteil, 100%)` setzt. Ohne
   den Eintrag bleibt die Animation in beiden Modi dunkel (geprüft: 0 von
   931 Elementen weichen ab).
 - **Deckkraft per Faktor:** `opacity: calc(var(--o) * (180% - 0.8 * var(--wx-d)))`
@@ -758,10 +758,10 @@ Element zu Hülle, dunkel auf `#1b2231`, hell auf `#fafbfd`).
 ### Weitere Animationen im hellen Modus
 
 Neben der Wetteranimation sind diese Animationen umgestellt, jeweils
-umgeschaltet über `owlet-dunkel-anteil`; dunkel bleibt alles wie bisher.
+umgeschaltet über `nachtblau-dunkel-anteil`; dunkel bleibt alles wie bisher.
 
 - **Energiefluss:** Leitungen in den Knotenfarben, inaktive Leitungen in
-  `owlet-unterkachel-rand`.
+  `nachtblau-unterkachel-rand`.
 - **Heizung** (`heizung-templates.yaml`): Wellen und Luftzug hell mit
   höherer Deckkraft, gleicher Kontrast zur Kachel wie dunkel.
 - **Hausgeräte** (`hausgeraete-templates.yaml`): Welle und Glanz hell mit
@@ -772,7 +772,7 @@ umgeschaltet über `owlet-dunkel-anteil`; dunkel bleibt alles wie bisher.
 - **Auto** (`autos-karte-v4.yaml`, `autos-templates.yaml`): Eiskristalle
   und Innenschein hell in Eis statt Weiß (0,95 statt 0,5 bzw. 0,28 statt
   0,12, gleicher Kontrast zum Grund wie dunkel, wie Schnee in der
-  Wetteranimation); die Pille „Glättegefahr“ auf `owlet-flaeche-erhoeht`.
+  Wetteranimation); die Pille „Glättegefahr“ auf `nachtblau-flaeche-erhoeht`.
   Das Tank-Symbol hält auf der Füllung hell mindestens 3,13:1. Die
   Schloss-Ringe (Amber 0,5, Stufe „Leuchten“) heben sich hell nur mit
   2,11:1 ab (dunkel 3,04:1); sie sind Zusatzsignal neben Text und Icon.
