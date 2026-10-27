@@ -12,7 +12,9 @@ Die Regeln stehen kurz hier und ausfuehrlich in ci/README.md:
 4. Lovelace-YAML heisst <thema>[-<variante>]-<art>[-vN].yaml mit der Art
    karte, view, templates oder konfig; JS-Module <name>.js; alles klein,
    ASCII, Bindestriche.
-5. In entwuerfe/ nur HTML und Markdown, in doku/ nur Markdown.
+5. In entwuerfe/ nur HTML und Markdown, in doku/ nur Markdown. Bilder
+   (Art "bild" in ci/dateien.py) im Wurzelverzeichnis, unter dashboard/ oder
+   in doku/ werden mit dem Hinweis auf design/ gemeldet.
 6. Je Ordner hoechstens eine aktive Version einer Karte: abgeloeste
    Fassungen gehoeren nach archiv/.
 
@@ -46,15 +48,19 @@ LOVELACE_NAME = re.compile(
     r"(?:-v(?P<version>[2-9]|[1-9][0-9]))?\.yaml$"
 )
 EINFACHER_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z]+$")
+BILD_HINWEIS = "Bilder liegen in design/"
 
 
 def pruefe(pfad: PurePosixPath) -> list[str]:
     teile = pfad.parts
     name = pfad.name
+    ist_bild = art(pfad) == "bild"
 
     if len(teile) == 1:
         if name in WURZEL_DATEIEN or name.startswith("."):
             return []
+        if ist_bild:
+            return [f"{pfad}: gehoert nicht ins Wurzelverzeichnis ({BILD_HINWEIS})"]
         return [f"{pfad}: gehoert nicht ins Wurzelverzeichnis (Bereich unter dashboard/)"]
 
     if teile[0] not in OBERSTE_ORDNER:
@@ -62,12 +68,16 @@ def pruefe(pfad: PurePosixPath) -> list[str]:
         return [f"{pfad}: Ordner '{teile[0]}/' ist nicht vorgesehen ({erlaubt})"]
 
     if teile[0] == "doku":
+        if ist_bild:
+            return [f"{pfad}: in doku/ liegt nur Markdown ({BILD_HINWEIS})"]
         if pfad.suffix != ".md" or len(teile) != 2:
             return [f"{pfad}: in doku/ liegt nur Markdown, ohne Unterordner"]
         return []
 
     if teile[0] != "dashboard":
         return []
+    if ist_bild:
+        return [f"{pfad}: unter dashboard/ liegen keine Bilder ({BILD_HINWEIS})"]
     if pfad.as_posix() == "dashboard/README.md":
         return []  # erzeugt von ci/gen_index.py
 
