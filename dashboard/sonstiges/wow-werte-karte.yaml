@@ -109,6 +109,27 @@ variables:
         spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
       };
     ]]]
+  primaerstil: getoent
+  # WoW-Sonderfarben (DESIGN.md, Sonderfarben): Lebensbalken des Spiels und
+  # Klassenfarben (RAID_CLASS_COLORS), Schluessel = Klassenname der API
+  # (deutsche Oberflaeche)
+  wow: |
+    [[[
+      return {
+        leben:  '#00ff00',
+        dunkel: '#10151d',
+        hell:   '#f2f5f8',
+        klassen: {
+          Todesritter:  '#c41e3a', 'Dämonenjäger': '#a330c9', Druide:  '#ff7c0a',
+          Rufer:        '#33937f', 'Jäger':        '#aad372', Magier:  '#3fc7eb',
+          'Mönch':      '#00ff98', Paladin:        '#f48cba', Priester: '#ffffff',
+          Schurke:      '#fff468', Schamane:       '#0070dd', Hexenmeister: '#8788ee',
+          Krieger:      '#c69b6d',
+        },
+        // Klassen, deren Fuellung helle Schrift braucht
+        hellSchrift: ['Todesritter', 'Dämonenjäger', 'Schamane'],
+      };
+    ]]]
   # Karte je Item-Symbol (wie ein Platz im Arsenal); Entitaet und Name des
   # Platzes setzt variables.ausruestung
   platz:
@@ -198,13 +219,39 @@ custom_fields:
         teile.push(`<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:0 2px;">Die Werte-Sensoren sind aus. Einschalten unter Einstellungen → Geräte &amp; Dienste → WoW Charakter → Charakter → Entitäten.</div>`);
       } else {
         const namen = { strength: 'Stärke', agility: 'Beweglichkeit', intellect: 'Intelligenz' };
-        const kachel = (wert, titel) => `
-          <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 10px;">
-            <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert === null ? '–' : Math.round(wert).toLocaleString('de-DE')}</div>
-            <div style="margin-top:2px;font-size:11.5px;color:${f.sek};">${titel}</div>
+        const w = variables.wow;
+        // Kachel: stil.grund/rand/schein faerben die Flaeche, stil.wert und
+        // stil.titel die Schrift; ohne stil die neutrale Unterkachel
+        const kachel = (wert, titel, stil = {}) => `
+          <div style="min-width:0;background:${stil.grund || f.kachel};border:1px solid ${stil.rand || f.rand};border-radius:13px;padding:8px 10px;${stil.schein ? `box-shadow:${stil.schein};` : ''}">
+            <div style="font-size:16px;font-weight:750;color:${stil.wert || f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${wert === null ? '–' : Math.round(wert).toLocaleString('de-DE')}</div>
+            <div style="margin-top:2px;font-size:11.5px;color:${stil.titel || f.sek};">${titel}</div>
           </div>`;
+        // Gefuellte Kachel (DESIGN.md, Bausteine): mit dunkler Schrift Verlauf
+        // von aufgehellt zur vollen Farbe, mit heller Schrift von der vollen
+        // zur abgedunkelten; so bleibt die Schrift ueberall bei mindestens 4,5:1
+        const gefuellt = (farbe, schrift) => ({
+          grund: schrift === w.dunkel
+            ? `linear-gradient(180deg, color-mix(in srgb, ${farbe} 75%, ${w.hell}) 0%, ${farbe} 100%)`
+            : `linear-gradient(180deg, color-mix(in srgb, ${farbe} 88%, ${w.dunkel}) 0%, color-mix(in srgb, ${farbe} 72%, ${w.dunkel}) 100%)`,
+          rand: `color-mix(in srgb, ${farbe} 50%, transparent)`,
+          schein: `0 0 14px -3px color-mix(in srgb, ${farbe} 50%, transparent)`,
+          wert: schrift, titel: schrift,
+        });
+        const getoent = (farbe) => ({
+          grund: `linear-gradient(180deg, color-mix(in srgb, ${farbe} 24%, transparent) 0%, color-mix(in srgb, ${farbe} 10%, transparent) 100%)`,
+          rand: `color-mix(in srgb, ${farbe} 50%, transparent)`,
+          // Label-Grau faellt auf Priester- und Schurken-Toenung unter 4,5:1
+          titel: f.text,
+        });
+        const klasse = states[`sensor.${p}_level`]?.attributes?.class;
+        const kf = w.klassen[klasse];
+        const stilLeben = leben === null ? {} : gefuellt(w.leben, w.dunkel);
+        const stilPrimaer = !kf || zahl(primaer) === null ? {}
+          : variables.primaerstil === 'gefuellt' ? gefuellt(kf, w.hellSchrift.includes(klasse) ? w.hell : w.dunkel)
+          : getoent(kf);
         teile.push(`<div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:6px;">
-          ${kachel(leben, 'Leben')}${kachel(zahl(primaer), namen[primaer?.attributes?.stat] || 'Primärwert')}
+          ${kachel(leben, 'Leben', stilLeben)}${kachel(zahl(primaer), namen[primaer?.attributes?.stat] || 'Primärwert', stilPrimaer)}
         </div>`);
         const max = Math.max(1, ...zweit.map((z) => z.wert || 0));
         teile.push(abschnitt('Zweitwerte', zweit.map((z) => `
