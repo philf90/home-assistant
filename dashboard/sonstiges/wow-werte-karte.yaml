@@ -11,7 +11,8 @@
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Werte wie im Charakterfenster des Spiels, dazu ein Blick auf die Ausruestung:
-#   Kopf        Spezialisierung und Heldentalente
+#   Kopf        Charakterbild mit Symbol der Spezialisierung (ohne Bild die
+#               Icon-Kachel), Spezialisierung und Heldentalente
 #   Kacheln     Leben und Primaerwert (Staerke, Beweglichkeit oder Intelligenz)
 #               als gefuellte Kacheln: Leben im Gruen des Lebensbalkens,
 #               Primaerwert in der Klassenfarbe des Charakters
@@ -68,14 +69,14 @@
 # Voraussetzung: custom:button-card und browser_mod (HACS), die Templates aus
 # wow-templates.yaml im Dashboard (fuer die Item-Symbole) und die
 # HACS-Integration "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer
-# Spezialisierung und Ausruestung ab 0.6.0.
+# Spezialisierung und Ausruestung ab 0.6.0, fuer das Symbol der
+# Spezialisierung am Charakterbild ab 0.8.0.
 type: custom:button-card
 triggers_update: all
-show_icon: true
+show_icon: false
 show_name: true
 show_label: true
 show_state: false
-icon: mdi:account-star
 name: |
   [[[
     const p = variables.prefix;
@@ -114,6 +115,8 @@ variables:
         kachel: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))',
         rand:   'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))',
         spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
+        // Ring um das Spec-Symbol, trennt es vom Charakterbild
+        ring:   'var(--nachtblau-huelle-oben, #1b2231)',
       };
     ]]]
   # WoW-Sonderfarben (DESIGN.md, Sonderfarben): Lebensbalken des Spiels und
@@ -198,6 +201,28 @@ variables:
         : null;
     ]]]
 custom_fields:
+  # Charakterbild wie im Arsenal und in der Charaktere-Karte, mit dem Symbol
+  # der Spezialisierung; ohne Bild die Icon-Kachel in Rose
+  bild: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const avatar = states[`image.${p}_avatar`]?.attributes?.entity_picture;
+      const a = states[`sensor.${p}_level`]?.attributes || {};
+      if (!avatar) {
+        return `<div style="width:44px;height:44px;box-sizing:border-box;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${f.akzent} 16%, transparent);border:1px solid color-mix(in srgb, ${f.akzent} 24%, transparent);">
+          <ha-icon icon="mdi:account-star" style="width:23px;height:23px;--mdc-icon-size:23px;--ha-icon-display:block;color:${f.akzent};"></ha-icon>
+        </div>`;
+      }
+      return `
+        <div style="position:relative;width:44px;height:44px;">
+          <div style="width:44px;height:44px;border-radius:13px;overflow:hidden;background:${f.spur};border:1px solid ${f.rand};box-sizing:border-box;">
+            <img src="${esc(avatar)}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">
+          </div>
+          ${a.spec_icon ? `<img src="${esc(a.spec_icon)}" alt="" title="${esc(a.spec || '')}" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;border-radius:50%;box-shadow:0 0 0 2px ${f.ring};">` : ''}
+        </div>`;
+    ]]]
   body: |
     [[[
       const f = variables.farben, p = variables.prefix;
@@ -350,22 +375,9 @@ styles:
     - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
     - cursor: default
   grid:
-    - grid-template-areas: '"i n" "i l" "body body" "aus_kopf aus_kopf" "sockel sockel" "aus_verz aus_verz" "verz verz" "aus_ende aus_ende"'
+    - grid-template-areas: '"bild n" "bild l" "body body" "aus_kopf aus_kopf" "sockel sockel" "aus_verz aus_verz" "verz verz" "aus_ende aus_ende"'
     - grid-template-columns: min-content minmax(0, 1fr)
     - grid-template-rows: min-content min-content auto
-  img_cell:
-    - width: 44px
-    - height: 44px
-    - border-radius: 13px
-    - margin-right: 14px
-    - align-self: center
-    - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
-    - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
-  icon:
-    - width: 23px
-    - height: 23px
-    - --ha-icon-display: block
-    - color: 'var(--nachtblau-rose, #e6a0c4)'
   name:
     - justify-self: start
     - align-self: end
@@ -380,6 +392,12 @@ styles:
     - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
     - margin-top: 1px
   custom_fields:
+    bild:
+      - align-self: center
+      - margin-right: 14px
+      # Das Spec-Symbol ragt 4 px ueber das Bild hinaus; ohne overflow:
+      # visible schnitte button-card (Klasse ellipsis) es ab
+      - overflow: visible
     body:
       - padding-top: 12px
       - justify-self: stretch
