@@ -34,7 +34,10 @@
 # bei deutscher Oberflaeche; mit englischer Oberflaeche heissen sie anders.
 #
 # Mythic+: Wert der aktuellen Season, sonst das Attribut api_rating (der Wert
-# im Arsenal), wie in wow-arsenal-karte.yaml.
+# im Arsenal), wie in wow-arsenal-karte.yaml. Mythic+ gibt es nur in Retail
+# (GAME_VERSIONS der Integration); fuer Classic und Forever faellt die Angabe
+# weg, und die Infozeile nutzt die ganze Breite. Ohne bekannte Spielversion
+# bleibt sie stehen.
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, also heller und
 # dunkler Modus. Akzent Rose (Bereich Freizeit, DESIGN.md "Akzente und
@@ -116,10 +119,10 @@ custom_fields:
         retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
         classic_anniversary: 'Classic Anniversary', forever: 'Forever',
       };
+      // Schluessel der Version (retail, classic_era, ...) oder null
       const version = (id) => {
         const geraet = (hass.devices || {})[(hass.entities || {})[id]?.device_id];
-        const m = /^World of Warcraft \((.+)\)$/.exec(geraet?.model || '');
-        return m ? (versionen[m[1]] || m[1]) : null;
+        return /^World of Warcraft \((.+)\)$/.exec(geraet?.model || '')?.[1] ?? null;
       };
 
       if (!variables.liste.length) {
@@ -146,7 +149,10 @@ custom_fields:
         const mplus = states[`sensor.${p}_mythic_wertung`];
         let wertung = zahl(mplus);
         if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
-        const spiel = version(`sensor.${p}_level`);
+        const schluessel = version(`sensor.${p}_level`);
+        const spiel = schluessel ? (versionen[schluessel] || schluessel) : null;
+        // Mythic+ nur in Retail; ohne bekannte Version wie bisher anzeigen
+        const mitMplus = !schluessel || schluessel === 'retail';
         const login = vor(states[`sensor.${p}_letzter_login`]?.state);
         // Letzter Level-Aufstieg (Ereignis ab Integration 0.8.0), hoechstens 7 Tage alt
         const auf = states[`event.${p}_level_gestiegen`];
@@ -169,8 +175,8 @@ custom_fields:
             </div>
             <div style="min-width:0;font-size:14.5px;line-height:1.3;font-weight:700;color:${f.titel};${zweizeilig}">${esc(name)}${spiel ? ` <span style="font-size:12px;font-weight:400;color:${f.sek};white-space:nowrap;">${esc(spiel)}</span>` : ''}</div>
             <div style="justify-self:end;font-size:13px;color:${f.sek};white-space:nowrap;"><b style="font-size:14.5px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;">${ilvl === null ? '–' : Math.round(ilvl)}</b> ilvl</div>
-            <div style="min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${info}</div>
-            <div style="justify-self:end;align-self:start;font-size:12px;color:${f.sek};white-space:nowrap;">M+ <b style="color:${f.label};font-weight:700;font-variant-numeric:tabular-nums;">${wertung === null ? '–' : Math.round(wertung)}</b></div>
+            <div style="${mitMplus ? '' : 'grid-column:2 / -1;'}min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${info}</div>
+            ${mitMplus ? `<div style="justify-self:end;align-self:start;font-size:12px;color:${f.sek};white-space:nowrap;">M+ <b style="color:${f.label};font-weight:700;font-variant-numeric:tabular-nums;">${wertung === null ? '–' : Math.round(wertung)}</b></div>` : ''}
             <div style="grid-column:2 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${[login ? `Login ${login}` : 'Login unbekannt', aufstieg].filter(Boolean).join(' · ')}</div>
           </div>`;
       });
