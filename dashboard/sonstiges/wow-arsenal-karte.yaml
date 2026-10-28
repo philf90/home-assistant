@@ -13,7 +13,8 @@
 # ============================================================================
 # Charakterseite wie im Arsenal von World of Warcraft, gebaut fuer 360 px:
 #   Kopf     Avatar (ab Integration 0.8.0 mit Symbol der Spezialisierung),
-#            Name, Titel, Stufe, Volk, Spezialisierung und Klasse;
+#            Name, Titel, Stufe, Volk, Spezialisierung und Klasse,
+#            Spielversion (Retail, Classic Era, ...);
 #            Pillen fuer Itemlevel, Mythic+-Wertung, Fraktion und Realm
 #   Mitte    Ganzkoerperbild, links und rechts je 8 Ausruestungsplaetze in
 #            der Reihenfolge des Arsenals, darunter Waffen- und Schildhand
@@ -41,6 +42,11 @@
 #
 # Mythic+: Die Pille zeigt den Sensorwert der aktuellen Season, sonst das
 # Attribut api_rating -- denselben Wert wie das Arsenal.
+#
+# Spielversion: steht im Modell des Charakter-Geraets ("World of Warcraft
+# (classic_era)", Integration ab 0.3.0, Classic ab 0.9.0); die Karte liest es
+# ueber hass.entities und hass.devices wie wow-charaktere-karte.yaml. Ohne
+# Geraet fehlt sie, ein unbekannter Schluessel erscheint unveraendert.
 #
 # Voraussetzung: custom:button-card und browser_mod (HACS), die Templates aus
 # wow-templates.yaml im Dashboard und die HACS-Integration "WoW Charakter"
@@ -96,10 +102,19 @@ custom_fields:
         titel = titel.replace(name, '').replace(/^[\s,]+|[\s,]+$/g, '');
       }
       const avatar = st('image', 'avatar')?.attributes?.entity_picture;
+      // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (retail)"
+      const versionen = {
+        retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+        classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+      };
+      const modell = (hass.devices || {})[(hass.entities || {})[lvl.entity_id]?.device_id]?.model;
+      const m = /^World of Warcraft \((.+)\)$/.exec(modell || '');
+      const spiel = m ? (versionen[m[1]] || m[1]) : null;
       const zeile = [
         leer(lvl) ? null : `Stufe ${esc(lvl.state)}`,
         a.race,
         [a.spec, a.class].filter(Boolean).join(' '),
+        spiel,
       ].filter(Boolean).map(esc).join(' · ');
 
       const ilvl = zahl(st('sensor', 'itemlevel'));
