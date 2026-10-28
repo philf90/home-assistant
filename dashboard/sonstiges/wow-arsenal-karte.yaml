@@ -19,7 +19,8 @@
 #   Mitte    Ganzkoerperbild, links und rechts je 8 Ausruestungsplaetze in
 #            der Reihenfolge des Arsenals, darunter Waffen- und Schildhand
 #   Unten    Kennzahlen: Raid-Fortschritt (hoechste Schwierigkeit mit Kills),
-#            Erfolgspunkte, Reittiere, Ehrenstufe
+#            Erfolgspunkte, Reittiere, Ehrenstufe; bei Classic nur Erfolgspunkte
+#            und Ehrenstufe (Raids und Sammlungen gibt es dort nicht)
 # Jeder Platz zeigt das Item-Symbol mit einem Rand in der Qualitaetsfarbe und
 # das Itemlevel. Leere Plaetze (z. B. Hemd) stehen gestrichelt da. Hat ein
 # Item einen leeren Sockel, sitzt oben rechts am Symbol ein Amber-Punkt; im
@@ -300,14 +301,19 @@ custom_fields:
         }
       }
       const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
+      // Classic (Spielversion aus dem Modell des Geraets, z. B. "World of
+      // Warcraft (classic_era)"): Raids und Sammlungen liefert die Classic-API
+      // nicht, die Kacheln fallen weg
+      const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+      const classic = /^World of Warcraft \(classic_.+\)$/.test(modell || '');
       const kennzahlen = [
-        raid,
+        classic ? null : raid,
         { wert: format(zahl(st('erfolgspunkte'))), name: 'Erfolge' },
-        { wert: format(zahl(st('reittiere'))), name: 'Reittiere' },
+        classic ? null : { wert: format(zahl(st('reittiere'))), name: 'Reittiere' },
         { wert: format(zahl(st('ehrenstufe'))), name: 'Ehren&shy;stufe' },
-      ];
+      ].filter(Boolean);
       return `
-        <div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:6px;">
+        <div style="display:grid;grid-template-columns:repeat(${kennzahlen.length}, minmax(0,1fr));gap:6px;">
           ${kennzahlen.map((k) => `
             <div style="min-width:0;padding:8px 6px;border-radius:13px;background:${f.kachel};border:1px solid ${f.rand};text-align:center;">
               <div style="font-size:15px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${k.wert}</div>
