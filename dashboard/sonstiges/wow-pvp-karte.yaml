@@ -1,0 +1,212 @@
+# ============================================================================
+# WoW – PvP eines Charakters
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# PvP eines Charakters fuer alle Spielversionen:
+#   Kacheln    Ehrenstufe und Ehrenhafte Siege (nur die vorhandenen Sensoren)
+#   Wertungen  je Bracket (3v3, 2v2, gewertete Schlachtfelder) die Wertung,
+#              die Siegquote der Saison als Balken, Siege und Niederlagen der
+#              Saison und der Woche
+# Die Integration legt einen Bracket-Sensor nur an, wenn die API beim Start
+# Daten liefert; Brackets ohne Sensor fallen weg. Ohne jedes Bracket steht ein
+# Hinweis da, bei Classic Era, dass es dort keine Arenen gibt (Arenen kamen
+# mit The Burning Crusade, gewertete Schlachtfelder mit Cataclysm,
+# Ehrenstufen mit Legion; was die Classic-API davon liefert, ist nicht
+# belegt). Solo-Shuffle, Blitz und 5v5 fragt die Integration nicht ab.
+#
+# Spielversion: aus dem Modell des Charakter-Geraets ("World of Warcraft
+# (classic_era)"), wie in wow-charaktere-karte.yaml.
+#
+# Daten: Sensoren _ehrenstufe, _ehrenhafte_siege und _pvp_wertung_<bracket>
+# (2v2, 3v3, rbg; Zustand = Wertung, Attribute season_played, season_won,
+# season_lost, weekly_played, weekly_won, weekly_lost). Namen bei deutscher
+# Oberflaeche; die Bracket-Sensoren gibt es ab Integration 0.11.0.
+#
+# Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, also heller und
+# dunkler Modus. Akzent Rose (Bereich Freizeit) fuer Icon-Kachel und Balken;
+# Siege und Niederlagen stehen als Text, nicht als Gruen und Rot.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.3.0, fuer die Wertungen ab 0.11.0.
+type: custom:button-card
+# Die Karte liest Sensoren ueber variables.prefix; bei jeder
+# Zustandsaenderung neu zeichnen.
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:sword-cross
+name: PvP
+label: |
+  [[[
+    const p = variables.prefix;
+    const name = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0];
+    return [variables.version.name, name].filter(Boolean).join(' · ') || ' ';
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--nachtblau-rose, #e6a0c4)',
+        text:   'var(--nachtblau-text, #f2f5f8)',
+        label:  'var(--nachtblau-label, #b4c0cf)',
+        sek:    'var(--nachtblau-text-sekundaer, #8794a5)',
+        kachel: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+  # Spielversion aus dem Modell des Geraets: key (retail, classic_era, ...)
+  # und Anzeigename; ohne Geraet beides null
+  version: |
+    [[[
+      const namen = {
+        retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+        classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+      };
+      const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${variables.prefix}_level`]?.device_id]?.model;
+      const key = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1] ?? null;
+      return { key, name: key ? (namen[key] || key) : null };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
+      const zahl = (e) => (leer(e) || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const anz = (v) => (typeof v === 'number' && !isNaN(v)) ? v : null;
+      const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
+      const hinweis = (text) => `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:0 2px;">${text}</div>`;
+      if (!st('level')) {
+        return hinweis(`Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.`);
+      }
+      const teile = [];
+
+      // Kacheln: nur vorhandene Sensoren, Breite geteilt
+      const kacheln = [['ehrenstufe', 'Ehrenstufe'], ['ehrenhafte_siege', 'Ehrenhafte Siege']]
+        .filter(([endung]) => st(endung));
+      if (kacheln.length) {
+        teile.push(`<div style="display:grid;grid-template-columns:repeat(${kacheln.length}, minmax(0,1fr));gap:6px;">${kacheln.map(([endung, name]) => `
+          <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 6px;text-align:center;">
+            <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${format(zahl(st(endung)))}</div>
+            <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};">${name}</div>
+          </div>`).join('')}</div>`);
+      }
+
+      // Wertungen je Bracket, wie im PvP-Fenster des Spiels 3v3 zuerst
+      const bilanz = (spiele, siege, nieder) => {
+        if (spiele === null) return null;
+        if (spiele === 0) return 'keine Spiele';
+        return `${siege ?? 0} S · ${nieder ?? 0} N`;
+      };
+      const brackets = [['3v3', '3v3-Arena'], ['2v2', '2v2-Arena'], ['rbg', 'Gewertete Schlachtfelder']]
+        .map(([b, name]) => ({ name, e: st(`pvp_wertung_${b}`) }))
+        .filter((b) => b.e);
+      if (brackets.length) {
+        teile.push(`<div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:12px;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">Wertungen</div>
+          ${brackets.map((b) => {
+            const a = b.e.attributes || {};
+            const spiele = anz(a.season_played), siege = anz(a.season_won);
+            const quote = spiele ? Math.round((siege || 0) / spiele * 100) : null;
+            const saison = bilanz(spiele, siege, anz(a.season_lost));
+            const woche = bilanz(anz(a.weekly_played), anz(a.weekly_won), anz(a.weekly_lost));
+            return `
+              <div style="display:grid;gap:4px;">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:baseline;">
+                  <span style="font-size:13px;font-weight:700;line-height:1.3;color:${f.label};">${b.name}</span>
+                  <span style="font-size:18px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${format(zahl(b.e))}</span>
+                </div>
+                <div style="height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${quote === null ? 0 : Math.max(2, quote)}%;border-radius:5px;background:${f.akzent};"></div></div>
+                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;font-size:12px;line-height:1.3;color:${f.sek};font-variant-numeric:tabular-nums;">
+                  <span>Saison: ${saison === null ? '–' : saison}${quote === null ? '' : ` · ${quote} %`}</span>
+                  <span>Woche: ${woche === null ? '–' : woche}</span>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`);
+      } else if (variables.version.key === 'classic_era') {
+        teile.push(hinweis('Arena-Wertungen gibt es in Classic Era nicht: Arenen kamen erst mit The Burning Crusade.'));
+      } else {
+        teile.push(hinweis('Keine PvP-Wertung: Für 2v2, 3v3 und gewertete Schlachtfelder lieferte die API beim Start keine Daten. Neue Wertungen erscheinen nach dem Neuladen der Integration.'));
+      }
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 16px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--nachtblau-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--nachtblau-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    # Version und Name: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
+    - font-size: 12.5px
+    - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      # button-card setzt an custom_fields white-space: nowrap (Klasse
+      # ellipsis); die Hinweise sollen umbrechen
+      - white-space: normal

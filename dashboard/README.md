@@ -181,7 +181,9 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`wow-arsenal-karte.yaml`](sonstiges/wow-arsenal-karte.yaml) | karte | WoW – Arsenal eines Charakters | button-card | `wow_charakter` | aktiv |
 | [`wow-berufe-karte.yaml`](sonstiges/wow-berufe-karte.yaml) | karte | WoW – Berufe | button-card | `wow_charakter` | aktiv |
 | [`wow-charaktere-karte.yaml`](sonstiges/wow-charaktere-karte.yaml) | karte | WoW – Charakterliste | button-card | – | aktiv |
+| [`wow-gilde-karte.yaml`](sonstiges/wow-gilde-karte.yaml) | karte | WoW – Gilde eines Charakters | button-card | `wow_charakter` | aktiv |
 | [`wow-mythic-karte.yaml`](sonstiges/wow-mythic-karte.yaml) | karte | WoW – Mythic+ der aktuellen Season | button-card | `wow_charakter` | aktiv |
+| [`wow-pvp-karte.yaml`](sonstiges/wow-pvp-karte.yaml) | karte | WoW – PvP eines Charakters | button-card | `wow_charakter` | aktiv |
 | [`wow-raid-karte.yaml`](sonstiges/wow-raid-karte.yaml) | karte | WoW – Raid-Fortschritt | button-card | `wow_charakter` | aktiv |
 | [`wow-ruf-karte.yaml`](sonstiges/wow-ruf-karte.yaml) | karte | WoW – Ruf und Ruhmstufen | button-card | `wow_charakter` | aktiv |
 | [`wow-sammlung-karte.yaml`](sonstiges/wow-sammlung-karte.yaml) | karte | WoW – Sammlungen und Erfolge | button-card | `wow_charakter` | aktiv |

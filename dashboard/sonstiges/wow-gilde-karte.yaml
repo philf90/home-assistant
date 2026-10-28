@@ -1,0 +1,289 @@
+# ============================================================================
+# WoW – Gilde eines Charakters
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Gilde eines Charakters fuer alle Spielversionen:
+#   Kopf       Gildenname, darunter Spielversion, Realm, Fraktion und
+#              Gruendungsjahr
+#   Kacheln    Mitglieder, Anzahl auf der hoechsten Stufe der Liste,
+#              Erfolgspunkte der Gilde (nur, wenn die API sie liefert)
+#   Klassen    Anzahl je Klasse, mit Klassenpunkt
+#   Mitglieder die ersten variables.mitglieder nach Rang, mit "dein
+#              Charakter" bei Charakteren, die in Home Assistant eingerichtet
+#              sind (Name und Realm wie ein Level-Sensor der Integration)
+#   Aktivitaet die neuesten variables.aktivitaeten Bosskills und Erfolge
+# Abschnitte ohne Daten fallen weg: Erfolge gibt es im Spiel erst ab Wrath of
+# the Lich King, Gildenerfolge ab Cataclysm, also nicht in Classic Era und
+# Anniversary; was die Classic-API davon liefert, ist nicht belegt. Rangnamen
+# liefert die API nicht: Rang 0 ist im Spiel immer die Gildenleitung und
+# heisst hier "Gildenmeister", sonst "Rang N".
+#
+# Ohne Gilde legt die Integration keinen Sensor an; die Karte nennt das. Tritt
+# der Charakter einer Gilde bei, erscheint der Sensor nach dem Neuladen der
+# Integration.
+#
+# Spielversion: aus dem Modell des Charakter-Geraets ("World of Warcraft
+# (classic_era)"), wie in wow-charaktere-karte.yaml.
+#
+# Daten: Sensor _gilde (Zustand = Mitglieder; Attribute name, realm, faction,
+# achievement_points, created, activities, members mit name, level, class,
+# rank). Name bei deutscher Oberflaeche; die Mitgliederliste gibt es ab
+# Integration 0.11.0.
+#
+# Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose
+# (Bereich Freizeit) fuer Icon-Kachel und "dein Charakter". Klassenpunkte in
+# den WoW-Klassenfarben (DESIGN.md, Sonderfarben), immer neben dem
+# Klassennamen als Text; Rand halb Farbe, halb nachtblau-text, damit auch der
+# Priester-Punkt (#f2f5f8) auf heller Huelle sichtbar bleibt. Unbekannte
+# Klasse: Punkt in Sekundaer.
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.8.0, fuer Mitglieder ab 0.11.0.
+type: custom:button-card
+# Die Karte liest Sensoren ueber variables.prefix; bei jeder
+# Zustandsaenderung neu zeichnen.
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:shield-sword
+name: |
+  [[[
+    return states[`sensor.${variables.prefix}_gilde`]?.attributes?.name || 'Gilde';
+  ]]]
+label: |
+  [[[
+    const g = states[`sensor.${variables.prefix}_gilde`]?.attributes || {};
+    const d = new Date(g.created);
+    const seit = g.created && !isNaN(d.getTime()) ? `seit ${d.getFullYear()}` : null;
+    return [variables.version.name, g.realm, g.faction, seit].filter(Boolean).join(' · ') || ' ';
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  # Anzahl der Mitglieder in der Liste und der Aktivitaeten; 0 blendet den
+  # Abschnitt aus
+  mitglieder: 5
+  aktivitaeten: 3
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--nachtblau-rose, #e6a0c4)',
+        text:   'var(--nachtblau-text, #f2f5f8)',
+        label:  'var(--nachtblau-label, #b4c0cf)',
+        sek:    'var(--nachtblau-text-sekundaer, #8794a5)',
+        kachel: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+  # WoW-Klassenfarben (DESIGN.md, Sonderfarben; RAID_CLASS_COLORS),
+  # Schluessel = Klassenname der API (deutsche Oberflaeche), wie in
+  # wow-werte-karte.yaml; Priester (im Spiel Weiss) nimmt #f2f5f8
+  klassen: |
+    [[[
+      return {
+        Todesritter:  '#c41e3a', 'Dämonenjäger': '#a330c9', Druide:  '#ff7c0a',
+        Rufer:        '#33937f', 'Jäger':        '#aad372', Magier:  '#3fc7eb',
+        'Mönch':      '#00ff98', Paladin:        '#f48cba', Priester: '#f2f5f8',
+        Schurke:      '#fff468', Schamane:       '#0070dd', Hexenmeister: '#8788ee',
+        Krieger:      '#c69b6d',
+      };
+    ]]]
+  # Spielversion aus dem Modell des Geraets: key (retail, classic_era, ...)
+  # und Anzeigename; ohne Geraet beides null
+  version: |
+    [[[
+      const namen = {
+        retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+        classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+      };
+      const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${variables.prefix}_level`]?.device_id]?.model;
+      const key = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1] ?? null;
+      return { key, name: key ? (namen[key] || key) : null };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      const format = (v) => (typeof v === 'number' && !isNaN(v)) ? Math.round(v).toLocaleString('de-DE') : '–';
+      const hinweis = (text) => `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:0 2px;">${text}</div>`;
+      const gilde = states[`sensor.${p}_gilde`];
+      if (!gilde) {
+        return states[`sensor.${p}_level`]
+          ? hinweis('Dieser Charakter ist in keiner Gilde. Tritt er einer bei, erscheint sie nach dem Neuladen der Integration.')
+          : hinweis(`Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.`);
+      }
+      const g = gilde.attributes || {};
+      const mitglieder = Array.isArray(g.members) ? g.members : [];
+      const teile = [];
+      const abschnitt = (titel, inhalt) => `
+        <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:9px;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">${titel}</div>
+          ${inhalt}
+        </div>`;
+      // Klassenpunkt: Rand halb Farbe, halb Theme-Text (DESIGN.md)
+      const punkt = (klasse) => {
+        const farbe = variables.klassen[klasse] || f.sek;
+        return `<span style="flex:none;width:8px;height:8px;box-sizing:border-box;border-radius:50%;background:${farbe};border:1px solid color-mix(in srgb, ${farbe} 50%, ${f.text});"></span>`;
+      };
+
+      // Kacheln: Mitglieder, hoechste Stufe der Liste, Erfolgspunkte
+      const stufen = mitglieder.map((m) => m.level).filter((l) => typeof l === 'number');
+      const hoechste = stufen.length ? Math.max(...stufen) : null;
+      const kacheln = [[parseFloat(gilde.state), 'Mitglieder']];
+      if (hoechste !== null) kacheln.push([stufen.filter((l) => l === hoechste).length, `auf Stufe ${hoechste}`]);
+      if (typeof g.achievement_points === 'number') kacheln.push([g.achievement_points, 'Erfolgs&shy;punkte']);
+      teile.push(`<div style="display:grid;grid-template-columns:repeat(${kacheln.length}, minmax(0,1fr));gap:6px;">${kacheln.map(([wert, name]) => `
+        <div style="min-width:0;background:${f.kachel};border:1px solid ${f.rand};border-radius:13px;padding:8px 4px;text-align:center;">
+          <div style="font-size:16px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${format(wert)}</div>
+          <div style="margin-top:2px;font-size:11.5px;line-height:1.25;color:${f.sek};${zweizeilig}">${name}</div>
+        </div>`).join('')}</div>`);
+
+      // Klassen, die haeufigsten zuerst
+      const zaehler = {};
+      for (const m of mitglieder) {
+        const k = m.class || 'Unbekannt';
+        zaehler[k] = (zaehler[k] || 0) + 1;
+      }
+      const klassen = Object.entries(zaehler).sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], 'de'));
+      if (klassen.length) {
+        teile.push(abschnitt('Klassen', `<div style="display:flex;flex-wrap:wrap;gap:6px;">${klassen.map(([k, n]) => `
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:9px;background:${f.spur};border:1px solid ${f.rand};font-size:12px;color:${f.label};white-space:nowrap;">${punkt(k)}${esc(k)} <span style="font-variant-numeric:tabular-nums;">${n}</span></span>`).join('')}</div>`));
+      }
+
+      // Mitglieder nach Rang (die Integration sortiert nach Rang und Name);
+      // eigene Charaktere: Level-Sensoren der Integration mit gleichem Namen
+      // und Realm
+      const eigene = new Set(Object.keys(states)
+        .filter((id) => /^sensor\..+_level$/.test(id))
+        .map((id) => states[id].attributes || {})
+        .filter((a) => 'class' in a && 'race' in a && 'realm' in a)
+        .map((a) => `${String(a.friendly_name || '').replace(/\s*Level$/, '').split(' – ')[0]}|${a.realm}`));
+      const liste = mitglieder.slice(0, Math.max(0, variables.mitglieder || 0));
+      if (liste.length) {
+        const zeilen = liste.map((m) => {
+          const rang = m.rank === 0 ? 'Gildenmeister' : (typeof m.rank === 'number' ? `Rang ${m.rank}` : '');
+          const du = eigene.has(`${m.name}|${g.realm}`)
+            ? ` <span style="margin-left:4px;padding:1px 6px;border-radius:7px;background:color-mix(in srgb, ${f.akzent} 12%, transparent);border:1px solid color-mix(in srgb, ${f.akzent} 24%, transparent);font-size:11px;font-weight:600;color:${f.akzent};white-space:nowrap;">dein Charakter</span>` : '';
+          const info = [typeof m.level === 'number' ? `Stufe ${m.level}` : null, m.class].filter(Boolean).map(esc).join(' · ');
+          return `
+            <div style="display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:1px 8px;align-items:center;">
+              ${punkt(m.class)}
+              <span style="min-width:0;font-size:13px;font-weight:700;line-height:1.3;color:${f.text};${zweizeilig}">${esc(m.name)}${du}</span>
+              <span style="font-size:12px;color:${f.sek};white-space:nowrap;">${rang}</span>
+              <span></span>
+              <span style="grid-column:2 / -1;font-size:12px;line-height:1.3;color:${f.sek};">${info}</span>
+            </div>`;
+        });
+        const rest = mitglieder.length - liste.length;
+        if (rest > 0) zeilen.push(`<div style="font-size:12px;color:${f.sek};">und ${rest.toLocaleString('de-DE')} weitere</div>`);
+        teile.push(abschnitt('Mitglieder nach Rang', zeilen.join('')));
+      }
+
+      // Aktivitaet: Bosskills und Erfolge (neueste zuerst, von der Integration)
+      const tag = (iso) => {
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      };
+      const aktiv = (Array.isArray(g.activities) ? g.activities : [])
+        .map((a) => ({
+          text: a.boss ? `Boss besiegt: ${esc(a.boss)}${a.difficulty ? ` · ${esc(a.difficulty)}` : ''}`
+            : a.achievement ? `${a.character ? `${esc(a.character)}: ` : ''}Erfolg „${esc(a.achievement)}“` : null,
+          tag: tag(a.timestamp),
+        }))
+        .filter((a) => a.text)
+        .slice(0, Math.max(0, variables.aktivitaeten || 0));
+      if (aktiv.length) {
+        teile.push(abschnitt('Aktivität', aktiv.map((a) => `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:baseline;">
+            <span style="min-width:0;font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">${a.text}</span>
+            <span style="font-size:12px;color:${f.sek};font-variant-numeric:tabular-nums;white-space:nowrap;">${a.tag}</span>
+          </div>`).join('')));
+      }
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 16px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--nachtblau-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    # Gildennamen: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--nachtblau-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    # Version, Realm, Fraktion und Jahr: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
+    - font-size: 12.5px
+    - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      # button-card setzt an custom_fields white-space: nowrap (Klasse
+      # ellipsis); Namen und Hinweise sollen umbrechen
+      - white-space: normal
