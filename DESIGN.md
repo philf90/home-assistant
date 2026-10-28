@@ -366,7 +366,7 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
   die Farben stehen deshalb nur als 2-px-Rand am Item-Symbol, nie als
   Schrift, auch im Item-Tooltip nicht (dort Rand an Symbol und
   Qualitäts-Pille). Quelle der Werte: Warcraft Wiki, `GetItemQualityColor`.
-- **World of Warcraft, Lebensbalken und Klassen:** nur in der Werte-Karte
+- **World of Warcraft, Lebensbalken und Klassen:** in der Werte-Karte
   (`wow-werte-karte.yaml`), dort als gefüllte Kachel: Leben im Grün des
   Lebensbalkens `#00ff00` (die Spieloberfläche setzt ihn mit
   `SetStatusBarColor(0.0, 1.0, 0.0)`), der Primärwert in der Klassenfarbe des
@@ -384,6 +384,12 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
   6,12:1, hell ab 3,22:1, Priester). Die Füllung allein liegt teils nah an
   der Hülle (Priester hell 1,00:1, Todesritter dunkel 2,72:1). Quelle der
   Klassenfarben: Warcraft Wiki, „Class colors“ (`RAID_CLASS_COLORS`).
+  Die Klassenfarben stehen außerdem als 8-px-Klassenpunkt in der
+  Gilden-Karte (`wow-gilde-karte.yaml`), vor jedem Mitglied und in der
+  Klassenübersicht. Der Punkt ist nur Zusatz: Der Klassenname steht immer
+  als Text daneben, deshalb gilt die 3:1-Grenze für Grafiken nicht. Den
+  Rand mischt die Karte wie bei der Kachel halb mit `nachtblau-text`, damit
+  auch der Priester-Punkt auf heller Hülle sichtbar bleibt.
 
 ## Heller Modus
 
@@ -641,7 +647,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
 | WoW-Qualitätsfarben | nur in der WoW-Karte, die in beiden Modi dunkel bleibt; in der Werte-Karte als Rand der Item-Symbole auch auf heller Hülle (Symbol trägt die Information) | Ungewöhnlich auf heller Hülle 1,25:1 |
-| WoW-Lebensbalken und -Klassenfarben | nur als gefüllte Kachel der Werte-Karte, Füllung und Schrift in beiden Modi gleich; Rand halb Farbe, halb `nachtblau-text` | Schrift ab 4,90:1; Rand zur hellen Hülle ab 3,22:1 |
+| WoW-Lebensbalken und -Klassenfarben | als gefüllte Kachel der Werte-Karte und als Klassenpunkt der Gilden-Karte (mit Klassenname als Text), Füllung und Schrift in beiden Modi gleich; Rand halb Farbe, halb `nachtblau-text` | Schrift ab 4,90:1; Rand zur hellen Hülle ab 3,22:1 |
 | Gelbe und rote Karte (Fußball-Popup) | Symbol in beiden Modi im Pastellton gefüllt (`#e6b566` bzw. `#f0736a`), Rand in `nachtblau-amber` bzw. `nachtblau-rot`; die Tieftöne allein wären gleich hell und die gelbe Karte wirkte rot | Füllungen 1,52:1 auseinander (Tieftöne 1,01:1); Rand auf Füllung 3,16:1 bzw. 2,10:1 |
 | Trikotkreise auf dem Spielfeld (Fußball-Popup) | in beiden Modi gleich: Füllung `#3a4453`, beim Lieblingsverein Vereinsrot `#e30613`, Nummer in `#f2f5f8`, auf Vereinsrot in Weiß `#ffffff`, Rand Weiß 0,24 | Nummer auf `#3a4453` 9,00:1, auf Vereinsrot 4,88:1 (mit `#f2f5f8` wären es 4,46:1) |
 
