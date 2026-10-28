@@ -12,7 +12,8 @@
 # ============================================================================
 # Werte wie im Charakterfenster des Spiels, dazu ein Blick auf die Ausruestung:
 #   Kopf        Charakterbild mit Symbol der Spezialisierung (ohne Bild die
-#               Icon-Kachel), Spezialisierung und Heldentalente
+#               Icon-Kachel), Spezialisierung und Klasse, darunter Name,
+#               Spielversion (Retail, Classic Era, ...) und Heldentalente
 #   Kacheln     Leben und Primaerwert (Staerke, Beweglichkeit oder Intelligenz)
 #               als gefuellte Kacheln: Leben im Gruen des Lebensbalkens,
 #               Primaerwert in der Klassenfarbe des Charakters
@@ -35,7 +36,7 @@
 # wow_platz (wow-templates.yaml), genau wie im Arsenal: Rand in der
 # Qualitaetsfarbe, Amber-Punkt bei leerem Sockel, Tooltip beim Darueber-
 # fahren, Popup beim Tippen. Daneben steht der Name des Platzes, das Itemlevel
-# klein darunter. Die Plaetze stehen in einer Raster-Karte (grid, zwei Spalten), die
+# (nur die Zahl) klein darunter. Die Plaetze stehen in einer Raster-Karte (grid, zwei Spalten), die
 # nur so viele Karten enthaelt wie Plaetze; ohne Plaetze faellt sie weg. Die
 # Entitaet je Platz (_ausrustung_kopf, ...) setzt variables.ausruestung aus
 # dem Feld slot der API zusammen; fehlt sie, steht nur der Name als Text da.
@@ -48,6 +49,10 @@
 # _set_fortschritt, _leere_sockel, _verzauberungen) gibt es ab 0.6.0; ohne
 # sie fallen die Zeilen weg, die Spezialisierung kommt dann aus dem
 # Level-Sensor. Namen bei deutscher Oberflaeche.
+# Die Spielversion steht im Modell des Charakter-Geraets ("World of Warcraft
+# (classic_era)", Integration ab 0.3.0, Classic ab 0.9.0); die Karte liest es
+# ueber hass.entities und hass.devices wie wow-charaktere-karte.yaml. Ohne
+# Geraet fehlt sie, ein unbekannter Schluessel erscheint unveraendert.
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
 # Freizeit) fuer Icon-Kachel und Balken; aktive Set-Boni Gruen (wie im
@@ -91,7 +96,15 @@ label: |
     const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
       .replace(/\s*Level$/, '').split(' – ')[0];
     const held = states[`sensor.${p}_spezialisierung`]?.attributes?.hero_talents;
-    return [geraet, held].filter(Boolean).join(' · ') || ' ';
+    // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (retail)"
+    const versionen = {
+      retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+      classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+    };
+    const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+    const m = /^World of Warcraft \((.+)\)$/.exec(modell || '');
+    const spiel = m ? (versionen[m[1]] || m[1]) : null;
+    return [geraet, spiel, held].filter(Boolean).join(' · ') || ' ';
   ]]]
 tap_action:
   action: none
@@ -388,6 +401,15 @@ styles:
   label:
     - justify-self: start
     - align-self: start
+    # Name, Spielversion und Heldentalente: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
     - font-size: 12.5px
     - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
     - margin-top: 1px
