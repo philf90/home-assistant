@@ -23,8 +23,16 @@
 #               Reittier, Haustier, Spielzeug oder Titel, je seit dem Start
 #               von Home Assistant (Ereignisse "Neuer Erfolg", "Neu gesammelt")
 # Kacheln und Abschnitte ohne Sensor (z. B. Erfolge und Titel vor 0.6.0)
-# fallen weg. Die Werte aendern sich erst, wenn sich der Charakter im Spiel
-# ausloggt.
+# fallen weg, ebenso die Fusszeilen ohne Ereignis-Entitaet. Die Werte
+# aendern sich erst, wenn sich der Charakter im Spiel ausloggt.
+#
+# WoW Classic: Die Classic-API liefert keine Sammlungen, Titel und Quests;
+# die Integration legt die Sensoren nicht an. Die Karte heisst dann
+# "Erfolge" und zeigt nur Erfolgspunkte, Erfolge, Kategorien und Statistik,
+# soweit die API sie liefert (Erfolge gibt es im Spiel erst ab Wrath of the
+# Lich King, also nicht in Classic Era und Burning Crusade). Fehlt alles,
+# nennt die Karte das statt der Einrichtungs-Meldung. Spielversion aus dem
+# Modell des Charakter-Geraets ("World of Warcraft (classic_era)").
 #
 # Statistik-IDs: Einstellungen -> Werkzeuge -> Zustaende -> Sensor
 # ..._spielstatistik, Attribut statistics (id, name, category, quantity).
@@ -50,7 +58,13 @@ show_name: true
 show_label: true
 show_state: false
 icon: mdi:trophy-variant
-name: Sammlungen & Erfolge
+name: |
+  [[[
+    // Classic: keine Sammlungen
+    const p = variables.prefix;
+    const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+    return /^World of Warcraft \(classic_.+\)$/.test(modell || '') ? 'Erfolge' : 'Sammlungen & Erfolge';
+  ]]]
 label: |
   [[[
     return String(states[`sensor.${variables.prefix}_level`]?.attributes?.friendly_name || '')
@@ -95,6 +109,11 @@ custom_fields:
       const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
       const format = (v) => v === null ? '–' : Math.round(v).toLocaleString('de-DE');
       if (!st('reittiere') && !st('erfolgspunkte')) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        if (/^World of Warcraft \(classic_.+\)$/.test(modell || '')) {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Sammlungen gibt es für WoW Classic nicht, und für diesen Charakter liefert die Classic-API keine Erfolge.</div>`;
+        }
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
       }
 
@@ -163,10 +182,13 @@ custom_fields:
           ${bild ? `<img src="${esc(bild)}" alt="" style="flex:none;width:20px;height:20px;border-radius:5px;border:1px solid ${f.rand};">` : ''}
           <span style="min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${text}</span>
         </div>`;
+      // Neuester Erfolg; ohne Ereignis-Entitaet (Classic ohne Erfolge) keine Zeile
       const erfolg = states[`event.${p}_neuer_erfolg`];
-      teile.push(tag(erfolg) && erfolg.attributes?.achievement
-        ? fusszeile(`Neuester Erfolg: ${esc(erfolg.attributes.achievement)} · ${tag(erfolg)}`, erfolg.attributes.icon)
-        : fusszeile('Neuester Erfolg: noch keiner seit dem Start von Home Assistant'));
+      if (erfolg) {
+        teile.push(tag(erfolg) && erfolg.attributes?.achievement
+          ? fusszeile(`Neuester Erfolg: ${esc(erfolg.attributes.achievement)} · ${tag(erfolg)}`, erfolg.attributes.icon)
+          : fusszeile('Neuester Erfolg: noch keiner seit dem Start von Home Assistant'));
+      }
       // Neu gesammelt (ab Integration 0.8.0): Reittier, Haustier, Spielzeug, Titel
       const neu = states[`event.${p}_neu_gesammelt`];
       if (neu) {
