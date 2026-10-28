@@ -11,7 +11,7 @@
 # ============================================================================
 # Alle Charaktere der Integration "WoW Charakter" auf einen Blick, je
 # Charakter eine Zeile:
-#   Avatar mit Symbol der Spezialisierung, Name, Itemlevel
+#   Avatar mit Symbol der Spezialisierung, Name mit Spielversion, Itemlevel
 #   Stufe · Spezialisierung Klasse · Realm, Mythic+-Wertung
 #   Letzter Login als "vor 3 Tagen", dazu ein Level-Aufstieg der letzten
 #   7 Tage (Ereignis "Level gestiegen")
@@ -19,6 +19,12 @@
 # spec_icon am Level-Sensor, event.<praefix>_level_gestiegen); ohne sie
 # bleibt die Zeile wie vorher.
 # Sortiert nach Stufe, dann Itemlevel. Ohne Avatar bleibt der Platzhalter.
+#
+# Spielversion (Retail, Classic Era, Classic Progression, Classic Anniversary,
+# Forever): steht nicht in den Sensoren, sondern im Modell des Charakter-
+# Geraets ("World of Warcraft (classic_era)", Integration ab 0.3.0, Classic
+# ab 0.9.0). Die Karte liest es ueber hass.entities und hass.devices; ohne
+# Geraet fehlt der Zusatz. Ein unbekannter Schluessel erscheint unveraendert.
 #
 # Charaktere: Die Karte sucht selbst alle Sensoren sensor.<praefix>_level mit
 # den Attributen class, race und realm (so legt die Integration den
@@ -105,6 +111,16 @@ custom_fields:
       const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
       const zahl = (e) => (leer(e) || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
       const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (retail)"
+      const versionen = {
+        retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+        classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+      };
+      const version = (id) => {
+        const geraet = (hass.devices || {})[(hass.entities || {})[id]?.device_id];
+        const m = /^World of Warcraft \((.+)\)$/.exec(geraet?.model || '');
+        return m ? (versionen[m[1]] || m[1]) : null;
+      };
 
       if (!variables.liste.length) {
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Charaktere gefunden. Integration „WoW Charakter“ einrichten oder variables.charaktere füllen.</div>`;
@@ -130,6 +146,7 @@ custom_fields:
         const mplus = states[`sensor.${p}_mythic_wertung`];
         let wertung = zahl(mplus);
         if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
+        const spiel = version(`sensor.${p}_level`);
         const login = vor(states[`sensor.${p}_letzter_login`]?.state);
         // Letzter Level-Aufstieg (Ereignis ab Integration 0.8.0), hoechstens 7 Tage alt
         const auf = states[`event.${p}_level_gestiegen`];
@@ -150,7 +167,7 @@ custom_fields:
               </div>
               ${a.spec_icon ? `<img src="${esc(a.spec_icon)}" alt="" title="${esc(a.spec || '')}" style="position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 2px ${f.ring};">` : ''}
             </div>
-            <div style="min-width:0;font-size:14.5px;font-weight:700;color:${f.titel};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+            <div style="min-width:0;font-size:14.5px;line-height:1.3;font-weight:700;color:${f.titel};${zweizeilig}">${esc(name)}${spiel ? ` <span style="font-size:12px;font-weight:400;color:${f.sek};white-space:nowrap;">${esc(spiel)}</span>` : ''}</div>
             <div style="justify-self:end;font-size:13px;color:${f.sek};white-space:nowrap;"><b style="font-size:14.5px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;">${ilvl === null ? '–' : Math.round(ilvl)}</b> ilvl</div>
             <div style="min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${info}</div>
             <div style="justify-self:end;align-self:start;font-size:12px;color:${f.sek};white-space:nowrap;">M+ <b style="color:${f.label};font-weight:700;font-variant-numeric:tabular-nums;">${wertung === null ? '–' : Math.round(wertung)}</b></div>
