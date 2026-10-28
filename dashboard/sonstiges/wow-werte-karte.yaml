@@ -18,7 +18,10 @@
 #               als gefuellte Kacheln: Leben im Gruen des Lebensbalkens,
 #               Primaerwert in der Klassenfarbe des Charakters
 #   Zweitwerte  Krit, Tempo, Meisterschaft, Vielseitigkeit in Prozent; die
-#               Balken stehen im Verhaeltnis zum hoechsten der vier Werte
+#               Balken stehen im Verhaeltnis zum hoechsten der vier Werte.
+#               Werte ohne Sensor fallen weg: Die Integration legt fuer WoW
+#               Classic nur Sensoren an, die beim Start einen Wert haben
+#               (Vielseitigkeit gibt es in Classic nicht)
 #   Ausruestung Set wie im Item-Tooltip des Arsenals: Teile (angelegt hell,
 #               fehlend grau) und alle Boni (aktiv gruen, inaktiv grau);
 #               die Zahl der Teile (3/5) als Pille: gruen, wenn alle Boni
@@ -258,7 +261,7 @@ custom_fields:
       const zweit = [
         ['kritische_trefferchance', 'Krit'], ['tempo', 'Tempo'],
         ['meisterschaft', 'Meisterschaft'], ['vielseitigkeit', 'Vielseitigkeit'],
-      ].map(([endung, name]) => ({ name, wert: zahl(st(endung)) }));
+      ].map(([endung, name]) => ({ name, da: !!st(endung), wert: zahl(st(endung)) }));
       if (leben === null && zahl(primaer) === null && zweit.every((z) => z.wert === null)) {
         teile.push(`<div style="font-size:12.5px;line-height:1.4;color:${f.sek};padding:0 2px;">Die Werte-Sensoren sind aus. Einschalten unter Einstellungen → Geräte &amp; Dienste → WoW Charakter → Charakter → Entitäten.</div>`);
       } else {
@@ -293,7 +296,8 @@ custom_fields:
           ${kachel(leben, 'Leben', stilLeben)}${kachel(zahl(primaer), namen[primaer?.attributes?.stat] || 'Primärwert', stilPrimaer)}
         </div>`);
         const max = Math.max(1, ...zweit.map((z) => z.wert || 0));
-        teile.push(abschnitt('Zweitwerte', zweit.map((z) => `
+        const zeilen = zweit.filter((z) => z.da);
+        if (zeilen.length) teile.push(abschnitt('Zweitwerte', zeilen.map((z) => `
           <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
             <span style="font-size:12.5px;color:${f.label};">${z.name}</span>
             <span style="font-size:13px;font-weight:700;color:${f.text};font-variant-numeric:tabular-nums;">${z.wert === null ? '–' : `${z.wert.toLocaleString('de-DE', { maximumFractionDigits: 1 })}&thinsp;%`}</span>

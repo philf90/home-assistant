@@ -25,6 +25,10 @@
 # des Ruf-Sensors (Einstellungen -> Werkzeuge -> Zustaende). Namen sind
 # nicht eindeutig, deshalb die ID.
 #
+# WoW Classic: Die Classic-API liefert keinen Ruf, die Integration legt den
+# Sensor nicht an; die Karte nennt das statt der Einrichtungs-Meldung
+# (Spielversion aus dem Modell des Charakter-Geraets).
+#
 # Daten: Sensor _ruf (Zustand = Anzahl der Fraktionen, Attribut factions mit
 # faction, faction_id, standing, value, max, renown, paragon). Name bei
 # deutscher Oberflaeche.
@@ -100,6 +104,12 @@ custom_fields:
         (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
       if (!states[`sensor.${p}_ruf`]) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        const version = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1];
+        if (version?.startsWith('classic_')) {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Ruf gibt es für WoW Classic nicht: Die Classic-API von Blizzard liefert keine Ruf-Daten.</div>`;
+        }
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Kein Ruf-Sensor unter <span style="color:${f.label};">sensor.${esc(p)}_ruf</span> gefunden. Integration „WoW Charakter“ ab 0.4.1 einrichten und das Präfix in der Karte anpassen.</div>`;
       }
       if (!variables.auswahl.length) {

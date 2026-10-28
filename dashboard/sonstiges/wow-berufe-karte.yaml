@@ -24,6 +24,9 @@
 # Entitaet, entity_picture); vorher bleibt es weg.
 # Kochkunst und Angeln koennen eine aeltere Stufe zeigen: Die Integration
 # nimmt die neueste Stufe, die der Charakter gelernt hat.
+# WoW Classic: Die Classic-API liefert keine Berufe, die Integration legt die
+# Sensoren nicht an; die Karte nennt das statt der Einrichtungs-Meldung
+# (Spielversion aus dem Modell des Charakter-Geraets).
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
 # Freizeit); ein ausgelernter Beruf (Skill = Maximum) bekommt Gruen und den
@@ -89,6 +92,12 @@ custom_fields:
         .sort((a, b) => ((b.max ? (b.skill || 0) / b.max : 0) - (a.max ? (a.skill || 0) / a.max : 0))
           || a.name.localeCompare(b.name, 'de'));
       if (!berufe.length) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        const version = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1];
+        if (version?.startsWith('classic_')) {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Berufe gibt es für WoW Classic nicht: Die Classic-API von Blizzard liefert keine Berufsdaten.</div>`;
+        }
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Berufe unter <span style="color:${f.label};">sensor.${esc(p)}_beruf_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
       }
       const zeilen = berufe.map((b) => {

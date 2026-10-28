@@ -19,6 +19,10 @@
 # Wertung aus dem Attribut api_rating da (der Wert, den das Arsenal zeigt),
 # mit dem Hinweis "laut Arsenal".
 #
+# Mythic+ gibt es nur in Retail: Fuer Classic und Forever legt die Integration
+# keine Mythic+-Sensoren an; die Karte nennt das statt der Einrichtungs-
+# Meldung (Spielversion aus dem Modell des Charakter-Geraets).
+#
 # Daten: Sensoren _mythic_wertung, _hochster_mythic_schlussel und
 # _mythic_laufe_in_zeit (Namen bei deutscher Oberflaeche). Die Dauer eines
 # Laufs ist in der API ohne belegte Einheit; die Integration rechnet sie in
@@ -86,6 +90,12 @@ custom_fields:
 
       const wertung = states[`sensor.${p}_mythic_wertung`];
       if (!wertung) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        const version = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1];
+        if (version && version !== 'retail') {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Mythic+ gibt es nur in Retail. Für diese Spielversion legt die Integration keine Mythic+-Sensoren an.</div>`;
+        }
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Mythic+-Sensoren unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ (Retail) einrichten und das Präfix in der Karte anpassen.</div>`;
       }
       const schluessel = states[`sensor.${p}_hochster_mythic_schlussel`];
