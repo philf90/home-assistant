@@ -19,6 +19,9 @@
 #            (Ereignis "Boss besiegt")
 # Schwierigkeiten ohne Bosse in der Antwort (0 von 0) blendet die Karte aus.
 # Raidnamen kommen von der API auf Englisch.
+# WoW Classic: Die Classic-API liefert keinen Raid-Fortschritt, die
+# Integration legt die Sensoren nicht an; die Karte nennt das statt der
+# Einrichtungs-Meldung (Spielversion aus dem Modell des Charakter-Geraets).
 #
 # Daten: Sensoren _raid_fortschritt_<stufe> (Zustand = besiegte Bosse,
 # Attribute expansion, total_bosses, raids, images) und event._boss_besiegt. Die
@@ -89,6 +92,12 @@ custom_fields:
         (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
       if (!states[`sensor.${p}_raid_fortschritt_lfr`]) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        const version = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1];
+        if (version?.startsWith('classic_')) {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Raid-Fortschritt gibt es für WoW Classic nicht: Die Classic-API von Blizzard liefert keine Raid-Daten.</div>`;
+        }
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ einrichten und das Präfix in der Karte anpassen.</div>`;
       }
       const balken = (wert, max, farbe) => `<div style="height:6px;border-radius:5px;background:${f.spur};overflow:hidden;"><div style="height:100%;width:${max ? Math.max(0, Math.min(100, wert / max * 100)) : 0}%;border-radius:5px;background:${farbe};"></div></div>`;
