@@ -14,8 +14,10 @@
 # die Item-Symbole in wow-werte-karte.yaml):
 #
 #   wow_basis     Nur Variablen: variables.wow mit Farben, Qualitaetsfarben,
-#                 esc() und tooltip(t, optionen), das den Item-Tooltip als
-#                 HTML baut. Hier stehen alle Farben der WoW-Karte einmal.
+#                 esc(), tooltip(t, optionen), das den Item-Tooltip als
+#                 HTML baut, und zusatzplaetze(hass, prefix) fuer die
+#                 Classic-Zusatzplaetze. Hier stehen alle Farben der WoW-Karte
+#                 einmal.
 #   wow_platz     Ein Ausruestungsplatz: Item-Symbol mit Rand in der
 #                 Qualitaetsfarbe und Itemlevel daneben (variables.seite:
 #                 links oder rechts; mit variables.text steht dort der Text
@@ -166,7 +168,20 @@ button_card_templates:
               </div>`;
           };
           const leereSockel = (sockets) => (Array.isArray(sockets) ? sockets : []).filter((s) => !s?.gem).length;
-          return { farben, qualitaet, esc, tooltip, leereSockel };
+          // zusatzplaetze(): Entity-IDs der Sensoren "Ausruestung {Platz}" fuer
+          // Plaetze, die Retail nicht kennt (ausserhalb von Retail, Integration
+          // ab 0.9.0), sortiert; gefunden ueber das Geraet von sensor.<prefix>_level
+          // und den Uebersetzungsschluessel equipment_other.
+          const zusatzplaetze = (hass, prefix) => {
+            const alle = (hass && hass.entities) || {};
+            const geraet = alle[`sensor.${prefix}_level`]?.device_id;
+            if (!geraet) return [];
+            return Object.values(alle)
+              .filter((e) => e.device_id === geraet && e.platform === 'wow_character' && e.translation_key === 'equipment_other')
+              .map((e) => e.entity_id)
+              .sort();
+          };
+          return { farben, qualitaet, esc, tooltip, leereSockel, zusatzplaetze };
         ]]]
 
   wow_platz:
