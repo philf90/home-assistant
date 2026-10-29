@@ -17,7 +17,9 @@
 #            Volk, Spezialisierung und Klasse;
 #            Pillen fuer Itemlevel, Mythic+-Wertung, Fraktion und Realm
 #   Mitte    Ganzkoerperbild, links und rechts je 8 Ausruestungsplaetze in
-#            der Reihenfolge des Arsenals, darunter Waffen- und Schildhand
+#            der Reihenfolge des Arsenals, darunter Waffen- und Schildhand;
+#            ausserhalb von Retail darunter bis zu zwei Zusatzplaetze (Sensoren
+#            "Ausruestung {Platz}", z. B. Distanz), gefunden ueber das Geraet
 #   Unten    Kennzahlen: Raid-Fortschritt (hoechste Schwierigkeit mit Kills),
 #            Anzahl der Erfolge (Sensor _erfolge, nicht die Erfolgspunkte),
 #            Reittiere, Ehrenstufe; bei Classic nur Erfolge und Ehrenstufe
@@ -283,6 +285,22 @@ custom_fields:
       entity: '[[[ return `sensor.${variables.prefix}_ausrustung_schildhand`; ]]]'
       variables:
         seite: links
+  # Zusatzplaetze ausserhalb von Retail (z. B. Distanz in Classic), hoechstens
+  # zwei; ohne Zusatzplatz bleiben z1 und z2 ausgeblendet
+  z1:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return variables.wow.zusatzplaetze(hass, variables.prefix)[0] || ""; ]]]'
+      variables:
+        seite: links
+  z2:
+    card:
+      type: custom:button-card
+      template: wow_platz
+      entity: '[[[ return variables.wow.zusatzplaetze(hass, variables.prefix)[1] || ""; ]]]'
+      variables:
+        seite: links
   leiste: |
     [[[
       const w = variables.wow, f = w.farben, p = variables.prefix;
@@ -337,13 +355,18 @@ styles:
     - cursor: default
   grid:
     # Plaetze links und rechts, das Bild ueber acht Zeilen in der Mitte,
-    # darunter Waffen- und Schildhand mittig
-    - grid-template-areas: >-
-        "kopf kopf kopf kopf"
-        "l1 bild bild r1" "l2 bild bild r2" "l3 bild bild r3" "l4 bild bild r4"
-        "l5 bild bild r5" "l6 bild bild r6" "l7 bild bild r7" "l8 bild bild r8"
-        ". w1 w2 ."
-        "leiste leiste leiste leiste"
+    # darunter Waffen- und Schildhand mittig; mit Zusatzplaetzen eine weitere
+    # Reihe darunter (einer mittig, zwei wie die Waffen)
+    - grid-template-areas: |
+        [[[
+          const n = variables.wow.zusatzplaetze(hass, variables.prefix).length;
+          const zusatz = n === 0 ? '' : n === 1 ? '". z1 z1 ."' : '". z1 z2 ."';
+          return `"kopf kopf kopf kopf"
+            "l1 bild bild r1" "l2 bild bild r2" "l3 bild bild r3" "l4 bild bild r4"
+            "l5 bild bild r5" "l6 bild bild r6" "l7 bild bild r7" "l8 bild bild r8"
+            ". w1 w2 ." ${zusatz}
+            "leiste leiste leiste leiste"`;
+        ]]]
     - grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto
     - row-gap: 5px
     - column-gap: 6px
@@ -371,6 +394,14 @@ styles:
       - justify-self: start
       - margin-left: 3px
       - margin-top: 1px
+    z1:
+      - display: '[[[ return variables.wow.zusatzplaetze(hass, variables.prefix).length ? "block" : "none"; ]]]'
+      - justify-self: '[[[ return variables.wow.zusatzplaetze(hass, variables.prefix).length === 1 ? "center" : "end"; ]]]'
+      - margin-right: 3px
+    z2:
+      - display: '[[[ return variables.wow.zusatzplaetze(hass, variables.prefix).length > 1 ? "block" : "none"; ]]]'
+      - justify-self: start
+      - margin-left: 3px
     leiste:
       - justify-self: stretch
       - min-width: 0
