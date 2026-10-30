@@ -9,22 +9,28 @@
 # Einfuegen:     Karte hinzufuegen -> Manuell
 # Platzhalter:   keine
 # ============================================================================
-# Alle Charaktere der Integration "WoW Charakter" auf einen Blick, je
-# Charakter eine Zeile:
-#   Avatar mit Symbol der Spezialisierung, Spielversion und Name, Itemlevel
+# Alle Charaktere der Integration "WoW Charakter" auf einen Blick,
+# gruppiert nach Spielversion. Jede Version ist eine Unterkachel mit Kopf
+# (Version, Anzahl), darin je Charakter eine Zeile, durch Linien getrennt:
+#   Avatar mit Symbol der Spezialisierung, Name, Itemlevel
 #   Stufe · Spezialisierung Klasse · Realm, Mythic+-Wertung
 #   Letzter Login als "vor 3 Tagen", dazu ein Level-Aufstieg der letzten
 #   7 Tage (Ereignis "Level gestiegen")
 # Symbol und Level-Aufstieg gibt es ab Integration 0.8.0 (Attribut
 # spec_icon am Level-Sensor, event.<praefix>_level_gestiegen); ohne sie
 # bleibt die Zeile wie vorher.
-# Sortiert nach Stufe, dann Itemlevel. Ohne Avatar bleibt der Platzhalter.
+# Gruppen: Retail, Classic Era, Classic Progression, Classic Anniversary,
+# Forever, dann unbekannte Versionen, zuletzt "Spielversion unbekannt".
+# Innerhalb der Gruppe sortiert nach Stufe, dann Itemlevel. Ohne Avatar
+# bleibt der Platzhalter.
 #
-# Spielversion (Retail, Classic Era, Classic Progression, Classic Anniversary,
-# Forever): steht nicht in den Sensoren, sondern im Modell des Charakter-
-# Geraets ("World of Warcraft (classic_era)", Integration ab 0.3.0, Classic
-# ab 0.9.0). Die Karte liest es ueber hass.entities und hass.devices; ohne
-# Geraet fehlt der Zusatz. Ein unbekannter Schluessel erscheint unveraendert.
+# Spielversion: steht nicht in den Sensoren, sondern im Modell des
+# Charakter-Geraets. Die Integration schreibt "World of Warcraft" fuer
+# Retail und "World of Warcraft Classic Era" fuer Classic Era (geprueft
+# 30.10.2026); der Rest nach "World of Warcraft " ist der Name der Gruppe.
+# Die Form mit Schluessel, "World of Warcraft (classic_era)", liest die
+# Karte ebenfalls. Die Karte liest das Modell ueber hass.entities und
+# hass.devices; ohne Geraet kommt der Charakter in "Spielversion unbekannt".
 #
 # Charaktere: Die Karte sucht selbst alle Sensoren sensor.<praefix>_level mit
 # den Attributen class, race und realm (so legt die Integration den
@@ -114,16 +120,22 @@ custom_fields:
       const leer = (e) => !e || ['unavailable', 'unknown', ''].includes(e.state);
       const zahl = (e) => (leer(e) || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
       const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
-      // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (retail)"
+      // Spielversion aus dem Modell des Geraets: "World of Warcraft" (Retail),
+      // "World of Warcraft Classic Era" oder "World of Warcraft (classic_era)"
       const versionen = {
         retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
         classic_anniversary: 'Classic Anniversary', forever: 'Forever',
       };
-      // Schluessel der Version (retail, classic_era, ...) oder null
+      // Anzeigename der Version (Retail, Classic Era, ...) oder null
       const version = (id) => {
         const geraet = (hass.devices || {})[(hass.entities || {})[id]?.device_id];
-        return /^World of Warcraft \((.+)\)$/.exec(geraet?.model || '')?.[1] ?? null;
+        const m = /^World of Warcraft(?: \((.+)\)| (.+))?$/.exec(geraet?.model || '');
+        if (!m) return null;
+        if (m[1]) return versionen[m[1]] || m[1];
+        return m[2] || 'Retail';
       };
+      const reihe = Object.values(versionen);
+      const rang = (v) => v === null ? 99 : (reihe.includes(v) ? reihe.indexOf(v) : 98);
 
       if (!variables.liste.length) {
         return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Charaktere gefunden. Integration „WoW Charakter“ einrichten oder variables.charaktere füllen.</div>`;
@@ -140,7 +152,7 @@ custom_fields:
         return t === 1 ? 'vor 1 Tag' : `vor ${t.toLocaleString('de-DE')} Tagen`;
       };
 
-      const zeilen = variables.liste.map((p) => {
+      const zeile = (p, erste) => {
         const lvl = states[`sensor.${p}_level`];
         const a = lvl?.attributes || {};
         const name = String(a.friendly_name || p).replace(/\s*Level$/, '').split(' – ')[0];
@@ -149,10 +161,9 @@ custom_fields:
         const mplus = states[`sensor.${p}_mythic_wertung`];
         let wertung = zahl(mplus);
         if (wertung === null) wertung = mplus?.attributes?.api_rating ?? null;
-        const schluessel = version(`sensor.${p}_level`);
-        const spiel = schluessel ? (versionen[schluessel] || schluessel) : null;
+        const spiel = version(`sensor.${p}_level`);
         // Mythic+ nur in Retail; ohne bekannte Version wie bisher anzeigen
-        const mitMplus = !schluessel || schluessel === 'retail';
+        const mitMplus = !spiel || spiel === 'Retail';
         const login = vor(states[`sensor.${p}_letzter_login`]?.state);
         // Letzter Level-Aufstieg (Ereignis ab Integration 0.8.0), hoechstens 7 Tage alt
         const auf = states[`event.${p}_level_gestiegen`];
@@ -166,21 +177,39 @@ custom_fields:
           a.realm,
         ].filter(Boolean).map(esc).join(' · ');
         return `
-          <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 10px;align-items:center;">
+          <div style="${erste ? '' : `border-top:1px solid ${f.rand};`}padding:9px 12px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 10px;align-items:center;">
             <div style="grid-row:1 / span 3;position:relative;width:40px;height:40px;">
               <div style="width:40px;height:40px;border-radius:12px;overflow:hidden;background:${f.spur};border:1px solid ${f.rand};box-sizing:border-box;">
                 ${avatar ? `<img src="${avatar}" alt="" style="display:block;width:100%;height:100%;object-fit:cover;">` : ''}
               </div>
               ${a.spec_icon ? `<img src="${esc(a.spec_icon)}" alt="" title="${esc(a.spec || '')}" style="position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 2px ${f.ring};">` : ''}
             </div>
-            <div style="min-width:0;font-size:14.5px;line-height:1.3;font-weight:700;color:${f.titel};${zweizeilig}">${spiel ? `<span style="font-size:12px;font-weight:400;color:${f.sek};white-space:nowrap;">${esc(spiel)}</span> ` : ''}${esc(name)}</div>
+            <div style="min-width:0;font-size:14.5px;line-height:1.3;font-weight:700;color:${f.titel};${zweizeilig}">${esc(name)}</div>
             <div style="justify-self:end;font-size:13px;color:${f.sek};white-space:nowrap;"><b style="font-size:14.5px;font-weight:750;color:${f.text};font-variant-numeric:tabular-nums;">${ilvl === null ? '–' : Math.round(ilvl)}</b> ilvl</div>
             <div style="${mitMplus ? '' : 'grid-column:2 / -1;'}min-width:0;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${info}</div>
             ${mitMplus ? `<div style="justify-self:end;align-self:start;font-size:12px;color:${f.sek};white-space:nowrap;">M+ <b style="color:${f.label};font-weight:700;font-variant-numeric:tabular-nums;">${wertung === null ? '–' : Math.round(wertung)}</b></div>` : ''}
             <div style="grid-column:2 / -1;font-size:12px;line-height:1.3;color:${f.sek};${zweizeilig}">${[login ? `Login ${login}` : 'Login unbekannt', aufstieg].filter(Boolean).join(' · ')}</div>
           </div>`;
-      });
-      return `<div style="display:grid;gap:8px;">${zeilen.join('')}</div>`;
+      };
+
+      // Gruppen je Spielversion; die Liste ist schon nach Stufe sortiert
+      const gruppen = new Map();
+      for (const p of variables.liste) {
+        const v = version(`sensor.${p}_level`);
+        if (!gruppen.has(v)) gruppen.set(v, []);
+        gruppen.get(v).push(p);
+      }
+      const kacheln = [...gruppen.entries()]
+        .sort((a, b) => (rang(a[0]) - rang(b[0])) || String(a[0]).localeCompare(String(b[0]), 'de'))
+        .map(([v, liste]) => `
+          <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;overflow:hidden;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:9px 12px 8px;border-bottom:1px solid ${f.rand};">
+              <span style="min-width:0;font-size:13px;line-height:1.3;font-weight:700;color:${f.titel};${zweizeilig}">${esc(v ?? 'Spielversion unbekannt')}</span>
+              <span style="font-size:12px;color:${f.sek};white-space:nowrap;">${liste.length === 1 ? '1 Charakter' : `${liste.length} Charaktere`}</span>
+            </div>
+            ${liste.map((p, i) => zeile(p, i === 0)).join('')}
+          </div>`);
+      return `<div style="display:grid;gap:8px;">${kacheln.join('')}</div>`;
     ]]]
 styles:
   card:
