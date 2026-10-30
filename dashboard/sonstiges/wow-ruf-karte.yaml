@@ -29,6 +29,9 @@
 # Sensor nicht an; die Karte nennt das statt der Einrichtungs-Meldung
 # (Spielversion aus dem Modell des Charakter-Geraets).
 #
+# Unterzeile: Spielversion (Retail, Classic Era, ...) vor dem Namen des
+# Charakters, wie in wow-werte-karte.yaml; bis zu zwei Zeilen.
+#
 # Daten: Sensor _ruf (Zustand = Anzahl der Fraktionen, Attribut factions mit
 # faction, faction_id, standing, value, max, renown, paragon). Name bei
 # deutscher Oberflaeche.
@@ -56,7 +59,16 @@ label: |
     const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
       .replace(/\s*Level$/, '').split(' – ')[0];
     const alle = states[`sensor.${p}_ruf`]?.attributes?.factions || [];
-    return [geraet, `${variables.auswahl.length} von ${alle.length} Fraktionen`].filter(Boolean).join(' · ');
+    // Spielversion aus dem Modell des Geraets: "World of Warcraft" (Retail),
+    // "World of Warcraft Classic Era" oder bis 0.21.x "World of Warcraft (classic_era)"
+    const versionen = {
+      retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+      classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+    };
+    const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+    const m = /^World of Warcraft(?: \((.+)\)| (.+))?$/.exec(modell || '');
+    const spiel = m ? (m[1] ? (versionen[m[1]] || m[1]) : (m[2] || 'Retail')) : null;
+    return [spiel, geraet, `${variables.auswahl.length} von ${alle.length} Fraktionen`].filter(Boolean).join(' · ');
   ]]]
 tap_action:
   action: none
@@ -176,6 +188,15 @@ styles:
   label:
     - justify-self: start
     - align-self: start
+    # Spielversion, Name und Zusatz: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
     - font-size: 12.5px
     - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
     - margin-top: 1px

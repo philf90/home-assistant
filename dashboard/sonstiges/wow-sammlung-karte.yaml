@@ -35,6 +35,9 @@
 # Modell des Charakter-Geraets ("World of Warcraft Classic Era", bis
 # Integration 0.21.x "World of Warcraft (classic_era)").
 #
+# Unterzeile: Spielversion (Retail, Classic Era, ...) vor dem Namen des
+# Charakters, wie in wow-werte-karte.yaml; bis zu zwei Zeilen.
+#
 # Statistik-IDs: Einstellungen -> Werkzeuge -> Zustaende -> Sensor
 # ..._spielstatistik, Attribut statistics (id, name, category, quantity).
 # Vorgabe (live mit Integration 0.6.0 gesehen): 107 Kreaturen getoetet,
@@ -68,8 +71,19 @@ name: |
   ]]]
 label: |
   [[[
-    return String(states[`sensor.${variables.prefix}_level`]?.attributes?.friendly_name || '')
-      .replace(/\s*Level$/, '').split(' – ')[0] || ' ';
+    const p = variables.prefix;
+    const geraet = String(states[`sensor.${p}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0];
+    // Spielversion aus dem Modell des Geraets: "World of Warcraft" (Retail),
+    // "World of Warcraft Classic Era" oder bis 0.21.x "World of Warcraft (classic_era)"
+    const versionen = {
+      retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+      classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+    };
+    const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+    const m = /^World of Warcraft(?: \((.+)\)| (.+))?$/.exec(modell || '');
+    const spiel = m ? (m[1] ? (versionen[m[1]] || m[1]) : (m[2] || 'Retail')) : null;
+    return [spiel, geraet].filter(Boolean).join(' · ') || ' ';
   ]]]
 tap_action:
   action: none
@@ -236,6 +250,15 @@ styles:
   label:
     - justify-self: start
     - align-self: start
+    # Spielversion und Name: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
     - font-size: 12.5px
     - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
     - margin-top: 1px
