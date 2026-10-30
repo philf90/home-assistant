@@ -523,7 +523,7 @@ in beiden Modi dunkel.
   Die übrigen WoW-Karten (`wow-charaktere-karte.yaml`,
   `wow-spielwelt-karte.yaml`, `wow-raid-karte.yaml`, `wow-mythic-karte.yaml`,
   `wow-berufe-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`,
-  `wow-werte-karte.yaml`) folgen dem Modus mit den Theme-Variablen; Akzent
+  `wow-garderobe-karte.yaml`, `wow-werte-karte.yaml`) folgen dem Modus mit den Theme-Variablen; Akzent
   ist Rosé (Bereich Freizeit). Ausnahmen in `wow-werte-karte.yaml`: die
   Item-Symbole aus `wow_platz` behalten ihren Qualitätsrand, und Leben und
   Primärwert sind gefüllte Kacheln in Lebensbalken- und Klassenfarbe

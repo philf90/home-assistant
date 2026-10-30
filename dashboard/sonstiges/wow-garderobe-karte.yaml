@@ -1,0 +1,202 @@
+# ============================================================================
+# WoW – Garderobe
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Transmog-Vorlagen und Erbstuecke eines Charakters:
+#   Kopf        Zahl verschiedener Transmog-Vorlagen und gesammelter Sets
+#   Erbstuecke  Anzahl im Titel; aufgewertete als Balken (Stufe 1 voll,
+#               hoehere Stufen halb deckend), darunter die Zahl je Stufe
+#   Plaetze     Vorlagen je Platz, zweispaltig, die meisten zuerst
+# Abschnitte ohne Sensor fallen weg. Die Werte aendern sich erst, wenn sich
+# der Charakter im Spiel ausloggt.
+#
+# Daten: Sensoren _transmog_vorlagen (Zustand; Attribute sets und slots)
+# und _erbstucke (Zustand; Attribute upgraded und upgrade_levels), Namen bei
+# deutscher Oberflaeche. Die Integration fasst gleichnamige Plaetze zusammen
+# ("Brust" fuer Brust und Robe) und zaehlt jede Vorlage einmal. Eine
+# Gesamtzahl nennt die API nicht, deshalb gibt es kein "x von y".
+#
+# Meist zeigen alle Charaktere eines Kontos dieselben Werte, aber nicht immer
+# (live 30.10.2026: Transmog-Vorlagen bei einem von sieben Charakteren
+# deutlich weniger). Die Karte gehoert deshalb zu einem Charakter.
+#
+# WoW Classic: Die Classic-API liefert keine Sammlungen; die Integration legt
+# die Sensoren nicht an. Die Karte nennt das statt der Einrichtungs-Meldung.
+# Spielversion aus dem Modell des Charakter-Geraets
+# ("World of Warcraft (classic_era)").
+#
+# Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose (Bereich
+# Freizeit) fuer Icon-Kachel und Balken; hoehere Erbstueck-Stufen mit
+# Deckkraft 0,5 (Leuchten).
+#
+# Voraussetzung: custom:button-card (HACS) und die HACS-Integration
+# "WoW Charakter" (philf90/HA-WOW) ab 0.31.0.
+type: custom:button-card
+triggers_update: all
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:hanger
+name: Garderobe
+label: |
+  [[[
+    return String(states[`sensor.${variables.prefix}_level`]?.attributes?.friendly_name || '')
+      .replace(/\s*Level$/, '').split(' – ')[0] || ' ';
+  ]]]
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  # Nur diese Zeile anpassen: Entity-ID ohne Domain und Endung,
+  # z. B. sensor.<charakter>_<realm>_level -> <charakter>_<realm>
+  prefix: wow_charakter
+  farben: |
+    [[[
+      return {
+        akzent: 'var(--nachtblau-rose, #e6a0c4)',
+        text:   'var(--nachtblau-text, #f2f5f8)',
+        label:  'var(--nachtblau-label, #b4c0cf)',
+        sek:    'var(--nachtblau-text-sekundaer, #8794a5)',
+        kachel: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))',
+        rand:   'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))',
+        spur:   'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))',
+      };
+    ]]]
+custom_fields:
+  body: |
+    [[[
+      const f = variables.farben, p = variables.prefix;
+      const esc = (s) => String(s ?? '').replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const zweizeilig = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+      const st = (endung) => states[`sensor.${p}_${endung}`];
+      const zahl = (e) => (!e || isNaN(parseFloat(e.state))) ? null : parseFloat(e.state);
+      const format = (v) => (typeof v === 'number' && !isNaN(v)) ? Math.round(v).toLocaleString('de-DE') : '–';
+      const vorlagen = st('transmog_vorlagen');
+      const erbstuecke = st('erbstucke');
+      if (!vorlagen && !erbstuecke) {
+        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+        if (/^World of Warcraft \(classic_.+\)$/.test(modell || '')) {
+          return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Transmog-Vorlagen und Erbstücke gibt es für WoW Classic nicht.</div>`;
+        }
+        return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Keine Entitäten unter <span style="color:${f.label};">sensor.${esc(p)}_*</span> gefunden. Integration „WoW Charakter“ ab 0.31.0 einrichten und das Präfix in der Karte anpassen.</div>`;
+      }
+
+      const abschnitt = (ueberschrift, inhalt) => `
+        <div style="background:${f.kachel};border:1px solid ${f.rand};border-radius:14px;padding:10px 12px;display:grid;gap:9px;">
+          ${ueberschrift ? `<div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${f.sek};">${ueberschrift}</div>` : ''}
+          ${inhalt}
+        </div>`;
+      const gross = (wert, name) => `
+        <div style="display:flex;align-items:baseline;gap:5px;min-width:0;">
+          <span style="font-size:22px;font-weight:750;letter-spacing:-0.01em;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${format(wert)}</span>
+          <span style="font-size:12px;color:${f.sek};">${name}</span>
+        </div>`;
+      const teile = [];
+
+      // Kopf: verschiedene Vorlagen und Sets
+      if (vorlagen) {
+        const sets = vorlagen.attributes?.sets;
+        teile.push(abschnitt('', `<div style="display:flex;flex-wrap:wrap;gap:4px 16px;">${gross(zahl(vorlagen), 'Vorlagen')}${typeof sets === 'number' ? gross(sets, 'Sets') : ''}</div>`));
+      }
+
+      // Erbstuecke: aufgewertete als geteilter Balken (Stufe 1, hoehere Stufen)
+      if (erbstuecke) {
+        const gesamt = zahl(erbstuecke);
+        const stufen = erbstuecke.attributes?.upgrade_levels || {};
+        const auf = erbstuecke.attributes?.upgraded;
+        const eins = Number(stufen['1']) || 0;
+        const hoeher = Math.max(0, (Number(auf) || 0) - eins);
+        const anteil = (n) => gesamt ? n / gesamt * 100 : 0;
+        const liste = Object.keys(stufen).map(Number).filter((s) => !isNaN(s)).sort((a, b) => a - b);
+        const verteilung = [
+          ...liste.filter((s) => s > 0).map((s) => `Stufe ${s}: <b style="color:${f.label};font-weight:600;">${format(Number(stufen[s]))}</b>`),
+          ...(stufen['0'] !== undefined ? [`ohne: <b style="color:${f.label};font-weight:600;">${format(Number(stufen['0']))}</b>`] : []),
+        ].join(' · ');
+        teile.push(abschnitt(`Erbstücke · ${format(gesamt)}`, `
+          ${typeof auf === 'number' ? `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;align-items:baseline;">
+            <span style="min-width:0;font-size:12.5px;line-height:1.3;color:${f.label};${zweizeilig}">Aufgewertet</span>
+            <span style="font-size:12px;color:${f.sek};white-space:nowrap;font-variant-numeric:tabular-nums;"><b style="font-size:13px;font-weight:700;color:${f.text};">${format(auf)}</b> von ${format(gesamt)}</span>
+            <div style="grid-column:1 / -1;height:6px;border-radius:5px;background:${f.spur};overflow:hidden;display:flex;gap:2px;">
+              ${eins ? `<div style="height:100%;width:${anteil(eins)}%;border-radius:5px;background:${f.akzent};"></div>` : ''}
+              ${hoeher ? `<div style="height:100%;width:${Math.max(2, anteil(hoeher))}%;border-radius:5px;background:color-mix(in srgb, ${f.akzent} 50%, transparent);"></div>` : ''}
+            </div>
+          </div>` : ''}
+          ${verteilung ? `<div style="font-size:12px;line-height:1.3;color:${f.sek};">${verteilung}</div>` : ''}`));
+      }
+
+      // Vorlagen je Platz, die meisten zuerst
+      const plaetze = Object.entries(vorlagen?.attributes?.slots || {})
+        .filter(([, n]) => typeof n === 'number')
+        .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], 'de'));
+      if (plaetze.length) {
+        teile.push(abschnitt('Vorlagen je Platz', `
+          <div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:4px 14px;">${plaetze.map(([name, n]) => `
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:baseline;">
+              <span style="min-width:0;font-size:12px;line-height:1.3;color:${f.label};${zweizeilig}">${esc(name)}</span>
+              <span style="font-size:12.5px;font-weight:700;color:${f.text};font-variant-numeric:tabular-nums;white-space:nowrap;">${format(n)}</span>
+            </div>`).join('')}
+          </div>`));
+        teile.push(`<div style="font-size:12px;line-height:1.3;color:${f.sek};padding:0 2px;">Gleichnamige Plätze stehen zusammen, z. B. „Brust“ für Brust und Robe.</div>`);
+      }
+      return `<div style="display:grid;gap:8px;">${teile.join('')}</div>`;
+    ]]]
+styles:
+  card:
+    - padding: 14px 16px 14px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+    - cursor: default
+  grid:
+    - grid-template-areas: '"i n" "i l" "body body"'
+    - grid-template-columns: min-content minmax(0, 1fr)
+    - grid-template-rows: min-content min-content auto
+  img_cell:
+    - width: 44px
+    - height: 44px
+    - border-radius: 13px
+    - margin-right: 14px
+    - align-self: center
+    - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+    - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+  icon:
+    - width: 23px
+    - height: 23px
+    - --ha-icon-display: block
+    - color: 'var(--nachtblau-rose, #e6a0c4)'
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-size: 17px
+    - font-weight: 700
+    - letter-spacing: -0.02em
+    - color: 'var(--nachtblau-text, #f2f5f8)'
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12.5px
+    - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+    - margin-top: 1px
+  custom_fields:
+    body:
+      - padding-top: 12px
+      - justify-self: stretch
+      - min-width: 0
+      - text-align: left
+      - white-space: normal
