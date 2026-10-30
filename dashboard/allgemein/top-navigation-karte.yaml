@@ -7,13 +7,16 @@
 # Karten:        button-card
 # Templates:     keine
 # Einfuegen:     Karte hinzufuegen -> Manuell
-# Platzhalter:   keine
+# Platzhalter:   weather.wohnort
+#                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Top-Navigation (Launcher-Raster) im Nachtblau-Stil.
 #
 # 10 Kacheln in zwei Reihen als custom:button-card: rundlich-quadratische
 # Icon-Kachel (dezent in der Sektionsfarbe getoent) + Label. Farbe pro Kachel
 # ueber variables.accent; die styles-Bloecke werden per YAML-Anker geteilt.
+# Die Wetterkachel wechselt ihr Icon mit dem Zustand von weather.wohnort
+# (MDI-Wettericons, nachts Mond), die Farbe bleibt Wolkengrau.
 #
 # Voraussetzung: custom:button-card (HACS) + die genutzten Icon-Sets
 # (bi, fa6-solid, phu, flat-ui) wie bisher.
@@ -141,8 +144,36 @@ cards:
         tap_action: { action: navigate, navigation_path: /dashboard-home/pflanzen }
         styles: *tile_icononly
       - type: custom:button-card
-        variables: { accent: 'var(--nachtblau-wolkengrau, #cdd6e0)' }
-        icon: flat-ui:weather
+        variables:
+          accent: 'var(--nachtblau-wolkengrau, #cdd6e0)'
+          weather_entity: weather.wohnort
+        # Icon nach dem Wetterzustand, die Farbe bleibt Wolkengrau. Nachtregel wie
+        # im Begruessungs-Banner: Der DWD meldet auch nachts 'sunny'. Ohne Wert
+        # bleibt das bisherige Icon stehen.
+        icon: |
+          [[[
+            const w = states[variables.weather_entity];
+            const cond = (!w || w.state === 'unavailable' || w.state === 'unknown') ? '' : w.state;
+            const sunE = states['sun.sun'];
+            const sunDown = !!sunE && sunE.state === 'below_horizon';
+            if (sunDown && cond === 'sunny') return 'mdi:weather-night';
+            if (sunDown && cond === 'partlycloudy') return 'mdi:weather-night-partly-cloudy';
+            const map = {
+              'sunny': 'mdi:weather-sunny', 'clear-night': 'mdi:weather-night',
+              'partlycloudy': 'mdi:weather-partly-cloudy', 'cloudy': 'mdi:weather-cloudy',
+              'fog': 'mdi:weather-fog', 'rainy': 'mdi:weather-rainy', 'pouring': 'mdi:weather-pouring',
+              'lightning': 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy',
+              'snowy': 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy', 'hail': 'mdi:weather-hail',
+              'windy': 'mdi:weather-windy', 'windy-variant': 'mdi:weather-windy-variant',
+              'exceptional': 'mdi:weather-cloudy-alert'
+            };
+            return map[cond] || 'flat-ui:weather';
+          ]]]
+        # Die Kachel hat keine eigene entity; ohne triggers_update rendert sie bei
+        # einem Wetterwechsel erst nach einem Neuladen neu
+        triggers_update:
+          - weather.wohnort
+          - sun.sun
         show_icon: true
         show_name: false
         tap_action: { action: navigate, navigation_path: /dashboard-home/wetter }

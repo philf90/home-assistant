@@ -14,7 +14,9 @@
 # Nachtblau-Karte:
 #
 #   Kopf         Icon-Kachel und Untertitel nach der Bedingung
-#                ("Bewoelkt · Regen an der Station")
+#                ("Bewoelkt · Regen an der Station"); nachts wird 'sunny'
+#                wie im Begruessungs-Banner zu 'clear-night' (Mond, "Klar"),
+#                die Wetterszene folgt mit
 #   Raster       sechs Kacheln: Temperatur, Luftfeuchtigkeit, Niederschlag,
 #                Wind, Helligkeit, Sonne (naechster Auf- oder Untergang);
 #                ab etwa 470 px Kartenbreite drei, sonst zwei Spalten
@@ -112,9 +114,14 @@ custom_fields:
     [[[
       // Wetterszene und Windschlieren uebereinander. Gleicher Zustand ->
       // gleicher Text -> die Animation laeuft weiter.
+      // Nachtregel wie im Kopf: nachts 'sunny' -> 'clear-night', vor dem
+      // Stationsregen, damit Regen weiter Vorrang hat
       const w = states['weather.wohnort'];
       const rb = states['binary_sensor.wetterstation_pro_regen'];
-      const cond = variables.wx.effCond(w ? w.state : '', !!rb && rb.state === 'on');
+      const sunE = states['sun.sun'];
+      const roh = w ? w.state : '';
+      const basis = !!sunE && sunE.state === 'below_horizon' && roh === 'sunny' ? 'clear-night' : roh;
+      const cond = variables.wx.effCond(basis, !!rb && rb.state === 'on');
       return variables.wx.wetter(cond, variables.stufe) + variables.wx.wind(variables.stufe);
     ]]]
   body: |
@@ -161,8 +168,11 @@ custom_fields:
         </div>`;
 
       // ---- Bedingung (Kopf) ----
+      // Der DWD meldet auch nachts 'sunny' (siehe welcome-banner-karte.yaml);
+      // nach Sonnenuntergang daher Mond und "Klar" wie im Banner
       const w=S('weather.wohnort');
-      const cond=w?w.state:'';
+      const sunDown=S('sun.sun')?.state==='below_horizon';
+      const cond=(w&&sunDown&&w.state==='sunny')?'clear-night':(w?w.state:'');
       const condMap={
         'sunny':['Sonnig',iSun,sun],'clear-night':['Klar',iMoon,indigo],
         'partlycloudy':['Teils bewölkt',iSun,sun],'cloudy':['Bewölkt',iCloud,cloud],
