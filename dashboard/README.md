@@ -10,8 +10,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`nachtblau-theme-konfig.yaml`](allgemein/nachtblau-theme-konfig.yaml) | konfig | Nachtblau-Theme – Farben fuer den hellen und den dunklen Modus | – | – | aktiv |
 | [`navbar-karte.yaml`](allgemein/navbar-karte.yaml) | karte | Navbar – schwebende Navigation unten | button-card, navbar-card | `benutzer_id_1/benutzer_id_2` | aktiv |
-| [`navigation-templates.yaml`](allgemein/navigation-templates.yaml) | templates | Navigation – Decluttering-Templates top_navigation und floating_navbar | button-card, navbar-card | `benutzer_id_1/benutzer_id_2` | aktiv |
-| [`top-navigation-karte.yaml`](allgemein/top-navigation-karte.yaml) | karte | Top-Navigation – Launcher-Raster | button-card | – | aktiv |
+| [`navigation-templates.yaml`](allgemein/navigation-templates.yaml) | templates | Navigation – Decluttering-Templates top_navigation und floating_navbar | button-card, navbar-card | `benutzer_id_1/benutzer_id_2`, `weather.wohnort` | aktiv |
+| [`top-navigation-karte.yaml`](allgemein/top-navigation-karte.yaml) | karte | Top-Navigation – Launcher-Raster | button-card | `weather.wohnort` | aktiv |
 | [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | `weather.wohnort` | aktiv |
 | [`banner-hell.html`](allgemein/entwuerfe/banner-hell.html) | entwurf | Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung | – | – | Entwurf zu `welcome-banner-karte.yaml` |
 | [`home-kacheln.html`](allgemein/entwuerfe/home-kacheln.html) | entwurf | Kachel-Vorschlaege fuer die Home-Ansicht | – | – | Entwurf |
