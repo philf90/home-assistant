@@ -23,6 +23,9 @@
 # keine Mythic+-Sensoren an; die Karte nennt das statt der Einrichtungs-
 # Meldung (Spielversion aus dem Modell des Charakter-Geraets).
 #
+# Unterzeile: Spielversion (Retail, Classic Era, ...) vor dem Namen des
+# Charakters, wie in wow-werte-karte.yaml; bis zu zwei Zeilen.
+#
 # Daten: Sensoren _mythic_wertung, _hochster_mythic_schlussel und
 # _mythic_laufe_in_zeit (Namen bei deutscher Oberflaeche). Die Dauer eines
 # Laufs ist in der API ohne belegte Einheit; die Integration rechnet sie in
@@ -54,7 +57,16 @@ label: |
       .replace(/\s*Level$/, '').split(' – ')[0];
     const runs = states[`sensor.${p}_hochster_mythic_schlussel`]?.attributes?.best_runs || {};
     const n = Object.keys(runs).length;
-    return [geraet, n ? `${n} Dungeons gelaufen` : 'noch kein Lauf in dieser Season'].filter(Boolean).join(' · ');
+    // Spielversion aus dem Modell des Geraets: "World of Warcraft" (Retail),
+    // "World of Warcraft Classic Era" oder bis 0.21.x "World of Warcraft (classic_era)"
+    const versionen = {
+      retail: 'Retail', classic_era: 'Classic Era', classic_progression: 'Classic Progression',
+      classic_anniversary: 'Classic Anniversary', forever: 'Forever',
+    };
+    const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
+    const m = /^World of Warcraft(?: \((.+)\)| (.+))?$/.exec(modell || '');
+    const spiel = m ? (m[1] ? (versionen[m[1]] || m[1]) : (m[2] || 'Retail')) : null;
+    return [spiel, geraet, n ? `${n} Dungeons gelaufen` : 'noch kein Lauf in dieser Season'].filter(Boolean).join(' · ');
   ]]]
 tap_action:
   action: none
@@ -90,9 +102,12 @@ custom_fields:
 
       const wertung = states[`sensor.${p}_mythic_wertung`];
       if (!wertung) {
-        // Spielversion aus dem Modell des Geraets, z. B. "World of Warcraft (classic_era)"
+        // Schluessel der Spielversion aus dem Modell des Geraets: "World of Warcraft
+        // Classic Era" ergibt classic_era, ohne Zusatz retail; bis 0.21.x
+        // "World of Warcraft (classic_era)"
         const modell = (hass.devices || {})[(hass.entities || {})[`sensor.${p}_level`]?.device_id]?.model;
-        const version = /^World of Warcraft \((.+)\)$/.exec(modell || '')?.[1];
+        const treffer = /^World of Warcraft(?: \((.+)\)| (.+))?$/.exec(modell || '');
+        const version = treffer ? (treffer[1] || (treffer[2] ? treffer[2].toLowerCase().replace(/ /g, '_') : 'retail')) : undefined;
         if (version && version !== 'retail') {
           return `<div style="font-size:12.5px;line-height:1.4;color:${f.sek};">Mythic+ gibt es nur in Retail. Für diese Spielversion legt die Integration keine Mythic+-Sensoren an.</div>`;
         }
@@ -182,12 +197,18 @@ styles:
   label:
     - justify-self: start
     - align-self: start
+    # Spielversion, Name und Zusatz: bis zu zwei Zeilen statt "..."
+    - max-width: 100%
+    - overflow: hidden
+    - white-space: normal
+    - display: -webkit-box
+    - -webkit-box-orient: vertical
+    - -webkit-line-clamp: '2'
+    - text-wrap: balance
+    - text-align: left
     - font-size: 12.5px
     - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
     - margin-top: 1px
-    # Name und Hinweis koennen zusammen laenger als eine Zeile sein
-    - white-space: normal
-    - text-align: left
   custom_fields:
     body:
       - padding-top: 12px
