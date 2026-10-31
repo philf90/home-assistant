@@ -18,7 +18,7 @@
 #   - Aktivitaet: drei Ringe (Bewegung und Schritte heute, Training der
 #     letzten 7 Tage) gegen die Ziel-Helfer, Badge "x / 3 Ziele", Balken
 #     Training 7 Tage mit WHO-Marken, Distanz (dahinter die Schritte),
-#     Stockwerke, Schritte 7 Tage
+#     Stockwerke, Schritte 30 Tage mit gleitendem 7-Tage-Mittel
 #   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
 #     (Naechte ohne Uhr bleiben leer, siehe "NAECHTE OHNE UHR" unten)
@@ -55,6 +55,17 @@
 #   - Legendentext hat in ApexCharts 5 padding-left:15px + margin-left:-15px
 #     (liegt ueber dem Farbpunkt); card_mod neutralisiert beides.
 #   - Verlaeufe lesen den Recorder (Standard 10 Tage) -> 7 Tage passen.
+#   - Schritte 30 Tage: aus der Langzeitstatistik (recorder/statistics_during_
+#     period, period: day), weil der Recorder nur 10 Tage behaelt. Tageswert ist
+#     der Zaehlerstand am Tagesende (types: state), NICHT die Tagessumme
+#     (change): Die App korrigiert den Zaehler teils um mehr als 10 % nach
+#     unten (31.10.2026 09:36: 535 -> 438), HA wertet das bei total_increasing
+#     als Zaehlerreset und zaehlt den neuen Stand doppelt (change 2004 statt
+#     Stand 1815; im Oktober 2026 an 9 von 29 Tagen zu hoch, z. B. 14.10.
+#     9000 statt 6722). Tage mit change 0 haben keine neuen Werte und bleiben
+#     leer. Heute nimmt den aktuellen Sensorwert, weil die Statistik bis zu
+#     einer Stunde alt ist. Rosa Linie: Mittel der letzten 7 abgeschlossenen
+#     Tage (mind. 5 mit Wert), heute zaehlt nicht mit.
 #   - Gestapelte Diagramme haben KEINE Karten-yaxis: deren "auto"-max nimmt die
 #     groesste Einzelserie statt der Stapelsumme und schneidet obere Segmente ab.
 #     Die Achse steht stattdessen in apex_config.yaxis (ApexCharts rechnet mit Summe).
@@ -549,17 +560,19 @@ sections:
           markers:
             size: 5
             strokeWidth: 0
-          show: false
+          show: true
         markers:
-          size: 4
+          size: 0
           strokeWidth: 0
         plotOptions:
           bar:
-            borderRadius: 4
-            columnWidth: 55%
+            borderRadius: 3
+            columnWidth: 70%
         stroke:
           curve: smooth
-          width: 2
+          width:
+          - 0
+          - 2.5
         tooltip:
           theme: dark
         xaxis:
@@ -581,7 +594,9 @@ sections:
           /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
              Serien nach Index, Legende nach rel = Index + 1 */
           .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --ge-c: var(--nachtblau-blau, #7fb3d5); }
+          .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --ge-c: var(--nachtblau-rose, #e6a0c4); }
           .apexcharts-bar-area { fill: var(--ge-c); stroke: var(--ge-c); }
+          .apexcharts-line { stroke: var(--ge-c); }
           .apexcharts-marker { fill: var(--ge-c); }
           .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
           .apexcharts-legend-text { color: var(--nachtblau-text-sekundaer, #8794a5) !important; }
@@ -596,7 +611,8 @@ sections:
           .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
           /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
           .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
-      graph_span: 7d
+          .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-rose, #e6a0c4) !important; }
+      graph_span: 30d
       header:
         show: false
       series:
@@ -604,17 +620,50 @@ sections:
         entity: sensor.iphone_health_steps
         name: Schritte
         color: '#7fb3d5'
-        group_by:
-          duration: 1d
-          fill: 'null'
-          func: max
         opacity: 1
+        float_precision: 0
+        data_generator: |
+          // Tageswert = Zaehlerstand am Tagesende aus der Langzeitstatistik (types: state), nicht die
+          // Tagessumme (change), siehe "Schritte 30 Tage" im Kopf. Heute: aktueller Sensorwert.
+          const tz = hass.config.time_zone;
+          const id = entity.entity_id;
+          const t0 = moment.tz(start, tz).startOf('day');
+          const heute = moment.tz(tz).startOf('day').valueOf();
+          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.toISOString(), end_time: new Date(end).toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
+          const out = (res[id] || []).filter((r) => r.start < heute).map((r) => [r.start, r.change > 0 ? r.state : null]);
+          const s = hass.states[id];
+          const v = s ? parseFloat(s.state) : NaN;
+          if (!isNaN(v) && new Date(s.last_updated).toDateString() === new Date().toDateString()) out.push([heute, v]);
+          return out;
+      - type: line
+        entity: sensor.iphone_health_steps
+        name: Ø 7 Tage
+        color: '#e6a0c4'
+        float_precision: 0
+        data_generator: |
+          // Gleitendes Mittel der letzten 7 abgeschlossenen Tage (Tagesendstand wie die Saeulen);
+          // ein Punkt nur mit mindestens 5 Werten im Fenster. Heute zaehlt nicht, der Tag ist offen.
+          const tz = hass.config.time_zone;
+          const id = entity.entity_id;
+          const t0 = moment.tz(start, tz).startOf('day');
+          const heute = moment.tz(tz).startOf('day').valueOf();
+          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.clone().subtract(7, 'day').toISOString(), end_time: new Date(end).toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
+          const tage = (res[id] || []).filter((r) => r.start < heute).map((r) => ({ t: r.start, v: r.change > 0 ? r.state : null }));
+          const out = [];
+          tage.forEach((d, i) => {
+            if (i < 6 || d.t < t0.valueOf()) return;
+            const w = tage.slice(i - 6, i + 1).filter((x) => x.v !== null);
+            if (w.length >= 5) out.push([d.t, Math.round(w.reduce((a, x) => a + x.v, 0) / w.length)]);
+          });
+          return out;
       span:
         end: day
       stacked: false
       yaxis:
       - apex_config:
-          forceNiceScale: true
+          # Maximum auf volle 2.500 aufrunden: forceNiceScale waehlt bei ~9.700 die Skala 0-20.000,
+          # ohne Rundung setzt die Karte den Datenhoechstwert (Marken 1.795/3.590/...).
+          max: EVAL:function(m){ return Math.max(2500, Math.ceil(m/2500)*2500); }
           labels:
             formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
           tickAmount: 4
