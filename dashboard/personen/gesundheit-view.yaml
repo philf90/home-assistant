@@ -4,7 +4,8 @@
 # Art:           view
 # Bereich:       personen
 # Status:        aktiv
-# Karten:        apexcharts-card, button-card, card-mod, decluttering-card
+# Karten:        apexcharts-card, button-card, card-mod, decluttering-card,
+#                ha-training-card
 # Templates:     floating_navbar (navigation-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
@@ -19,6 +20,8 @@
 #     letzten 7 Tage) gegen die Ziel-Helfer, Badge "x / 3 Ziele", Balken
 #     Training 7 Tage mit WHO-Marken, Distanz (dahinter die Schritte),
 #     Stockwerke, Schritte 30 Tage mit gleitendem 7-Tage-Mittel
+#   - Training: letztes Training mit Route, Verlauf und Kilometer-Splits
+#     (Karte der Integration Training, siehe "TRAINING")
 #   - Herz: Erholungs-Ampel im Kopf (siehe "ERHOLUNGS-AMPEL"), Ruhepuls,
 #     HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
@@ -100,6 +103,19 @@
 #     merkt sich eine Automation den Zeitpunkt der letzten neuen Nacht.
 #     "Letzte Nacht" nur, wenn dieser Zeitpunkt heute ist.
 #   Grenze: Eine Nacht zaehlt fuer den Tag, an dem die Daten ankommen.
+#
+# TRAINING (eigene Huelle unter der Aktivitaet)
+#   custom:ha-training-card liefert die Integration Training selbst aus
+#   (github.com/philf90/HA-Training, ueber HACS; keine Dashboard-Ressource).
+#   Health Auto Export schickt jedes Training der Apple Watch per
+#   REST-Automation an den Webhook der Integration (Datentyp Workouts,
+#   Exportversion 2, Route und Workout Metrics an, Zeitraster Sekunden).
+#   Die Karte zeigt Kennzahlen, die Route nach Tempo oder Puls eingefaerbt,
+#   Puls- und Tempoverlauf und die Kilometer-Splits; Auswahl der letzten 30
+#   Trainings im Kopf. Route und Verlaeufe holt sie ueber die WebSocket-API
+#   der Integration (nur angemeldet); die Kartenkacheln kommen von
+#   OpenStreetMap. Rand, Schatten und Farben aus dem Nachtblau-Stil.
+#   Optionen: workout: latest (oder id), color_by: speed | heart_rate.
 #
 # ERHOLUNGS-AMPEL (Kopf der Herz-Huelle)
 #   Badge mit der Zahl auffaelliger Werte aus sensor.erholung_signale:
@@ -267,7 +283,8 @@
 # und sensor.erholung_signale fuer die Erholungs-Ampel (template:).
 #
 # Voraussetzung: custom:button-card + custom:apexcharts-card +
-#                custom:decluttering-card + card-mod (alle via HACS)
+#                custom:decluttering-card + card-mod (alle via HACS),
+#                Integration Training (HACS, liefert ha-training-card)
 #                + obige Helfer und Automation
 #                + sensor.date (Integration "Time & Date", Anzeige "Datum").
 title: Gesundheit
@@ -709,6 +726,13 @@ sections:
         # Weiches Maximum der Karte: mindestens 10.000, darueber der Datenhoechstwert. Ein max in
         # apex_config uebergeht die Karte (am iPhone blieben die Marken 2.437/4.874/.../9.748).
         max: ~10000
+  - type: custom:ha-training-card
+    workout: latest
+    color_by: speed
+    visibility:
+    - condition: user
+      users:
+      - benutzer_id_1
   - type: vertical-stack
     visibility:
     - condition: user

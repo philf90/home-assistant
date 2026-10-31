@@ -143,7 +143,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`gesundheit-meldungen-konfig.yaml`](personen/gesundheit-meldungen-konfig.yaml) | konfig | Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung, Erholungs-Signale | – | `sensor.iphone_*`, `notify.mobile_app_iphone` | aktiv |
-| [`gesundheit-view.yaml`](personen/gesundheit-view.yaml) | view | Gesundheit – komplette Ansicht | apexcharts-card, button-card, card-mod, decluttering-card | `sensor.iphone_*`, `benutzer_id_1/benutzer_id_2` | aktiv |
+| [`gesundheit-view.yaml`](personen/gesundheit-view.yaml) | view | Gesundheit – komplette Ansicht | apexcharts-card, button-card, card-mod, decluttering-card, ha-training-card | `sensor.iphone_*`, `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`owlet-smart-sock-karte.yaml`](personen/owlet-smart-sock-karte.yaml) | karte | Owlet Smart Sock – Referenz des Nachtblau-Stils | button-card, card-mod | `*_seriennr` | aktiv |
 | [`person-presence-karte.yaml`](personen/person-presence-karte.yaml) | karte | Personen-Praesenz | button-card | `person.bewohner`, `sensor.iphone_*` | aktiv |
 
