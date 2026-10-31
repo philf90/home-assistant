@@ -1,5 +1,5 @@
 # ============================================================================
-# Gesundheit – Morgen-Briefing und Frueherkennung (Automationen)
+# Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung (Automationen)
 # ----------------------------------------------------------------------------
 # Art:           konfig
 # Bereich:       personen
@@ -9,7 +9,7 @@
 # Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Zwei Meldungen aufs Handy zu den Apple-Health-Werten der Gesundheit-View
+# Drei Meldungen aufs Handy zu den Apple-Health-Werten der Gesundheit-View
 # (gesundheit-view.yaml). Schwellen und Begruendung stehen dort im Kopf,
 # Abschnitt "EIGENES NORMAL".
 #
@@ -34,13 +34,39 @@
 #     liess sich der Oktober nicht nachrechnen (Recorder behaelt 10 Tage).
 #     Ein Signal allein meldet nichts: Einzelwerte streuen stark.
 #     Keine Diagnose; die Meldung nennt nur, welche Werte abweichen.
+#   automation "Gesundheit: Bewegungs-Erinnerung"
+#     Taeglich 19:00, wenn die Schritte von heute unter 40 % von
+#     input_number.ziel_schritte liegen (bei 7.500 also unter 3.000) und
+#     heute noch keine 30 Trainingsminuten erfasst sind (Rad, Schwimmen
+#     ohne Schritte). Die Meldung nennt eine kleine Aufgabe (15 min Gehen,
+#     rund 1.500 Schritte bei ~100 Schritten/min, CADENCE-Adults), nicht
+#     die Luecke zum Ziel.
+#     Rueckblick 02.-29.10.2026 (Stundenwerte der Langzeitstatistik):
+#       Regel                        Meldungen   davon 19.-29.10.
+#       19:00 unter 50 % (3.750)       13 / 28     8 von 11 Tagen
+#       19:00 unter 60 % Ø 7 Tage       6 / 28     3 (Basis sinkt mit)
+#       19:00 unter 40 % (3.000)        4 / 28     3
+#     Die 40-%-Regel haette am 09., 21., 28. und 29.10. gemeldet; alle vier
+#     Tage endeten unter 3.100 Schritten. Nach 19:00 kamen im Median nur
+#     noch 670 Schritte dazu. Die Grenze liegt an einer steilen Stelle
+#     (02.10. 3.013, 15.10. 3.031 um 19:00): bei 3.100 waeren es 6 Tage,
+#     bei 3.500 schon 12. Kein Filter auf werktags (alle vier Meldetage
+#     waren Werktage, am Wochenende Ø 6.249 statt 5.064) und keiner auf
+#     Anwesenheit (21.-30.10. um 19:00 immer zu Hause).
+#     Apple Health liefert die Schritte verzoegert: Ist ein Spaziergang um
+#     19:00 noch nicht uebertragen, kann die Meldung trotzdem kommen.
 #
 # Helfer (UI: Einstellungen > Geraete & Dienste > Helfer > Statistik):
 #   Aus gesundheit-view.yaml (Kopf, ERFORDERLICH):
 #     sensor.iphone_ruhepuls_normal_7_tage, sensor.iphone_hrv_normal_7_tage,
 #     sensor.iphone_atemfrequenz_normal_7_tage, sensor.iphone_hrv_24_stunden,
 #     sensor.iphone_blutsauerstoff_minimum_24_stunden,
-#     sensor.iphone_training_7_tage, input_number.ziel_training_woche
+#     sensor.iphone_training_7_tage, input_number.ziel_training_woche,
+#     input_number.ziel_schritte
+#   Direkt aus der Companion App: sensor.iphone_health_steps,
+#   sensor.iphone_exercise_time (beide setzen erst mit dem ersten Wert des
+#   neuen Tags zurueck; die Bewegungs-Erinnerung wertet sie nur mit einem
+#   Update von heute).
 #   Nur fuer diese Automationen: keine weiteren.
 #   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
 #   sensor.iphone_training_7_tage usw.
@@ -54,6 +80,8 @@
 #   - /dashboard-home/gesundheit: Pfad, den das Tippen auf die Meldung oeffnet
 #   - 21:30: Uhrzeit der Fruehwarnung; frueher als 20 Uhr ist der
 #     Ruhepuls oft noch zu hoch (Apple rechnet ihn bis zum Abend neu)
+#   - 19:00 und 0.4 (40 % des Schrittziels): Uhrzeit und Schwelle der
+#     Bewegungs-Erinnerung
 #
 # Einbinden als Paket in configuration.yaml:
 #   homeassistant:
@@ -165,6 +193,40 @@ automation:
         {{ signale | join('\n') }}
 
         Kann auf Infekt, Belastung oder wenig Schlaf hindeuten. Mehr Ruhe einplanen? Keine Diagnose.
+      data:
+        group: gesundheit
+        url: /dashboard-home/gesundheit
+        clickAction: /dashboard-home/gesundheit
+
+- id: gesundheit_bewegungs_erinnerung
+  alias: 'Gesundheit: Bewegungs-Erinnerung'
+  description: 'Täglich 19:00 erinnern, wenn die Schritte von heute unter 40 % des Schrittziels liegen und noch keine 30 Trainingsminuten erfasst sind. Nennt eine kleine Aufgabe statt der Lücke zum Ziel. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: single
+  triggers:
+  - trigger: time
+    at: '19:00:00'
+    note: Um 19:00 kommen im Median nur noch 670 Schritte dazu (Oktober 2026), es bleibt aber Zeit für einen Spaziergang.
+  variables:
+    schritte: >-
+      {%- set s = states.sensor.iphone_health_steps -%}
+      {{ s.state | int(-1) if s is not none and (s.last_updated | as_local).date() == now().date() else -1 }}
+    training: >-
+      {%- set e = states.sensor.iphone_exercise_time -%}
+      {{ e.state | int(0) if e is not none and (e.last_updated | as_local).date() == now().date() else 0 }}
+    schwelle: "{{ (states('input_number.ziel_schritte') | float(7500) * 0.4) | round(0) | int }}"
+  conditions:
+  - condition: template
+    value_template: '{{ 0 <= schritte < schwelle }}'
+    note: 'Unter 40 % des Schrittziels. -1 = kein Update von heute: dann steht noch der Vortag im Sensor, keine Meldung.'
+  - condition: template
+    value_template: '{{ training < 30 }}'
+    note: Rad oder Schwimmen zählen als Training, aber kaum als Schritte. Trainingsminuten nur mit Update von heute.
+  actions:
+  - action: notify.mobile_app_iphone
+    continue_on_error: true
+    data:
+      title: "Bewegung: erst {{ '{:,}'.format(schritte) | replace(',', '.') }} Schritte"
+      message: 15 Minuten zügig gehen bringen rund 1.500 Schritte.
       data:
         group: gesundheit
         url: /dashboard-home/gesundheit
