@@ -19,7 +19,8 @@
 #     letzten 7 Tage) gegen die Ziel-Helfer, Badge "x / 3 Ziele", Balken
 #     Training 7 Tage mit WHO-Marken, Distanz (dahinter die Schritte),
 #     Stockwerke, Schritte 30 Tage mit gleitendem 7-Tage-Mittel
-#   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
+#   - Herz: Erholungs-Ampel im Kopf (siehe "ERHOLUNGS-AMPEL"), Ruhepuls,
+#     HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
 #     (Naechte ohne Uhr bleiben leer, siehe "NAECHTE OHNE UHR" unten),
 #     darunter die Bilanz "Naechte >= 7 h Schlaf" (siehe "SCHLAFBILANZ")
@@ -99,6 +100,16 @@
 #     merkt sich eine Automation den Zeitpunkt der letzten neuen Nacht.
 #     "Letzte Nacht" nur, wenn dieser Zeitpunkt heute ist.
 #   Grenze: Eine Nacht zaehlt fuer den Tag, an dem die Daten ankommen.
+#
+# ERHOLUNGS-AMPEL (Kopf der Herz-Huelle)
+#   Badge mit der Zahl auffaelliger Werte aus sensor.erholung_signale:
+#   0 Gruen "typisch", 1 Amber "1 auffällig", ab 2 Koralle "n auffällig"
+#   (Koralle immer mit Text). Darunter, sobald etwas auffaellt, die Namen
+#   aus sensor.erholung_abweichende_werte ("Auffällig: Ruhepuls, Schlaf").
+#   Beide Sensoren und die fuenf Schwellen stehen im Paket
+#   gesundheit-meldungen-konfig.yaml (template:); die Fruehwarnung um 21:30
+#   meldet ab 2 aus derselben Zaehlung. Der Ruhepuls zaehlt erst ab 20 Uhr.
+#   Rueckblick und Begruendung (Apple Vitals, Oktober 2026) ebenda.
 #
 # SCHLAFBILANZ (Schlaf-Huelle, unter dem Diagramm)
 #   "Naechte >= 7 h Schlaf: x von n" ueber dieselben 7 Tage wie das Diagramm,
@@ -251,7 +262,9 @@
 #         data: { timestamp: "{{ now().timestamp() }}" }
 #
 # Meldungen (Morgen-Briefing, Fruehwarnung bei mehreren abweichenden
-# Vitalwerten): gesundheit-meldungen-konfig.yaml, nutzt dieselben Helfer.
+# Vitalwerten, Bewegungs-Erinnerung): gesundheit-meldungen-konfig.yaml, nutzt
+# dieselben Helfer. Von dort kommen auch sensor.erholung_abweichende_werte
+# und sensor.erholung_signale fuer die Erholungs-Ampel (template:).
 #
 # Voraussetzung: custom:button-card + custom:apexcharts-card +
 #                custom:decluttering-card + card-mod (alle via HACS)
@@ -719,6 +732,26 @@ sections:
       show_icon: true
       show_name: true
       show_label: true
+      custom_fields:
+        badge: |
+          [[[
+            // Erholungs-Ampel (ERHOLUNGS-AMPEL im Kopf): Zahl der auffaelligen Werte
+            const n=parseInt(states['sensor.erholung_signale']?.state);
+            if(isNaN(n)) return '';
+            const c=n===0?'var(--nachtblau-gruen, #a6d49e)':(n===1?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-koralle, #e7936e)');
+            const txt=n===0?'typisch':n+' auffällig';
+            return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${txt}</span>`;
+          ]]]
+        hinweis: |
+          [[[
+            // Namen der auffaelligen Werte, nur wenn etwas auffaellt
+            const a=states['sensor.erholung_abweichende_werte']?.state;
+            if(!a||['keine','unknown','unavailable'].includes(a)) return '';
+            return `<span style="display:block;font-size:12px;color:var(--nachtblau-label, #b4c0cf);margin-top:8px;text-align:left;">Auffällig: ${a}</span>`;
+          ]]]
+      triggers_update:
+      - sensor.erholung_signale
+      - sensor.erholung_abweichende_werte
       styles:
         icon:
         - width: 23px
@@ -747,10 +780,12 @@ sections:
           badge:
           - justify-self: end
           - align-self: center
+          hinweis:
+          - justify-self: start
         grid:
-        - grid-template-areas: '"i n badge" "i l badge"'
+        - grid-template-areas: '"i n badge" "i l badge" "hinweis hinweis hinweis"'
         - grid-template-columns: min-content 1fr min-content
-        - grid-template-rows: min-content min-content
+        - grid-template-rows: min-content min-content min-content
         img_cell:
         - width: 44px
         - height: 44px

@@ -1,5 +1,5 @@
 # ============================================================================
-# Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung (Automationen)
+# Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung, Erholungs-Signale
 # ----------------------------------------------------------------------------
 # Art:           konfig
 # Bereich:       personen
@@ -9,9 +9,10 @@
 # Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Drei Meldungen aufs Handy zu den Apple-Health-Werten der Gesundheit-View
+# Drei Meldungen aufs Handy und die gemeinsame Zaehlung der Erholungs-
+# Signale zu den Apple-Health-Werten der Gesundheit-View
 # (gesundheit-view.yaml). Schwellen und Begruendung stehen dort im Kopf,
-# Abschnitt "EIGENES NORMAL".
+# Abschnitt "EIGENES NORMAL", und hier unter "Erholung abweichende Werte".
 #
 # Inhalt:
 #   automation "Gesundheit: Morgen-Briefing"
@@ -23,16 +24,35 @@
 #     erkennen" im Kopf von gesundheit-view.yaml). Nach einer Nacht ohne Uhr
 #     kommt keine Nachricht. Bewusst ohne Ruhepuls: der Morgenwert ist
 #     vorlaeufig (30.10.2026: 08:09 72, 22:30 63 bpm).
-#   automation "Gesundheit: Frühwarnung Vitalwerte"
-#     Taeglich 21:30. Meldet, wenn mindestens zwei Signale zusammenkommen:
-#       Ruhepuls       >= Normal + 3 bpm, nur mit Update von heute
+#   template "Erholung abweichende Werte" / "Erholung Signale"
+#     Gemeinsame Zaehlung fuer die Erholungs-Ampel der Gesundheit-View und
+#     die Fruehwarnung. sensor.erholung_abweichende_werte nennt die
+#     auffaelligen Werte ("Ruhepuls, Schlaf" oder "keine"),
+#     sensor.erholung_signale zaehlt sie (0-5). Fuenf Signale:
+#       Ruhepuls       >= Normal + 3 bpm, erst ab 20 Uhr und nur mit Update
+#                      von heute (Apple rechnet ihn bis zum Abend neu)
 #       HRV 24 h       <= Normal - 5 ms
 #       Atemfrequenz   >= Normal + 2/min, nur wenn die Nacht heute ankam
 #       SpO2-Minimum   <= 90 % in den letzten 24 h
-#     Rueckblick Oktober 2026 mit 30-Tage-Basis: ausgeloest am 07.10.,
-#     08.10. und 23.10., an den uebrigen 27 Tagen nicht. Mit der 7-Tage-Basis
-#     liess sich der Oktober nicht nachrechnen (Recorder behaelt 10 Tage).
-#     Ein Signal allein meldet nichts: Einzelwerte streuen stark.
+#       Schlaf         < 6 h, nur wenn die Nacht heute ankam
+#     Angelehnt an Apples Vitals-App (Herzfrequenz, Atemfrequenz,
+#     Handgelenktemperatur, Blutsauerstoff, Schlafdauer gegen 7 Tage, Hinweis
+#     ab zwei Abweichungen); die Temperatur liefert die Uhr hier nicht.
+#     Rueckblick 08.-30.10.2026 (Tageswerte, Normal = Mittel der 7 Vortage):
+#       Variante                       >= 2 auffaellig      genau 1
+#       Ruhepuls, HRV, Atemfr., SpO2   08.10., 23.10.       5 Tage
+#       ... Schlaf statt SpO2          08.10., 23.10.       4 Tage
+#       alle fuenf (gewaehlt)          08.10., 23.10.       6 Tage
+#     Der fuenfte Wert hat im Oktober keine zusaetzliche Fruehwarnung
+#     ausgeloest, nur einen gelben Tag mehr (28.10.: Schlaf 5 h 41 min).
+#     Ohne Paket: beide als Template-Helfer anlegen (Helfer > Template >
+#     Sensor), gleicher Name und Inhalt wie unten, Erholung Signale mit
+#     Zustandsklasse "Messung" und der Verfuegbarkeit unter "Erweitert".
+#   automation "Gesundheit: Frühwarnung Vitalwerte"
+#     Taeglich 21:30. Meldet, wenn sensor.erholung_signale mindestens 2 ist,
+#     und nennt die Werte mit Abweichung. Ein Signal allein meldet nichts:
+#     Einzelwerte streuen stark. Erster Lauf 31.10.2026 21:30: Ruhepuls 69
+#     (Normal 65,3, +3,7), sonst unauffaellig -> 1 Signal, keine Meldung.
 #     Keine Diagnose; die Meldung nennt nur, welche Werte abweichen.
 #   automation "Gesundheit: Bewegungs-Erinnerung"
 #     Taeglich 19:00, wenn die Schritte von heute unter 40 % von
@@ -67,7 +87,9 @@
 #   sensor.iphone_exercise_time (beide setzen erst mit dem ersten Wert des
 #   neuen Tags zurueck; die Bewegungs-Erinnerung wertet sie nur mit einem
 #   Update von heute).
-#   Nur fuer diese Automationen: keine weiteren.
+#   Neu in diesem Paket: sensor.erholung_abweichende_werte und
+#   sensor.erholung_signale (template:, siehe oben); die Gesundheit-View
+#   liest sie fuer die Erholungs-Ampel.
 #   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
 #   sensor.iphone_training_7_tage usw.
 #   Training 7 Tage: Die App setzt die Trainingsminuten erst mit dem ersten
@@ -78,8 +100,9 @@
 # Anpassen:
 #   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter, siehe oben)
 #   - /dashboard-home/gesundheit: Pfad, den das Tippen auf die Meldung oeffnet
-#   - 21:30: Uhrzeit der Fruehwarnung; frueher als 20 Uhr ist der
-#     Ruhepuls oft noch zu hoch (Apple rechnet ihn bis zum Abend neu)
+#   - 21:30: Uhrzeit der Fruehwarnung; frueher als 20 Uhr zaehlt der
+#     Ruhepuls nicht mit (Apple rechnet ihn bis zum Abend neu)
+#   - Schwellen der fuenf Signale: im Template "Erholung abweichende Werte"
 #   - 19:00 und 0.4 (40 % des Schrittziels): Uhrzeit und Schwelle der
 #     Bewegungs-Erinnerung
 #
@@ -98,6 +121,51 @@
 # Voraussetzung: Helfer und Automation "Schlaf: neue Nacht erkennen" aus
 #                gesundheit-view.yaml, obige Statistik-Helfer,
 #                Home Assistant Companion App fuer die Meldungen.
+
+template:
+- sensor:
+  - name: Erholung abweichende Werte
+    unique_id: erholung_abweichende_werte
+    icon: mdi:heart-pulse
+    state: >-
+      {%- set P = 'sensor.iphone_' -%}
+      {%- set heute = now().date() -%}
+      {%- set ns = namespace(s=[]) -%}
+      {%- set rhr = states(P ~ 'resting_heart_rate') | float(none) -%}
+      {%- set rhr_n = states(P ~ 'ruhepuls_normal_7_tage') | float(none) -%}
+      {%- set rhr_e = states[P ~ 'resting_heart_rate'] -%}
+      {%- if rhr is not none and rhr_n is not none and rhr_e is not none
+            and (rhr_e.last_updated | as_local).date() == heute
+            and now().hour >= 20 and rhr - rhr_n >= 3 -%}
+        {%- set ns.s = ns.s + ['Ruhepuls'] -%}
+      {%- endif -%}
+      {%- set hrv = states(P ~ 'hrv_24_stunden') | float(none) -%}
+      {%- set hrv_n = states(P ~ 'hrv_normal_7_tage') | float(none) -%}
+      {%- if hrv is not none and hrv_n is not none and hrv_n - hrv >= 5 -%}
+        {%- set ns.s = ns.s + ['HRV'] -%}
+      {%- endif -%}
+      {%- set ts = state_attr('input_datetime.schlaf_letzte_nacht', 'timestamp') -%}
+      {%- set nacht_heute = ts is not none and (ts | as_datetime | as_local).date() == heute -%}
+      {%- set rr = states(P ~ 'respiratory_rate') | float(none) -%}
+      {%- set rr_n = states(P ~ 'atemfrequenz_normal_7_tage') | float(none) -%}
+      {%- if nacht_heute and rr is not none and rr_n is not none and rr - rr_n >= 2 -%}
+        {%- set ns.s = ns.s + ['Atemfrequenz'] -%}
+      {%- endif -%}
+      {%- set spo2 = states(P ~ 'blutsauerstoff_minimum_24_stunden') | float(none) -%}
+      {%- if spo2 is not none and spo2 <= 90 -%}
+        {%- set ns.s = ns.s + ['SpO₂'] -%}
+      {%- endif -%}
+      {%- set schlaf = states(P ~ 'sleep_duration') | float(none) -%}
+      {%- if nacht_heute and schlaf is not none and schlaf < 360 -%}
+        {%- set ns.s = ns.s + ['Schlaf'] -%}
+      {%- endif -%}
+      {{ ns.s | join(', ') if ns.s else 'keine' }}
+  - name: Erholung Signale
+    unique_id: erholung_signale
+    icon: mdi:traffic-light
+    state_class: measurement
+    availability: "{{ states('sensor.erholung_abweichende_werte') not in ['unknown', 'unavailable'] }}"
+    state: "{% set a = states('sensor.erholung_abweichende_werte') %}{{ 0 if a == 'keine' else a.split(', ') | count }}"
 
 automation:
 - id: gesundheit_morgen_briefing
@@ -142,55 +210,57 @@ automation:
 
 - id: gesundheit_fruehwarnung_vitalwerte
   alias: 'Gesundheit: Frühwarnung Vitalwerte'
-  description: 'Täglich 21:30 die Tageswerte gegen das eigene 7-Tage-Normal prüfen und melden, wenn mindestens zwei Signale zusammenkommen (Ruhepuls, HRV 24 h, Atemfrequenz, SpO2-Minimum 24 h). Keine Diagnose. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  description: 'Täglich 21:30 melden, wenn mindestens zwei der fünf Erholungs-Signale auffällig sind (sensor.erholung_signale: Ruhepuls, HRV 24 h, Atemfrequenz, SpO2-Minimum 24 h, Schlaf). Keine Diagnose. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
   mode: single
   triggers:
   - trigger: time
     at: '21:30:00'
     note: Apple rechnet den Tagesruhepuls bis zum Abend neu; um 21:30 ist er weitgehend endgültig.
-  variables:
-    signale: >-
-      {%- set f = '%.1f' -%}
-      {%- set heute = now().date() -%}
-      {%- set ns = namespace(s=[]) -%}
-      {%- set rhr = states('sensor.iphone_resting_heart_rate') | float(none) -%}
-      {%- set rhr_n = states('sensor.iphone_ruhepuls_normal_7_tage') | float(none) -%}
-      {%- set rhr_frisch = states.sensor.iphone_resting_heart_rate is not none
-            and (states.sensor.iphone_resting_heart_rate.last_updated | as_local).date() == heute -%}
-      {%- if rhr is not none and rhr_n is not none and rhr_frisch and rhr - rhr_n >= 3 -%}
-        {%- set ns.s = ns.s + ['Ruhepuls ' ~ rhr | round(0) | int ~ ' bpm (Ø 7 T '
-            ~ (f | format(rhr_n)) | replace('.', ',') ~ ', +' ~ (f | format(rhr - rhr_n)) | replace('.', ',') ~ ')'] -%}
-      {%- endif -%}
-      {%- set hrv = states('sensor.iphone_hrv_24_stunden') | float(none) -%}
-      {%- set hrv_n = states('sensor.iphone_hrv_normal_7_tage') | float(none) -%}
-      {%- if hrv is not none and hrv_n is not none and hrv_n - hrv >= 5 -%}
-        {%- set ns.s = ns.s + ['HRV 24 h ' ~ (f | format(hrv)) | replace('.', ',') ~ ' ms (Ø 7 T '
-            ~ (f | format(hrv_n)) | replace('.', ',') ~ ', −' ~ (f | format(hrv_n - hrv)) | replace('.', ',') ~ ')'] -%}
-      {%- endif -%}
-      {%- set rr = states('sensor.iphone_respiratory_rate') | float(none) -%}
-      {%- set rr_n = states('sensor.iphone_atemfrequenz_normal_7_tage') | float(none) -%}
-      {%- set ts = state_attr('input_datetime.schlaf_letzte_nacht', 'timestamp') -%}
-      {%- set nacht_heute = ts is not none and (ts | as_datetime | as_local).date() == heute -%}
-      {%- if rr is not none and rr_n is not none and nacht_heute and rr - rr_n >= 2 -%}
-        {%- set ns.s = ns.s + ['Atemfrequenz ' ~ rr | round(0) | int ~ '/min (Ø 7 T '
-            ~ (f | format(rr_n)) | replace('.', ',') ~ ', +' ~ (f | format(rr - rr_n)) | replace('.', ',') ~ ')'] -%}
-      {%- endif -%}
-      {%- set spo2 = states('sensor.iphone_blutsauerstoff_minimum_24_stunden') | float(none) -%}
-      {%- if spo2 is not none and spo2 <= 90 -%}
-        {%- set ns.s = ns.s + ['Blutsauerstoff Minimum 24 h ' ~ spo2 | int ~ ' %'] -%}
-      {%- endif -%}
-      {{ ns.s }}
   conditions:
-  - condition: template
-    value_template: '{{ signale | count >= 2 }}'
-    note: Mindestens zwei von vier Signalen; einzelne Ausreißer sind Messrauschen.
+  - condition: numeric_state
+    entity_id: sensor.erholung_signale
+    above: 1
+    note: Mindestens zwei von fünf Signalen; einzelne Ausreißer sind Messrauschen. Die Schwellen stehen im Template "Erholung abweichende Werte".
+  variables:
+    zeilen: >-
+      {%- set f = '%.1f' -%}
+      {%- set a = states('sensor.erholung_abweichende_werte') -%}
+      {%- set namen = [] if a in ['keine', 'unknown', 'unavailable'] else a.split(', ') -%}
+      {%- set ns = namespace(z=[]) -%}
+      {%- if 'Ruhepuls' in namen -%}
+        {%- set v = states('sensor.iphone_resting_heart_rate') | float(0) -%}
+        {%- set n = states('sensor.iphone_ruhepuls_normal_7_tage') | float(0) -%}
+        {%- set ns.z = ns.z + ['Ruhepuls ' ~ v | round(0) | int ~ ' bpm (Ø 7 T '
+            ~ (f | format(n)) | replace('.', ',') ~ ', +' ~ (f | format(v - n)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- if 'HRV' in namen -%}
+        {%- set v = states('sensor.iphone_hrv_24_stunden') | float(0) -%}
+        {%- set n = states('sensor.iphone_hrv_normal_7_tage') | float(0) -%}
+        {%- set ns.z = ns.z + ['HRV 24 h ' ~ (f | format(v)) | replace('.', ',') ~ ' ms (Ø 7 T '
+            ~ (f | format(n)) | replace('.', ',') ~ ', −' ~ (f | format(n - v)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- if 'Atemfrequenz' in namen -%}
+        {%- set v = states('sensor.iphone_respiratory_rate') | float(0) -%}
+        {%- set n = states('sensor.iphone_atemfrequenz_normal_7_tage') | float(0) -%}
+        {%- set ns.z = ns.z + ['Atemfrequenz ' ~ v | round(0) | int ~ '/min (Ø 7 T '
+            ~ (f | format(n)) | replace('.', ',') ~ ', +' ~ (f | format(v - n)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- if 'SpO₂' in namen -%}
+        {%- set ns.z = ns.z + ['Blutsauerstoff Minimum 24 h '
+            ~ states('sensor.iphone_blutsauerstoff_minimum_24_stunden') | int(0) ~ ' %'] -%}
+      {%- endif -%}
+      {%- if 'Schlaf' in namen -%}
+        {%- set m = states('sensor.iphone_sleep_duration') | int(0) -%}
+        {%- set ns.z = ns.z + ['Schlaf ' ~ m // 60 ~ ' h ' ~ '%02d' | format(m % 60) ~ ' min'] -%}
+      {%- endif -%}
+      {{ ns.z }}
   actions:
   - action: notify.mobile_app_iphone
     continue_on_error: true
     data:
-      title: 'Gesundheit: {{ signale | count }} Werte über deinem Normal'
+      title: 'Gesundheit: {{ zeilen | count }} Werte auffällig'
       message: >-
-        {{ signale | join('\n') }}
+        {{ zeilen | join('\n') }}
 
         Kann auf Infekt, Belastung oder wenig Schlaf hindeuten. Mehr Ruhe einplanen? Keine Diagnose.
       data:
