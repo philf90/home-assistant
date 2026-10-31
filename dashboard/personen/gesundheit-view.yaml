@@ -48,6 +48,13 @@
 #     groesste Einzelserie statt der Stapelsumme und schneidet obere Segmente ab.
 #     Die Achse steht stattdessen in apex_config.yaxis (ApexCharts rechnet mit Summe).
 #   - Schlafdauern: ueber 60 min als "x h mm min", sonst "n min" (erst runden).
+#   - Schlaf-Diagramm: Achse fest 0-12 h. Mit forceNiceScale allein waehlt
+#     ApexCharts 5.3.3 bei Naechten um 8-9 h die Skala 0-20 (nachgestellt
+#     31.10.2026). stroke.width 0: apexcharts-card reicht Naechte ohne Uhr als 0
+#     durch, mit Rand 2 zeichnete ApexCharts dort einen Strich auf der Nulllinie.
+#   - Herz-Diagramm: Ruhepuls als letzter Wert des Tages (Apples Endwert; der
+#     Mittelwert enthielt den hoeheren vorlaeufigen Morgenwert), HRV als Median
+#     (eine einzelne Messung wie 78 ms verschiebt sonst den Tagespunkt).
 #   - Farben: apexcharts-card zeichnet beim Wechsel zwischen hell und dunkel
 #     nicht neu. Saeulen, Linien, Achsen und Gitter faerbt deshalb das
 #     card_mod-CSS jeder Diagrammkarte mit var(--nachtblau-...); die Farben unter
@@ -89,14 +96,15 @@
 #     an diesem Tag geschrieben wurden.
 #
 # EIGENES NORMAL (Kacheln Ruhepuls, HRV, Atemfrequenz)
-#   Unter dem Wert steht das Mittel der letzten 7 Tage ("Ø 7 T"), bei
-#   Ruhepuls und Atemfrequenz dazu die Abweichung. Schwellen wie in der
+#   Unter dem Wert steht das Mittel der letzten 7 Tage ("Ø 7 T") und die
+#   Abweichung davon (Ruhepuls vor 20 Uhr nur mit "vorl."). Schwellen wie in der
 #   Frueherkennung (Oktober 2026 rueckwirkend geprueft):
 #     Ruhepuls     ab +2 bpm Amber, ab +3 bpm Koralle "erhoeht"; erst ab 20 Uhr,
 #                  weil Apple den Tagesruhepuls bis zum Abend neu rechnet
 #                  (30.10.2026: 08:09 72, 22:30 63 bpm)
 #     Atemfrequenz ab +1,5/min Amber, ab +2/min Koralle "erhoeht"
-#     HRV          nur das Normal: der Kachelwert ist eine Einzelmessung
+#     HRV 24 h     ab -3 ms Amber, ab -5 ms Koralle "niedrig"; Kachelwert ist
+#                  das Mittel der letzten 24 h, nicht die letzte Einzelmessung
 #   Feste Abstaende statt Standardabweichung: Die Standardabweichung ueber die
 #   Einzelmessungen misst die Schwankung innerhalb eines Tages, nicht die von
 #   Tag zu Tag (7 Tage bis 31.10.2026: Ruhepuls 3,3 statt 1,9 bpm, HRV 12,4
@@ -116,9 +124,51 @@
 #     HRV Normal 7 Tage           Quelle sensor.iphone_heart_rate_variability
 #     Atemfrequenz Normal 7 Tage  Quelle sensor.iphone_respiratory_rate,
 #                                 "letzten Wert behalten" an (ein Wert je Nacht)
+#   dazu mit max. Alter 1 Tag (Stichprobengroesse 1000):
+#     HRV 24 Stunden              Quelle sensor.iphone_heart_rate_variability,
+#                                 "Durchschnitt Stufe", Genauigkeit 1
+#     Blutsauerstoff Mittel 24 Stunden   Quelle sensor.iphone_blood_oxygen,
+#                                 "Durchschnitt Stufe", Genauigkeit 1
+#     Blutsauerstoff Minimum 24 Stunden  Quelle sensor.iphone_blood_oxygen,
+#                                 "Minimalwert" (value_min), Genauigkeit 0
+#   Datum-Helfer (Datum und Uhrzeit), Startwert von Hand setzen:
+#     input_datetime.vo2max_stand   Zeitpunkt der letzten VO2max-Aenderung
+#     input_datetime.gewicht_stand  Zeitpunkt der letzten Gewichtsaenderung
 #   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
 #   sensor.iphone_ruhepuls_normal_7_tage usw. Die 7 Tage passen in die
 #   10 Tage, die der Recorder behaelt.
+#   Automation "Gesundheit: Stand von VO2max und Gewicht merken"
+#   (last_changed taugt nicht als Datum: Neustarts und kurze Ausfaelle setzen
+#   ihn neu, 30.10.2026 21:48 bei VO2max 40,2 seit 04.10. 16 Uhr):
+#     mode: queued
+#     max: 5
+#     triggers:
+#       - trigger: state
+#         entity_id: sensor.iphone_vo2_max
+#         to: null                       # nur Zustandswechsel
+#         not_from: [unavailable, unknown]
+#         id: vo2max
+#       - trigger: state
+#         entity_id: sensor.iphone_weight
+#         to: null
+#         not_from: [unavailable, unknown]
+#         id: gewicht
+#     actions:
+#       - choose:
+#           - conditions:
+#               - { condition: trigger, id: vo2max }
+#               - { condition: numeric_state, entity_id: sensor.iphone_vo2_max, above: 0 }
+#             sequence:
+#               - action: input_datetime.set_datetime
+#                 target: { entity_id: input_datetime.vo2max_stand }
+#                 data: { timestamp: "{{ now().timestamp() }}" }
+#           - conditions:
+#               - { condition: trigger, id: gewicht }
+#               - { condition: numeric_state, entity_id: sensor.iphone_weight, above: 0 }
+#             sequence:
+#               - action: input_datetime.set_datetime
+#                 target: { entity_id: input_datetime.gewicht_stand }
+#                 data: { timestamp: "{{ now().timestamp() }}" }
 #   Automation "Schlaf: neue Nacht erkennen":
 #     mode: queued          # App schreibt alle fuenf nacheinander -> keinen
 #     max: 10               # Durchlauf verlieren, der letzte sieht alles
@@ -626,6 +676,7 @@ sections:
               let c='var(--nachtblau-text-sekundaer, #8794a5)', t='Ø 7 T '+f(b);
               // Apple rechnet den Tagesruhepuls bis zum Abend neu (morgens oft bis rund 10 bpm hoeher):
               // Abweichung erst ab 20 Uhr zeigen und werten.
+              if(!isNaN(v)&&new Date().getHours()<20) t+=' · vorl.';
               if(!isNaN(v)&&new Date().getHours()>=20){ const d=Number((v*variables.factor).toFixed(variables.decimals))-b, z=(d>=0?'+':'−')+f(Math.abs(d)); t+=' · '+z;
                 if(d>=3){ c='var(--nachtblau-koralle, #e7936e)'; t+=' erhöht'; } else if(d>=2) c='var(--nachtblau-amber, #e6b566)'; }
               zusatz=`<span style="font-size:0.55em;font-weight:600;white-space:nowrap;color:${c};">${t}</span>`;
@@ -683,10 +734,10 @@ sections:
           - margin-top: 0px
       - icon: mdi:heart-flash
         type: custom:button-card
-        entity: sensor.iphone_heart_rate_variability
+        entity: sensor.iphone_hrv_24_stunden
         triggers_update:
         - sensor.iphone_hrv_normal_7_tage
-        name: HRV
+        name: HRV 24 h
         label: |
           [[[
             const e=(typeof entity!=='undefined')?entity:null;
@@ -698,7 +749,10 @@ sections:
             let zusatz='';
             if(!isNaN(b)){
               let c='var(--nachtblau-text-sekundaer, #8794a5)', t='Ø 7 T '+f(b);
-              // Kachelwert ist eine Einzelmessung (streut am Tag um +-20 ms): nur das Normal zeigen, keine Abweichung.
+              // Kachelwert: zeitgewichtetes Mittel der letzten 24 h (Statistik-Helfer), nicht die letzte Einzelmessung
+              // (streut am Tag um +-20 ms). Niedriger als das Normal ist das Warnsignal, wie in der Fruehwarnung.
+              if(!isNaN(v)){ const d=Number((v*variables.factor).toFixed(variables.decimals))-b, z=(d>=0?'+':'−')+f(Math.abs(d)); t+=' · '+z;
+                if(d<=-5){ c='var(--nachtblau-koralle, #e7936e)'; t+=' niedrig'; } else if(d<=-3) c='var(--nachtblau-amber, #e6b566)'; }
               zusatz=`<span style="font-size:0.55em;font-weight:600;white-space:nowrap;color:${c};">${t}</span>`;
             }
             return `<span style="display:inline-flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;"><span style="white-space:nowrap;">${n}<span style="font-size:0.55em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;margin-left:3px;">${variables.unit||''}</span></span>${zusatz}</span>`;
@@ -959,7 +1013,7 @@ sections:
         group_by:
           duration: 1d
           fill: 'null'
-          func: avg
+          func: last
         yaxis_id: hr
       - type: line
         entity: sensor.iphone_heart_rate_variability
@@ -968,7 +1022,7 @@ sections:
         group_by:
           duration: 1d
           fill: 'null'
-          func: avg
+          func: median
         yaxis_id: hrv
       span:
         end: day
@@ -1157,7 +1211,7 @@ sections:
             columnWidth: 55%
         stroke:
           curve: smooth
-          width: 2
+          width: 0
         tooltip:
           theme: dark
         xaxis:
@@ -1168,6 +1222,7 @@ sections:
           labels:
             formatter: EVAL:function(v){ return (v===null||v===undefined)?'':Number(v).toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:1}); }
           min: 0
+          max: 12
           tickAmount: 4
       card_mod:
         style: |
@@ -1329,7 +1384,9 @@ sections:
     - type: grid
       cards:
       - type: custom:button-card
-        entity: sensor.iphone_blood_oxygen
+        entity: sensor.iphone_blutsauerstoff_mittel_24_stunden
+        triggers_update:
+        - sensor.iphone_blutsauerstoff_minimum_24_stunden
         name: Blutsauerstoff
         show_icon: false
         show_name: true
@@ -1338,11 +1395,16 @@ sections:
           dial: |
             [[[
               // 270-Grad-Bogen wie Heizung. Skala 80-100 %.
-              // Farbe: gruen ab 95 % (ueblicher Ruhe-Referenzbereich), amber 90-94, rot darunter. Anzeigehilfe, keine Diagnose.
+              // Wert: zeitgewichtetes Mittel der letzten 24 h (Statistik-Helfer), nicht die letzte Einzelmessung --
+              // die streut am Tag um mehrere Prozentpunkte (30.10.2026: 95-100 %).
+              // Farbe: gruen bei Mittel ab 95 % (ueblicher Ruhe-Referenzbereich) und Minimum ueber 90 %,
+              // amber bei Mittel 90-94 % oder Minimum bis 90 %, rot bei Mittel unter 90 %. Anzeigehilfe, keine Diagnose.
               const e=(typeof entity!=='undefined')?entity:null;
               const v=e?parseFloat(e.state):NaN;
+              const mn=parseFloat(states['sensor.iphone_blutsauerstoff_minimum_24_stunden']?.state);
               let col='var(--nachtblau-text-sekundaer, #8794a5)', txt='Keine Daten';
-              if(!isNaN(v)){ if(v>=95){col='var(--nachtblau-gruen, #a6d49e)';txt='Referenzbereich';} else if(v>=90){col='var(--nachtblau-amber, #e6b566)';txt='unter 95 %';} else {col='var(--nachtblau-rot, #f0736a)';txt='unter 90 %';} }
+              if(!isNaN(v)){ if(v<90){col='var(--nachtblau-rot, #f0736a)';txt='Mittel unter 90 %';} else if(v<95){col='var(--nachtblau-amber, #e6b566)';txt='Mittel unter 95 %';} else if(!isNaN(mn)&&mn<=90){col='var(--nachtblau-amber, #e6b566)';txt='Minimum '+Math.round(mn)+' %';} else {col='var(--nachtblau-gruen, #a6d49e)';txt='Referenzbereich';} }
+              const unter=isNaN(mn)?'':`<div style="font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);">Min 24 h ${Math.round(mn)} %</div>`;
               const R=48, C=2*Math.PI*R, track=C*0.75;
               const frac=isNaN(v)?0:Math.max(0,Math.min(1,(v-80)/20));
               return `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
@@ -1353,9 +1415,9 @@ sections:
                   </g></svg>
                   <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
                     <div style="color:var(--nachtblau-text, #f2f5f8);font-weight:750;letter-spacing:-0.02em;"><span style="font-size:26px;font-variant-numeric:tabular-nums;">${isNaN(v)?'–':Math.round(v)}</span><span style="font-size:14px;">%</span></div>
-                    <div style="font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);margin-top:3px;">SpO₂</div>
+                    <div style="font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);margin-top:3px;">SpO₂ Ø 24 h</div>
                   </div></div>
-                <div style="font-size:11.5px;font-weight:600;color:${col};">${txt}</div></div>`;
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:11.5px;font-weight:600;color:${col};">${txt}</div>${unter}</div></div>`;
             ]]]
         styles:
           name:
@@ -1460,13 +1522,22 @@ sections:
         - icon: mdi:run
           type: custom:button-card
           entity: sensor.iphone_vo2_max
+          triggers_update:
+          - input_datetime.vo2max_stand
+          - sensor.date
           name: VO2max
           label: |
             [[[
               const e=(typeof entity!=='undefined')?entity:null;
               const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
               const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
-              return `${n}<span style="font-size:0.55em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;margin-left:3px;">${variables.unit||''}</span>`;
+              // Datum der letzten echten Aenderung (Automation "Gesundheit: Stand von VO2max und Gewicht merken").
+              // Apple aktualisiert VO2max nur nach Workouts im Freien; ab 30 Tagen Alter Amber.
+              const ts=states['input_datetime.vo2max_stand']?.attributes?.timestamp;
+              let zusatz='';
+              if(ts){ const tage=Math.floor((Date.now()-ts*1000)/86400000); const alt=tage>=30;
+                zusatz=`<span style="font-size:0.55em;font-weight:600;white-space:nowrap;color:${alt?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-text-sekundaer, #8794a5)'};">seit ${new Date(ts*1000).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})}${alt?' · '+tage+' T':''}</span>`; }
+              return `<span style="display:inline-flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;"><span style="white-space:nowrap;">${n}<span style="font-size:0.55em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;margin-left:3px;">${variables.unit||''}</span></span>${zusatz}</span>`;
             ]]]
           show_icon: true
           show_name: true
@@ -2028,11 +2099,16 @@ sections:
             [[[
               // Listet nur Sensoren mit Wert, damit keine leeren Kacheln entstehen
               const L=[['sensor.iphone_weight','Gewicht','kg',1],['sensor.iphone_body_fat_percentage','Körperfett','%',1],['sensor.iphone_lean_body_mass','Fettfreie Masse','kg',1],['sensor.iphone_height','Größe','cm',0],['sensor.iphone_blood_pressure_systolic','Blutdruck sys.','mmHg',0],['sensor.iphone_blood_pressure_diastolic','Blutdruck dia.','mmHg',0],['sensor.iphone_body_temperature','Körpertemperatur','°C',1],['sensor.iphone_basal_body_temperature','Basaltemperatur','°C',1],['sensor.iphone_blood_glucose','Blutzucker','mg/dL',0],['sensor.iphone_water','Wasser','ml',0]];
-              const rows=L.map(([id,n,u,d])=>({n,u,v:parseFloat(states[id]?.state),d})).filter(x=>!isNaN(x.v));
+              const rows=L.map(([id,n,u,d])=>({id,n,u,v:parseFloat(states[id]?.state),d})).filter(x=>!isNaN(x.v));
+              // Gewicht: Datum der letzten echten Aenderung (Automation "Gesundheit: Stand von VO2max und Gewicht merken");
+              // ein Wert, der sich nie aendert, ist eher eine einmalige Eingabe als eine Messung. Ab 30 Tagen Amber.
+              const gts=states['input_datetime.gewicht_stand']?.attributes?.timestamp;
+              const seit=id=>{ if(id!=='sensor.iphone_weight'||!gts) return ''; const tage=Math.floor((Date.now()-gts*1000)/86400000);
+                return ` · <span style="color:${tage>=30?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-text-sekundaer, #8794a5)'};">seit ${new Date(gts*1000).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})}</span>`; };
               return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">${rows.map(x=>`
                 <div style="border-radius:14px;padding:10px 12px;background:color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent);text-align:left;">
                   <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:var(--nachtblau-blau, #7fb3d5);font-variant-numeric:tabular-nums;">${x.v.toFixed(x.d).replace('.',',')}<span style="font-size:0.55em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;margin-left:3px;">${x.u}</span></div>
-                  <div style="font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);margin-top:2px;">${x.n}</div></div>`).join('')}</div>`;
+                  <div style="font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);margin-top:2px;">${x.n}${seit(x.id)}</div></div>`).join('')}</div>`;
             ]]]
         styles:
           card:
@@ -2048,6 +2124,8 @@ sections:
         tap_action:
           action: none
         triggers_update:
+        - input_datetime.gewicht_stand
+        - sensor.date
         - sensor.iphone_weight
         - sensor.iphone_body_fat_percentage
         - sensor.iphone_lean_body_mass
