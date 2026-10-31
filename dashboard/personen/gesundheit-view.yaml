@@ -15,8 +15,9 @@
 #
 # Apple-Health-Daten aus der Companion App (Geraet "iPhone",
 # Sensoren sensor.iphone_*), aufgeteilt in sechs Nachtblau-Huellen:
-#   - Aktivitaet heute: drei Ringe (Bewegung / Training / Schritte) gegen die
-#     Ziel-Helfer, Badge "x / 3 Ziele", Distanz (dahinter die Schritte),
+#   - Aktivitaet heute: drei Ringe (Bewegung und Schritte heute, Training der
+#     letzten 7 Tage) gegen die Ziel-Helfer, Badge "x / 3 Ziele", Balken
+#     Training 7 Tage mit WHO-Marken, Distanz (dahinter die Schritte),
 #     Stockwerke, Schritte 7 Tage
 #   - Herz: Ruhepuls, HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
@@ -35,8 +36,18 @@
 # Ziel-Helfer (UI: Einstellungen > Geraete & Dienste > Helfer > Zahlenwert,
 # ohne "initial", damit der Wert Neustarts ueberlebt):
 #   input_number.ziel_aktive_energie   400 kcal  (100-2000, Schritt 10)
-#   input_number.ziel_trainingszeit     30 min   (5-180, Schritt 5)
+#   input_number.ziel_training_woche   150 min   (30-600, Schritt 10)
 #   input_number.ziel_schritte        7500 steps (1000-30000, Schritt 500)
+#
+# TRAINING ALS WOCHENZIEL
+#   Die WHO empfiehlt 150-300 min moderate Bewegung pro Woche (Bull et al.
+#   2020), kein Tagesziel. Der Trainingsring zaehlt deshalb die letzten 7 Tage
+#   (Statistik-Helfer sensor.iphone_training_7_tage, siehe ERFORDERLICH) gegen
+#   input_number.ziel_training_woche; der Balken darunter zeigt dieselbe Summe
+#   mit Marken beim Ziel und bei 300 min. Das fruehere Tagesziel
+#   (input_number.ziel_trainingszeit, 30 min) wurde im Oktober 2026 an 4 von
+#   29 Tagen erreicht; die Wochensummen lagen bei 134/171/99/72 min.
+#   "Training heute" in den Vitalwerten zeigt weiter die Minuten des Tages.
 #
 # Hinweise zu den Diagrammen (apexcharts-card v2.2.3 / ApexCharts 5.3.3):
 #   - Gestapelte Saeulen brauchen einen gemeinsamen stack_group. Ohne ihn legt
@@ -124,6 +135,11 @@
 #     HRV Normal 7 Tage           Quelle sensor.iphone_heart_rate_variability
 #     Atemfrequenz Normal 7 Tage  Quelle sensor.iphone_respiratory_rate,
 #                                 "letzten Wert behalten" an (ein Wert je Nacht)
+#     Training 7 Tage             Quelle sensor.iphone_exercise_time, Merkmal
+#                                 "Summe der nichtnegativen Differenzen"
+#                                 (sum_differences_nonnegative), Stichproben-
+#                                 groesse 2000, Genauigkeit 0; wertet den
+#                                 taeglichen Ruecksprung als Neustart bei 0
 #   dazu mit max. Alter 1 Tag (Stichprobengroesse 1000):
 #     HRV 24 Stunden              Quelle sensor.iphone_heart_rate_variability,
 #                                 "Durchschnitt Stufe", Genauigkeit 1
@@ -249,8 +265,9 @@ sections:
             // Tageszaehler zaehlen nur mit Update von heute (TAGESZAEHLER VOM VORTAG im Kopf)
             const v=id=>parseFloat(states[id]?.state);
             const h=id=>{ const s=states[id]; return !s?NaN:(new Date(s.last_updated).toDateString()===new Date().toDateString()?parseFloat(s.state):0); };
-            const pairs=[['sensor.iphone_active_energy','input_number.ziel_aktive_energie'],['sensor.iphone_exercise_time','input_number.ziel_trainingszeit'],['sensor.iphone_health_steps','input_number.ziel_schritte']];
-            let ok=0; pairs.forEach(([a,g])=>{ if(!isNaN(h(a))&&!isNaN(v(g))&&v(g)>0&&h(a)>=v(g)) ok++; });
+            // Training zaehlt als Wochenziel: Summe der letzten 7 Tage (TRAINING ALS WOCHENZIEL im Kopf)
+            const pairs=[['sensor.iphone_active_energy','input_number.ziel_aktive_energie',h],['sensor.iphone_training_7_tage','input_number.ziel_training_woche',v],['sensor.iphone_health_steps','input_number.ziel_schritte',h]];
+            let ok=0; pairs.forEach(([a,g,w])=>{ if(!isNaN(w(a))&&!isNaN(v(g))&&v(g)>0&&w(a)>=v(g)) ok++; });
             const c= ok===3?'var(--nachtblau-gruen, #a6d49e)':(ok>0?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-text-sekundaer, #8794a5)');
             const txt=ok+' / 3 Ziele';
             return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;font-variant-numeric:tabular-nums;">${txt}</span>`;
@@ -299,10 +316,10 @@ sections:
         action: none
       triggers_update:
       - sensor.iphone_active_energy
-      - sensor.iphone_exercise_time
+      - sensor.iphone_training_7_tage
       - sensor.iphone_health_steps
       - input_number.ziel_aktive_energie
-      - input_number.ziel_trainingszeit
+      - input_number.ziel_training_woche
       - input_number.ziel_schritte
       - sensor.date
     - type: custom:button-card
@@ -312,7 +329,8 @@ sections:
       custom_fields:
         rings: |
           [[[
-            // Drei konzentrische Ringe (Bewegung / Training / Schritte) gegen die Ziel-Helfer.
+            // Drei konzentrische Ringe (Bewegung / Training / Schritte) gegen die Ziel-Helfer;
+            // Training als Summe der letzten 7 Tage gegen das Wochenziel (TRAINING ALS WOCHENZIEL im Kopf).
             // Strichstaerke 8 und Spur wie die Heizungs-Boegen (dunkel Weiss 0,07).
             const v=id=>{ const x=parseFloat(states[id]?.state); return isNaN(x)?null:x; };
             // Tageszaehler: Wert vom Vortag zaehlt heute als 0 (TAGESZAEHLER VOM VORTAG im Kopf)
@@ -320,20 +338,32 @@ sections:
             const de=n=>n===null?'–':Math.round(n).toLocaleString('de-DE');
             const rows=[
               {id:'sensor.iphone_active_energy', g:'input_number.ziel_aktive_energie', c:'var(--nachtblau-rot, #f0736a)', r:50, l:'Bewegung', u:'kcal'},
-              {id:'sensor.iphone_exercise_time', g:'input_number.ziel_trainingszeit', c:'var(--nachtblau-gruen, #a6d49e)', r:38, l:'Training', u:'min'},
+              {id:'sensor.iphone_training_7_tage', g:'input_number.ziel_training_woche', c:'var(--nachtblau-gruen, #a6d49e)', r:38, l:'Training 7 T', u:'min', woche:true},
               {id:'sensor.iphone_health_steps', g:'input_number.ziel_schritte', c:'var(--nachtblau-blau, #7fb3d5)', r:26, l:'Schritte', u:''}
             ];
-            const ring=x=>{ const C=2*Math.PI*x.r; const val=h(x.id), goal=v(x.g);
+            const wert=x=>x.woche?v(x.id):h(x.id);
+            const ring=x=>{ const C=2*Math.PI*x.r; const val=wert(x), goal=v(x.g);
               const p=(val!==null&&goal)?Math.max(0,Math.min(1,val/goal)):0;
               return `<circle cx="60" cy="60" r="${x.r}" fill="none" style="stroke:color-mix(in srgb, rgba(255, 255, 255, 0.07) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))" stroke-width="8"/>`+
                 (p>0?`<circle cx="60" cy="60" r="${x.r}" fill="none" style="stroke:${x.c}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}"/>`:''); };
-            const leg=rows.map(x=>{ const val=h(x.id), goal=v(x.g); const pct=(val!==null&&goal)?Math.round(val/goal*100):null;
+            const leg=rows.map(x=>{ const val=wert(x), goal=v(x.g); const pct=(val!==null&&goal)?Math.round(val/goal*100):null;
               return `<div style="display:flex;flex-direction:column;gap:2px;">
                 <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--nachtblau-text-sekundaer, #8794a5);"><span style="width:8px;height:8px;border-radius:3px;background:${x.c};"></span>${x.l}${pct!==null?' · '+pct+' %':''}</div>
                 <div style="color:var(--nachtblau-text, #f2f5f8);font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;">${de(val)}<span style="font-size:0.62em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;"> / ${de(goal)} ${x.u}</span></div></div>`; }).join('');
-            return `<div style="display:flex;align-items:center;justify-content:space-evenly;gap:16px;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+            // Balken Training 7 Tage: Marken beim Wochenziel und bei 300 min (obere WHO-Empfehlung).
+            // Skala bis 110 % von max(300, Wert), damit die 300er-Marke nicht am Rand klebt.
+            const tw=v('sensor.iphone_training_7_tage'), tz=v('input_number.ziel_training_woche')||150;
+            const skala=Math.max(300,tw||0)*1.1, pos=x=>(x/skala*100).toFixed(1);
+            const marke=x=>`<div style="position:absolute;left:${pos(x)}%;top:-3px;width:2px;height:14px;border-radius:1px;transform:translateX(-1px);background:var(--nachtblau-text-sekundaer, #8794a5);"></div>
+              <div style="position:absolute;left:${pos(x)}%;top:15px;transform:translateX(-50%);font-size:11px;color:var(--nachtblau-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;">${x}</div>`;
+            const balken=tw===null?'':`<div style="width:100%;padding:0 2px 18px;box-sizing:border-box;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;font-weight:600;color:var(--nachtblau-text-sekundaer, #8794a5);margin-bottom:7px;"><span>Training 7 Tage · WHO 150–300 min</span><span style="color:var(--nachtblau-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${de(tw)} min</span></div>
+              <div style="position:relative;height:8px;border-radius:4px;background:color-mix(in srgb, rgba(255, 255, 255, 0.07) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)));">
+                <div style="width:${pos(tw)}%;height:100%;border-radius:4px;background:var(--nachtblau-gruen, #a6d49e);"></div>${marke(tz)}${tz!==300?marke(300):''}</div></div>`;
+            return `<div style="display:flex;flex-direction:column;gap:14px;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+              <div style="display:flex;align-items:center;justify-content:space-evenly;gap:16px;width:100%;">
               <svg viewBox="0 0 120 120" style="width:120px;height:120px;flex:none;transform:rotate(-90deg);">${rows.map(ring).join('')}</svg>
-              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;text-align:left;">${leg}</div></div>`;
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;text-align:left;">${leg}</div></div>${balken}</div>`;
           ]]]
       styles:
         card:
@@ -350,10 +380,10 @@ sections:
         action: none
       triggers_update:
       - sensor.iphone_active_energy
-      - sensor.iphone_exercise_time
+      - sensor.iphone_training_7_tage
       - sensor.iphone_health_steps
       - input_number.ziel_aktive_energie
-      - input_number.ziel_trainingszeit
+      - input_number.ziel_training_woche
       - input_number.ziel_schritte
       - sensor.date
     - type: grid

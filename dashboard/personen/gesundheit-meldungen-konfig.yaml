@@ -16,8 +16,9 @@
 # Inhalt:
 #   automation "Gesundheit: Morgen-Briefing"
 #     Eine leise Push-Nachricht pro Tag, sobald die Nacht angekommen ist:
-#     Schlafdauer, Tief/REM/wach, Training der letzten 7 Tage gegen die
-#     WHO-Empfehlung (150 min pro Woche). Ausloeser ist
+#     Schlafdauer, Tief/REM/wach, Training der letzten 7 Tage gegen das
+#     Wochenziel input_number.ziel_training_woche (WHO: 150 min pro Woche,
+#     siehe TRAINING ALS WOCHENZIEL in gesundheit-view.yaml). Ausloeser ist
 #     input_datetime.schlaf_letzte_nacht (Automation "Schlaf: neue Nacht
 #     erkennen" im Kopf von gesundheit-view.yaml). Nach einer Nacht ohne Uhr
 #     kommt keine Nachricht. Bewusst ohne Ruhepuls: der Morgenwert ist
@@ -38,12 +39,9 @@
 #   Aus gesundheit-view.yaml (Kopf, ERFORDERLICH):
 #     sensor.iphone_ruhepuls_normal_7_tage, sensor.iphone_hrv_normal_7_tage,
 #     sensor.iphone_atemfrequenz_normal_7_tage, sensor.iphone_hrv_24_stunden,
-#     sensor.iphone_blutsauerstoff_minimum_24_stunden
-#   Nur fuer diese Automationen:
-#     Training 7 Tage   Quelle sensor.iphone_exercise_time, Merkmal
-#                       "Summe der nichtnegativen Differenzen"
-#                       (sum_differences_nonnegative), max. Alter 7 Tage,
-#                       Stichprobengroesse 2000, Genauigkeit 0
+#     sensor.iphone_blutsauerstoff_minimum_24_stunden,
+#     sensor.iphone_training_7_tage, input_number.ziel_training_woche
+#   Nur fuer diese Automationen: keine weiteren.
 #   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
 #   sensor.iphone_training_7_tage usw.
 #   Training 7 Tage: Die App setzt die Trainingsminuten erst mit dem ersten
@@ -76,7 +74,7 @@
 automation:
 - id: gesundheit_morgen_briefing
   alias: 'Gesundheit: Morgen-Briefing'
-  description: 'Eine leise Push-Nachricht pro Tag, sobald die Nacht angekommen ist: Schlafdauer und Phasen, Training der letzten 7 Tage gegen 150 min. Kein Ruhepuls, der Morgenwert ist vorläufig. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  description: 'Eine leise Push-Nachricht pro Tag, sobald die Nacht angekommen ist: Schlafdauer und Phasen, Training der letzten 7 Tage gegen das Wochenziel. Kein Ruhepuls, der Morgenwert ist vorläufig. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
   mode: single
   triggers:
   - trigger: state
@@ -95,6 +93,7 @@ automation:
     rem: "{{ states('sensor.iphone_rem_sleep') | int(0) }}"
     wach: "{{ states('sensor.iphone_awake') | int(0) }}"
     training: "{{ states('sensor.iphone_training_7_tage') | int(-1) }}"
+    ziel: "{{ states('input_number.ziel_training_woche') | int(150) }}"
   actions:
   - action: notify.mobile_app_iphone
     continue_on_error: true
@@ -105,7 +104,7 @@ automation:
         · REM {{ rem }} min ({{ (rem / g * 100) | round(0) | int if g else 0 }} %)
         · wach {{ wach }} min{% if training >= 0 %}
 
-        Training letzte 7 Tage: {{ training }} von 150 min{{ ' · noch ' ~ (150 - training) ~ ' min' if training < 150 else ' · Ziel erreicht' }}{% endif %}
+        Training letzte 7 Tage: {{ training }} von {{ ziel }} min{{ ' · noch ' ~ (ziel - training) ~ ' min' if training < ziel else ' · Ziel erreicht' }}{% endif %}
       data:
         group: gesundheit
         url: /dashboard-home/gesundheit
