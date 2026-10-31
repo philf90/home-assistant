@@ -64,8 +64,12 @@ function checkFile(file) {
   for (const tpl of templates) {
     // In eine Funktion wickeln: button-card fuehrt den Block als
     // Funktionskoerper aus, deshalb sind 'return' und 'this' dort gueltig.
+    // Mit denselben Parametern wie button-card (states, entity, user, hass,
+    // variables, html): Ein "const html = ..." oben im Template ist dort ein
+    // SyntaxError ("Identifier 'html' has already been declared"), ohne die
+    // Parameter faellt er nicht auf (Schlafbilanz, 31.10.2026).
     try {
-      new vm.Script(`(function(){${tpl.code}\n})`, { filename: name });
+      new vm.Script(`(function(states, entity, user, hass, variables, html){${tpl.code}\n})`, { filename: name });
     } catch (err) {
       problems.push({
         file: name,
