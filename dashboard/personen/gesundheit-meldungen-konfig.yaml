@@ -1,0 +1,177 @@
+# ============================================================================
+# Gesundheit – Morgen-Briefing und Frueherkennung (Automationen)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       personen
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder die Automationen einzeln im YAML-Editor der UI)
+# Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Zwei Meldungen aufs Handy zu den Apple-Health-Werten der Gesundheit-View
+# (gesundheit-view.yaml). Schwellen und Begruendung stehen dort im Kopf,
+# Abschnitt "EIGENES NORMAL".
+#
+# Inhalt:
+#   automation "Gesundheit: Morgen-Briefing"
+#     Eine leise Push-Nachricht pro Tag, sobald die Nacht angekommen ist:
+#     Schlafdauer, Tief/REM/wach, Training der letzten 7 Tage gegen die
+#     WHO-Empfehlung (150 min pro Woche). Ausloeser ist
+#     input_datetime.schlaf_letzte_nacht (Automation "Schlaf: neue Nacht
+#     erkennen" im Kopf von gesundheit-view.yaml). Nach einer Nacht ohne Uhr
+#     kommt keine Nachricht. Bewusst ohne Ruhepuls: der Morgenwert ist
+#     vorlaeufig (30.10.2026: 08:09 72, 22:30 63 bpm).
+#   automation "Gesundheit: Frühwarnung Vitalwerte"
+#     Taeglich 21:30. Meldet, wenn mindestens zwei Signale zusammenkommen:
+#       Ruhepuls       >= Normal + 3 bpm, nur mit Update von heute
+#       HRV 24 h       <= Normal - 5 ms
+#       Atemfrequenz   >= Normal + 2/min, nur wenn die Nacht heute ankam
+#       SpO2-Minimum   <= 90 % in den letzten 24 h
+#     Rueckblick Oktober 2026 mit 30-Tage-Basis: ausgeloest am 07.10.,
+#     08.10. und 23.10., an den uebrigen 27 Tagen nicht. Mit der 7-Tage-Basis
+#     liess sich der Oktober nicht nachrechnen (Recorder behaelt 10 Tage).
+#     Ein Signal allein meldet nichts: Einzelwerte streuen stark.
+#     Keine Diagnose; die Meldung nennt nur, welche Werte abweichen.
+#
+# Helfer (UI: Einstellungen > Geraete & Dienste > Helfer > Statistik):
+#   Aus gesundheit-view.yaml (Kopf, ERFORDERLICH):
+#     sensor.iphone_ruhepuls_normal_7_tage, sensor.iphone_hrv_normal_7_tage,
+#     sensor.iphone_atemfrequenz_normal_7_tage
+#   Nur fuer diese Automationen:
+#     Training 7 Tage   Quelle sensor.iphone_exercise_time, Merkmal
+#                       "Summe der nichtnegativen Differenzen"
+#                       (sum_differences_nonnegative), max. Alter 7 Tage,
+#                       Stichprobengroesse 2000, Genauigkeit 0
+#     HRV 24 Stunden    Quelle sensor.iphone_heart_rate_variability,
+#                       "Durchschnitt Stufe" (average_step), max. Alter
+#                       1 Tag, Stichprobengroesse 1000, Genauigkeit 1
+#     Blutsauerstoff Minimum 24 Stunden
+#                       Quelle sensor.iphone_blood_oxygen, "Minimalwert"
+#                       (value_min), max. Alter 1 Tag, Genauigkeit 0
+#   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
+#   sensor.iphone_training_7_tage usw.
+#   Training 7 Tage: Die App setzt die Trainingsminuten erst mit dem ersten
+#   Wert des neuen Tags zurueck (immer 1). sum_differences_nonnegative wertet
+#   den Ruecksprung als Neustart bei 0 und zaehlt die 1 mit. Nachgerechnet
+#   31.10.2026: Helfer 61 min, Verlauf 62 min (Unterschied am Fensteranfang).
+#
+# Anpassen:
+#   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter, siehe oben)
+#   - /dashboard-home/gesundheit: Pfad, den das Tippen auf die Meldung oeffnet
+#   - 21:30: Uhrzeit der Fruehwarnung; frueher als 20 Uhr ist der
+#     Ruhepuls oft noch zu hoch (Apple rechnet ihn bis zum Abend neu)
+#
+# Einbinden als Paket in configuration.yaml:
+#   homeassistant:
+#     packages:
+#       gesundheit_meldungen: !include gesundheit-meldungen-konfig.yaml
+# Danach unter Einstellungen -> Werkzeuge -> YAML die Automationen neu laden.
+#
+# Achtung bei bestehenden Fassungen aus der UI: Gibt es die Automationen
+# schon (Einstellungen -> Automationen & Szenen), diese vorher loeschen,
+# sonst laufen sie doppelt (die UI-Fassung hat eine andere id).
+# Ohne Paket: Neue Automation -> Drei-Punkte-Menue -> In YAML bearbeiten und
+# jeweils den Listeneintrag ohne "- " einfuegen (ohne id, die vergibt die UI).
+#
+# Voraussetzung: Helfer und Automation "Schlaf: neue Nacht erkennen" aus
+#                gesundheit-view.yaml, obige Statistik-Helfer,
+#                Home Assistant Companion App fuer die Meldungen.
+
+automation:
+- id: gesundheit_morgen_briefing
+  alias: 'Gesundheit: Morgen-Briefing'
+  description: 'Eine leise Push-Nachricht pro Tag, sobald die Nacht angekommen ist: Schlafdauer und Phasen, Training der letzten 7 Tage gegen 150 min. Kein Ruhepuls, der Morgenwert ist vorläufig. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: single
+  triggers:
+  - trigger: state
+    entity_id: input_datetime.schlaf_letzte_nacht
+    to: null
+    for:
+      minutes: 2
+    note: 'to: null = nur Zustandswechsel, keine Attributänderungen. for: 2 min wartet, bis die Companion App alle Schlafwerte geschrieben hat.'
+  conditions:
+  - condition: template
+    value_template: '{{ this.attributes.last_triggered is none or (this.attributes.last_triggered | as_local).date() != now().date() }}'
+    note: Höchstens eine Nachricht pro Tag, auch wenn Apple die Nacht später nachkorrigiert.
+  variables:
+    g: "{{ states('sensor.iphone_sleep_duration') | int(0) }}"
+    tief: "{{ states('sensor.iphone_deep_sleep') | int(0) }}"
+    rem: "{{ states('sensor.iphone_rem_sleep') | int(0) }}"
+    wach: "{{ states('sensor.iphone_awake') | int(0) }}"
+    training: "{{ states('sensor.iphone_training_7_tage') | int(-1) }}"
+  actions:
+  - action: notify.mobile_app_iphone
+    continue_on_error: true
+    data:
+      title: "Schlaf {{ g // 60 }} h {{ '%02d' | format(g % 60) }} min{{ ' · unter 7 h' if g < 420 else '' }}"
+      message: >-
+        Tief {{ tief }} min ({{ (tief / g * 100) | round(0) | int if g else 0 }} %)
+        · REM {{ rem }} min ({{ (rem / g * 100) | round(0) | int if g else 0 }} %)
+        · wach {{ wach }} min{% if training >= 0 %}
+
+        Training letzte 7 Tage: {{ training }} von 150 min{{ ' · noch ' ~ (150 - training) ~ ' min' if training < 150 else ' · Ziel erreicht' }}{% endif %}
+      data:
+        group: gesundheit
+        url: /dashboard-home/gesundheit
+        clickAction: /dashboard-home/gesundheit
+        push:
+          interruption-level: passive
+
+- id: gesundheit_fruehwarnung_vitalwerte
+  alias: 'Gesundheit: Frühwarnung Vitalwerte'
+  description: 'Täglich 21:30 die Tageswerte gegen das eigene 7-Tage-Normal prüfen und melden, wenn mindestens zwei Signale zusammenkommen (Ruhepuls, HRV 24 h, Atemfrequenz, SpO2-Minimum 24 h). Keine Diagnose. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: single
+  triggers:
+  - trigger: time
+    at: '21:30:00'
+    note: Apple rechnet den Tagesruhepuls bis zum Abend neu; um 21:30 ist er weitgehend endgültig.
+  variables:
+    signale: >-
+      {%- set f = '%.1f' -%}
+      {%- set heute = now().date() -%}
+      {%- set ns = namespace(s=[]) -%}
+      {%- set rhr = states('sensor.iphone_resting_heart_rate') | float(none) -%}
+      {%- set rhr_n = states('sensor.iphone_ruhepuls_normal_7_tage') | float(none) -%}
+      {%- set rhr_frisch = states.sensor.iphone_resting_heart_rate is not none
+            and (states.sensor.iphone_resting_heart_rate.last_updated | as_local).date() == heute -%}
+      {%- if rhr is not none and rhr_n is not none and rhr_frisch and rhr - rhr_n >= 3 -%}
+        {%- set ns.s = ns.s + ['Ruhepuls ' ~ rhr | round(0) | int ~ ' bpm (Ø 7 T '
+            ~ (f | format(rhr_n)) | replace('.', ',') ~ ', +' ~ (f | format(rhr - rhr_n)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- set hrv = states('sensor.iphone_hrv_24_stunden') | float(none) -%}
+      {%- set hrv_n = states('sensor.iphone_hrv_normal_7_tage') | float(none) -%}
+      {%- if hrv is not none and hrv_n is not none and hrv_n - hrv >= 5 -%}
+        {%- set ns.s = ns.s + ['HRV 24 h ' ~ (f | format(hrv)) | replace('.', ',') ~ ' ms (Ø 7 T '
+            ~ (f | format(hrv_n)) | replace('.', ',') ~ ', −' ~ (f | format(hrv_n - hrv)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- set rr = states('sensor.iphone_respiratory_rate') | float(none) -%}
+      {%- set rr_n = states('sensor.iphone_atemfrequenz_normal_7_tage') | float(none) -%}
+      {%- set ts = state_attr('input_datetime.schlaf_letzte_nacht', 'timestamp') -%}
+      {%- set nacht_heute = ts is not none and (ts | as_datetime | as_local).date() == heute -%}
+      {%- if rr is not none and rr_n is not none and nacht_heute and rr - rr_n >= 2 -%}
+        {%- set ns.s = ns.s + ['Atemfrequenz ' ~ rr | round(0) | int ~ '/min (Ø 7 T '
+            ~ (f | format(rr_n)) | replace('.', ',') ~ ', +' ~ (f | format(rr - rr_n)) | replace('.', ',') ~ ')'] -%}
+      {%- endif -%}
+      {%- set spo2 = states('sensor.iphone_blutsauerstoff_minimum_24_stunden') | float(none) -%}
+      {%- if spo2 is not none and spo2 <= 90 -%}
+        {%- set ns.s = ns.s + ['Blutsauerstoff Minimum 24 h ' ~ spo2 | int ~ ' %'] -%}
+      {%- endif -%}
+      {{ ns.s }}
+  conditions:
+  - condition: template
+    value_template: '{{ signale | count >= 2 }}'
+    note: Mindestens zwei von vier Signalen; einzelne Ausreißer sind Messrauschen.
+  actions:
+  - action: notify.mobile_app_iphone
+    continue_on_error: true
+    data:
+      title: 'Gesundheit: {{ signale | count }} Werte über deinem Normal'
+      message: >-
+        {{ signale | join('\n') }}
+
+        Kann auf Infekt, Belastung oder wenig Schlaf hindeuten. Mehr Ruhe einplanen? Keine Diagnose.
+      data:
+        group: gesundheit
+        url: /dashboard-home/gesundheit
+        clickAction: /dashboard-home/gesundheit
