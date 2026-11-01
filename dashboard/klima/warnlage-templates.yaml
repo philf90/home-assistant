@@ -292,20 +292,37 @@ button_card_templates:
                 };
 
                 // ---------- Parameter normalisieren ----------
-                // {"Windrichtung":"west","Böen":"~55 [km/h]"} -> Chips "Böen · ~55 km/h"
+                // {"Windrichtung":"south-west","Böen":"~55 [km/h]"} -> Chips "Windrichtung · Südwest", "Böen · ca. 55 km/h"
+                // Die Integration liefert manche Werte nur auf Englisch, obwohl der
+                // Warntext deutsch ist. Uebersetzt werden nur belegte Werte: die
+                // Himmelsrichtungen (Wortteile) und Ortsangaben, deren deutsche Fassung im
+                // Warntext derselben Warnung steht. Unbekannte Werte bleiben, wie sie sind.
+                const ORT = {
+                  'particularly in valleys and dips': 'vor allem in Tal- und Muldenlagen' // FROST, 01.11.2026
+                };
+                const RICHTUNG = { north: 'Nord', east: 'Ost', south: 'Süd', west: 'West' };
                 const paramChips = (params, color) => {
                   if (!params || typeof params !== 'object') return '';
                   const keys = Object.keys(params);
                   if (!keys.length) return '';
                   const clean = (v) => {
                     let t = String(v).replace(/\[([^\]]+)\]/g, '$1').replace(/\s+/g, ' ').trim();
+                    const klein = t.toLowerCase();
+                    if (ORT[klein]) return ORT[klein];
+                    // "south-west" -> "Südwest", "north-north-east" -> "Nordnordost"
+                    if (/^(north|east|south|west)(-(north|east|south|west))*$/.test(klein)) {
+                      const teile = klein.split('-').map((x) => RICHTUNG[x]);
+                      return teile[0] + teile.slice(1).join('').toLowerCase();
+                    }
+                    // "~-1 °C" -> "ca. -1 °C": die Tilde direkt vor dem Minus las sich als "~-"
+                    t = t.replace(/^~\s*/, 'ca. ');
                     if (/^[a-zäöüß]+$/.test(t)) t = t.charAt(0).toUpperCase() + t.slice(1);
                     return t;
                   };
                   const chips = keys.map((k) =>
                     `<span style="display:inline-flex;align-items:baseline;gap:5px;font-size:12px;line-height:1;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid ${line};border-radius:999px;padding:6px 10px;white-space:nowrap;">`
                     + `<span style="color:${label};">${esc(k)}</span>`
-                    + `<span style="color:${value};font-weight:600;">${clean(params[k])}</span></span>`
+                    + `<span style="color:${value};font-weight:600;">${esc(clean(params[k]))}</span></span>`
                   ).join('');
                   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">${chips}</div>`;
                 };
