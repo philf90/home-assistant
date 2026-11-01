@@ -808,7 +808,15 @@ umgeschaltet über `nachtblau-dunkel-anteil`; dunkel bleibt alles wie bisher.
   Brunnenpumpe (Grün 0,5) in der Stufe „Leuchten“, hell im Tiefton; die
   Ringe heben sich hell mit 2,1:1 ab, Zusatzsignal neben Text und Icon. Der
   Schalter „Meldung am Ende“ ist an hell voll im Limette-Tiefton (Knopf
-  5,42:1; mit 0,5 wären es 2,11:1).
+  5,42:1; mit 0,5 wären es 2,11:1). Der Schalter „Frostschutz“ folgt
+  demselben Muster in Blau, weil Frost Blau ist (siehe „Temperaturstufen“):
+  Knopf hell auf vollem Blau-Tiefton 5,44:1 (mit 0,5 wären es 2,12:1),
+  dunkel auf Blau 0,5 4,92:1. Bei Frostschutz stehen Schloss und Text der
+  gesperrten Kacheln in Blau (dunkel 6,53:1, hell 5,42:1 auf der
+  Unterkachel), ein zu kaltes Ventillager (ab 2 °C abwärts) und eine
+  laufende Pumpe in Amber (7,83:1 bzw. 5,42:1). Der Hinweis wird Amber, wenn
+  die Sperre-Automation aus ist (Text in Label-Farbe auf Amber 0,12: dunkel
+  6,23:1, hell 7,63:1).
 
 ## Eine neue Farbe aufnehmen
 

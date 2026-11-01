@@ -42,6 +42,24 @@
 #                       "Meldung am Ende"; Hinweis, mit welcher Laufzeit der
 #                       naechste Start laeuft
 #
+# Frostschutz (Winter: Ventile eingelagert, Gartenleitung entleert):
+#   Schalter            erste Zeile in "Bewaesserung einstellen", Pille in Blau
+#                       (DESIGN.md: Frost = Blau), Tippen mit Rueckfrage,
+#                       Halten -> more-info. Nur von Hand; keine Automation
+#                       schaltet ihn.
+#   Sperre              bei Frostschutz nehmen Pumpe, Gruppe, Zonen, -/+,
+#                       "Standard" und "Meldung am Ende" kein Tippen an
+#                       (pointer-events per Style-Template); Zeilen zeigen
+#                       Schloss und "Frostschutz · ..." in Blau, die Zonen die
+#                       Temperatur des eingelagerten Ventils (ab 2 °C abwaerts
+#                       Amber), die Pumpe weiter ihre Leistung.
+#   Hinweis             statt der Laufzeit-Vorschau; Amber, wenn die
+#                       Automation "Frostschutz-Sperre" aus ist. Chip
+#                       "Frostschutz" in der Kopfzeile Garten.
+#   Die Karte sperrt nur die Bedienung. Wirksam ist die Automation
+#   "Frostschutz-Sperre": Sie schaltet Pumpe und Ventile bei Frostschutz
+#   sofort wieder aus, egal woher der Befehl kam.
+#
 # Maehroboter (Dreame A2, Integration antondaubert/dreame-mower):
 #   Lawn Solo           Status aus dem Statussensor, waehrend des Maehens
 #                       Fortschritt in % mit Balken und Flaeche; Akku und
@@ -83,12 +101,27 @@
 #       input_number.bewasserung_laufzeit_nach_regen  10-90 min, Schritt 5
 #       input_number.bewasserung_regen_schwelle       0,5-10 mm, Schritt 0,5
 #       input_boolean.bewasserung_meldung  Schalter der Meldung am Ende
+#       input_boolean.bewasserung_frostschutz  Frostschutz, ohne initial
+#           (behaelt den Zustand ueber Neustarts)
 #   - Skript script.bewasserung_einstellungen_setzen: Felder laufzeit,
 #     laufzeit_nach_regen, regen_schwelle -> je input_number.set_value
 #   - Automationen (UI):
+#       Regel: Wer Pumpe oder Ventil einschaltet, prueft den Frostschutz;
+#       wer ausschaltet oder schliesst, prueft ihn nie.
 #       "Bewaesserung: Zonen-Timer"  Ventil auf -> Pumpe an und Timer der Zone
 #           starten: Laufzeit, nach Regen ueber der Schwelle (Tagesregen) die
-#           Laufzeit nach Regen, hoechstens 90 min; Ventil zu -> Timer abbrechen
+#           Laufzeit nach Regen, hoechstens 90 min; Ventil zu -> Timer
+#           abbrechen. Bei Frostschutz bricht der Zweig "Ventil auf" vor dem
+#           Einschalten ab (Bedingung als erster Schritt).
+#       "Bewaesserung: Frostschutz-Sperre"  bei Frostschutz: Pumpe an -> sofort
+#           aus, Ventil auf -> Gruppe zu (continue_on_error), beim Einschalten
+#           des Frostschutzes und nach HA-Start dasselbe; Meldung an
+#           notify.mobile_app_iphone mit Laufzeit des Shelly. Trigger auf die
+#           Pumpe als state mit to: "on", damit auch der Wechsel aus
+#           unavailable zaehlt; mode restart.
+#       "Bewaesserung: Frostwarnung Ventillager"  bei Frostschutz: eine der
+#           drei Ventil-Temperaturen 30 min unter 3 °C -> Meldung (die
+#           ELV-SH-WSM sind laut Hersteller nicht frostsicher). Schaltet nichts.
 #       "Bewaesserung: Zone nach Ablauf schliessen"  timer.finished -> Ventil
 #           der Zone zu
 #       "Bewaesserung: Pumpe aus ohne laufende Zone"  Timer beendet oder
@@ -100,6 +133,7 @@
 #           Tippen oeffnet /dashboard-home/garten
 #       "Bewaesserung: Abbruch bei Regen"  Regensensor meldet Naesse, ein
 #           Ventil offen -> alle Ventile zu
+#     Jahresablauf und Shelly-Einstellungen: doku/bewaesserung-frostschutz.md
 #   - Maehroboter: antondaubert/dreame-mower (HACS, geprueft mit v1.10.1),
 #     Geraet "Lawn Solo" im Bereich Garten. Genutzt: lawn_mower, Sensoren
 #     Status, Geraetecode, Batterie, Maeh Fortschritt, Klingen- und
@@ -250,7 +284,61 @@ cards:
         show_label: false
         tap_action:
           action: none
-        styles: *header_styles
+        # Wie &header_styles, dazu rechts der Chip "Frostschutz" (nur bei
+        # Frostschutz an). Neu gezeichnet wird, weil das Feld den Helfer liest.
+        custom_fields:
+          fs: |
+            [[[
+              const f=states['input_boolean.bewasserung_frostschutz'];
+              if(!(f&&f.state==='on')) return '';
+              return `<span style="display:inline-flex;align-items:center;gap:4px;line-height:1"><ha-icon icon="mdi:snowflake" style="--mdc-icon-size:13px;width:13px;height:13px;display:flex"></ha-icon><span>Frostschutz</span></span>`;
+            ]]]
+        styles:
+          card:
+            - background: none
+            - box-shadow: none
+            - border: none
+            - padding: 2px 2px 6px
+          grid:
+            - grid-template-areas: '"i n fs"'
+            - grid-template-columns: min-content minmax(0, 1fr) auto
+          img_cell:
+            - width: 44px
+            - height: 44px
+            - border-radius: 13px
+            - margin-right: 14px
+            - align-self: center
+            - background: 'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 12%, transparent)'
+            - border: '1px solid color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 24%, transparent)'
+          icon:
+            - width: 23px
+            - height: 23px
+            - --ha-icon-display: block
+            - color: 'var(--nachtblau-gruen, #a6d49e)'
+          name:
+            - justify-self: start
+            - align-self: center
+            - font-size: 17px
+            - font-weight: 700
+            - letter-spacing: -0.02em
+            - color: 'var(--nachtblau-text, #f2f5f8)'
+          custom_fields:
+            fs:
+              - display: |
+                  [[[
+                    const f=states['input_boolean.bewasserung_frostschutz'];
+                    return (f&&f.state==='on') ? 'block' : 'none';
+                  ]]]
+              - justify-self: end
+              - align-self: center
+              - padding: 4px 9px
+              - border-radius: 999px
+              - font-size: 12px
+              - font-weight: 600
+              - white-space: nowrap
+              - color: 'var(--nachtblau-blau, #7fb3d5)'
+              - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 12%, transparent)'
+              - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)'
       - type: custom:button-card
         entity: switch.shelly_outdoor_plug_s_gen3_brunnenpumpe
         name: Brunnenpumpe
@@ -289,6 +377,14 @@ cards:
               const pw= p?`${parseFloat(p.state).toFixed(1).replace('.',',')} ${p.attributes.unit_of_measurement||'W'}`:'';
               const n=(variables.timers||[]).filter(id=>states[id]&&states[id].state==='active').length;
               const z= n?`läuft für ${n} ${n===1?'Zone':'Zonen'}`:'';
+              const f=states['input_boolean.bewasserung_frostschutz'];
+              if(f&&f.state==='on'){
+                // Frostschutz: Schloss in Blau; laeuft die Pumpe trotzdem, Amber
+                const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
+                const c=an?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-blau, #7fb3d5)';
+                const lock=`<ha-icon icon="mdi:lock" style="--mdc-icon-size:13px;width:13px;height:13px;display:inline-flex;vertical-align:-2px;margin-right:3px"></ha-icon>`;
+                return `<span style="color:${c}">${lock}Frostschutz · ${an?'läuft trotzdem':'aus'}${pw?' · '+pw:''}</span>`;
+              }
               return [pw,z].filter(Boolean).join(' · ');
             ]]]
         styles:
@@ -298,6 +394,11 @@ cards:
             - box-shadow: none
             - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
             - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+            - pointer-events: &fs_sperre |
+                [[[
+                  const f=states['input_boolean.bewasserung_frostschutz'];
+                  return (f&&f.state==='on') ? 'none' : 'auto';
+                ]]]
           grid:
             - grid-template-columns: min-content 1fr
             - grid-template-areas: '"i n" "i sub"'
@@ -378,6 +479,11 @@ cards:
               const e=(typeof entity!=='undefined')?entity:null;
               const ids=(e&&e.attributes.entity_id)||[];
               const n=ids.filter(id=>states[id]&&states[id].state==='open').length;
+              const f=states['input_boolean.bewasserung_frostschutz'];
+              if(f&&f.state==='on'){
+                const lock=`<ha-icon icon="mdi:lock" style="--mdc-icon-size:13px;width:13px;height:13px;display:inline-flex;vertical-align:-2px;margin-right:3px"></ha-icon>`;
+                return `<span style="color:var(--nachtblau-blau, #7fb3d5)">${lock}Frostschutz · gesperrt</span>`;
+              }
               return n?`An · ${n} von ${ids.length} ${ids.length===1?'Zone':'Zonen'}`:'Aus';
             ]]]
           tm: &bw_tm |
@@ -405,6 +511,7 @@ cards:
             ]]]
         styles: &bw_styles_timed
           card:
+            - pointer-events: *fs_sperre
             - position: relative
             - border-radius: 16px
             - padding: |
@@ -518,12 +625,25 @@ cards:
             - timer.bewasserung_vorne
           flow: sensor.elv_sh_wsm_seriennr_1_water_flow
           daily: sensor.garten_bewasserung_daily
+          temp: sensor.elv_sh_wsm_seriennr_1_temperatur
         extra_styles: *bw_extra
         custom_fields:
           sub: &bw_zone_sub |
             [[[
               const e=(typeof entity!=='undefined')?entity:null;
               if(!e) return '';
+              const f=states['input_boolean.bewasserung_frostschutz'];
+              if(f&&f.state==='on'){
+                // Frostschutz: Ventil eingelagert; Temperatur des Geraets = Lager.
+                // Ab 2 °C abwaerts Amber (Frostwarnung der Automation unter 3 °C).
+                const t=states[variables.temp];
+                const tv=t?parseFloat(t.state):NaN;
+                const kalt=!isNaN(tv)&&tv<=2;
+                const c=kalt?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-blau, #7fb3d5)';
+                const lock=`<ha-icon icon="mdi:lock" style="--mdc-icon-size:13px;width:13px;height:13px;display:inline-flex;vertical-align:-2px;margin-right:3px"></ha-icon>`;
+                const temp=isNaN(tv)?'':` · ${tv.toFixed(0)} °C`;
+                return `<span style="color:${c}">${lock}Frostschutz · gesperrt${temp}</span>`;
+              }
               const diff=Math.floor((Date.now()-new Date(e.last_changed).getTime())/1000);
               const since= diff<60?`vor ${diff} Sek.`: diff<3600?`vor ${Math.floor(diff/60)} Min.`: diff<86400?`vor ${Math.floor(diff/3600)} Std.`:`vor ${Math.floor(diff/86400)} Tagen`;
               if(e.state!=='open') return `geschlossen · ${since}`;
@@ -551,6 +671,7 @@ cards:
             - timer.bewasserung_mitte
           flow: sensor.bewasserung_mitte_wasser_durchfluss
           daily: sensor.garten_bewasserung_mitte_daily
+          temp: sensor.bewasserung_mitte_temperatur
         extra_styles: *bw_extra
         custom_fields:
           sub: *bw_zone_sub
@@ -572,6 +693,7 @@ cards:
             - timer.bewasserung_hinten
           flow: sensor.elv_sh_wsm_seriennr_2_wasser_durchfluss
           daily: sensor.garten_bewasserung_hinten_daily
+          temp: sensor.elv_sh_wsm_seriennr_2_temperatur
         extra_styles: *bw_extra
         custom_fields:
           sub: *bw_zone_sub
@@ -683,8 +805,97 @@ cards:
                     const st=variables.standard||{};
                     const ids={laufzeit:'input_number.bewasserung_laufzeit',laufzeit_nach_regen:'input_number.bewasserung_laufzeit_nach_regen',regen_schwelle:'input_number.bewasserung_regen_schwelle'};
                     const ab=Object.keys(ids).some(k=>{const s=states[ids[k]];const v=s?parseFloat(s.state):NaN;return !isNaN(v)&&Math.abs(v-st[k])>0.001;});
-                    return ab ? 'block' : 'none';
+                    const f=states['input_boolean.bewasserung_frostschutz'];
+                    return (ab&&!(f&&f.state==='on')) ? 'block' : 'none';
                   ]]]
+      # Frostschutz: Hauptschalter fuer den Winter, nur von Hand. Pille wie
+      # "Meldung am Ende", Akzent Blau (DESIGN.md: Frost = Blau). Die Rueckfrage
+      # ist fest formuliert und passt fuer beide Richtungen.
+      - type: custom:button-card
+        entity: input_boolean.bewasserung_frostschutz
+        name: Frostschutz
+        icon: |
+          [[[ return (entity && entity.state === 'on') ? 'mdi:snowflake' : 'mdi:snowflake-off'; ]]]
+        show_icon: true
+        show_name: true
+        show_state: false
+        tap_action:
+          action: toggle
+          confirmation:
+            text: >-
+              Frostschutz umschalten? Ein: Brunnenpumpe und Ventile bleiben
+              gesperrt. Aus: Die Pumpe kann die Gartenleitung wieder mit Wasser
+              füllen.
+        hold_action:
+          action: more-info
+        custom_fields:
+          sub: |
+            [[[
+              const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
+              return an ? 'Brunnenpumpe und Ventile gesperrt' : 'Bewässerung freigegeben';
+            ]]]
+          sw: |
+            [[[
+              const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
+              return `<span style="position:relative;display:block;box-sizing:border-box;width:42px;height:24px;border-radius:12px;background:${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-blau, #7fb3d5))':'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05)))'};border:1px solid ${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-blau, #7fb3d5))':'color-mix(in srgb, rgba(255, 255, 255, 0.08) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};"><span style="position:absolute;top:2px;left:${an?20:2}px;width:18px;height:18px;border-radius:50%;background:${an?'#f2f5f8':'var(--nachtblau-text-sekundaer, #8794a5)'};transition:left 0.15s ease;"></span></span>`;
+            ]]]
+        styles:
+          card:
+            - border-radius: 16px
+            - padding: 12px 14px
+            - box-shadow: none
+            - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+            - border: |
+                [[[ return (entity && entity.state === 'on') ? '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+          grid:
+            - grid-template-columns: min-content minmax(0, 1fr) auto
+            - grid-template-areas: '"i n sw" "i sub sw"'
+            - grid-template-rows: min-content min-content
+            - column-gap: 4px
+          img_cell:
+            - width: 42px
+            - height: 42px
+            - border-radius: 12px
+            - margin-right: 9px
+            - align-self: center
+            - background: |
+                [[[ return (entity && entity.state === 'on') ? 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+            - border: |
+                [[[ return (entity && entity.state === 'on') ? '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+          icon:
+            - width: 22px
+            - height: 22px
+            - --ha-icon-display: block
+            - color: |
+                [[[ return (entity && entity.state === 'on') ? 'var(--nachtblau-blau, #7fb3d5)' : 'var(--nachtblau-text-sekundaer, #8794a5)'; ]]]
+          name:
+            - justify-self: stretch
+            - align-self: end
+            - min-width: 0
+            - text-align: left
+            - font-size: 14.5px
+            - font-weight: 700
+            - letter-spacing: -0.01em
+            - color: 'var(--nachtblau-text, #f2f5f8)'
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            sub:
+              - justify-self: stretch
+              - align-self: start
+              - min-width: 0
+              - text-align: left
+              - font-size: 12.5px
+              - line-height: 1.25
+              - color: |
+                  [[[ return (entity && entity.state === 'on') ? 'var(--nachtblau-blau, #7fb3d5)' : 'var(--nachtblau-text-sekundaer, #8794a5)'; ]]]
+              - margin-top: 2px
+              - white-space: normal
+            sw:
+              - align-self: center
+              - justify-self: end
+              - margin-left: 8px
       - type: custom:button-card
         entity: input_number.bewasserung_laufzeit
         name: Laufzeit
@@ -719,6 +930,7 @@ cards:
                   entity_id: input_number.bewasserung_laufzeit
               styles:
                 card: &bw_step_card
+                  - pointer-events: *fs_sperre
                   - width: 32px
                   - height: 32px
                   - padding: 0
@@ -731,7 +943,8 @@ cards:
                   - color: &bw_minus_color |
                       [[[
                         const v=parseFloat(entity.state);
-                        return (isNaN(v)||v<=entity.attributes.min) ? 'var(--nachtblau-muted, #6e7988)' : 'var(--nachtblau-label, #b4c0cf)';
+                        const f=states['input_boolean.bewasserung_frostschutz'];
+                        return (isNaN(v)||v<=entity.attributes.min||(f&&f.state==='on')) ? 'var(--nachtblau-muted, #6e7988)' : 'var(--nachtblau-label, #b4c0cf)';
                       ]]]
           plus:
             card:
@@ -752,7 +965,8 @@ cards:
                   - color: &bw_plus_color |
                       [[[
                         const v=parseFloat(entity.state);
-                        return (isNaN(v)||v>=entity.attributes.max) ? 'var(--nachtblau-muted, #6e7988)' : 'var(--nachtblau-label, #b4c0cf)';
+                        const f=states['input_boolean.bewasserung_frostschutz'];
+                        return (isNaN(v)||v>=entity.attributes.max||(f&&f.state==='on')) ? 'var(--nachtblau-muted, #6e7988)' : 'var(--nachtblau-label, #b4c0cf)';
                       ]]]
         styles: &bw_set_row
           card:
@@ -931,15 +1145,26 @@ cards:
           action: toggle
         hold_action:
           action: more-info
+        # Bei Frostschutz gesperrt; "Regenschutz" teilt Pille und Stil, setzt
+        # die Variable aber nicht und bleibt bedienbar.
+        variables:
+          frostsperre: true
         custom_fields:
           sub: Push ans iPhone, wenn alles aus ist
           sw: &sw_pille |
             [[[
               const an=(typeof entity!=='undefined'&&entity&&entity.state==='on');
-              return `<span style="position:relative;display:block;box-sizing:border-box;width:42px;height:24px;border-radius:12px;background:${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-limette, #bdd27f) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05)))'};border:1px solid ${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-limette, #bdd27f) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.08) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};"><span style="position:absolute;top:2px;left:${an?20:2}px;width:18px;height:18px;border-radius:50%;background:${an?'#f2f5f8':'var(--nachtblau-text-sekundaer, #8794a5)'};transition:left 0.15s ease;"></span></span>`;
+              const fz=states['input_boolean.bewasserung_frostschutz'];
+              const gesperrt=!!(variables.frostsperre&&fz&&fz.state==='on');
+              return `<span style="opacity:${gesperrt?0.45:1};position:relative;display:block;box-sizing:border-box;width:42px;height:24px;border-radius:12px;background:${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-limette, #bdd27f) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05)))'};border:1px solid ${an?'color-mix(in srgb, color-mix(in srgb, var(--nachtblau-limette, #bdd27f) 50%, transparent) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-limette, #bdd27f))':'color-mix(in srgb, rgba(255, 255, 255, 0.08) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};"><span style="position:absolute;top:2px;left:${an?20:2}px;width:18px;height:18px;border-radius:50%;background:${an?'#f2f5f8':'var(--nachtblau-text-sekundaer, #8794a5)'};transition:left 0.15s ease;"></span></span>`;
             ]]]
         styles: &sw_zeile
           card:
+            - pointer-events: |
+                [[[
+                  const f=states['input_boolean.bewasserung_frostschutz'];
+                  return (variables.frostsperre&&f&&f.state==='on') ? 'none' : 'auto';
+                ]]]
             - border-radius: 16px
             - padding: 12px 14px
             - box-shadow: none
@@ -1009,6 +1234,12 @@ cards:
               const nach=Math.min(num('input_number.bewasserung_laufzeit_nach_regen',30),lauf);
               const start= regen>schwelle ? nach : lauf;
               const f=(v)=>v.toFixed(1).replace('.',',');
+              const fs=states['input_boolean.bewasserung_frostschutz'];
+              if(fs&&fs.state==='on'){
+                const sp=states['automation.bewasserung_frostschutz_sperre'];
+                if(!(sp&&sp.state==='on')) return `<b style="color:var(--nachtblau-text, #f2f5f8)">Sperre-Automation ist aus.</b> Die Brunnenpumpe wird nicht mehr abgefangen. Automation „Frostschutz-Sperre“ wieder einschalten.`;
+                return `<b style="color:var(--nachtblau-text, #f2f5f8)">Frostschutz an</b> · Leitung entleert, Ventile eingelagert. Die Brunnenpumpe wird bei jedem Einschalten sofort wieder ausgeschaltet.`;
+              }
               return `Heute <b style="color:var(--nachtblau-text, #f2f5f8)">${f(regen)} mm</b> Regen, Schwelle ${f(schwelle)} mm → nächster Start mit <b style="color:var(--nachtblau-text, #f2f5f8)">${start} min</b>`;
             ]]]
         styles:
@@ -1016,8 +1247,19 @@ cards:
             - border-radius: 13px
             - padding: 10px 14px
             - box-shadow: none
-            - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 12%, transparent)'
-            - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)'
+            # Amber nur, wenn Frostschutz an und die Sperre-Automation aus ist
+            - background: |
+                [[[
+                  const fs=states['input_boolean.bewasserung_frostschutz'], sp=states['automation.bewasserung_frostschutz_sperre'];
+                  const warn=fs&&fs.state==='on'&&!(sp&&sp.state==='on');
+                  return `color-mix(in srgb, ${warn?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-blau, #7fb3d5)'} 12%, transparent)`;
+                ]]]
+            - border: |
+                [[[
+                  const fs=states['input_boolean.bewasserung_frostschutz'], sp=states['automation.bewasserung_frostschutz_sperre'];
+                  const warn=fs&&fs.state==='on'&&!(sp&&sp.state==='on');
+                  return `1px solid color-mix(in srgb, ${warn?'var(--nachtblau-amber, #e6b566)':'var(--nachtblau-blau, #7fb3d5)'} 24%, transparent)`;
+                ]]]
           grid:
             - grid-template-areas: '"txt"'
             - grid-template-columns: 1fr
