@@ -1,5 +1,5 @@
 # ============================================================================
-# Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung, Erholungs-Signale
+# Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung, Wochenbericht, Schalter
 # ----------------------------------------------------------------------------
 # Art:           konfig
 # Bereich:       personen
@@ -9,8 +9,8 @@
 # Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Drei Meldungen aufs Handy und die gemeinsame Zaehlung der Erholungs-
-# Signale zu den Apple-Health-Werten der Gesundheit-View
+# Fuenf Meldungen aufs Handy, ihre Schalter und die gemeinsame Zaehlung der
+# Erholungs-Signale zu den Apple-Health-Werten der Gesundheit-View
 # (gesundheit-view.yaml). Schwellen und Begruendung stehen dort im Kopf,
 # Abschnitt "EIGENES NORMAL", und hier unter "Erholung abweichende Werte".
 #
@@ -75,6 +75,51 @@
 #     Anwesenheit (21.-30.10. um 19:00 immer zu Hause).
 #     Apple Health liefert die Schritte verzoegert: Ist ein Spaziergang um
 #     19:00 noch nicht uebertragen, kann die Meldung trotzdem kommen.
+#   automation "Gesundheit: Wochenbericht"
+#     Sonntags 20:10 eine leise Nachricht: diese Woche Mo 00:00 bis So 20:00
+#     gegen dieselbe Spanne der Vorwoche (beide enden zur selben Uhrzeit,
+#     Summen bleiben vergleichbar; nach 19 Uhr kommen im Median nur noch 670
+#     Schritte dazu, siehe Bewegungs-Erinnerung). Quelle ist die
+#     Langzeitstatistik ueber recorder.get_statistics (stuendlich), kein
+#     zusaetzlicher Sensor. Tageswerte:
+#       Schritte, Training  Zaehlerstand am Tagesende, nur Tage mit neuen
+#                           Werten (change > 0); NICHT die Tagessumme, die
+#                           zaehlt Korrekturen der App doppelt (siehe
+#                           gesundheit-view.yaml, Schritte 30 Tage)
+#       Schlaf              Wert am Tagesende, nur wenn sich die Kombination
+#                           Gesamt/Tief/Kern/REM/Wach gegenueber dem Vortag
+#                           aendert (NAECHTE OHNE UHR in gesundheit-view.yaml)
+#       Ruhe-, Gehpuls      letzter Wert des Tages (Apple rechnet bis zum
+#                           Abend nach)
+#     Woche: Schritte Ø ueber Tage mit Wert, Training als Summe, Schlaf Ø
+#     ueber Naechte mit Daten plus "x von n Naechten >= 7 h", Pulse Ø.
+#     VO2max-Zeile, wenn input_datetime.vo2max_stand 30 Tage oder aelter ist
+#     (Apple schaetzt VO2max nur bei Outdoor Gehen, Laufen und Wandern).
+#     Wochenbeginn und Vorwoche ueber as_local gerechnet, damit eine
+#     Zeitumstellung in der Woche den Stichtag nicht um eine Stunde
+#     verschiebt (geprueft mit KW 43, Umstellung am 25.10.).
+#     Probelauf 01.11.2026 (KW 43 gegen KW 42): Schritte Ø 4.117 gegen
+#     6.272, Training 81 gegen 147 min, Schlaf 7 h 17 (5 von 5 >= 7 h) gegen
+#     7 h 02 (2 von 4), Ruhepuls 65,0 gegen 64,7, Gehpuls 102,7 gegen 101,3.
+#     Dieselbe Rechnung (in JavaScript) zeigt die Karte "Wochenbericht" der
+#     Gesundheit-View; sie liest die Statistik selbst, auch wenn die Meldung
+#     ausgeschaltet ist.
+#   automation "Gesundheit: Datenhinweis Schlaf"
+#     Taeglich 10:00, wenn die letzte erkannte Nacht
+#     (input_datetime.schlaf_letzte_nacht) vorgestern oder frueher war, also
+#     mindestens zwei Naechte fehlen. Einmal pro Luecke (letzter Hinweis
+#     aelter als die letzte Nacht); die Automation "Schlaf: neue Nacht
+#     erkennen" (gesundheit-view.yaml) entfernt die Nachricht mit
+#     clear_notification und tag gesundheit_schlafdaten, sobald eine Nacht
+#     ankommt. Rueckblick 01.10.-01.11.2026: an 12 von 32 Tagen keine neue
+#     Nacht, zwei in Folge nur 07.-09.10. -> eine Meldung (08.10.); schon
+#     ab einer fehlenden Nacht waeren es 12 gewesen.
+#   input_boolean (Schalter, Karte "Meldungen" am Ende der Gesundheit-View)
+#     gesundheit_meldungen (Hauptschalter) und je einer pro Meldung:
+#     gesundheit_meldung_morgen_briefing, _fruhwarnung, _bewegung,
+#     _wochenbericht, _datenhinweise. Jede Automation prueft als erste
+#     Bedingung Hauptschalter und eigenen Schalter. Die Schalter betreffen
+#     nur die Nachrichten; Ampel, Bilanz und Karten rechnen weiter.
 #
 # Helfer (UI: Einstellungen > Geraete & Dienste > Helfer > Statistik):
 #   Aus gesundheit-view.yaml (Kopf, ERFORDERLICH):
@@ -89,7 +134,11 @@
 #   Update von heute).
 #   Neu in diesem Paket: sensor.erholung_abweichende_werte und
 #   sensor.erholung_signale (template:, siehe oben); die Gesundheit-View
-#   liest sie fuer die Erholungs-Ampel.
+#   liest sie fuer die Erholungs-Ampel. Dazu die sechs Schalter
+#   (input_boolean:, siehe oben); ohne Paket als Helfer "Schalter" mit
+#   denselben Namen anlegen und einmal einschalten (neu stehen sie auf aus).
+#   Wochenbericht: input_datetime.vo2max_stand (gesundheit-view.yaml) und
+#   die Langzeitstatistik der neun Sensoren aus der Automation.
 #   HA haengt die Helfer an das Quellgeraet; die Entitaeten heissen dann
 #   sensor.iphone_training_7_tage usw.
 #   Training 7 Tage: Die App setzt die Trainingsminuten erst mit dem ersten
@@ -105,6 +154,8 @@
 #   - Schwellen der fuenf Signale: im Template "Erholung abweichende Werte"
 #   - 19:00 und 0.4 (40 % des Schrittziels): Uhrzeit und Schwelle der
 #     Bewegungs-Erinnerung
+#   - 20:10 und today_at('20:00'): Zeitpunkt und Stichtag des Wochenberichts
+#   - 10:00 und tage >= 2: Zeitpunkt und Schwelle des Datenhinweises
 #
 # Einbinden als Paket in configuration.yaml:
 #   homeassistant:
@@ -167,6 +218,29 @@ template:
     availability: "{{ states('sensor.erholung_abweichende_werte') not in ['unknown', 'unavailable'] }}"
     state: "{% set a = states('sensor.erholung_abweichende_werte') %}{{ 0 if a == 'keine' else a.split(', ') | count }}"
 
+input_boolean:
+  # Schalter der Karte "Meldungen" (Gesundheit-View). Ohne initial, damit der
+  # Zustand Neustarts uebersteht; neu angelegt stehen sie auf aus -> einmal
+  # einschalten. Gleiche Namen als Helfer in der UI ergeben dieselben IDs.
+  gesundheit_meldungen:
+    name: Gesundheit Meldungen
+    icon: mdi:bell-outline
+  gesundheit_meldung_morgen_briefing:
+    name: Gesundheit Meldung Morgen-Briefing
+    icon: mdi:weather-sunset-up
+  gesundheit_meldung_fruhwarnung:
+    name: Gesundheit Meldung Frühwarnung
+    icon: mdi:heart-pulse
+  gesundheit_meldung_bewegung:
+    name: Gesundheit Meldung Bewegung
+    icon: mdi:walk
+  gesundheit_meldung_wochenbericht:
+    name: Gesundheit Meldung Wochenbericht
+    icon: mdi:calendar-week
+  gesundheit_meldung_datenhinweise:
+    name: Gesundheit Meldung Datenhinweise
+    icon: mdi:watch-variant
+
 automation:
 - id: gesundheit_morgen_briefing
   alias: 'Gesundheit: Morgen-Briefing'
@@ -180,6 +254,12 @@ automation:
       minutes: 2
     note: 'to: null = nur Zustandswechsel, keine Attributänderungen. for: 2 min wartet, bis die Companion App alle Schlafwerte geschrieben hat.'
   conditions:
+  - condition: state
+    entity_id:
+    - input_boolean.gesundheit_meldungen
+    - input_boolean.gesundheit_meldung_morgen_briefing
+    state: 'on'
+    note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Morgen-Briefing.'
   - condition: template
     value_template: '{{ this.attributes.last_triggered is none or (this.attributes.last_triggered | as_local).date() != now().date() }}'
     note: Höchstens eine Nachricht pro Tag, auch wenn Apple die Nacht später nachkorrigiert.
@@ -217,6 +297,12 @@ automation:
     at: '21:30:00'
     note: Apple rechnet den Tagesruhepuls bis zum Abend neu; um 21:30 ist er weitgehend endgültig.
   conditions:
+  - condition: state
+    entity_id:
+    - input_boolean.gesundheit_meldungen
+    - input_boolean.gesundheit_meldung_fruhwarnung
+    state: 'on'
+    note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Frühwarnung.'
   - condition: numeric_state
     entity_id: sensor.erholung_signale
     above: 1
@@ -285,6 +371,12 @@ automation:
       {{ e.state | int(0) if e is not none and (e.last_updated | as_local).date() == now().date() else 0 }}
     schwelle: "{{ (states('input_number.ziel_schritte') | float(7500) * 0.4) | round(0) | int }}"
   conditions:
+  - condition: state
+    entity_id:
+    - input_boolean.gesundheit_meldungen
+    - input_boolean.gesundheit_meldung_bewegung
+    state: 'on'
+    note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Bewegungs-Erinnerung.'
   - condition: template
     value_template: '{{ 0 <= schritte < schwelle }}'
     note: 'Unter 40 % des Schrittziels. -1 = kein Update von heute: dann steht noch der Vortag im Sensor, keine Meldung.'
@@ -301,3 +393,180 @@ automation:
         group: gesundheit
         url: /dashboard-home/gesundheit
         clickAction: /dashboard-home/gesundheit
+
+- id: gesundheit_wochenbericht
+  alias: 'Gesundheit: Wochenbericht'
+  description: 'Sonntags 20:10 eine leise Nachricht: diese Woche (Mo 00:00 bis So 20:00) gegen denselben Zeitraum der Vorwoche. Schritte Ø/Tag, Training, Schlaf Ø mit Nächten ≥ 7 h, Ruhe- und Gehpuls Ø; VO₂max-Zeile ab 30 Tagen ohne neuen Wert. Dieselbe Rechnung zeigt die Karte Wochenbericht der Gesundheit-View. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: single
+  triggers:
+  - trigger: time
+    at: '20:10:00'
+    note: Zehn Minuten Puffer, bis die Stundenstatistik 19-20 Uhr geschrieben ist.
+  conditions:
+  - condition: time
+    weekday:
+    - sun
+  - condition: state
+    entity_id:
+    - input_boolean.gesundheit_meldungen
+    - input_boolean.gesundheit_meldung_wochenbericht
+    state: 'on'
+    note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Wochenbericht.'
+  actions:
+  - variables:
+      cut_iso: "{{ today_at('20:00').isoformat() }}"
+    note: 'Stichtag Sonntag 20:00: beide Wochen enden zur selben Uhrzeit, Summen bleiben vergleichbar.'
+  - variables:
+      w0_iso: "{%- set c = as_datetime(cut_iso) | as_local -%}{{ (c.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=c.weekday())).isoformat() }}"
+      vo2_tage: "{{ ((as_timestamp(cut_iso) - state_attr('input_datetime.vo2max_stand', 'timestamp') | float(0)) / 86400) | int }}"
+  - action: recorder.get_statistics
+    data:
+      start_time: "{{ ((as_datetime(w0_iso) | as_local) - timedelta(days=8)).isoformat() }}"
+      end_time: "{{ cut_iso }}"
+      statistic_ids:
+      - sensor.iphone_health_steps
+      - sensor.iphone_exercise_time
+      - sensor.iphone_sleep_duration
+      - sensor.iphone_deep_sleep
+      - sensor.iphone_core_sleep
+      - sensor.iphone_rem_sleep
+      - sensor.iphone_awake
+      - sensor.iphone_resting_heart_rate
+      - sensor.iphone_walking_heart_rate_average
+      period: hour
+      types:
+      - state
+      - change
+      - mean
+    response_variable: stats
+    note: Langzeitstatistik stündlich, ab Sonntag vor der Vorwoche (Vergleichsnacht für den ersten Tag). Automationen laufen ohne Benutzer, die Admin-Aktion ist erlaubt.
+  - variables:
+      werte: >-
+        {%- macro sigfor(last, day) -%}{%- for k in ['g', 't', 'k', 'r', 'a'] -%}{%- set v = last.get(k ~ '|' ~ day) -%}{{ (v | round(0) | int) if v is number else 'x' }}{{ '/' if not loop.last }}{%- endfor -%}{%- endmacro -%}
+        {%- set ids = {'st': 'sensor.iphone_health_steps', 'ex': 'sensor.iphone_exercise_time', 'g': 'sensor.iphone_sleep_duration', 't': 'sensor.iphone_deep_sleep', 'k': 'sensor.iphone_core_sleep', 'r': 'sensor.iphone_rem_sleep', 'a': 'sensor.iphone_awake', 'rp': 'sensor.iphone_resting_heart_rate', 'gp': 'sensor.iphone_walking_heart_rate_average'} -%}
+        {%- set w0 = as_datetime(w0_iso) | as_local -%}
+        {%- set cut_ts = as_timestamp(cut_iso) -%}
+        {%- set luecke_von = as_timestamp((as_datetime(cut_iso) | as_local) - timedelta(days=7)) -%}
+        {%- set luecke_bis = as_timestamp(w0) -%}
+        {%- set ziel = states('input_number.ziel_schritte') | float(7500) -%}
+        {%- set ns = namespace(last=[], aktiv=[]) -%}
+        {%- for key, sid in ids.items() -%}
+          {%- for r in stats.statistics.get(sid, []) -%}
+            {%- set t = as_timestamp(r.start) -%}
+            {%- if t < luecke_von or t >= luecke_bis -%}
+              {%- set d = key ~ '|' ~ (t | timestamp_custom('%Y-%m-%d')) -%}
+              {%- set v = r.get('state') if key in ['st', 'ex'] else r.get('mean') -%}
+              {%- if v is number -%}{%- set ns.last = ns.last + [(d, v)] -%}{%- endif -%}
+              {%- if key in ['st', 'ex'] and (r.get('change') or 0) > 0 -%}{%- set ns.aktiv = ns.aktiv + [d] -%}{%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+        {%- set last = dict(ns.last) -%}
+        {%- set out = namespace(w={}) -%}
+        {%- for name, off in [('diese', 0), ('vor', 7)] -%}
+          {%- set s = namespace(st=[], ex=0, n=[], tage=[], rp=[], gp=[], prev='') -%}
+          {%- set s.prev = sigfor(last, (w0 - timedelta(days=off + 1)).strftime('%Y-%m-%d')) -%}
+          {%- for i in range(7) -%}
+            {%- set day = (w0 - timedelta(days=off) + timedelta(days=i)).strftime('%Y-%m-%d') -%}
+            {%- set stv = last.get('st|' ~ day) if ('st|' ~ day) in ns.aktiv else none -%}
+            {%- set s.st = s.st + [(stv | int) if stv is number else none] -%}
+            {%- set exv = last.get('ex|' ~ day) if ('ex|' ~ day) in ns.aktiv else 0 -%}
+            {%- set s.ex = s.ex + ((exv | int) if exv is number else 0) -%}
+            {%- set sg = sigfor(last, day) -%}
+            {%- set gv = last.get('g|' ~ day) -%}
+            {%- if sg != s.prev and 'x' not in sg and gv is number -%}
+              {%- set s.n = s.n + [gv | round(0) | int] -%}
+              {%- set s.tage = s.tage + [gv | round(0) | int] -%}
+            {%- else -%}
+              {%- set s.tage = s.tage + [none] -%}
+            {%- endif -%}
+            {%- set s.prev = sg -%}
+            {%- set rv = last.get('rp|' ~ day) -%}
+            {%- set s.rp = s.rp + [(rv | round(1)) if rv is number else none] -%}
+            {%- set gpv = last.get('gp|' ~ day) -%}
+            {%- set s.gp = s.gp + [(gpv | round(1)) if gpv is number else none] -%}
+          {%- endfor -%}
+          {%- set stl = s.st | select('number') | list -%}
+          {%- set rpl = s.rp | select('number') | list -%}
+          {%- set gpl = s.gp | select('number') | list -%}
+          {%- set out.w = dict(out.w, **{name: {
+              'schritte_tage': s.st,
+              'schritte_mittel': ((stl | sum) / (stl | count)) | round(0) | int if stl else none,
+              'ziel_tage': stl | select('ge', ziel) | list | count,
+              'tage_mit_schritten': stl | count,
+              'training': s.ex,
+              'schlaf_tage': s.tage,
+              'schlaf_mittel': ((s.n | sum) / (s.n | count)) | round(0) | int if s.n else none,
+              'naechte': s.n | count,
+              'naechte_7h': s.n | select('ge', 420) | list | count,
+              'ruhepuls_tage': s.rp,
+              'ruhepuls': ((rpl | sum) / (rpl | count)) | round(1) if rpl else none,
+              'gehpuls_tage': s.gp,
+              'gehpuls': ((gpl | sum) / (gpl | count)) | round(1) if gpl else none}}) -%}
+        {%- endfor -%}
+        {{ out.w }}
+    note: 'Tageswerte je Woche: Schritte und Training als Zählerstand am Tagesende (nur Tage mit neuen Werten), Schlaf nur bei neuer Kombination der fünf Schlafwerte, Ruhe- und Gehpuls als letzter Wert des Tages.'
+  - variables:
+      text: |-
+        {%- set d = werte.diese -%}{%- set v = werte.vor -%}
+        {%- macro tsd(x) -%}{{ '{:,}'.format(x) | replace(',', '.') if x is number else '–' }}{%- endmacro -%}
+        {%- macro dez(x) -%}{{ ('%.1f' | format(x)) | replace('.', ',') if x is number else '–' }}{%- endmacro -%}
+        {%- macro hm(x) -%}{{ ((x // 60) | int ~ ' h ' ~ '%02d' | format((x % 60) | int)) if x is number else '–' }}{%- endmacro -%}
+        {%- macro proz(a, b) -%}{%- if a is number and b is number and b > 0 -%}{{ (', ' ~ ('%+d' | format(((a / b - 1) * 100) | round(0) | int)) ~ ' %') | replace('-', '−') }}{%- endif -%}{%- endmacro -%}
+        Schritte Ø {{ tsd(d.schritte_mittel) }}/Tag (Vorwoche {{ tsd(v.schritte_mittel) }}{{ proz(d.schritte_mittel, v.schritte_mittel) }})
+        Training {{ d.training }} min (Vorwoche {{ v.training }})
+        Schlaf Ø {{ hm(d.schlaf_mittel) }}, {{ d.naechte_7h }} von {{ d.naechte }} Nächten ≥ 7 h (Vorwoche {{ hm(v.schlaf_mittel) }}, {{ v.naechte_7h }} von {{ v.naechte }})
+        Ruhepuls Ø {{ dez(d.ruhepuls) }} ({{ dez(v.ruhepuls) }}) · Gehpuls Ø {{ dez(d.gehpuls) }} ({{ dez(v.gehpuls) }})
+        {%- if vo2_tage >= 30 %}
+        VO₂max {{ states('sensor.iphone_vo2_max') | replace('.', ',') }} seit {{ vo2_tage }} Tagen unverändert: Outdoor Gehen, Laufen oder Wandern aufzeichnen
+        {%- endif %}
+      titel: "Wochenbericht: {{ werte.diese.training }} von {{ states('input_number.ziel_training_woche') | int(150) }} min Training"
+  - action: notify.mobile_app_iphone
+    continue_on_error: true
+    data:
+      title: '{{ titel }}'
+      message: '{{ text }}'
+      data:
+        group: gesundheit
+        tag: gesundheit_wochenbericht
+        url: /dashboard-home/gesundheit
+        clickAction: /dashboard-home/gesundheit
+        push:
+          interruption-level: passive
+
+- id: gesundheit_datenhinweis_schlaf
+  alias: 'Gesundheit: Datenhinweis Schlaf'
+  description: 'Täglich 10:00 einmal pro Lücke melden, wenn zwei oder mehr Nächte keine Schlafdaten angekommen sind (input_datetime.schlaf_letzte_nacht). Die Automation Schlaf: neue Nacht erkennen entfernt die Nachricht wieder, sobald eine Nacht ankommt. Oktober 2026: 12 von 32 Tagen ohne neue Nacht, zwei Nächte in Folge nur 07.-09.10. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: single
+  triggers:
+  - trigger: time
+    at: '10:00:00'
+    note: Nächte kommen meist morgens an (Morgen-Briefing 31.10. 12:59, 01.11. 07:44); zwei fehlende Nächte sind um 10 Uhr eindeutig.
+  variables:
+    tage: "{{ (now().date() - as_datetime(states('input_datetime.schlaf_letzte_nacht')).date()).days if states('input_datetime.schlaf_letzte_nacht') not in ['unknown', 'unavailable'] else 0 }}"
+  conditions:
+  - condition: state
+    entity_id:
+    - input_boolean.gesundheit_meldungen
+    - input_boolean.gesundheit_meldung_datenhinweise
+    state: 'on'
+    note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Datenhinweise.'
+  - condition: template
+    value_template: '{{ tage >= 2 }}'
+    note: Letzte erkannte Nacht vorgestern oder früher = mindestens zwei Nächte ohne Daten.
+  - condition: template
+    value_template: "{{ this.attributes.last_triggered is none or as_timestamp(this.attributes.last_triggered) < state_attr('input_datetime.schlaf_letzte_nacht', 'timestamp') | float(0) }}"
+    note: 'Einmal pro Lücke: seit der letzten Nacht noch kein Hinweis gesendet.'
+  actions:
+  - action: notify.mobile_app_iphone
+    continue_on_error: true
+    data:
+      title: Keine Schlafdaten seit {{ tage }} Nächten
+      message: "{%- set n = as_datetime(states('input_datetime.schlaf_letzte_nacht')) -%}Letzte Nacht in Home Assistant: {{ ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][n.weekday()] }} {{ n.strftime('%d.%m.') }} Die Uhr nachts tragen und tagsüber laden. Falls du sie getragen hast: iPhone entsperren, damit Health überträgt."
+      data:
+        group: gesundheit
+        tag: gesundheit_schlafdaten
+        url: /dashboard-home/gesundheit
+        clickAction: /dashboard-home/gesundheit
+        push:
+          interruption-level: active
