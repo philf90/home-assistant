@@ -9,19 +9,23 @@
 # Templates:     floating_navbar (navigation-templates.yaml),
 #                top_navigation (navigation-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor unter views: oder per !include
-# Platzhalter:   sensor.iphone_*, benutzer_id_1/benutzer_id_2
+# Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone,
+#                benutzer_id_1/benutzer_id_2
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Gesundheit – komplette Ansicht (View) im Nachtblau-Stil
 #
 # Apple-Health-Daten aus der Companion App (Geraet "iPhone",
-# Sensoren sensor.iphone_*), aufgeteilt in sechs Nachtblau-Huellen:
+# Sensoren sensor.iphone_*), aufgeteilt in acht Nachtblau-Huellen:
 #   - Aktivitaet: drei Ringe (Bewegung und Schritte heute, Training der
 #     letzten 7 Tage) gegen die Ziel-Helfer, Badge "x / 3 Ziele", Balken
 #     Training 7 Tage mit WHO-Marken, Distanz (dahinter die Schritte),
 #     Stockwerke, Schritte 30 Tage mit gleitendem 7-Tage-Mittel
 #   - Training: letztes Training mit Route, Verlauf und Kilometer-Splits
 #     (Karte der Integration Training, siehe "TRAINING")
+#   - Wochenbericht: diese Woche gegen dieselbe Spanne der Vorwoche,
+#     umschaltbar zwischen letztem Bericht und laufender Woche (siehe
+#     "WOCHENBERICHT")
 #   - Herz: Erholungs-Ampel im Kopf (siehe "ERHOLUNGS-AMPEL"), Ruhepuls,
 #     HRV, Puls beim Gehen, Herzfrequenz + 7-Tage-Verlauf
 #   - Schlaf: Dauer-Badge, Phasen-Segmentbalken, 7 Naechte gestapelt
@@ -30,6 +34,7 @@
 #   - Vitalwerte: SpO2-Bogen (wie Heizung), Atemfrequenz, VO2max, Training
 #   - Energieumsatz: Gesamt-Badge, Ruhe/aktiv, 7 Tage gestapelt
 #   - Koerperwerte: nur sichtbar, sobald mindestens ein Wert existiert
+#   - Meldungen: Schalter fuer alle Nachrichten der View (siehe "MELDUNGEN")
 #
 # Passt zur Route /dashboard-home/gesundheit (Eintrag im "More"-Menue von
 # navbar-karte.yaml / navigation-templates.yaml, Bereich "Freizeit").
@@ -51,7 +56,10 @@
 #   input_number.ziel_training_woche; der Balken darunter zeigt dieselbe Summe
 #   mit Marken beim Ziel und bei 300 min. Das fruehere Tagesziel
 #   (input_number.ziel_trainingszeit, 30 min) wurde im Oktober 2026 an 4 von
-#   29 Tagen erreicht; die Wochensummen lagen bei 134/171/99/72 min.
+#   29 Tagen erreicht. Wochensummen Mo-So laut Langzeitstatistik (Zaehler-
+#   stand am Tagesende): 05.-11.10. 143, 12.-18.10. 148, 19.-25.10. 81 min
+#   (nachgerechnet 01.11.2026; die frueher hier genannten 134/171/99/72 min
+#   liessen sich keiner Wochengrenze zuordnen).
 #   "Training heute" in den Vitalwerten zeigt weiter die Minuten des Tages.
 #
 # Hinweise zu den Diagrammen (apexcharts-card v2.2.3 / ApexCharts 5.3.3):
@@ -103,6 +111,52 @@
 #     merkt sich eine Automation den Zeitpunkt der letzten neuen Nacht.
 #     "Letzte Nacht" nur, wenn dieser Zeitpunkt heute ist.
 #   Grenze: Eine Nacht zaehlt fuer den Tag, an dem die Daten ankommen.
+#
+# WOCHENBERICHT (eigene Huelle unter dem Training)
+#   Diese Woche gegen dieselbe Spanne der Vorwoche, wie die Nachricht der
+#   Automation "Gesundheit: Wochenbericht" (gesundheit-meldungen-konfig.yaml,
+#   dort Rechnung, Begruendung und Probelauf). Die Karte holt die
+#   Langzeitstatistik der neun Sensoren selbst per callWS
+#   (recorder/statistics_during_period, stuendlich, ab Sonntag vor der
+#   Vorwoche) und rechnet in JavaScript genauso wie die Automation in Jinja:
+#   Schritte und Training als Zaehlerstand am Tagesende (nur Tage mit neuen
+#   Werten), Schlaf nur bei neuer Kombination der fuenf Werte, Ruhe- und
+#   Gehpuls als letzter Wert des Tages. Gegenprobe 01.11.2026 mit denselben
+#   Tageswerten (KW 43 gegen KW 42): beide 4.117/6.272 Schritte, 7 h 17/
+#   7 h 02, 65,0/64,7 und 102,7/101,3 bpm.
+#   - Umschalter: "Bericht KW n" = Stichtag letzter Sonntag 20:00 (wie die
+#     Nachricht), "Laufend KW n" = letzte volle Stunde gegen dieselbe Spanne
+#     der Vorwoche. Wahl und Ergebnis merkt sich window.__nachtblauWochenbericht
+#     (Muster wie SCHLAFBILANZ), neu geholt wird je Stichtag einmal.
+#     Tippen wie in fahrzeiten-templates.yaml: button-card gibt der Karte
+#     ohne Aktion pointer-events: none und ruft bei touchend preventDefault()
+#     auf, deshalb pointer-events: auto am Inhalt und eigene touchstart/
+#     touchend/click-Listener (Tipp unter 10 px und 800 ms, click danach
+#     700 ms gesperrt). Per addEventListener, nicht ontouchend =: Chromium
+#     legt die ontouch*-Eigenschaften nur bei erkannter Touch-Faehigkeit an
+#     (nachgestellt 01.11.2026, iPhone: Umschalter reagierte nicht).
+#   - Training: Balken gegen input_number.ziel_training_woche, Marke beim
+#     Ziel, Skala bis zum doppelten Ziel.
+#   - Kacheln: Schritte Ø/Tag mit Mo-So-Saeulen (Linie beim Tagesziel,
+#     unter dem Ziel 0,5 Deckkraft), Schlaf Ø mit einem Feld je Nacht wie die
+#     Schlafbilanz (gestrichelt = ohne Uhr, Spur = heute bzw. noch offen),
+#     Ruhe- und Gehpuls Ø als Linie Mo-So. Darunter Vorwoche und Aenderung.
+#   - Hinweise: VO2max 30 Tage oder laenger unveraendert, zwei oder mehr
+#     Naechte in Folge ohne Daten; sonst "Keine Hinweise".
+#   - Fuss: "Gesendet ..." aus last_triggered der Automation, wenn sie in
+#     den zwei Stunden nach dem Stichtag lief, sonst "Nicht als Nachricht
+#     gesendet" (Meldung aus oder Woche vor der Automation).
+#   - Gemessen: Inhalt bei 306 und 348 px ohne waagrechten Ueberlauf; bei
+#     306 px rutscht die Aenderung in der Schlaf-Kachel in eine zweite Zeile.
+#
+# MELDUNGEN (eigene Huelle am Ende der View)
+#   Oben der Hauptschalter input_boolean.gesundheit_meldungen, darunter je
+#   Meldung eine Zeile: Name, Zeitplan, "zuletzt" aus last_triggered der
+#   Automation (wird nur gesetzt, wenn ihre Bedingungen erfuellt sind und die
+#   Nachricht rausgeht) und ein Schalter. Tippen schaltet, Halten oeffnet die
+#   Automation. Bei ausgeschaltetem Hauptschalter sind die Zeilen auf 0,45
+#   abgeblendet und zeigen "alle aus". Die Schalter und die Bedingungen in
+#   den Automationen stehen in gesundheit-meldungen-konfig.yaml.
 #
 # TRAINING (eigene Huelle unter der Aktivitaet)
 #   custom:ha-training-card liefert die Integration Training selbst aus
@@ -270,6 +324,18 @@
 #           {{ sig.split('/') | select('is_number') | list | count == 5
 #              and sig != states('input_text.schlaf_signatur') }}
 #     actions:
+#       # Hinweis "Keine Schlafdaten" vom Handy nehmen, wenn er seit der
+#       # vorigen Nacht gesendet wurde (vor dem Setzen des Zeitpunkts)
+#       - if:
+#           - condition: template
+#             value_template: >-
+#               {{ as_timestamp(state_attr('automation.gesundheit_datenhinweis_schlaf',
+#                  'last_triggered'), 0) > state_attr('input_datetime.schlaf_letzte_nacht',
+#                  'timestamp') | float(0) }}
+#         then:
+#           - action: notify.mobile_app_iphone
+#             continue_on_error: true
+#             data: { message: clear_notification, data: { tag: gesundheit_schlafdaten } }
 #       - action: input_text.set_value
 #         target: { entity_id: input_text.schlaf_signatur }
 #         data: { value: "{{ sig }}" }
@@ -278,14 +344,15 @@
 #         data: { timestamp: "{{ now().timestamp() }}" }
 #
 # Meldungen (Morgen-Briefing, Fruehwarnung bei mehreren abweichenden
-# Vitalwerten, Bewegungs-Erinnerung): gesundheit-meldungen-konfig.yaml, nutzt
-# dieselben Helfer. Von dort kommen auch sensor.erholung_abweichende_werte
+# Vitalwerten, Bewegungs-Erinnerung, Wochenbericht, Datenhinweis Schlaf) und
+# ihre Schalter: gesundheit-meldungen-konfig.yaml, nutzt dieselben Helfer. Von dort kommen auch sensor.erholung_abweichende_werte
 # und sensor.erholung_signale fuer die Erholungs-Ampel (template:).
 #
 # Voraussetzung: custom:button-card + custom:apexcharts-card +
 #                custom:decluttering-card + card-mod (alle via HACS),
 #                Integration Training (HACS, liefert ha-training-card)
 #                + obige Helfer und Automation
+#                + Schalter und Automationen aus gesundheit-meldungen-konfig.yaml
 #                + sensor.date (Integration "Time & Date", Anzeige "Datum").
 title: Gesundheit
 path: gesundheit
@@ -733,6 +800,243 @@ sections:
     - condition: user
       users:
       - benutzer_id_1
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - benutzer_id_1
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:calendar-week
+      type: custom:button-card
+      name: Wochenbericht
+      label: Woche gegen Vorwoche · Bericht So 20 Uhr
+      show_icon: true
+      show_name: true
+      show_label: true
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-rose, #e6a0c4)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+      tap_action:
+        action: none
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      custom_fields:
+        bericht: |
+          [[[
+            // Wochenbericht: diese Woche gegen dieselbe Spanne der Vorwoche aus der Langzeitstatistik.
+            // Rechnung wie in der Automation "Gesundheit: Wochenbericht" (WOCHENBERICHT im Kopf).
+            // nicht 'html' nennen: button-card uebergibt dem Template einen Parameter html
+            const ID={st:'sensor.iphone_health_steps',ex:'sensor.iphone_exercise_time',g:'sensor.iphone_sleep_duration',t:'sensor.iphone_deep_sleep',k:'sensor.iphone_core_sleep',r:'sensor.iphone_rem_sleep',a:'sensor.iphone_awake',rp:'sensor.iphone_resting_heart_rate',gp:'sensor.iphone_walking_heart_rate_average'};
+            const C=window.__nachtblauWochenbericht=window.__nachtblauWochenbericht||{modus:'bericht',daten:{},laeuft:{}};
+            const karte=this;
+            const ws=(karte&&karte._hass)||hass;
+            const num=id=>{ const x=parseFloat(states[id]?.state); return isNaN(x)?null:x; };
+            const zielS=num('input_number.ziel_schritte')??7500, zielT=num('input_number.ziel_training_woche')??150;
+            const F={sek:'var(--nachtblau-text-sekundaer, #8794a5)',text:'var(--nachtblau-text, #f2f5f8)',label:'var(--nachtblau-label, #b4c0cf)',blau:'var(--nachtblau-blau, #7fb3d5)',vio:'var(--nachtblau-violett, #b399d4)',rose:'var(--nachtblau-rose, #e6a0c4)',gruen:'var(--nachtblau-gruen, #a6d49e)',amber:'var(--nachtblau-amber, #e6b566)',aus:'var(--nachtblau-aus, #3a4453)',kachel:'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))',rand:'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))',erhoeht:'var(--nachtblau-flaeche-erhoeht, #222b3c)',vertieft:'var(--nachtblau-flaeche-vertieft, #10151d)',spur:'color-mix(in srgb, rgba(255, 255, 255, 0.07) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};
+            const pad=n=>String(n).padStart(2,'0');
+            const tag=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+            const plusTage=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+            const montag=d=>{ const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; };
+            const kw=d=>{ const x=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const n=x.getUTCDay()||7; x.setUTCDate(x.getUTCDate()+4-n); const j=new Date(Date.UTC(x.getUTCFullYear(),0,1)); return Math.ceil(((x-j)/86400000+1)/7); };
+            const WT=['So','Mo','Di','Mi','Do','Fr','Sa'];
+            const jetzt=new Date();
+            // Stichtag: Bericht = letzter Sonntag 20:00 (wie die Nachricht), laufend = letzte volle Stunde
+            const stichtag=m=>{ const x=new Date(jetzt); if(m==='laufend'){ x.setMinutes(0,0,0); return x; } x.setHours(20,0,0,0); x.setDate(x.getDate()-x.getDay()); if(x>jetzt) x.setDate(x.getDate()-7); return x; };
+            const rechne=(res,cut)=>{
+              const w0=montag(cut), vonL=plusTage(cut,-7).getTime(), bisL=w0.getTime();
+              const last={}, aktiv=new Set();
+              for(const [k,sid] of Object.entries(ID)){
+                for(const r of (res[sid]||[])){
+                  const t=typeof r.start==='number'?r.start:Date.parse(r.start);
+                  if(t>=vonL&&t<bisL) continue;   // Vorwoche endet zur selben Uhrzeit wie diese Woche
+                  const d=k+'|'+tag(new Date(t)), zaehler=k==='st'||k==='ex';
+                  const v=zaehler?r.state:r.mean;
+                  if(typeof v==='number') last[d]=v;
+                  if(zaehler&&(r.change||0)>0) aktiv.add(d);
+                }
+              }
+              const sig=d=>['g','t','k','r','a'].map(k=>{ const v=last[k+'|'+d]; return typeof v==='number'?Math.round(v):'x'; }).join('/');
+              const mittel=a=>{ const x=a.filter(v=>typeof v==='number'); return x.length?x.reduce((p,q)=>p+q,0)/x.length:null; };
+              const r1=x=>x===null?null:Math.round(x*10)/10;
+              const woche=off=>{
+                const b=plusTage(w0,-off), s={st:[],ex:0,n:[],tage:[],rp:[],gp:[]};
+                let prev=sig(tag(plusTage(b,-1)));
+                for(let i=0;i<7;i++){
+                  const d=tag(plusTage(b,i));
+                  const st=aktiv.has('st|'+d)?last['st|'+d]:null;
+                  s.st.push(typeof st==='number'?Math.trunc(st):null);
+                  const ex=aktiv.has('ex|'+d)?last['ex|'+d]:0;
+                  s.ex+=typeof ex==='number'?Math.trunc(ex):0;
+                  const sg=sig(d), g=last['g|'+d];
+                  if(sg!==prev&&!sg.includes('x')&&typeof g==='number'){ s.n.push(Math.round(g)); s.tage.push(Math.round(g)); } else s.tage.push(null);
+                  prev=sg;
+                  const rv=last['rp|'+d]; s.rp.push(typeof rv==='number'?r1(rv):null);
+                  const gv=last['gp|'+d]; s.gp.push(typeof gv==='number'?r1(gv):null);
+                }
+                const stl=s.st.filter(v=>v!==null);
+                return {...s, schritte:stl.length?Math.round(mittel(stl)):null, zielTage:stl.filter(v=>v>=zielS).length, tageSchritte:stl.length,
+                  schlaf:s.n.length?Math.round(mittel(s.n)):null, n7:s.n.filter(v=>v>=420).length, ruhe:r1(mittel(s.rp)), geh:r1(mittel(s.gp))};
+              };
+              return {w0, cut, diese:woche(0), vor:woche(7)};
+            };
+            const schluessel=m=>m+'|'+stichtag(m).getTime();
+            const de=(x,n=0)=>x===null||x===undefined?'–':Number(x).toLocaleString('de-DE',{minimumFractionDigits:n,maximumFractionDigits:n});
+            const hm=x=>x===null?'–':`${Math.floor(x/60)} h ${pad(x%60)}`;
+            const minus=s=>s.replace('-','−');
+            const proz=(a,b)=>a===null||b===null||!b?'':minus(`${a>=b?'+':''}${Math.round((a/b-1)*100)} %`);
+            const diff=(a,b,n,e)=>a===null||b===null?'':minus(`${a>=b?'+':''}${(a-b).toLocaleString('de-DE',{minimumFractionDigits:n,maximumFractionDigits:n})}${e}`);
+            const pille=t=>t?`<span style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:${F.erhoeht};color:${F.label};border:1px solid ${F.rand};white-space:nowrap;">${t}</span>`:'';
+            const TAGE=`<div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:9px;color:${F.sek};text-align:center;margin-top:2px;"><span>M</span><span>D</span><span>M</span><span>D</span><span>F</span><span>S</span><span>S</span></div>`;
+            const svg=inner=>`<svg viewBox="0 0 100 34" preserveAspectRatio="none" style="display:block;width:100%;height:34px;margin-top:6px;">${inner}</svg>`;
+            const saeulen=tage=>{ const max=Math.max(zielS*4/3,...tage.filter(v=>v!==null)), bw=100/7, y=v=>34-(v/max)*32;
+              return svg(tage.map((v,i)=>v===null?'':`<rect x="${(i*bw+1.5).toFixed(2)}" y="${y(v).toFixed(2)}" width="${(bw-3).toFixed(2)}" height="${(34-y(v)).toFixed(2)}" rx="1.5" fill="${F.blau}" opacity="${v>=zielS?1:0.5}"/>`).join('')
+                +`<line x1="0" x2="100" y1="${y(zielS).toFixed(2)}" y2="${y(zielS).toFixed(2)}" stroke="${F.label}" stroke-width="1" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`)+TAGE; };
+            const felder=(tage,offenAb)=>{ const bw=100/7;
+              return svg(tage.map((v,i)=>{ const x=(i*bw+1.5).toFixed(2), w=(bw-3).toFixed(2);
+                if(v!==null) return `<rect x="${x}" y="9" width="${w}" height="20" rx="2" fill="${F.vio}" opacity="${v>=420?1:0.5}"/>`;
+                if(i>=offenAb) return `<rect x="${x}" y="9" width="${w}" height="20" rx="2" fill="${F.spur}"/>`;
+                return `<rect x="${x}" y="9" width="${w}" height="20" rx="2" fill="none" stroke="${F.aus}" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`; }).join(''))+TAGE; };
+            const linie=(tage,alle)=>{ const w=alle.filter(v=>v!==null); if(!w.length) return svg('')+TAGE;
+              const lo=Math.min(...w)-2, hi=Math.max(...w)+2, bw=100/7, y=v=>30-((v-lo)/(hi-lo))*26;
+              let d='', an=false; tage.forEach((v,i)=>{ if(v===null){ an=false; return; } d+=(an?'L':'M')+((i+0.5)*bw).toFixed(2)+','+y(v).toFixed(2); an=true; });
+              const punkte=tage.map((v,i)=>v===null?'':`<circle cx="${((i+0.5)*bw).toFixed(2)}" cy="${y(v).toFixed(2)}" r="1.6" fill="${F.rose}"/>`).join('');
+              return svg(`<path d="${d}" fill="none" stroke="${F.rose}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`+punkte)+TAGE; };
+            const kachel=(l,w,e,vor,delta,grafik,zusatz)=>`<div style="background:${F.kachel};border:1px solid ${F.rand};border-radius:13px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0;">`
+              +`<span style="font-size:11px;font-weight:600;color:${F.sek};">${l}</span>`
+              +`<span style="font-size:18px;font-weight:700;color:${F.text};font-variant-numeric:tabular-nums;line-height:1.25;white-space:nowrap;">${w}${e?`<small style="font-size:11px;color:${F.sek};font-weight:600;margin-left:3px;">${e}</small>`:''}</span>`
+              +`<span style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px;font-size:11px;color:${F.sek};font-variant-numeric:tabular-nums;"><span>Vorwoche ${vor}</span>${pille(delta)}</span>`
+              +grafik+(zusatz?`<span style="font-size:10.5px;color:${F.sek};margin-top:2px;">${zusatz}</span>`:'')+`</div>`;
+            const lueckeMax=(tage,offenAb)=>{ let m=0,n=0,ende=-1; tage.forEach((v,i)=>{ if(i>=offenAb) return; if(v===null){ n++; if(n>m){ m=n; ende=i; } } else n=0; }); return {m,ende}; };
+            const inhalt=()=>{
+              const m=C.modus, cutM=stichtag(m), e=C.daten[schluessel(m)];
+              const kwB=kw(montag(stichtag('bericht'))), kwL=kw(montag(stichtag('laufend')));
+              const seg=`<div style="display:flex;gap:3px;padding:3px;border-radius:12px;background:${F.vertieft};border:1px solid ${F.rand};">`
+                +[['bericht',`Bericht KW ${kwB}`],['laufend',`Laufend KW ${kwL}`]].map(([w,l])=>`<button type="button" data-wb-modus="${w}" style="all:unset;flex:1;text-align:center;cursor:pointer;font-size:12px;font-weight:600;padding:6px 8px;border-radius:9px;${m===w?`background:${F.erhoeht};color:${F.text};`:`color:${F.sek};`}">${l}</button>`).join('')+`</div>`;
+              if(!e) return seg+`<div style="font-size:12.5px;color:${F.sek};padding:16px 2px;">Statistik wird geladen …</div>`;
+              const d=e.diese, v=e.vor, w0=e.w0, so=plusTage(w0,6);
+              const dm=x=>`${pad(x.getDate())}.${pad(x.getMonth()+1)}.`;
+              const zeitraum=m==='bericht'
+                ? `KW ${kw(w0)} · ${dm(w0)}–${dm(so)} · gegen KW ${kw(plusTage(w0,-7))}`
+                : `KW ${kw(w0)} · Mo–${WT[cutM.getDay()]} ${pad(cutM.getHours())}:00 · gegen dieselbe Spanne KW ${kw(plusTage(w0,-7))}`;
+              const offenAb=m==='laufend'?(cutM.getDay()+6)%7:7;
+              const skala=Math.max(zielT*2,d.ex), breite=Math.min(100,d.ex/skala*100);
+              const training=`<div style="background:${F.kachel};border:1px solid ${F.rand};border-radius:13px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;">`
+                +`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:${F.label};"><span>Training</span><span style="font-variant-numeric:tabular-nums;"><b style="color:${F.text};font-size:17px;">${d.ex}</b> von ${de(zielT)} min</span></div>`
+                +`<div style="position:relative;height:8px;border-radius:4px;background:color-mix(in srgb, ${F.gruen} 12%, transparent);"><span style="position:absolute;left:0;top:0;bottom:0;width:${breite.toFixed(1)}%;border-radius:4px;background:${F.gruen};"></span><span style="position:absolute;top:-3px;bottom:-3px;left:${(zielT/skala*100).toFixed(1)}%;width:2px;border-radius:1px;background:${F.label};"></span></div>`
+                +`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:${F.sek};font-variant-numeric:tabular-nums;"><span>Vorwoche ${v.ex} min</span>${pille(proz(d.ex,v.ex))}</div></div>`;
+              const ruheAlle=[...d.rp,...v.rp], gehAlle=[...d.gp,...v.gp];
+              const kacheln=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;">`
+                +kachel('Schritte Ø/Tag',de(d.schritte),'',de(v.schritte),proz(d.schritte,v.schritte),saeulen(d.st),`Ziel an ${d.zielTage} von ${d.tageSchritte} Tagen`)
+                +kachel('Schlaf Ø',hm(d.schlaf),'',hm(v.schlaf),diff(d.schlaf,v.schlaf,0,' min'),felder(d.tage,offenAb),`${d.n7} von ${d.n.length} Nächten ≥ 7 h`)
+                +kachel('Ruhepuls Ø',de(d.ruhe,1),'bpm',de(v.ruhe,1),diff(d.ruhe,v.ruhe,1,''),linie(d.rp,ruheAlle),'')
+                +kachel('Gehpuls Ø',de(d.geh,1),'bpm',de(v.geh,1),diff(d.geh,v.geh,1,''),linie(d.gp,gehAlle),'')+`</div>`;
+              const hinweise=[];
+              const vo2=states['input_datetime.vo2max_stand']?.attributes?.timestamp;
+              if(vo2){ const t=Math.floor((e.cut.getTime()/1000-vo2)/86400); if(t>=30) hinweise.push(`VO₂max seit ${t} Tagen unverändert: Outdoor Gehen, Laufen oder Wandern aufzeichnen`); }
+              const l=lueckeMax(d.tage,offenAb);
+              if(l.m>=2){ const von=plusTage(w0,l.ende-l.m+1), bis=plusTage(w0,l.ende); hinweise.push(`${l.m} Nächte in Folge ohne Schlafdaten (${WT[von.getDay()]}–${WT[bis.getDay()]})`); }
+              const punkt=c=>`<span style="width:8px;height:8px;border-radius:50%;flex:none;margin-top:5px;background:${c};"></span>`;
+              const hw=`<div style="display:flex;flex-direction:column;gap:5px;background:${F.kachel};border:1px solid ${F.rand};border-radius:12px;padding:8px 10px;font-size:12.5px;color:${F.label};">`
+                +(hinweise.length?hinweise.map(t=>`<div style="display:flex;gap:8px;">${punkt(F.amber)}<span>${t}</span></div>`).join(''):`<div style="display:flex;gap:8px;">${punkt(F.gruen)}<span>Keine Hinweise</span></div>`)+`</div>`;
+              let fuss;
+              if(m==='bericht'){
+                const lt=states['automation.gesundheit_wochenbericht']?.attributes?.last_triggered, z=lt?new Date(lt):null;
+                fuss=z&&z>=e.cut&&z-e.cut<7200000?`Gesendet ${WT[z.getDay()]} ${dm(z)} ${pad(z.getHours())}:${pad(z.getMinutes())}`:'Nicht als Nachricht gesendet';
+              } else fuss=`Stand ${WT[cutM.getDay()]} ${pad(cutM.getHours())}:00 · stündlich neu`;
+              return seg+`<div style="font-size:12px;color:${F.sek};margin:8px 2px 8px;">${zeitraum}</div>`
+                +`<div style="display:flex;flex-direction:column;gap:8px;">${training}${kacheln}${hw}</div>`
+                +`<div style="font-size:11px;color:${F.sek};text-align:right;margin-top:6px;">${fuss}</div>`;
+            };
+            const zeichnen=()=>{ const el=karte&&karte.shadowRoot&&karte.shadowRoot.querySelector('[data-wochenbericht]'); if(el){ el.innerHTML=inhalt(); binden(); } };
+            // Umschalter: button-card gibt einer Karte ohne Aktion pointer-events: none und ruft bei
+            // touchend preventDefault() auf (am Handy kein click). Deshalb pointer-events: auto am
+            // Inhalt und Tipp ueber touchend (unter 10 px, unter 800 ms) oder click, wie in
+            // fahrzeiten-templates.yaml.
+            const binden=()=>{ const root=karte&&karte.shadowRoot; if(!root) return;
+              root.querySelectorAll('[data-wb-modus]').forEach(b=>{
+                if(b.dataset.wbGebunden) return; b.dataset.wbGebunden='1';
+                const wahl=()=>{ C.modus=b.dataset.wbModus; holen(C.modus); zeichnen(); };
+                b.addEventListener('touchstart',ev=>{ ev.stopPropagation(); const t=ev.touches&&ev.touches[0]; C.tipp=t?{x:t.clientX,y:t.clientY,z:Date.now()}:null; },{passive:true});
+                b.addEventListener('touchcancel',ev=>{ ev.stopPropagation(); C.tipp=null; });
+                b.addEventListener('touchend',ev=>{ ev.stopPropagation(); const t=ev.changedTouches&&ev.changedTouches[0], st=C.tipp; C.tipp=null;
+                  if(!t||!st||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10||Date.now()-st.z>800) return;
+                  if(ev.cancelable) ev.preventDefault(); C.tippZeit=Date.now(); wahl(); });
+                b.addEventListener('click',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(Date.now()-(C.tippZeit||0)<700) return; wahl(); });
+              }); };
+            const holen=m=>{ const k=schluessel(m); if(C.daten[k]||C.laeuft[k]||!ws||typeof ws.callWS!=='function') return;
+              C.laeuft[k]=true; const cut=stichtag(m), w0=montag(cut);
+              ws.callWS({type:'recorder/statistics_during_period',start_time:plusTage(w0,-8).toISOString(),end_time:cut.toISOString(),statistic_ids:Object.values(ID),period:'hour',types:['state','change','mean']})
+                .then(res=>{ C.daten[k]=rechne(res,cut); C.laeuft[k]=false; zeichnen(); })
+                .catch(()=>{ C.laeuft[k]=false; }); };
+            holen(C.modus);
+            setTimeout(binden,0);
+            return `<div data-wochenbericht style="width:100%;pointer-events:auto;text-align:left;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">${inhalt()}</div>`;
+          ]]]
+      styles:
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 0 2px 2px
+        custom_fields:
+          bericht:
+          - width: 100%
+        grid:
+        - grid-template-areas: '"bericht"'
+      tap_action:
+        action: none
+      triggers_update:
+      - sensor.iphone_health_steps
+      - input_datetime.schlaf_letzte_nacht
+      - automation.gesundheit_wochenbericht
+      - input_number.ziel_schritte
+      - input_number.ziel_training_woche
+      - sensor.date
   - type: vertical-stack
     visibility:
     - condition: user
@@ -2375,5 +2679,609 @@ sections:
         - sensor.iphone_basal_body_temperature
         - sensor.iphone_blood_glucose
         - sensor.iphone_water
+  - type: vertical-stack
+    visibility:
+    - condition: user
+      users:
+      - benutzer_id_1
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - icon: mdi:bell-cog-outline
+      type: custom:button-card
+      name: Meldungen
+      label: Nachrichten aus der Gesundheit-View · Tippen schaltet
+      show_icon: true
+      show_name: true
+      show_label: true
+      styles:
+        icon:
+        - width: 23px
+        - height: 23px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-blau, #7fb3d5)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 17px
+        - font-weight: 700
+        - letter-spacing: -0.02em
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 12.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - margin-top: 1px
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 2px 2px 6px
+        grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: min-content 1fr
+        - grid-template-rows: min-content min-content
+        img_cell:
+        - width: 44px
+        - height: 44px
+        - border-radius: 13px
+        - margin-right: 14px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)'
+      tap_action:
+        action: none
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldungen
+      icon: mdi:bell-outline
+      name: Alle Meldungen
+      variables:
+        haupt: true
+        automation: ''
+        plan: Hauptschalter für alle Nachrichten unten
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-blau, #7fb3d5)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: none
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: none
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldung_morgen_briefing
+      icon: mdi:weather-sunset-up
+      name: Morgen-Briefing
+      variables:
+        haupt: false
+        automation: automation.gesundheit_morgen_briefing
+        plan: nach der Nacht, leise
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-indigo, #8ea2e6)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-indigo, #8ea2e6) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-indigo, #8ea2e6) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: more-info
+        entity: automation.gesundheit_morgen_briefing
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+      - automation.gesundheit_morgen_briefing
+      - input_boolean.gesundheit_meldung_morgen_briefing
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldung_fruhwarnung
+      icon: mdi:heart-pulse
+      name: Frühwarnung Vitalwerte
+      variables:
+        haupt: false
+        automation: automation.gesundheit_fruhwarnung_vitalwerte
+        plan: 21:30 ab 2 auffälligen Werten
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-rose, #e6a0c4)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: more-info
+        entity: automation.gesundheit_fruhwarnung_vitalwerte
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+      - automation.gesundheit_fruhwarnung_vitalwerte
+      - input_boolean.gesundheit_meldung_fruhwarnung
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldung_bewegung
+      icon: mdi:walk
+      name: Bewegungs-Erinnerung
+      variables:
+        haupt: false
+        automation: automation.gesundheit_bewegungs_erinnerung
+        plan: 19:00 unter 40 % des Schrittziels
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-blau, #7fb3d5)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: more-info
+        entity: automation.gesundheit_bewegungs_erinnerung
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+      - automation.gesundheit_bewegungs_erinnerung
+      - input_boolean.gesundheit_meldung_bewegung
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldung_wochenbericht
+      icon: mdi:calendar-week
+      name: Wochenbericht
+      variables:
+        haupt: false
+        automation: automation.gesundheit_wochenbericht
+        plan: So 20:10, leise
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-rose, #e6a0c4)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: more-info
+        entity: automation.gesundheit_wochenbericht
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+      - automation.gesundheit_wochenbericht
+      - input_boolean.gesundheit_meldung_wochenbericht
+    - type: custom:button-card
+      entity: input_boolean.gesundheit_meldung_datenhinweise
+      icon: mdi:watch-variant
+      name: Datenhinweise
+      variables:
+        haupt: false
+        automation: automation.gesundheit_datenhinweis_schlaf
+        plan: 10:00, wenn 2 Nächte Schlafdaten fehlen
+      show_icon: true
+      show_name: true
+      show_label: true
+      show_state: false
+      label: |
+          [[[
+            // Zeitplan und letzte gesendete Nachricht (last_triggered = Bedingungen erfuellt, Aktion lief)
+            if(variables.haupt) return entity?.state==='on'?'Alle Nachrichten an':'Alle Nachrichten aus';
+            const lt=variables.automation?states[variables.automation]?.attributes?.last_triggered:null;
+            let z='noch nie';
+            if(lt){ const d=new Date(lt), h=new Date();
+              const tage=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+              const uhr=d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+              z=tage===0?`heute ${uhr}`:(tage===1?`gestern ${uhr}`:d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'})); }
+            const aus=states['input_boolean.gesundheit_meldungen']?.state!=='on';
+            return `${variables.plan} · zuletzt ${z}${aus?' · alle aus':''}`;
+          ]]]
+      custom_fields:
+        schalter: |
+          [[[
+            const an=entity?.state==='on';
+            const spur=an?'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 50%, transparent)':'var(--nachtblau-aus, #3a4453)';
+            return `<span style="position:relative;display:block;width:44px;height:26px;border-radius:13px;background:${spur};"><span style="position:absolute;top:3px;left:${an?21:3}px;width:20px;height:20px;border-radius:50%;background:var(--nachtblau-text, #f2f5f8);"></span></span>`;
+          ]]]
+      styles:
+        icon:
+        - width: 20px
+        - height: 20px
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-amber, #e6b566)'
+        name:
+        - justify-self: start
+        - align-self: end
+        - font-size: 14px
+        - font-weight: 600
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        - text-align: left
+        label:
+        - justify-self: start
+        - align-self: start
+        - font-size: 11.5px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        - text-align: left
+        - white-space: normal
+        - overflow: hidden
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: 2
+        card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - border-top: '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'
+        - border-radius: 0
+        - padding: 9px 2px
+        - opacity: '[[[ return (!variables.haupt && states["input_boolean.gesundheit_meldungen"]?.state!=="on") ? 0.45 : 1 ]]]'
+        custom_fields:
+          schalter:
+          - justify-self: end
+          - align-self: center
+        grid:
+        - grid-template-areas: '"i n schalter" "i l schalter"'
+        - grid-template-columns: min-content 1fr min-content
+        - grid-template-rows: min-content min-content
+        - column-gap: 0
+        img_cell:
+        - width: 36px
+        - height: 36px
+        - border-radius: 11px
+        - margin-right: 12px
+        - align-self: center
+        - background: 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 16%, transparent)'
+        - border: '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)'
+      tap_action:
+        action: toggle
+        haptic: light
+      hold_action:
+        action: more-info
+        entity: automation.gesundheit_datenhinweis_schlaf
+      triggers_update:
+      - input_boolean.gesundheit_meldungen
+      - automation.gesundheit_datenhinweis_schlaf
+      - input_boolean.gesundheit_meldung_datenhinweise
   - type: custom:decluttering-card
     template: floating_navbar
