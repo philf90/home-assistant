@@ -488,7 +488,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
 | [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-garderobe-karte.yaml`, `wow-gilde-karte.yaml`, `wow-mythic-karte.yaml`, `wow-pvp-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
-| [`doku/`](doku/) | `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
+| [`doku/`](doku/) | `bewaesserung-frostschutz.md`, `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
 <!-- index:end -->
 
 Varianten (`lichter-raum-…`, `lichter-glow-…`) sind gleichwertige
@@ -535,6 +535,8 @@ Voraussetzungen und Import beschreibt die Doku je Dashboard. Dazu:
   Proxmox-Warnung `ms-cert=2023k` beim Start der HA-VM
 - [`proxmox-haos-speicher-erweitern.md`](doku/proxmox-haos-speicher-erweitern.md) –
   Festplatte von Home Assistant OS unter Proxmox vergrößern
+- [`bewaesserung-frostschutz.md`](doku/bewaesserung-frostschutz.md) –
+  Frostschutz der Gartenbewässerung: Schutzschichten, Herbst und Frühjahr
 
 ## Prüfungen
 
