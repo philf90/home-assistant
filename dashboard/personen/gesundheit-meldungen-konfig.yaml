@@ -98,6 +98,10 @@
 #     Wochenbeginn und Vorwoche ueber as_local gerechnet, damit eine
 #     Zeitumstellung in der Woche den Stichtag nicht um eine Stunde
 #     verschiebt (geprueft mit KW 43, Umstellung am 25.10.).
+#     Gerundet wird wie in der Karte (Math.round: ,5 immer aufwaerts), mit
+#     (x + 0.5) | round(0, 'floor'), auf eine Stelle mit x * 10. round(0)
+#     rundet ,5 zur geraden Zahl: Erster Lauf 01.11.2026 meldete fuer KW 44
+#     Schlaf Ø 7 h 04 (424,5 min), die Karte 7 h 05.
 #     Probelauf 01.11.2026 (KW 43 gegen KW 42): Schritte Ø 4.117 gegen
 #     6.272, Training 81 gegen 147 min, Schlaf 7 h 17 (5 von 5 >= 7 h) gegen
 #     7 h 02 (2 von 4), Ruhepuls 65,0 gegen 64,7, Gehpuls 102,7 gegen 101,3.
@@ -442,7 +446,7 @@ automation:
     note: Langzeitstatistik stündlich, ab Sonntag vor der Vorwoche (Vergleichsnacht für den ersten Tag). Automationen laufen ohne Benutzer, die Admin-Aktion ist erlaubt.
   - variables:
       werte: >-
-        {%- macro sigfor(last, day) -%}{%- for k in ['g', 't', 'k', 'r', 'a'] -%}{%- set v = last.get(k ~ '|' ~ day) -%}{{ (v | round(0) | int) if v is number else 'x' }}{{ '/' if not loop.last }}{%- endfor -%}{%- endmacro -%}
+        {%- macro sigfor(last, day) -%}{%- for k in ['g', 't', 'k', 'r', 'a'] -%}{%- set v = last.get(k ~ '|' ~ day) -%}{{ ((v + 0.5) | round(0, 'floor') | int) if v is number else 'x' }}{{ '/' if not loop.last }}{%- endfor -%}{%- endmacro -%}
         {%- set ids = {'st': 'sensor.iphone_health_steps', 'ex': 'sensor.iphone_exercise_time', 'g': 'sensor.iphone_sleep_duration', 't': 'sensor.iphone_deep_sleep', 'k': 'sensor.iphone_core_sleep', 'r': 'sensor.iphone_rem_sleep', 'a': 'sensor.iphone_awake', 'rp': 'sensor.iphone_resting_heart_rate', 'gp': 'sensor.iphone_walking_heart_rate_average'} -%}
         {%- set w0 = as_datetime(w0_iso) | as_local -%}
         {%- set cut_ts = as_timestamp(cut_iso) -%}
@@ -475,44 +479,44 @@ automation:
             {%- set sg = sigfor(last, day) -%}
             {%- set gv = last.get('g|' ~ day) -%}
             {%- if sg != s.prev and 'x' not in sg and gv is number -%}
-              {%- set s.n = s.n + [gv | round(0) | int] -%}
-              {%- set s.tage = s.tage + [gv | round(0) | int] -%}
+              {%- set s.n = s.n + [(gv + 0.5) | round(0, 'floor') | int] -%}
+              {%- set s.tage = s.tage + [(gv + 0.5) | round(0, 'floor') | int] -%}
             {%- else -%}
               {%- set s.tage = s.tage + [none] -%}
             {%- endif -%}
             {%- set s.prev = sg -%}
             {%- set rv = last.get('rp|' ~ day) -%}
-            {%- set s.rp = s.rp + [(rv | round(1)) if rv is number else none] -%}
+            {%- set s.rp = s.rp + [((rv * 10 + 0.5) | round(0, 'floor') / 10) if rv is number else none] -%}
             {%- set gpv = last.get('gp|' ~ day) -%}
-            {%- set s.gp = s.gp + [(gpv | round(1)) if gpv is number else none] -%}
+            {%- set s.gp = s.gp + [((gpv * 10 + 0.5) | round(0, 'floor') / 10) if gpv is number else none] -%}
           {%- endfor -%}
           {%- set stl = s.st | select('number') | list -%}
           {%- set rpl = s.rp | select('number') | list -%}
           {%- set gpl = s.gp | select('number') | list -%}
           {%- set out.w = dict(out.w, **{name: {
               'schritte_tage': s.st,
-              'schritte_mittel': ((stl | sum) / (stl | count)) | round(0) | int if stl else none,
+              'schritte_mittel': ((stl | sum) / (stl | count) + 0.5) | round(0, 'floor') | int if stl else none,
               'ziel_tage': stl | select('ge', ziel) | list | count,
               'tage_mit_schritten': stl | count,
               'training': s.ex,
               'schlaf_tage': s.tage,
-              'schlaf_mittel': ((s.n | sum) / (s.n | count)) | round(0) | int if s.n else none,
+              'schlaf_mittel': ((s.n | sum) / (s.n | count) + 0.5) | round(0, 'floor') | int if s.n else none,
               'naechte': s.n | count,
               'naechte_7h': s.n | select('ge', 420) | list | count,
               'ruhepuls_tage': s.rp,
-              'ruhepuls': ((rpl | sum) / (rpl | count)) | round(1) if rpl else none,
+              'ruhepuls': ((rpl | sum) / (rpl | count) * 10 + 0.5) | round(0, 'floor') / 10 if rpl else none,
               'gehpuls_tage': s.gp,
-              'gehpuls': ((gpl | sum) / (gpl | count)) | round(1) if gpl else none}}) -%}
+              'gehpuls': ((gpl | sum) / (gpl | count) * 10 + 0.5) | round(0, 'floor') / 10 if gpl else none}}) -%}
         {%- endfor -%}
         {{ out.w }}
-    note: 'Tageswerte je Woche: Schritte und Training als Zählerstand am Tagesende (nur Tage mit neuen Werten), Schlaf nur bei neuer Kombination der fünf Schlafwerte, Ruhe- und Gehpuls als letzter Wert des Tages.'
+    note: 'Tageswerte je Woche: Schritte und Training als Zählerstand am Tagesende (nur Tage mit neuen Werten), Schlaf nur bei neuer Kombination der fünf Schlafwerte, Ruhe- und Gehpuls als letzter Wert des Tages. Gerundet wie die Karte Wochenbericht (Math.round: ,5 immer aufwärts) mit (x + 0.5) | round(0, ''floor''); round(0) rundet ,5 zur geraden Zahl (01.11.2026: 424,5 min ergab 7 h 04, die Karte 7 h 05).'
   - variables:
       text: |-
         {%- set d = werte.diese -%}{%- set v = werte.vor -%}
         {%- macro tsd(x) -%}{{ '{:,}'.format(x) | replace(',', '.') if x is number else '–' }}{%- endmacro -%}
         {%- macro dez(x) -%}{{ ('%.1f' | format(x)) | replace('.', ',') if x is number else '–' }}{%- endmacro -%}
         {%- macro hm(x) -%}{{ ((x // 60) | int ~ ' h ' ~ '%02d' | format((x % 60) | int)) if x is number else '–' }}{%- endmacro -%}
-        {%- macro proz(a, b) -%}{%- if a is number and b is number and b > 0 -%}{{ (', ' ~ ('%+d' | format(((a / b - 1) * 100) | round(0) | int)) ~ ' %') | replace('-', '−') }}{%- endif -%}{%- endmacro -%}
+        {%- macro proz(a, b) -%}{%- if a is number and b is number and b > 0 -%}{{ (', ' ~ ('%+d' | format(((a / b - 1) * 100 + 0.5) | round(0, 'floor') | int)) ~ ' %') | replace('-', '−') }}{%- endif -%}{%- endmacro -%}
         Schritte Ø {{ tsd(d.schritte_mittel) }}/Tag (Vorwoche {{ tsd(v.schritte_mittel) }}{{ proz(d.schritte_mittel, v.schritte_mittel) }})
         Training {{ d.training }} min (Vorwoche {{ v.training }})
         Schlaf Ø {{ hm(d.schlaf_mittel) }}, {{ d.naechte_7h }} von {{ d.naechte }} Nächten ≥ 7 h (Vorwoche {{ hm(v.schlaf_mittel) }}, {{ v.naechte_7h }} von {{ v.naechte }})
@@ -521,6 +525,7 @@ automation:
         VO₂max {{ states('sensor.iphone_vo2_max') | replace('.', ',') }} seit {{ vo2_tage }} Tagen unverändert: Outdoor Gehen, Laufen oder Wandern aufzeichnen
         {%- endif %}
       titel: "Wochenbericht: {{ werte.diese.training }} von {{ states('input_number.ziel_training_woche') | int(150) }} min Training"
+    note: 'Prozent zur Vorwoche gerundet wie die Karte Wochenbericht (,5 immer aufwärts).'
   - action: notify.mobile_app_iphone
     continue_on_error: true
     data:
