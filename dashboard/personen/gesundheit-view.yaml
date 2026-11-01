@@ -128,6 +128,13 @@
 #     Nachricht), "Laufend KW n" = letzte volle Stunde gegen dieselbe Spanne
 #     der Vorwoche. Wahl und Ergebnis merkt sich window.__nachtblauWochenbericht
 #     (Muster wie SCHLAFBILANZ), neu geholt wird je Stichtag einmal.
+#     Tippen wie in fahrzeiten-templates.yaml: button-card gibt der Karte
+#     ohne Aktion pointer-events: none und ruft bei touchend preventDefault()
+#     auf, deshalb pointer-events: auto am Inhalt und eigene touchstart/
+#     touchend/click-Listener (Tipp unter 10 px und 800 ms, click danach
+#     700 ms gesperrt). Per addEventListener, nicht ontouchend =: Chromium
+#     legt die ontouch*-Eigenschaften nur bei erkannter Touch-Faehigkeit an
+#     (nachgestellt 01.11.2026, iPhone: Umschalter reagierte nicht).
 #   - Training: Balken gegen input_number.ziel_training_woche, Marke beim
 #     Ziel, Skala bis zum doppelten Ziel.
 #   - Kacheln: Schritte Ø/Tag mit Mo-So-Saeulen (Linie beim Tagesziel,
@@ -986,8 +993,21 @@ sections:
                 +`<div style="font-size:11px;color:${F.sek};text-align:right;margin-top:6px;">${fuss}</div>`;
             };
             const zeichnen=()=>{ const el=karte&&karte.shadowRoot&&karte.shadowRoot.querySelector('[data-wochenbericht]'); if(el){ el.innerHTML=inhalt(); binden(); } };
+            // Umschalter: button-card gibt einer Karte ohne Aktion pointer-events: none und ruft bei
+            // touchend preventDefault() auf (am Handy kein click). Deshalb pointer-events: auto am
+            // Inhalt und Tipp ueber touchend (unter 10 px, unter 800 ms) oder click, wie in
+            // fahrzeiten-templates.yaml.
             const binden=()=>{ const root=karte&&karte.shadowRoot; if(!root) return;
-              root.querySelectorAll('[data-wb-modus]').forEach(b=>{ b.onclick=ev=>{ ev.stopPropagation(); C.modus=b.dataset.wbModus; holen(C.modus); zeichnen(); }; }); };
+              root.querySelectorAll('[data-wb-modus]').forEach(b=>{
+                if(b.dataset.wbGebunden) return; b.dataset.wbGebunden='1';
+                const wahl=()=>{ C.modus=b.dataset.wbModus; holen(C.modus); zeichnen(); };
+                b.addEventListener('touchstart',ev=>{ ev.stopPropagation(); const t=ev.touches&&ev.touches[0]; C.tipp=t?{x:t.clientX,y:t.clientY,z:Date.now()}:null; },{passive:true});
+                b.addEventListener('touchcancel',ev=>{ ev.stopPropagation(); C.tipp=null; });
+                b.addEventListener('touchend',ev=>{ ev.stopPropagation(); const t=ev.changedTouches&&ev.changedTouches[0], st=C.tipp; C.tipp=null;
+                  if(!t||!st||Math.hypot(t.clientX-st.x,t.clientY-st.y)>10||Date.now()-st.z>800) return;
+                  if(ev.cancelable) ev.preventDefault(); C.tippZeit=Date.now(); wahl(); });
+                b.addEventListener('click',ev=>{ ev.stopPropagation(); ev.preventDefault(); if(Date.now()-(C.tippZeit||0)<700) return; wahl(); });
+              }); };
             const holen=m=>{ const k=schluessel(m); if(C.daten[k]||C.laeuft[k]||!ws||typeof ws.callWS!=='function') return;
               C.laeuft[k]=true; const cut=stichtag(m), w0=montag(cut);
               ws.callWS({type:'recorder/statistics_during_period',start_time:plusTage(w0,-8).toISOString(),end_time:cut.toISOString(),statistic_ids:Object.values(ID),period:'hour',types:['state','change','mean']})
@@ -995,7 +1015,7 @@ sections:
                 .catch(()=>{ C.laeuft[k]=false; }); };
             holen(C.modus);
             setTimeout(binden,0);
-            return `<div data-wochenbericht style="width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">${inhalt()}</div>`;
+            return `<div data-wochenbericht style="width:100%;pointer-events:auto;text-align:left;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">${inhalt()}</div>`;
           ]]]
       styles:
         card:
