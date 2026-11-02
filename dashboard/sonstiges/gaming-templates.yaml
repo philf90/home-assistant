@@ -1,5 +1,5 @@
 # ============================================================================
-# Gaming – Spielkarte, Themen-Pillen und Zurueck-Kopf
+# Gaming – Umschalter zwischen den Spielen
 # ----------------------------------------------------------------------------
 # Art:           templates
 # Bereich:       sonstiges
@@ -10,238 +10,54 @@
 #                oberste Ebene unter button_card_templates:
 # Platzhalter:   keine
 # ============================================================================
-# Drei Templates fuer das Gaming-Dashboard (gaming-view.yaml), Vorschlag B
-# "Lobby" aus dem Entwurf gaming-dashboard.html:
+# Zwei Templates fuer das Gaming-Dashboard (gaming-view.yaml), Vorschlag A
+# "Zwei Spiele" aus dem Entwurf gaming-dashboard.html:
 #
-#   gaming_spiel   Karte eines Spiels im Nachtblau-Stil.
-#                  In der Lobby (ohne variables.thema): Symbol des Spiels,
-#                  Name, Spieler bzw. Charakter, drei Kennzahlen und darunter
-#                  die Themen als Pillen (custom_fields.themen, setzt die
-#                  View mit gaming_themen).
-#                    Battlefield 6      K/D, Siegquote, Restzeit der Saison
-#                    World of Warcraft  Itemlevel, Mythic+-Wertung, Reset
-#                  Auf einer Unterseite (variables.thema gesetzt): schmaler
-#                  Zurueck-Kopf wie im Entwurf, Pfeil in neutraler
-#                  Icon-Kachel, Thema als Titel, darunter "Lobby · Spiel".
-#                  Die Aktion (zurueck zur Lobby) setzt die Karte in der View;
-#                  das Template selbst hat keine.
-#   gaming_themen  Behaelter ohne Huelle fuer die Pillen: Flex-Zeile, die
-#                  umbricht. Jede Pille steht als eigene Karte in einem
-#                  custom_field (Reihenfolge wie in der View).
-#   gaming_thema   Eine Pille: Icon in Rose, daneben der Name, Unterkachel-
-#                  Grund, Radius 999 px. Ihre Aktion (navigate) setzt die View.
-#                  Die Pillen sind eigene button-cards in der Spielkarte; ihre
-#                  Spielkarte hat in der Lobby keine Aktion, ein Antippen
-#                  loest also nur die Pille aus.
+#   gaming_umschalter  Huelle oben in jedem View, Innenabstand 10 px, darin
+#                      zwei Kacheln nebeneinander (custom_fields links: BF6,
+#                      rechts: WoW, je eine gaming_wahl-Karte, setzt die View).
+#   gaming_wahl        Kachel eines Spiels: Icon-Kachel 34 px, Name, darunter
+#                      eine Kennzahl.
+#                        Battlefield 6      "K/D 1,50"
+#                        World of Warcraft  "Reset 1 T 12 h"
+#                      Das Spiel des offenen Views (variables.aktiv: true)
+#                      ist Rose getoent (Flaeche 0,12, Rand 0,24, Icon-Kachel
+#                      0,16/0,24, Icon Rose); das andere hat Unterkachel-Grund,
+#                      neutrale Icon-Kachel (erhoehte Flaeche) und Label-Grau.
+#                      Die Aktion (navigate) setzt die View an der Kachel des
+#                      anderen Spiels. Die Kacheln sind eigene button-cards in
+#                      der Huelle; die Huelle selbst hat keine Aktion.
 #
-# Variablen von gaming_spiel:
+# Variablen von gaming_wahl:
 #   spiel    bf6 oder wow
-#   prefix   Entity-ID ohne Domain und Endung: bei BF6 der Spieler
-#            (sensor.<spieler>_k_d -> <spieler>), bei WoW der Charakter
-#            (sensor.<charakter>_<realm>_level -> <charakter>_<realm>)
+#   prefix   nur BF6: Spieler (sensor.<spieler>_k_d -> <spieler>)
 #   welt     nur WoW: Spielwelt-Geraet, Vorgabe wow_spielwelt_eu
 #            (sensor.wow_spielwelt_eu_wochentlicher_reset)
-#   thema    nur Unterseiten: Titel, z. B. "Kampf"
+#   aktiv    true beim Spiel des offenen Views
 #
-# Daten (Namen bei deutscher Oberflaeche):
-#   BF6  sensor.<spieler>_k_d, _siegquote, _rang, _plattform;
-#        sensor.bf6_spielwelt_saisonende (Attribut season).
-#        Name des Spielers = Name seines Geraets, wie in den Karten der
-#        Integration. Siegquote in Farbe wie dort: ab 55 % Gruen, ab 45 %
-#        Amber, darunter Rot; die Zahl steht immer dabei.
-#   WoW  sensor.<charakter>_<realm>_level (Attribute class, spec),
-#        _itemlevel, _mythic_wertung (ohne Lauf in der Season das Attribut
-#        api_rating, dann "M+ laut Arsenal" wie in der Mythic+-Karte);
-#        sensor.<welt>_wochentlicher_reset.
-#   Fehlt ein Wert (unknown, unavailable, Classic ohne Mythic+), steht "–".
-#   Restzeiten: ab 2 Tagen "77 Tage", darunter "1 T 13 h", unter einem Tag
-#   "13 h", unter einer Stunde "45 min". Sie rechnen beim Zeichnen;
-#   triggers_update: all zeichnet bei jeder Zustandsaenderung neu.
+# Daten (Namen bei deutscher Oberflaeche): sensor.<spieler>_k_d und
+# sensor.<welt>_wochentlicher_reset. Fehlt ein Wert, steht "–". Restzeit ab
+# 2 Tagen "77 Tage", darunter "1 T 13 h", unter einem Tag "13 h", unter einer
+# Stunde "45 min"; sie rechnet beim Zeichnen, triggers_update: all zeichnet
+# bei jeder Zustandsaenderung neu.
 #
-# Breiten (DESIGN.md, Bildschirmbreiten): Inhalt der Huelle 310 px
-# (Galaxy S25, Karte 344 px, 16 px Innenabstand, 1 px Rand) bzw. 352 px
-# (iPhone 17 Pro); drei Kennzahlen je 99,3 bzw. 113,3 px, Platz fuer den
-# Wert 77,3 bzw. 91,3 px. Laengste Werte gemessen (Roboto 700, 17 px):
-# "100 Tage" 70,3 px, "1 T 13 h" 61,1 px, "100,0 %" 60 px; Labels brechen
-# in zwei Zeilen um.
-# Pillen (Roboto 600, 12,5 px, gemessen; dazu Icon 15, Abstand 4,
-# Innenabstand 22 und Rand 2 px): BF6 80 + 86 + 123 px, mit zwei Abstaenden
-# 301 px, also eine Zeile auf beiden Handys. WoW 98 + 102 + 103 + 72 px:
-# beim S25 zwei Pillen je Zeile, beim iPhone drei und eine.
+# Breiten (DESIGN.md, Bildschirmbreiten): Karte 344 px (Galaxy S25) bzw.
+# 386 px (iPhone 17 Pro), Inhalt nach 10 px Innenabstand und 1 px Rand
+# 322 bzw. 364 px, Kachel bei 8 px Abstand 157 bzw. 178 px, Platz fuer den
+# Text nach Innenabstand, Rand, Icon-Kachel und Spalt 92 bzw. 113 px.
+# Gemessen (Roboto): "World of Warcraft" 107,5 px (700, 13,5 px) bricht beim
+# S25 in zwei Zeilen um, beim iPhone nicht; "Battlefield 6" 73,6 px. Die
+# Kennzahl ist einzeilig, laengste Form "Reset 100 Tage" 82,3 px (400, 12 px).
+# Beide Kacheln sind gleich hoch (Raster, Hoehe 100 %).
 #
 # Farben: Nachtblau-Theme-Variablen mit dunklem Rueckfall, Akzent Rose
 # (Bereich Freizeit, wie die Karten beider Integrationen).
 #
-# Voraussetzung: custom:button-card (HACS); Integrationen "BF6 Spieler"
-# (philf90/HA-BF6) und "WoW Charakter" (philf90/HA-WOW).
+# Voraussetzung: custom:button-card (HACS) ab 7.0 (eingebettete Karten in
+# custom_fields); Integrationen "BF6 Spieler" (philf90/HA-BF6) und
+# "WoW Charakter" (philf90/HA-WOW).
 button_card_templates:
-  gaming_spiel:
-    triggers_update: all
-    show_icon: true
-    show_name: true
-    show_label: true
-    show_state: false
-    tap_action: { action: none }
-    hold_action: { action: none }
-    double_tap_action: { action: none }
-    variables:
-      spiel: bf6
-      prefix: ''
-      welt: wow_spielwelt_eu
-      thema: ''
-    icon: |
-      [[[
-        if (variables.thema) return 'mdi:arrow-left';
-        return variables.spiel === 'wow' ? 'mdi:sword-cross' : 'mdi:target';
-      ]]]
-    name: |
-      [[[
-        if (variables.thema) return variables.thema;
-        return variables.spiel === 'wow' ? 'World of Warcraft' : 'Battlefield 6';
-      ]]]
-    label: |
-      [[[
-        const v = variables, p = v.prefix;
-        const spiel = v.spiel === 'wow' ? 'World of Warcraft' : 'Battlefield 6';
-        if (v.thema) return `Lobby · ${spiel}`;
-        const da = (e) => e && !['unknown', 'unavailable'].includes(e.state);
-        if (v.spiel === 'wow') {
-          const lvl = states[`sensor.${p}_level`];
-          if (!lvl) return 'Charakter nicht gefunden';
-          const a = lvl.attributes || {};
-          const name = String(a.friendly_name || '').replace(/\s*Level$/, '').split(' – ')[0];
-          const klasse = [a.spec, a.class].filter(Boolean).join(' ');
-          return [name, klasse, da(lvl) ? `Stufe ${lvl.state}` : ''].filter(Boolean).join(' · ');
-        }
-        const kd = `sensor.${p}_k_d`;
-        if (!states[kd]) return 'Spieler nicht gefunden';
-        const ent = (hass.entities || {})[kd];
-        const geraet = ent && (hass.devices || {})[ent.device_id];
-        const name = geraet ? (geraet.name_by_user || geraet.name || '') : '';
-        const plattformen = { steam: 'Steam', ea: 'EA app', epic: 'Epic Games', pc: 'PC',
-          psn: 'PlayStation', ps4: 'PlayStation', ps5: 'PlayStation',
-          xbox: 'Xbox', xboxone: 'Xbox', xboxseries: 'Xbox' };
-        const plattform = plattformen[states[`sensor.${p}_plattform`]?.state] || '';
-        const rang = states[`sensor.${p}_rang`];
-        return [name, plattform, da(rang) ? `Rang ${rang.state}` : ''].filter(Boolean).join(' · ');
-      ]]]
-    custom_fields:
-      kennzahlen: |
-        [[[
-          if (variables.thema) return '';
-          const p = variables.prefix;
-          const da = (e) => e && !['unknown', 'unavailable'].includes(e.state);
-          const zahl = (e) => (da(e) && !isNaN(parseFloat(e.state))) ? parseFloat(e.state) : null;
-          const de = (n, d) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
-          const rest = (e) => {
-            const t = da(e) ? Date.parse(e.state) : NaN;
-            if (isNaN(t)) return null;
-            const m = Math.max(0, Math.round((t - Date.now()) / 60000));
-            const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
-            if (d >= 2) return `${d} Tage`;
-            if (d === 1) return `1 T ${h} h`;
-            return h >= 1 ? `${h} h` : `${m} min`;
-          };
-          const kachel = (titel, wert, farbe) => `
-            <div style="min-width:0;padding:8px 10px;border-radius:13px;text-align:left;
-              background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));
-              border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">
-              <div style="font-size:12px;line-height:1.25;color:var(--nachtblau-text-sekundaer, #8794a5);
-                overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${titel}</div>
-              <div style="font-size:17px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums;
-                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-                color:${wert === null ? 'var(--nachtblau-text-sekundaer, #8794a5)' : (farbe || 'var(--nachtblau-text, #f2f5f8)')};">${wert === null ? '–' : wert}</div>
-            </div>`;
-          let k = [];
-          if (variables.spiel === 'wow') {
-            const ilvl = zahl(states[`sensor.${p}_itemlevel`]);
-            const mp = states[`sensor.${p}_mythic_wertung`];
-            const wertung = zahl(mp);
-            const arsenal = wertung === null && mp ? parseFloat(mp.attributes?.api_rating) : NaN;
-            const reset = rest(states[`sensor.${variables.welt}_wochentlicher_reset`]);
-            k = [
-              kachel('Itemlevel', ilvl === null ? null : de(ilvl, 0)),
-              wertung !== null ? kachel('M+-Wertung', de(wertung, 0))
-                : kachel('M+ laut Arsenal', isNaN(arsenal) ? null : de(arsenal, 0)),
-              kachel('Reset in', reset),
-            ];
-          } else {
-            const kd = zahl(states[`sensor.${p}_k_d`]);
-            const sq = zahl(states[`sensor.${p}_siegquote`]);
-            const ende = states['sensor.bf6_spielwelt_saisonende'];
-            const saison = ende?.attributes?.season;
-            const farbe = sq === null ? null : sq >= 55 ? 'var(--nachtblau-gruen, #a6d49e)'
-              : sq >= 45 ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-rot, #f0736a)';
-            k = [
-              kachel('K/D', kd === null ? null : de(kd, 2)),
-              kachel('Siegquote', sq === null ? null : `${de(sq, 1)} %`, farbe),
-              kachel(saison ? `Saison ${saison} endet in` : 'Saison endet in', rest(ende)),
-            ];
-          }
-          return `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;">${k.join('')}</div>`;
-        ]]]
-    styles:
-      card:
-        # Unterseite: schmaler Zurueck-Kopf wie im Entwurf
-        - padding: "[[[ return variables.thema ? '12px 14px' : '14px 16px 14px'; ]]]"
-        - border-radius: 22px
-        - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
-        - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
-        - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
-        - cursor: "[[[ return variables.thema ? 'pointer' : 'default'; ]]]"
-      grid:
-        - grid-template-areas: "[[[ return variables.thema ? '\"i n\" \"i l\"' : '\"i n\" \"i l\" \"kennzahlen kennzahlen\" \"themen themen\"'; ]]]"
-        - grid-template-columns: min-content minmax(0, 1fr)
-        - grid-template-rows: min-content min-content auto auto
-      img_cell:
-        - width: "[[[ return variables.thema ? '34px' : '44px'; ]]]"
-        - height: "[[[ return variables.thema ? '34px' : '44px'; ]]]"
-        - border-radius: "[[[ return variables.thema ? '11px' : '13px'; ]]]"
-        - margin-right: "[[[ return variables.thema ? '10px' : '14px'; ]]]"
-        - align-self: center
-        # Lobby: Icon-Kachel in Rose; Unterseite: neutrale Kachel (erhoehte Flaeche)
-        - background: "[[[ return variables.thema ? 'var(--nachtblau-flaeche-erhoeht, #222b3c)' : 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'; ]]]"
-        - border: "[[[ return variables.thema ? '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))' : '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'; ]]]"
-      icon:
-        - width: "[[[ return variables.thema ? '19px' : '23px'; ]]]"
-        - height: "[[[ return variables.thema ? '19px' : '23px'; ]]]"
-        - --ha-icon-display: block
-        - color: "[[[ return variables.thema ? 'var(--nachtblau-label, #b4c0cf)' : 'var(--nachtblau-rose, #e6a0c4)'; ]]]"
-      name:
-        - justify-self: start
-        - align-self: end
-        - text-align: left
-        - font-size: "[[[ return variables.thema ? '15px' : '17px'; ]]]"
-        - font-weight: 700
-        - letter-spacing: -0.02em
-        - color: 'var(--nachtblau-text, #f2f5f8)'
-      label:
-        - justify-self: start
-        - align-self: start
-        # Spieler bzw. Charakter, Plattform, Rang: bis zu zwei Zeilen statt "..."
-        - max-width: 100%
-        - overflow: hidden
-        - white-space: normal
-        - display: -webkit-box
-        - -webkit-box-orient: vertical
-        - -webkit-line-clamp: '2'
-        - text-wrap: balance
-        - text-align: left
-        - font-size: 12.5px
-        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
-        - margin-top: 1px
-      custom_fields:
-        kennzahlen:
-          - padding-top: 12px
-          - justify-self: stretch
-          - min-width: 0
-          - white-space: normal
-        themen:
-          - padding-top: 10px
-          - justify-self: stretch
-          - min-width: 0
-
-  gaming_themen:
+  gaming_umschalter:
     show_icon: false
     show_name: false
     show_label: false
@@ -251,52 +67,125 @@ button_card_templates:
     double_tap_action: { action: none }
     styles:
       card:
-        - padding: 0
-        - background: none
-        - border: none
-        - box-shadow: none
-        - border-radius: 0
+        - padding: 10px
+        - border-radius: 22px
+        - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+        - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+        - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+        - cursor: default
       grid:
-        # Flex statt Raster: Pillen in natuerlicher Breite, umbrechend
-        - display: flex
-        - flex-wrap: wrap
-        - gap: 6px
-        - justify-content: flex-start
-        - align-items: center
+        - grid-template-areas: '"links rechts"'
+        - grid-template-columns: repeat(2, minmax(0, 1fr))
+        - column-gap: 8px
+        - align-items: stretch
+      custom_fields:
+        links:
+          - min-width: 0
+        rechts:
+          - min-width: 0
+    # Kacheln gleich hoch: die eingebettete Karte fuellt ihr Rasterfeld
     extra_styles: |
-      #container > * { flex: 0 0 auto; min-width: 0; }
+      #links > *, #rechts > * { display: block; height: 100%; }
 
-  gaming_thema:
+  gaming_wahl:
+    triggers_update: all
     show_icon: true
     show_name: true
-    show_label: false
+    show_label: true
     show_state: false
     hold_action: { action: none }
     double_tap_action: { action: none }
+    variables:
+      spiel: bf6
+      prefix: ''
+      welt: wow_spielwelt_eu
+      aktiv: false
+    icon: "[[[ return variables.spiel === 'wow' ? 'mdi:sword-cross' : 'mdi:target'; ]]]"
+    name: "[[[ return variables.spiel === 'wow' ? 'World of Warcraft' : 'Battlefield 6'; ]]]"
+    label: |
+      [[[
+        const da = (e) => e && !['unknown', 'unavailable'].includes(e.state);
+        if (variables.spiel === 'wow') {
+          const e = states[`sensor.${variables.welt}_wochentlicher_reset`];
+          const t = da(e) ? Date.parse(e.state) : NaN;
+          if (isNaN(t)) return 'Reset –';
+          const m = Math.max(0, Math.round((t - Date.now()) / 60000));
+          const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60);
+          const rest = d >= 2 ? `${d} Tage` : d === 1 ? `1 T ${h} h` : h >= 1 ? `${h} h` : `${m} min`;
+          return `Reset ${rest}`;
+        }
+        const e = states[`sensor.${variables.prefix}_k_d`];
+        const kd = da(e) ? parseFloat(e.state) : NaN;
+        return isNaN(kd) ? 'K/D –'
+          : `K/D ${kd.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      ]]]
     styles:
       card:
-        - padding: 5px 11px
-        - border-radius: 999px
+        - height: 100%
+        - box-sizing: border-box
+        - padding: 10px
+        - border-radius: 16px
         - box-shadow: none
-        - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
-        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        - background: |
+            [[[ return variables.aktiv
+                  ? 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 12%, transparent)'
+                  : 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'; ]]]
+        - border: |
+            [[[ return variables.aktiv
+                  ? '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+                  : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+        - cursor: "[[[ return variables.aktiv ? 'default' : 'pointer'; ]]]"
       grid:
-        - grid-template-areas: '"i n"'
-        - grid-template-columns: min-content auto
-        - column-gap: 4px
-        - align-items: center
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 34px minmax(0, 1fr)
+        - grid-template-rows: auto auto
+        - column-gap: 9px
+        - align-content: center
       img_cell:
-        - width: 15px
-        - height: 15px
+        - width: 34px
+        - height: 34px
+        - border-radius: 11px
+        - align-self: center
+        - background: |
+            [[[ return variables.aktiv
+                  ? 'color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 16%, transparent)'
+                  : 'var(--nachtblau-flaeche-erhoeht, #222b3c)'; ]]]
+        - border: |
+            [[[ return variables.aktiv
+                  ? '1px solid color-mix(in srgb, var(--nachtblau-rose, #e6a0c4) 24%, transparent)'
+                  : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
       icon:
-        - width: 15px
-        - height: 15px
+        - width: 19px
+        - height: 19px
         - --ha-icon-display: block
-        - color: 'var(--nachtblau-rose, #e6a0c4)'
+        - color: |
+            [[[ return variables.aktiv
+                  ? 'var(--nachtblau-rose, #e6a0c4)' : 'var(--nachtblau-label, #b4c0cf)'; ]]]
       name:
-        - font-size: 12.5px
-        - font-weight: 600
+        - justify-self: start
+        - align-self: end
+        - text-align: left
+        - font-size: 13.5px
+        - font-weight: 700
+        - line-height: 1.2
+        - color: 'var(--nachtblau-text, #f2f5f8)'
+        # Spielname bis zu zwei Zeilen statt "..." (S25: "World of Warcraft")
+        - max-width: 100%
+        - overflow: hidden
+        - white-space: normal
+        - display: -webkit-box
+        - -webkit-box-orient: vertical
+        - -webkit-line-clamp: '2'
+        - text-wrap: balance
+      label:
+        - justify-self: start
+        - align-self: start
+        - max-width: 100%
+        - font-size: 12px
         - line-height: 1.35
-        # Wert-artig kurz (hoechstens zwei Woerter), deshalb einzeilig
+        - margin-top: 1px
+        - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+        # Kennzahl: einzeilig
         - white-space: nowrap
-        - color: 'var(--nachtblau-label, #b4c0cf)'
+        - overflow: hidden
+        - text-overflow: ellipsis
