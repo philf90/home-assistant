@@ -15,6 +15,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`welcome-banner-karte.yaml`](allgemein/welcome-banner-karte.yaml) | karte | Begruessungs-Banner mit Wetterszene | button-card | `weather.wohnort` | aktiv |
 | [`banner-hell.html`](allgemein/entwuerfe/banner-hell.html) | entwurf | Begruessungs-Banner im hellen Modus – Entwurf und Kontrastrechnung | – | – | Entwurf zu `welcome-banner-karte.yaml` |
 | [`home-kacheln.html`](allgemein/entwuerfe/home-kacheln.html) | entwurf | Kachel-Vorschlaege fuer die Home-Ansicht | – | – | Entwurf |
+| [`more-menue.html`](allgemein/entwuerfe/more-menue.html) | entwurf | More-Menue der Navigationsleiste – Ist-Analyse und Varianten | – | – | Entwurf zu `navbar-karte.yaml`, `navigation-templates.yaml` |
 
 ## energie
 
