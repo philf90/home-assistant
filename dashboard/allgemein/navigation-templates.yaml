@@ -24,6 +24,12 @@
 #   - type: custom:decluttering-card
 #     template: floating_navbar
 #
+# decluttering_templates gelten nur im eigenen Dashboard. In der Instanz
+# steht floating_navbar deshalb zweimal: in dashboard-home und als eigene
+# Kopie in dashboard-gaming (Views bf6 und wow). Bei jeder Aenderung beide
+# Dashboards anpassen, sonst zeigt das Gaming-Dashboard ein anderes
+# More-Menue (Stand 02.11.2026: beide gleich).
+#
 # Voraussetzung: HACS-Karte "decluttering-card"; fuer das More-Menue in
 #   floating_navbar zusaetzlich die HACS-Integration "browser_mod".
 # ============================================================================
@@ -363,25 +369,34 @@ decluttering_templates:
           tap_action:
             action: navigate
             navigation_path: /dashboard-home/hausgerate
-        # "More" oeffnet ein Nachtblau-Raster-Menue via browser_mod.popup, gegliedert
-        # in Bereiche mit Ueberschrift: Zuhause, Draussen, Freizeit, Technik,
-        # Verwaltung und Darstellung (System, Hell, Dunkel). Seit 19.10.2026 auch
-        # mit Garten und System, die vorher nur ueber die obere Leiste bzw. gar
-        # nicht ueber die Navigation erreichbar waren.
-        # Seit 20.10.2026 mit Sicherheit (Zuhause); Wetter steht seitdem mit
-        # Garten und Pflanzen unter "Draussen", damit das Menue weiter auf einen
-        # iPhone-Bildschirm passt.
-        # Seit 21.10.2026 mit Docker unter Technik (vierte Kachel, zweite Reihe).
-        # Damit das Menue weiter auf den iPhone-Bildschirm passt, ist Neustart
-        # eine schmale Zeile ueber die volle Breite statt einer Kachel, und die
-        # Kacheln haben oben und unten je 2 px weniger Innenabstand. Gemessen an
-        # Bildschirmfotos (iPhone, 3 Bildpunkte je CSS-Pixel): die zweite
-        # Technik-Reihe kostet 82 px (Kachel 70, Abstand 12), Neustart als
-        # schmale Zeile (31 statt 70 px) spart 39 px, der Innenabstand ueber
-        # sechs Kachelreihen 24 px. Das Menue ist damit 19 px hoeher als mit
-        # Docker unter Verwaltung; bis zur unteren Kante des Popups blieben
-        # dort rund 45 px. Ohne den kleineren Innenabstand waeren es nur
-        # wenige Pixel gewesen.
+        # "More" oeffnet ein Nachtblau-Menue via browser_mod.popup, gegliedert in
+        # Bereiche: Zuhause, Draussen, Freizeit, Technik, Verwaltung, Darstellung
+        # (System, Hell, Dunkel) und am Ende der Knopf "Home Assistant neu starten".
+        # Bisherige Staende: 19.10.2026 Garten und System dazu; 20.10.2026
+        # Sicherheit (Zuhause), Wetter unter "Draussen"; 21.10.2026 Docker unter
+        # Technik; 02.11.2026 Stand der Instanz mit Gaming und vier Spalten.
+        # Seit 02.11.2026 als App-Raster (Entwurf, Messung und die verworfenen
+        # Varianten: more-menue.html):
+        #   - Alle Raster mit vier Spalten. Die Kachel hat keinen eigenen Rahmen
+        #     mehr, die Icon-Kachel (42 px, Toenung 0,16, Rand 0,24 wie in DESIGN.md)
+        #     traegt die Bereichsfarbe, die Ueberschrift einen Farbpunkt. Vorher
+        #     wechselten 3 und 4 Spalten (Kachel am iPhone 123 bzw. 91 px breit), die
+        #     Icon-Kachel war 34 px gross und mit 0,12 getoent.
+        #   - Die aktuelle Ansicht hat einen gruenen Punkt und die Unterkachel als
+        #     Grund, passend zur gruenen Markierung in der Leiste. Verglichen wird
+        #     window.location.pathname mit variables.pfad, auch fuer Unterseiten
+        #     (/dashboard-gaming/wow zaehlt zu /dashboard-gaming).
+        #   - Darstellung ist ein Umschalter: ein Rahmen mit drei Segmenten, damit
+        #     die Auswahl nicht wie ein Sprungziel aussieht.
+        #   - Neustart ist keine Kachel: Er oeffnet keinen Bereich, sondern loest eine
+        #     kritische Aktion aus. Deshalb ein Textknopf ganz unten, durch eine Linie
+        #     abgesetzt, mit einem Verb als Beschriftung, roter Schrift und rotem Rand
+        #     ohne rote Flaeche (rote Schrift auf Toenung 0,12 hielte nur 4,37:1,
+        #     DESIGN.md) und einer Rueckfrage, die die Folge nennt (wie der
+        #     Container-Neustart in docker-templates.yaml).
+        #   - Hoehe im HTML-Nachbau bei 360 x 697 px (Galaxy S25): 613 von 629 px
+        #     unter dem Dialogkopf, ohne die fruehere Verkleinerung per
+        #     @media (max-height: 760px). Im Geraet nachmessen.
         # Aufruf als Browser-Call (fire-dom-event): Das Popup oeffnet nur im
         # aktuellen Browser. Als call-service ohne browser_id oeffnete browser_mod
         # es laut Doku auf allen registrierten Browsern.
@@ -397,7 +412,9 @@ decluttering_templates:
               service: browser_mod.popup
               data:
                 title: Menü
-                # Dialog-Oberflaeche aus dem Theme (dunkel Nachtblau statt Schwarz)
+                # Dialog-Oberflaeche aus dem Theme (dunkel Nachtblau statt Schwarz).
+                # Rasterabstand 2 px: vier Spalten bei 360 px Breite geben so 84 statt
+                # 81 px je Zelle, "Einstellungen" passt einzeilig.
                 style: |
                   --mdc-theme-surface: var(--nachtblau-huelle-oben, #1b2231);
                   --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
@@ -408,137 +425,156 @@ decluttering_templates:
                   --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
                   --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
                   --vertical-stack-card-gap: 6px;
-                  --grid-card-gap: 6px;
+                  --grid-card-gap: 2px;
                 content:
                   type: vertical-stack
                   cards:
-                    # Ueberschrift je Bereich: klein, Versalien, Label-Grau (wie die
-                    # Abschnittskoepfe der Autokarte, dort Sekundaer-Grau; im Popup auf der
-                    # Huelle ist Label-Grau kraeftiger). Keine Aktion, nur Text.
+                    # Ueberschrift je Bereich: klein, Versalien, Label-Grau, davor ein
+                    # Punkt in der Bereichsfarbe (variables.farbe; ohne Farbe Muted, nur
+                    # Dekoration). Keine Aktion, nur Text.
                     - type: custom:button-card
                       name: Zuhause
                       show_icon: false
+                      variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)' }
                       tap_action: { action: none }
                       hold_action: { action: none }
+                      extra_styles: &menu_kopf_extra |
+                        #name::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 2px; background: var(--menu-farbe); }
                       styles: &menu_kopf
                         card:
-                          - padding: 2px 4px 0
+                          - padding: 2px 6px 0
                           - background: none
                           - border: none
                           - box-shadow: none
+                          - --menu-farbe: "[[[ return variables.farbe || 'var(--nachtblau-muted, #6e7988)'; ]]]"
                         grid:
                           - grid-template-areas: '"n"'
                         name:
                           - justify-self: start
+                          - display: flex
+                          - align-items: center
+                          - gap: 7px
                           - font-size: 11px
                           - font-weight: 700
                           - letter-spacing: 0.07em
                           - text-transform: uppercase
                           - color: 'var(--nachtblau-label, #b4c0cf)'
                     - type: grid
-                      columns: 3
+                      columns: 4
                       square: false
                       cards:
+                        # Ziel-Kachel: Farbe je Bereich ueber variables.farbe (ohne Farbe
+                        # neutral), Sprungziel ueber variables.pfad (auch fuer die
+                        # Markierung der aktuellen Ansicht).
                         - type: custom:button-card
                           icon: mdi:cctv
                           name: Kamera
-                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)' }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/kamera }
+                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)', pfad: /dashboard-home/kamera }
+                          tap_action: &menu_ziel { action: navigate, navigation_path: '[[[ return variables.pfad; ]]]' }
                           extra_styles: &menu_extra |
-                            /* Niedrige Bildschirme (z. B. 360 x 697 px): Kacheln kompakter, damit das Menue ohne Scrollen passt */
-                            @media (max-height: 760px) {
-                              ha-card { padding: 4px 6px 3px !important; }
-                              #img-cell { width: 26px !important; height: 26px !important; margin-bottom: 3px !important; border-radius: 9px !important; }
-                              #icon { width: 16px !important; height: 16px !important; }
-                            }
+                            /* Punkt "aktuelle Ansicht" rechts oben neben der Icon-Kachel (42 px breit,
+                               rechte Kante bei 50 % + 21 px); sichtbar ueber --menu-hier aus styles.card */
+                            ha-card::after { content: ""; position: absolute; top: 2px; left: calc(50% + 21px); width: 7px; height: 7px; border-radius: 50%; background: var(--nachtblau-gruen, #a6d49e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 18%, transparent); opacity: var(--menu-hier, 0%); pointer-events: none; }
                           styles: &menu_tile
                             card:
-                              # 7/6 px statt 9/8 px: das Menue braucht die Hoehe fuer die
-                              # zweite Technik-Reihe (Rechnung oben bei "More")
-                              - padding: 7px 6px 6px
-                              - border-radius: 14px
-                              - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
-                              - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                              - position: relative
+                              - padding: 3px 0
+                              - border-radius: 16px
                               - box-shadow: none
+                              # 100 % in der aktuellen Ansicht, sonst 0 %: schaltet Punkt, Grund und Rand
+                              - --menu-hier: "[[[ const p = window.location.pathname, z = variables.pfad || ''; return z && (p === z || p.startsWith(z + '/')) ? '100%' : '0%'; ]]]"
+                              - background: 'color-mix(in srgb, var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) var(--menu-hier), transparent)'
+                              - border: '1px solid color-mix(in srgb, var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) var(--menu-hier), transparent)'
                             grid:
                               - grid-template-areas: '"i" "n"'
                               - grid-template-rows: min-content min-content
                               - justify-items: center
                             img_cell:
-                              - width: 34px
-                              - height: 34px
-                              - border-radius: 11px
-                              # Farbe je Bereich ueber variables.farbe (var(--nachtblau-...)); ohne Farbe neutral
-                              - background: "[[[ return variables.farbe ? 'color-mix(in srgb, ' + variables.farbe + ' 12%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]"
+                              - width: 42px
+                              - height: 42px
+                              - border-radius: 13px
+                              - background: "[[[ return variables.farbe ? 'color-mix(in srgb, ' + variables.farbe + ' 16%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]"
                               - border: "[[[ return variables.farbe ? '1px solid color-mix(in srgb, ' + variables.farbe + ' 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]"
-                              - margin-bottom: 6px
+                              - margin-bottom: 5px
                             icon:
-                              - width: 19px
-                              - height: 19px
+                              - width: 24px
+                              - height: 24px
                               - color: "[[[ return variables.farbe || 'var(--nachtblau-label, #b4c0cf)'; ]]]"
                               # Grundlinie aus: als inline-flex sitzt das Icon sonst ~0,6 px zu tief
                               - --ha-icon-display: block
                               # Glyphe mittig: variables.glyph ist die Mitte der Glyphe im 24er-Raster
                               # relativ zu (12, 12), gemessen an @mdi/js 7.4.47; verschoben wird um den
-                              # Gegenwert, umgerechnet auf 19 px (nur ab 0,4 Einheiten eingetragen)
-                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 19 / 24}px, ${-g[1] * 19 / 24}px)`; ]]]'
+                              # Gegenwert, bei 24 px ist eine Rastereinheit 1 px (nur ab 0,4 Einheiten eingetragen)
+                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0]}px, ${-g[1]}px)`; ]]]'
                             name:
                               - font-size: 12px
                               - font-weight: 600
-                              - color: 'var(--nachtblau-text, #f2f5f8)'
+                              - color: 'var(--nachtblau-titel, #e7ecf3)'
+                              # bis zu zwei Zeilen statt abgeschnitten (DESIGN.md, "Text")
+                              - max-width: 100%
+                              - white-space: normal
+                              - overflow: hidden
+                              - display: -webkit-box
+                              - -webkit-box-orient: vertical
+                              - -webkit-line-clamp: 2
+                              - text-wrap: balance
                         - type: custom:button-card
                           icon: mdi:car
                           name: Auto
-                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)', glyph: [0, 1] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/auto }
+                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)', pfad: /dashboard-home/auto, glyph: [0, 1] }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:shield-home
                           name: Sicherheit
-                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)' }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/sicherheit }
+                          variables: { farbe: 'var(--nachtblau-blau, #7fb3d5)', pfad: /dashboard-home/sicherheit }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                     - type: custom:button-card
                       name: Draußen
                       show_icon: false
+                      variables: { farbe: 'var(--nachtblau-limette, #bdd27f)' }
                       tap_action: { action: none }
                       hold_action: { action: none }
+                      extra_styles: *menu_kopf_extra
                       styles: *menu_kopf
                     - type: grid
-                      columns: 3
+                      columns: 4
                       square: false
                       cards:
                         - type: custom:button-card
                           icon: mdi:grass
                           name: Garten
-                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)' }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/garten }
+                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)', pfad: /dashboard-home/garten }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:flower
                           name: Pflanzen
-                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)', glyph: [0, -0.5] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/pflanzen }
+                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)', pfad: /dashboard-home/pflanzen, glyph: [0, -0.5] }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:weather-partly-cloudy
                           name: Wetter
-                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)', glyph: [-0.47, 0] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/wetter }
+                          variables: { farbe: 'var(--nachtblau-limette, #bdd27f)', pfad: /dashboard-home/wetter, glyph: [-0.47, 0] }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                     - type: custom:button-card
                       name: Freizeit
                       show_icon: false
+                      variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)' }
                       tap_action: { action: none }
                       hold_action: { action: none }
+                      extra_styles: *menu_kopf_extra
                       styles: *menu_kopf
                     - type: grid
-                      columns: 3
+                      columns: 4
                       square: false
                       cards:
                         # Gesundheit: nur fuer einen Benutzer sichtbar (wie die View selbst)
@@ -551,61 +587,71 @@ decluttering_templates:
                             type: custom:button-card
                             icon: mdi:heart-pulse
                             name: Gesundheit
-                            variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)' }
-                            tap_action: { action: navigate, navigation_path: /dashboard-home/gesundheit }
+                            variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)', pfad: /dashboard-home/gesundheit }
+                            tap_action: *menu_ziel
                             styles: *menu_tile
                             extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:soccer
                           name: Fußball
-                          variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)' }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/fussball }
+                          variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)', pfad: /dashboard-home/fussball }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:airplane
                           name: Flüge
-                          variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)', glyph: [0.47, 0] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/fluege }
+                          variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)', pfad: /dashboard-home/fluege, glyph: [0.47, 0] }
+                          tap_action: *menu_ziel
+                          styles: *menu_tile
+                          extra_styles: *menu_extra
+                        # Glyphe von mdi:gamepad-variant ist mittig (Begrenzung 1..23 x 6..18)
+                        - type: custom:button-card
+                          icon: mdi:gamepad-variant
+                          name: Gaming
+                          variables: { farbe: 'var(--nachtblau-rose, #e6a0c4)', pfad: /dashboard-gaming }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                     - type: custom:button-card
                       name: Technik
                       show_icon: false
+                      variables: { farbe: 'var(--nachtblau-violett, #b399d4)' }
                       tap_action: { action: none }
                       hold_action: { action: none }
+                      extra_styles: *menu_kopf_extra
                       styles: *menu_kopf
                     - type: grid
-                      columns: 3
+                      columns: 4
                       square: false
                       cards:
                         - type: custom:button-card
                           icon: mdi:home-automation
-                          name: Homematic IP
-                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', glyph: [0, -0.5] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/homematic-ip }
+                          name: Homematic
+                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', pfad: /dashboard-home/homematic-ip, glyph: [0, -0.5] }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:router-network
                           name: Netzwerk
-                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', glyph: [0, 4] }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/netzwerk }
+                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', pfad: /dashboard-home/netzwerk, glyph: [0, 4] }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         # Glyphe von mdi:docker ist mittig (Begrenzung 2..22 x 4,83..19,17)
                         - type: custom:button-card
                           icon: mdi:docker
                           name: Docker
-                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)' }
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/docker }
+                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', pfad: /dashboard-home/docker }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:zigbee
                           name: Zigbee
-                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)' }
-                          tap_action: { action: navigate, navigation_path: /45df7312_zigbee2mqtt/ingress }
+                          variables: { farbe: 'var(--nachtblau-violett, #b399d4)', pfad: /45df7312_zigbee2mqtt/ingress }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                     - type: custom:button-card
@@ -613,152 +659,224 @@ decluttering_templates:
                       show_icon: false
                       tap_action: { action: none }
                       hold_action: { action: none }
+                      extra_styles: *menu_kopf_extra
                       styles: *menu_kopf
                     - type: grid
-                      columns: 3
+                      columns: 4
                       square: false
                       cards:
                         - type: custom:button-card
                           icon: mdi:server
                           name: System
-                          tap_action: { action: navigate, navigation_path: /dashboard-home/system }
+                          variables: { pfad: /dashboard-home/system }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
+                        # Weiche Trennstelle (­): bricht nur, wenn das Wort nicht in die Zelle passt
                         - type: custom:button-card
                           icon: mdi:cog
-                          name: Einstellungen
-                          tap_action: { action: navigate, navigation_path: /config/dashboard }
+                          name: "Einstel­lungen"
+                          variables: { pfad: /config/dashboard }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
                         - type: custom:button-card
                           icon: mdi:hammer
                           name: Werkzeuge
-                          tap_action: { action: navigate, navigation_path: /config/tools/yaml }
+                          variables: { pfad: /config/tools/yaml }
+                          tap_action: *menu_ziel
                           styles: *menu_tile
                           extra_styles: *menu_extra
-                    # Neustart als schmale Zeile ueber die volle Breite (Aufbau wie die
-                    # Darstellungs-Knoepfe: Icon neben dem Text). Als vierte Kachel im
-                    # Raster brauchte Neustart eine eigene Kachelreihe.
+                    - type: custom:button-card
+                      name: Darstellung
+                      show_icon: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      extra_styles: *menu_kopf_extra
+                      styles: *menu_kopf
+                    # Darstellung fuer den angemeldeten Benutzer: System, Hell, Dunkel, als
+                    # Umschalter (ein Rahmen, drei Segmente). browser_mod.set_theme setzt nur
+                    # den Modus, das Theme bleibt wie im Profil gewaehlt. HA speichert die Wahl
+                    # im Benutzerprofil, sie gilt also auf allen Geraeten dieses Benutzers.
+                    # Danach schliesst das Popup; beim naechsten Oeffnen ist die neue Auswahl
+                    # markiert (hass.selectedTheme.dark: undefined = System, false = Hell,
+                    # true = Dunkel).
+                    # Die Segmente sind eingebettete button-cards (custom_fields mit card:).
+                    # Deren JS-Templates wertet button-card im Kontext dieser aeusseren Karte
+                    # aus (siehe docker-templates.yaml), variables der Segmente waeren dort
+                    # nicht sichtbar. Deshalb nennt jedes Segment seinen Modus im Template
+                    # selbst und setzt nur --menu-an (100 % gewaehlt, sonst 0 %); Farben und
+                    # Masse teilen sich die Segmente ueber Anker.
+                    - type: custom:button-card
+                      show_icon: false
+                      show_name: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles:
+                        card:
+                          - padding: 3px
+                          - border-radius: 14px
+                          - box-shadow: none
+                          - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
+                          - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                        grid:
+                          - grid-template-areas: '"system hell dunkel"'
+                          - grid-template-columns: repeat(3, minmax(0, 1fr))
+                          - column-gap: 3px
+                        custom_fields:
+                          system: &seg_feld
+                            - min-width: 0
+                          hell: *seg_feld
+                          dunkel: *seg_feld
+                      custom_fields:
+                        system:
+                          card:
+                            type: custom:button-card
+                            icon: mdi:theme-light-dark
+                            name: System
+                            tap_action:
+                              action: fire-dom-event
+                              browser_mod:
+                                service: browser_mod.sequence
+                                data:
+                                  sequence:
+                                    - service: browser_mod.set_theme
+                                      data: { dark: auto }
+                                    - service: browser_mod.close_popup
+                            hold_action: { action: none }
+                            styles:
+                              card:
+                                - --menu-an: "[[[ const d = (hass.selectedTheme || {}).dark; return d !== true && d !== false ? '100%' : '0%'; ]]]"
+                                - height: 38px
+                                - padding: 0 6px
+                                - border-radius: 11px
+                                - box-shadow: none
+                                - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.16), transparent)'
+                                - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.24), transparent)'
+                              grid: &seg_grid
+                                - grid-template-areas: '"i n"'
+                                - grid-template-columns: min-content min-content
+                                - justify-content: center
+                                - align-items: center
+                                - column-gap: 7px
+                              icon: &seg_icon
+                                - width: 18px
+                                - height: 18px
+                                - color: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) var(--menu-an), var(--nachtblau-label, #b4c0cf))'
+                                # Grundlinie aus (sonst ~2 px unter der Textmitte); Glyphe mittig
+                                # ueber --menu-glyph-y (nur Dunkel: 0,49 Einheiten bei 18 px)
+                                - --ha-icon-display: block
+                                - transform: translateY(var(--menu-glyph-y, 0px))
+                              name: &seg_name
+                                - font-size: 13px
+                                - font-weight: 600
+                                - color: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) var(--menu-an), var(--nachtblau-label, #b4c0cf))'
+                        hell:
+                          card:
+                            type: custom:button-card
+                            icon: mdi:white-balance-sunny
+                            name: Hell
+                            tap_action:
+                              action: fire-dom-event
+                              browser_mod:
+                                service: browser_mod.sequence
+                                data:
+                                  sequence:
+                                    - service: browser_mod.set_theme
+                                      data: { dark: light }
+                                    - service: browser_mod.close_popup
+                            hold_action: { action: none }
+                            styles:
+                              card:
+                                - --menu-an: "[[[ return (hass.selectedTheme || {}).dark === false ? '100%' : '0%'; ]]]"
+                                - height: 38px
+                                - padding: 0 6px
+                                - border-radius: 11px
+                                - box-shadow: none
+                                - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.16), transparent)'
+                                - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.24), transparent)'
+                              grid: *seg_grid
+                              icon: *seg_icon
+                              name: *seg_name
+                        dunkel:
+                          card:
+                            type: custom:button-card
+                            icon: mdi:weather-night
+                            name: Dunkel
+                            tap_action:
+                              action: fire-dom-event
+                              browser_mod:
+                                service: browser_mod.sequence
+                                data:
+                                  sequence:
+                                    - service: browser_mod.set_theme
+                                      data: { dark: dark }
+                                    - service: browser_mod.close_popup
+                            hold_action: { action: none }
+                            styles:
+                              card:
+                                - --menu-an: "[[[ return (hass.selectedTheme || {}).dark === true ? '100%' : '0%'; ]]]"
+                                - --menu-glyph-y: 0.37px
+                                - height: 38px
+                                - padding: 0 6px
+                                - border-radius: 11px
+                                - box-shadow: none
+                                - background: 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.16), transparent)'
+                                - border: '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) calc(var(--menu-an) * 0.24), transparent)'
+                              grid: *seg_grid
+                              icon: *seg_icon
+                              name: *seg_name
+                    # Trennlinie: setzt den Neustart von Navigation und Darstellung ab
+                    - type: custom:button-card
+                      show_icon: false
+                      show_name: false
+                      tap_action: { action: none }
+                      hold_action: { action: none }
+                      styles:
+                        card:
+                          - height: 1px
+                          - padding: 0
+                          - margin: 2px 0
+                          - border: none
+                          - border-radius: 0
+                          - box-shadow: none
+                          - background: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                    # Neustart: Aktion, kein Ziel (Begruendung oben bei "More"). Rote Schrift
+                    # auf dem Huellengrund haelt dunkel mindestens 5,5:1, hell 5,49:1.
                     - type: custom:button-card
                       icon: mdi:power
-                      name: Neustart
+                      name: Home Assistant neu starten
                       variables: { glyph: [0, -0.5] }
                       tap_action:
                         action: call-service
                         service: homeassistant.restart
                         service_data: {}
                         confirmation:
-                          text: Home Assistant neustarten?
+                          text: 'Home Assistant neu starten? Dashboard und Gerätesteuerung sind dabei kurz nicht erreichbar, Automationen laufen erst danach wieder.'
+                      hold_action: { action: none }
                       styles:
                         card:
-                          - padding: 8px 8px
+                          - height: 40px
+                          - padding: 0 12px
                           - border-radius: 14px
-                          - background: 'color-mix(in srgb, var(--nachtblau-rot, #f0736a) 12%, transparent)'
-                          - border: '1px solid color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent)'
                           - box-shadow: none
+                          - background: none
+                          - border: '1px solid color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent)'
                         grid:
                           - grid-template-areas: '"i n"'
                           - grid-template-columns: min-content min-content
                           - justify-content: center
                           - align-items: center
-                          - column-gap: 7px
+                          - column-gap: 8px
                         icon:
                           - width: 18px
                           - height: 18px
                           - color: 'var(--nachtblau-rot, #f0736a)'
-                          # wie menu_tile: Grundlinie aus, Glyphe mittig (variables.glyph)
+                          # wie menu_tile: Grundlinie aus, Glyphe mittig (variables.glyph, 18 px)
                           - --ha-icon-display: block
                           - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 18 / 24}px, ${-g[1] * 18 / 24}px)`; ]]]'
                         name:
-                          - font-size: 12px
+                          - font-size: 13px
                           - font-weight: 600
-                          - color: 'var(--nachtblau-text, #f2f5f8)'
-                    - type: custom:button-card
-                      name: Darstellung
-                      show_icon: false
-                      tap_action: { action: none }
-                      hold_action: { action: none }
-                      styles: *menu_kopf
-                    - type: grid
-                      columns: 3
-                      square: false
-                      cards:
-                        # Darstellung fuer den angemeldeten Benutzer: System, Hell, Dunkel.
-                        # browser_mod.set_theme setzt nur den Modus, das Theme bleibt wie im
-                        # Profil gewaehlt. HA speichert die Wahl im Benutzerprofil, sie gilt also
-                        # auf allen Geraeten dieses Benutzers. Danach schliesst das Popup; beim
-                        # naechsten Oeffnen ist die neue Auswahl markiert (hass.selectedTheme.dark:
-                        # undefined = System, false = Hell, true = Dunkel).
-                        - type: custom:button-card
-                          icon: mdi:theme-light-dark
-                          name: System
-                          variables: { modus: auto }
-                          tap_action:
-                            action: fire-dom-event
-                            browser_mod:
-                              service: browser_mod.sequence
-                              data:
-                                sequence:
-                                  - service: browser_mod.set_theme
-                                    data: { dark: auto }
-                                  - service: browser_mod.close_popup
-                          styles: &theme_tile
-                            card:
-                              - padding: 8px 8px
-                              - border-radius: 14px
-                              - box-shadow: none
-                              - background: |
-                                  [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';
-                                      return m === variables.modus ? 'color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 12%, transparent)' : 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'; ]]]
-                              - border: |
-                                  [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';
-                                      return m === variables.modus ? '1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
-                            grid:
-                              - grid-template-areas: '"i n"'
-                              - grid-template-columns: min-content min-content
-                              - justify-content: center
-                              - align-items: center
-                              - column-gap: 7px
-                            icon:
-                              - width: 18px
-                              - height: 18px
-                              # Grundlinie aus (sonst ~2 px unter der Textmitte), Glyphe mittig wie menu_tile
-                              - --ha-icon-display: block
-                              - transform: '[[[ const g = variables.glyph || [0, 0]; return `translate(${-g[0] * 18 / 24}px, ${-g[1] * 18 / 24}px)`; ]]]'
-                              - color: |
-                                  [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';
-                                      return m === variables.modus ? 'var(--nachtblau-blau, #7fb3d5)' : 'var(--nachtblau-label, #b4c0cf)'; ]]]
-                            name:
-                              - font-size: 12px
-                              - font-weight: 600
-                              - color: |
-                                  [[[ const d = (hass.selectedTheme || {}).dark, m = d === true ? 'dark' : d === false ? 'light' : 'auto';
-                                      return m === variables.modus ? 'var(--nachtblau-blau, #7fb3d5)' : 'var(--nachtblau-label, #b4c0cf)'; ]]]
-                        - type: custom:button-card
-                          icon: mdi:white-balance-sunny
-                          name: Hell
-                          variables: { modus: light }
-                          tap_action:
-                            action: fire-dom-event
-                            browser_mod:
-                              service: browser_mod.sequence
-                              data:
-                                sequence:
-                                  - service: browser_mod.set_theme
-                                    data: { dark: light }
-                                  - service: browser_mod.close_popup
-                          styles: *theme_tile
-                        - type: custom:button-card
-                          icon: mdi:weather-night
-                          name: Dunkel
-                          variables: { modus: dark, glyph: [0, -0.49] }
-                          tap_action:
-                            action: fire-dom-event
-                            browser_mod:
-                              service: browser_mod.sequence
-                              data:
-                                sequence:
-                                  - service: browser_mod.set_theme
-                                    data: { dark: dark }
-                                  - service: browser_mod.close_popup
-                          styles: *theme_tile
+                          - white-space: nowrap
+                          - color: 'var(--nachtblau-rot, #f0736a)'
