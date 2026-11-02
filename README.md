@@ -122,7 +122,7 @@ Datei; die Übersicht nach Bereich:
 | `flugradar/` | Flightradar24 (HACS) |
 | `fussball/` | keine: Daten von OpenLigaDB direkt im Browser, ESPN über das Paket `fussball-espn-konfig.yaml`; Companion App für die Meldungen |
 | `sicherheit/` | Homematic(IP) Local, UniFi Protect, UniFi Access, UniFi Network, Backup, Telegram Bot, Companion App |
-| `sonstiges/` | UniFi Protect und WebRTC Camera (Kameras), [Claude Usage](#claude-usage) (HACS), WoW Charakter (`philf90/HA-WOW`, HACS, ab 0.3.0; welche Karte eine neuere Version braucht, steht in ihrem Kopf), Kalender des Abfallentsorgers (Müllabfuhr) |
+| `sonstiges/` | UniFi Protect und WebRTC Camera (Kameras), [Claude Usage](#claude-usage) (HACS), WoW Charakter (`philf90/HA-WOW`, HACS, ab 0.3.0; welche Karte eine neuere Version braucht, steht in ihrem Kopf), BF6 Spieler (`philf90/HA-BF6`, HACS, ab 0.6.2, für das Gaming-Dashboard), Kalender des Abfallentsorgers (Müllabfuhr) |
 
 Einige Karten brauchen zusätzlich Helfer, Template-Sensoren oder
 Automationen. Sie stehen im Kopfkommentar der Datei, meist zum Kopieren.
@@ -174,7 +174,7 @@ Kopfblock. Die Zeile `Einfuegen` nennt, wohin die Datei gehört.
      `hausgeraete-templates.yaml`, `heizung-templates.yaml`,
      `warnlage-templates.yaml`, `wetter-templates.yaml`,
      `docker-templates.yaml`, `sicherheit-templates.yaml`,
-     `wow-templates.yaml`
+     `wow-templates.yaml`, `gaming-templates.yaml`
 
    Welche Templates eine Karte braucht, steht in ihrer Zeile `Templates`.
 4. **Platzhalter ersetzen.** Unverändert eingefügt bleibt eine Karte leer
@@ -384,7 +384,8 @@ daraus und aus den Kopfblöcken erzeugt.
 | `kind_1`, `kind_2` | Vorname eines Kindes in der Entity-ID (`sensor.temperatur_kind_1_*`, `light.kind_2`, `light.kinderzimmer_kind_2_namenslicht`); `1`/`2` entsprechen den Anzeigenamen „Kinderzimmer 1“/„Kinderzimmer 2“ | Einstellungen → Geräte & Dienste → Entitäten, nach Raum oder Gerät suchen | `homematic-view.yaml`, `kameras-view.yaml`, `lichter-glow-karte.yaml`, `lichter-mushroom-karte.yaml`, `lichter-raum-karte.yaml`, `lichter-slider-karte.yaml`, `sicherheit-templates.yaml`, `temperaturen-karte-v2.yaml`; in `archiv/`: `fenster-lichter-uebersicht-karte.yaml`, `temperaturen-karte.yaml` |
 | `weather.wohnort` | Wetter-Entity des Wohnorts (Vorhersage, Bedingung fürs Icon) | Einstellungen → Geräte & Dienste → Deutscher Wetterdienst (HACS, `dwd_weather`) → Station → Entität `weather.*` | `navigation-templates.yaml`, `top-navigation-karte.yaml`, `welcome-banner-karte.yaml`, `wetter-karte-v2.yaml`; in `archiv/`: `wetter-karte.yaml` |
 | `sensor.warnregion_*` | Sensoren der DWD-Wetterwarnungen (`…_aktuelle_warnstufe`, `…_vorwarnstufe`); `warnregion` steht für den Namen der Warnregion | Einstellungen → Geräte & Dienste → DWD Weather Warnings → Region → Entitäten | `meteoalarm-karte.yaml`, `warnlage-templates.yaml`, `wetter-view.yaml` |
-| `wow_charakter` | Charaktername und Realm in den Entity-IDs der HACS-Integration WoW Charakter (`sensor.<charakter>_<realm>_level`, `image.<charakter>_<realm>_avatar`) | Einstellungen → Geräte & Dienste → WoW Charakter → Charakter → Entitäten | `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-garderobe-karte.yaml`, `wow-gilde-karte.yaml`, `wow-mythic-karte.yaml`, `wow-pvp-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-werte-karte.yaml` |
+| `wow_charakter` | Charaktername und Realm in den Entity-IDs der HACS-Integration WoW Charakter (`sensor.<charakter>_<realm>_level`, `image.<charakter>_<realm>_avatar`) | Einstellungen → Geräte & Dienste → WoW Charakter → Charakter → Entitäten | `gaming-dashboard.html`, `gaming-view.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-garderobe-karte.yaml`, `wow-gilde-karte.yaml`, `wow-mythic-karte.yaml`, `wow-pvp-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-werte-karte.yaml` |
+| `bf6_spieler` | Spielername in den Entity-IDs der HACS-Integration BF6 Spieler (`sensor.<spieler>_kills`, `sensor.<spieler>_k_d`) | Einstellungen → Geräte & Dienste → BF6 Spieler → Spieler → Entitäten | `gaming-dashboard.html`, `gaming-view.yaml` |
 | `sensor.claude_usage_konto_*` | Sensoren der HACS-Integration Claude Usage (`…_session_usage`, `…_weekly_reset_time`, `…_weekly_<modell>_limit_usage`); `konto` steht für Kontoname und Plan aus dem Gerätenamen (`claude_usage_<name>_<plan>`) | Einstellungen → Geräte & Dienste → Claude Usage → Gerät → Entitäten | `claude-nutzung-karte.yaml`, `claude-nutzung.html` |
 | `VG Wohnort` | Verbandsgemeinde im Titel der Abfuhrtermine (`Restmüll in VG Wohnort`). Die trash-card in `muellabfuhr-karte.yaml` (archiv) ordnet die Termine über den vollen Titel den Tonnen zu; `muellabfuhr-karte-v2.yaml` erkennt die Tonne am Stichwort (Bio, Papier, Restmüll …) und nennt den Platzhalter nur im Beispiel im Kopfkommentar | Kalender des Abfallentsorgers (`calendar.mull`) → Titel eines Termins, der Teil nach „in“ | `muellabfuhr-karte-v2.yaml`; in `archiv/`: `muellabfuhr-karte.yaml` |
 | `telegram_eintrag` | Config-Entry-ID des Telegram-Bots (`config_entry_id` bei `telegram_bot.send_message`) | Automationseditor → Aktion „Telegram Bot: Nachricht senden“ → Bot auswählen; Home Assistant setzt die ID selbst ein | `wachmodus-konfig.yaml` |
@@ -486,7 +487,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
 | [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
 | [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
-| [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-garderobe-karte.yaml`, `wow-gilde-karte.yaml`, `wow-mythic-karte.yaml`, `wow-pvp-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html` |
+| [`sonstiges/`](dashboard/sonstiges/) | `claude-nutzung-karte.yaml`, `gaming-templates.yaml`, `gaming-view.yaml`, `kameras-templates.yaml`, `kameras-view.yaml`, `muellabfuhr-karte-v2.yaml`, `wow-arsenal-karte.yaml`, `wow-berufe-karte.yaml`, `wow-charaktere-karte.yaml`, `wow-garderobe-karte.yaml`, `wow-gilde-karte.yaml`, `wow-mythic-karte.yaml`, `wow-pvp-karte.yaml`, `wow-raid-karte.yaml`, `wow-ruf-karte.yaml`, `wow-sammlung-karte.yaml`, `wow-spielwelt-karte.yaml`, `wow-templates.yaml`, `wow-werte-karte.yaml` | `kameras-karte.yaml`, `muellabfuhr-karte.yaml` | `claude-nutzung.html`, `gaming-dashboard.html` |
 | [`grafana/`](grafana/) | `energie-dashboard.json`, `proxmox-pbs-dashboard.json`, `proxmox-ve-dashboard.json` | – | `proxmox-mockups.html`, `proxmox-mockups.md` |
 | [`doku/`](doku/) | `bewaesserung-frostschutz.md`, `karten-basemap-carto.md`, `proxmox-haos-secure-boot-warnung.md`, `proxmox-haos-speicher-erweitern.md`, `umbenennung-2026-10.md`, `umbenennung-nachtblau.md` | – | – |
 <!-- index:end -->

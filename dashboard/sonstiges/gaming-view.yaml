@@ -1,0 +1,333 @@
+# ============================================================================
+# Gaming – Lobby mit Unterseiten fuer Battlefield 6 und World of Warcraft
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        bf6-arsenal-card, bf6-classes-card, bf6-history-card,
+#                bf6-maps-card, bf6-modes-card, bf6-player-card,
+#                bf6-world-card, button-card, decluttering-card,
+#                wow-arsenal-card, wow-characters-card, wow-collections-card,
+#                wow-guild-card, wow-mythic-card, wow-professions-card,
+#                wow-pvp-card, wow-raid-card, wow-reputation-card,
+#                wow-stats-card, wow-talent-tree-card, wow-wardrobe-card,
+#                wow-world-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                gaming_spiel (gaming-templates.yaml),
+#                gaming_thema (gaming-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor eines eigenen Dashboards
+#                (URL dashboard-gaming), Block views: ersetzen
+# Platzhalter:   bf6_spieler, wow_charakter
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Eigenes Dashboard "Gaming" mit den Karten der Integrationen BF6 Spieler und
+# WoW Charakter. Umgesetzt ist Vorschlag B "Lobby" aus dem Entwurf
+# entwuerfe/gaming-dashboard.html:
+#
+#   Lobby          je Spiel ein Kopf mit drei Kennzahlen (gaming_spiel), die
+#                  Themen als Kacheln (gaming_thema) und die Spielwelt-Karte
+#   Unterseiten    2 bis 4 Karten je Thema, oben derselbe Kopf mit Pfeil
+#                  zurueck zur Lobby und die Themen-Kacheln, das offene Thema
+#                  Rose getoent
+#     BF6          Kampf (Spieler, Verlauf K/D und Kills), Arsenal (Waffen und
+#                  Fahrzeuge, Klassen), Karten (Karten, Modi)
+#     WoW          Charakter (Arsenal, Werte, Talentbaum), Fortschritt
+#                  (Mythic+, Raids, PvP), Sammlung (Sammlungen, Garderobe,
+#                  Ruf, Berufe), Gilde (Gilde, alle Charaktere)
+#
+# Die Unterseiten sind subview: true mit back_path auf die Lobby: Sie stehen
+# nicht als Reiter in der Kopfleiste, deren Pfeil fuehrt ebenfalls zurueck.
+# Jede Seite endet mit der Navbar aus dem Home-Dashboard (floating_navbar);
+# "Gaming" steht dort im More-Menue unter Freizeit.
+#
+# Alle Integrationskarten fuellen die Breite eines Abschnitts (12 von 12
+# Spalten); am Handy liegen die Abschnitte untereinander. max_columns 2:
+# am Desktop Kopf und erste Karte links, die weiteren Karten rechts.
+#
+# Ein Charakter: Jede WoW-Karte zeigt genau einen Charakter (entity). Alle
+# Karten nutzen denselben (wow_charakter); die uebrigen zeigt "WoW
+# Charaktere" unter Gilde. BF6 Squad fehlt bewusst: Sie vergleicht mehrere
+# Spieler und lohnt erst ab dem zweiten.
+#
+# EINRICHTEN (einmal):
+#   1. Einstellungen -> Dashboards -> Dashboard hinzufuegen -> "Neues
+#      Dashboard von Grund auf", Titel "Gaming", Symbol mdi:gamepad-variant,
+#      URL dashboard-gaming (die Pfade unten und im More-Menue nutzen sie).
+#   2. Dashboard oeffnen -> Bearbeiten -> 3 Punkte -> Raw-Konfigurationseditor:
+#      - button_card_templates: aus gaming-templates.yaml
+#      - decluttering_templates: floating_navbar aus navigation-templates.yaml
+#        (Templates gelten nur im eigenen Dashboard; aendert sich das
+#        More-Menue, auch hier nachziehen)
+#      - views: aus dieser Datei
+#   3. Platzhalter ersetzen: bf6_spieler (sensor.<spieler>_kills),
+#      wow_charakter (sensor.<charakter>_<realm>_level).
+#
+# Voraussetzung: custom:button-card und custom:decluttering-card (HACS),
+# HACS-Integration browser_mod (More-Menue der Navbar); HACS-Integrationen
+# "BF6 Spieler" (philf90/HA-BF6) ab 0.6.2 und "WoW Charakter"
+# (philf90/HA-WOW) ab 0.33.9. Beide liefern ihre Karten selbst aus, eine
+# Dashboard-Ressource ist nicht noetig.
+views:
+  # --------------------------------------------------------------------------
+  # Lobby
+  # --------------------------------------------------------------------------
+  - title: Lobby
+    path: lobby
+    icon: mdi:gamepad-variant
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: bf6, prefix: bf6_spieler }
+          - &bf6_themen
+            type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:account
+                name: Kampf
+                variables: { pfad: bf6-kampf }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/bf6-kampf }
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:pistol
+                name: Arsenal
+                variables: { pfad: bf6-arsenal }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/bf6-arsenal }
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:map
+                name: Karten
+                variables: { pfad: bf6-karten }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/bf6-karten }
+          - type: custom:bf6-world-card
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: wow, prefix: wow_charakter }
+          - &wow_themen
+            type: grid
+            columns: 4
+            square: false
+            cards:
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:account-star
+                name: Charakter
+                variables: { pfad: wow-charakter }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/wow-charakter }
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:sword-cross
+                name: Fortschritt
+                variables: { pfad: wow-fortschritt }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/wow-fortschritt }
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:trophy-variant
+                name: Sammlung
+                variables: { pfad: wow-sammlung }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/wow-sammlung }
+              - type: custom:button-card
+                template: gaming_thema
+                icon: mdi:shield-sword
+                name: Gilde
+                variables: { pfad: wow-gilde }
+                tap_action: { action: navigate, navigation_path: /dashboard-gaming/wow-gilde }
+          - type: custom:wow-world-card
+            entity: sensor.wow_spielwelt_eu_wow_marke
+      - &navbar
+        type: grid
+        cards:
+          - type: custom:decluttering-card
+            template: floating_navbar
+
+  # --------------------------------------------------------------------------
+  # Battlefield 6
+  # --------------------------------------------------------------------------
+  - title: BF6 · Kampf
+    path: bf6-kampf
+    icon: mdi:account
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: bf6, prefix: bf6_spieler, thema: Kampf }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *bf6_themen
+          - type: custom:bf6-player-card
+            entity: sensor.bf6_spieler_kills
+      - type: grid
+        cards:
+          - type: custom:bf6-history-card
+            entity: sensor.bf6_spieler_kills
+            metric: kd
+            period: day
+            days: 30
+          - type: custom:bf6-history-card
+            entity: sensor.bf6_spieler_kills
+            metric: kills
+            period: day
+            days: 30
+      - *navbar
+
+  - title: BF6 · Arsenal
+    path: bf6-arsenal
+    icon: mdi:pistol
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: bf6, prefix: bf6_spieler, thema: Arsenal }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *bf6_themen
+          - type: custom:bf6-arsenal-card
+            entity: sensor.bf6_spieler_kills
+      - type: grid
+        cards:
+          - type: custom:bf6-classes-card
+            entity: sensor.bf6_spieler_kills
+      - *navbar
+
+  - title: BF6 · Karten
+    path: bf6-karten
+    icon: mdi:map
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: bf6, prefix: bf6_spieler, thema: 'Karten & Modi' }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *bf6_themen
+          - type: custom:bf6-maps-card
+            entity: sensor.bf6_spieler_kills
+            limit: 10
+            min_matches: 1
+      - type: grid
+        cards:
+          - type: custom:bf6-modes-card
+            entity: sensor.bf6_spieler_kills
+      - *navbar
+
+  # --------------------------------------------------------------------------
+  # World of Warcraft
+  # --------------------------------------------------------------------------
+  - title: WoW · Charakter
+    path: wow-charakter
+    icon: mdi:account-star
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: wow, prefix: wow_charakter, thema: Charakter }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *wow_themen
+          - type: custom:wow-arsenal-card
+            entity: sensor.wow_charakter_level
+      - type: grid
+        cards:
+          - type: custom:wow-stats-card
+            entity: sensor.wow_charakter_level
+          - type: custom:wow-talent-tree-card
+            entity: sensor.wow_charakter_level
+      - *navbar
+
+  - title: WoW · Fortschritt
+    path: wow-fortschritt
+    icon: mdi:sword-cross
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: wow, prefix: wow_charakter, thema: Fortschritt }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *wow_themen
+          - type: custom:wow-mythic-card
+            entity: sensor.wow_charakter_level
+      - type: grid
+        cards:
+          - type: custom:wow-raid-card
+            entity: sensor.wow_charakter_level
+          - type: custom:wow-pvp-card
+            entity: sensor.wow_charakter_level
+      - *navbar
+
+  - title: WoW · Sammlung
+    path: wow-sammlung
+    icon: mdi:trophy-variant
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: wow, prefix: wow_charakter, thema: Sammlung }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *wow_themen
+          - type: custom:wow-collections-card
+            entity: sensor.wow_charakter_level
+          - type: custom:wow-wardrobe-card
+            entity: sensor.wow_charakter_level
+      - type: grid
+        cards:
+          - type: custom:wow-reputation-card
+            entity: sensor.wow_charakter_level
+          - type: custom:wow-professions-card
+            entity: sensor.wow_charakter_level
+      - *navbar
+
+  - title: WoW · Gilde
+    path: wow-gilde
+    icon: mdi:shield-sword
+    subview: true
+    back_path: /dashboard-gaming/lobby
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: custom:button-card
+            template: gaming_spiel
+            variables: { spiel: wow, prefix: wow_charakter, thema: 'Gilde & Charaktere' }
+            tap_action: { action: navigate, navigation_path: /dashboard-gaming/lobby }
+          - *wow_themen
+          - type: custom:wow-guild-card
+            entity: sensor.wow_charakter_level
+      - type: grid
+        cards:
+          - type: custom:wow-characters-card
+      - *navbar

@@ -259,8 +259,8 @@ raus“ nicht wie „Zustand in Ordnung“ aussieht.
 
 Das More-Menü der Navigationsleiste färbt seine Kacheln je Bereich, nicht je
 Ziel: Zuhause Blau, Draußen Limette, Freizeit Rosé, Technik Violett, Verwaltung
-neutral (Label-Grau auf `nachtblau-neutral-kachel`). Für Fußball und Flüge gibt es
-keine eigene Bereichsfarbe; Rosé steht dort für den ganzen Bereich Freizeit.
+neutral (Label-Grau auf `nachtblau-neutral-kachel`). Für Fußball, Flüge und Gaming gibt
+es keine eigene Bereichsfarbe; Rosé steht dort für den ganzen Bereich Freizeit.
 Neustart bleibt als einzige Kachel rot. Kamera, Pflanzen und Wetter sehen im
 Menü deshalb anders aus als in der oberen Navigation. Die Farbe setzt jede Kachel
 über `variables.farbe`.
