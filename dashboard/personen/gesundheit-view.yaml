@@ -81,6 +81,12 @@
 #     Tage (mind. 5 mit Wert), heute zaehlt nicht mit; 1,5 px gestrichelt per
 #     CSS (apexcharts-card uebergeht stroke.width aus apex_config). Y-Achse mit
 #     weichem Maximum ~10000 der Karte (0-10.000 in 2.500er-Schritten).
+#     Zeitraum wie beim Schlaf-Diagramm (siehe dort): graph_span 29d mit
+#     span.start day und offset -29d, die Achse endet heute 0 Uhr statt 24 Uhr
+#     (vorher blieb rechts neben der heutigen Saeule ein leerer Tag). Die
+#     Statistik wird bis jetzt gelesen; die Linie verlaengert apexcharts-card
+#     (extend_to end) bis zum Achsenende, also jetzt bis zur heutigen Saeule
+#     statt in den leeren Tag.
 #   - Gestapelte Diagramme haben KEINE Karten-yaxis: deren "auto"-max nimmt die
 #     groesste Einzelserie statt der Stapelsumme und schneidet obere Segmente ab.
 #     Die Achse steht stattdessen in apex_config.yaxis (ApexCharts rechnet mit Summe).
@@ -97,6 +103,12 @@
 #     aus: Es teilt in feste 24 h ab Achsenende, in Wochen mit Zeitumstellung
 #     rutschen die Naechte davor einen Tag nach links. Der data_generator liest
 #     deshalb selbst bis jetzt statt bis end (= heute 0 Uhr).
+#     Erster Tag = start + 12 h, dann Tagesbeginn: span.offset und graph_span
+#     rechnen feste 24 h, in den Wochen nach der Umstellung auf Sommerzeit liegt
+#     start deshalb um 23 Uhr des Vortags, nach der Umstellung auf Winterzeit um
+#     1 Uhr (nachgerechnet fuer Europe/Berlin, alte Fassung mit span.end day
+#     genauso). Mit startOf('day') allein kam dort ein Tag vor dem Achsenbeginn
+#     dazu. Gilt auch fuer das Schritte-Diagramm.
 #     Tooltip kompakt (12 px, schmale Zeilen) und ohne Datumskasten an der Achse:
 #     Ist er hoeher als die Zeichenflaeche, setzt ApexCharts 5.3.3 ihn ueber deren
 #     Oberkante, ha-card (overflow: hidden) schnitt dann "Tief" ab (03.11.2026).
@@ -759,7 +771,7 @@ sections:
           /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
           .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
           .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-rose, #e6a0c4) !important; }
-      graph_span: 30d
+      graph_span: 29d
       header:
         show: false
       series:
@@ -774,9 +786,9 @@ sections:
           // Tagessumme (change), siehe "Schritte 30 Tage" im Kopf. Heute: aktueller Sensorwert.
           const tz = hass.config.time_zone;
           const id = entity.entity_id;
-          const t0 = moment.tz(start, tz).startOf('day');
+          const t0 = moment.tz(start, tz).add(12, 'hour').startOf('day'); // start liegt bei Zeitumstellung 1 h neben 0 Uhr
           const heute = moment.tz(tz).startOf('day').valueOf();
-          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.toISOString(), end_time: new Date(end).toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
+          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.toISOString(), end_time: new Date().toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
           const out = (res[id] || []).filter((r) => r.start < heute).map((r) => [r.start, r.change > 0 ? r.state : null]);
           const s = hass.states[id];
           const v = s ? parseFloat(s.state) : NaN;
@@ -792,9 +804,9 @@ sections:
           // ein Punkt nur mit mindestens 5 Werten im Fenster. Heute zaehlt nicht, der Tag ist offen.
           const tz = hass.config.time_zone;
           const id = entity.entity_id;
-          const t0 = moment.tz(start, tz).startOf('day');
+          const t0 = moment.tz(start, tz).add(12, 'hour').startOf('day'); // start liegt bei Zeitumstellung 1 h neben 0 Uhr
           const heute = moment.tz(tz).startOf('day').valueOf();
-          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.clone().subtract(7, 'day').toISOString(), end_time: new Date(end).toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
+          const res = await hass.callWS({ type: 'recorder/statistics_during_period', start_time: t0.clone().subtract(7, 'day').toISOString(), end_time: new Date().toISOString(), statistic_ids: [id], period: 'day', types: ['state', 'change'] });
           const tage = (res[id] || []).filter((r) => r.start < heute).map((r) => ({ t: r.start, v: r.change > 0 ? r.state : null }));
           const out = [];
           tage.forEach((d, i) => {
@@ -803,8 +815,11 @@ sections:
             if (w.length >= 5) out.push([d.t, Math.round(w.reduce((a, x) => a + x.v, 0) / w.length)]);
           });
           return out;
+      # 30 Tage, die Achse reicht vom ersten bis zum heutigen Tag 0 Uhr (Saeulen stehen auf 0 Uhr):
+      # graph_span 29d ab heute 0 Uhr minus 29 Tage (siehe "Schritte 30 Tage" im Kopf)
       span:
-        end: day
+        start: day
+        offset: -29d
       stacked: false
       yaxis:
       - apex_config:
@@ -1788,7 +1803,8 @@ sections:
           // die Kombination Gesamt/Tief/Kern/REM/Wach zum Tagesende gegenueber dem Vortag geaendert hat.
           const ids=['sensor.iphone_sleep_duration','sensor.iphone_deep_sleep','sensor.iphone_core_sleep','sensor.iphone_rem_sleep','sensor.iphone_awake'];
           // Die Achse endet heute 0 Uhr (span, siehe "Schlaf-Diagramm" im Kopf) -> bis heute und bis jetzt lesen, nicht bis end.
-          const t0=moment(start).startOf('day'), heute=moment().startOf('day');
+          // start liegt bei Zeitumstellung 1 h neben 0 Uhr (span.offset rechnet feste 24 h) -> +12 h, dann Tagesbeginn.
+          const t0=moment(start).add(12,'hour').startOf('day'), heute=moment().startOf('day');
           const h=await hass.callWS({type:'history/history_during_period',start_time:t0.clone().subtract(1,'day').toISOString(),end_time:new Date().toISOString(),entity_ids:ids,minimal_response:true,no_attributes:true,significant_changes_only:false});
           // letzter numerischer Wert bis Zeitpunkt t (unavailable/unknown ueberspringen)
           const at=(id,t)=>{ let v=null; for(const p of (h[id]||[])){ if(p.lu*1000>t) break; const n=parseFloat(p.s); if(!isNaN(n)) v=n; } return v; };
