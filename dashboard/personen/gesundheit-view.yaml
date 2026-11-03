@@ -89,6 +89,20 @@
 #     ApexCharts 5.3.3 bei Naechten um 8-9 h die Skala 0-20 (nachgestellt
 #     31.10.2026). stroke.width 0: apexcharts-card reicht Naechte ohne Uhr als 0
 #     durch, mit Rand 2 zeichnete ApexCharts dort einen Strich auf der Nulllinie.
+#     Zeitraum: graph_span 6d mit span.start day und offset -6d, die Achse reicht
+#     also von 0 Uhr vor 6 Tagen bis heute 0 Uhr. Die Saeulen stehen auf 0 Uhr;
+#     mit graph_span 7d und span.end day endete die Achse erst heute 24 Uhr, rechts
+#     neben der letzten Saeule blieb ein leerer Tag (apexcharts-card kuerzt das Ende
+#     nur, wenn alle Serien group_by haben, _findEndOfChart). group_by scheidet
+#     aus: Es teilt in feste 24 h ab Achsenende, in Wochen mit Zeitumstellung
+#     rutschen die Naechte davor einen Tag nach links. Der data_generator liest
+#     deshalb selbst bis jetzt statt bis end (= heute 0 Uhr).
+#     Tooltip kompakt (12 px, schmale Zeilen) und ohne Datumskasten an der Achse:
+#     Ist er hoeher als die Zeichenflaeche, setzt ApexCharts 5.3.3 ihn ueber deren
+#     Oberkante, ha-card (overflow: hidden) schnitt dann "Tief" ab (03.11.2026).
+#     Nachgestellt mit 7 Saeulen bis 11,5 h bei 290/330/470 px Breite: Tooltip
+#     immer ganz in der Karte, mind. 15 px Luft oben. Legende ohne Werte
+#     (legend_value false); sie zeigte den Wert von heute, ohne Uhr "N/A h".
 #   - Energie-Diagramm: Achse bis zum naechsten vollen Tausender ueber dem
 #     hoechsten Tag (yaxis.max als EVAL-Funktion), Linien alle 1.000 kcal
 #     (stepSize). Mit tickAmount 4 und forceNiceScale waehlte ApexCharts 5.3.3
@@ -1699,9 +1713,13 @@ sections:
           width: 0
         tooltip:
           theme: dark
+          x:
+            format: dd.MM.
         xaxis:
           labels:
             format: dd.MM.
+          tooltip:
+            enabled: false
         yaxis:
           forceNiceScale: true
           labels:
@@ -1746,7 +1764,14 @@ sections:
           .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
           .apexcharts-tooltip-series-group-2 .apexcharts-tooltip-marker { color: var(--nachtblau-tuerkis-hell, #77d4d0) !important; }
           .apexcharts-tooltip-series-group-3 .apexcharts-tooltip-marker { color: var(--nachtblau-amber, #e6b566) !important; }
-      graph_span: 7d
+          /* Kompakter Tooltip: Datum + vier Phasen muessen in die Zeichenflaeche passen, sonst schiebt ApexCharts
+             ihn ueber die Oberkante und ha-card (overflow: hidden) schneidet "Tief" ab (siehe Kopf) */
+          .apexcharts-tooltip { font-size: 12px !important; }
+          .apexcharts-tooltip-title { font-size: 12px !important; padding: 4px 10px !important; margin-bottom: 2px !important; }
+          .apexcharts-tooltip-series-group.apexcharts-active, .apexcharts-tooltip-series-group:last-child { padding-bottom: 0 !important; }
+          .apexcharts-tooltip-y-group { padding: 2px 0 !important; }
+          .apexcharts-tooltip-marker { width: 12px !important; height: 12px !important; font-size: 13px !important; }
+      graph_span: 6d
       header:
         show: false
       series:
@@ -1756,16 +1781,19 @@ sections:
         color: '#b399d4'
         opacity: 1
         stack_group: tag
+        show:
+          legend_value: false
         data_generator: &schlaf_gen |
           // Naechte ohne Uhr: Die App behaelt die Werte der Vornacht. Ein Tag zaehlt nur, wenn sich
           // die Kombination Gesamt/Tief/Kern/REM/Wach zum Tagesende gegenueber dem Vortag geaendert hat.
           const ids=['sensor.iphone_sleep_duration','sensor.iphone_deep_sleep','sensor.iphone_core_sleep','sensor.iphone_rem_sleep','sensor.iphone_awake'];
-          const t0=moment(start).startOf('day');
-          const h=await hass.callWS({type:'history/history_during_period',start_time:t0.clone().subtract(1,'day').toISOString(),end_time:new Date(end).toISOString(),entity_ids:ids,minimal_response:true,no_attributes:true,significant_changes_only:false});
+          // Die Achse endet heute 0 Uhr (span, siehe "Schlaf-Diagramm" im Kopf) -> bis heute und bis jetzt lesen, nicht bis end.
+          const t0=moment(start).startOf('day'), heute=moment().startOf('day');
+          const h=await hass.callWS({type:'history/history_during_period',start_time:t0.clone().subtract(1,'day').toISOString(),end_time:new Date().toISOString(),entity_ids:ids,minimal_response:true,no_attributes:true,significant_changes_only:false});
           // letzter numerischer Wert bis Zeitpunkt t (unavailable/unknown ueberspringen)
           const at=(id,t)=>{ let v=null; for(const p of (h[id]||[])){ if(p.lu*1000>t) break; const n=parseFloat(p.s); if(!isNaN(n)) v=n; } return v; };
           const out=[]; let prev=null;
-          for(const d=t0.clone().subtract(1,'day'); d.isBefore(end); d.add(1,'day')){
+          for(const d=t0.clone().subtract(1,'day'); !d.isAfter(heute); d.add(1,'day')){
             const e=Math.min(d.clone().endOf('day').valueOf(),Date.now());
             const sig=ids.map(id=>at(id,e)).join('/');
             const v=at(entity.entity_id,e);
@@ -1780,6 +1808,8 @@ sections:
         color: '#7fb3d5'
         opacity: 1
         stack_group: tag
+        show:
+          legend_value: false
         data_generator: *schlaf_gen
         unit: h
       - type: column
@@ -1788,6 +1818,8 @@ sections:
         color: '#77d4d0'
         opacity: 1
         stack_group: tag
+        show:
+          legend_value: false
         data_generator: *schlaf_gen
         unit: h
       - type: column
@@ -1796,10 +1828,15 @@ sections:
         color: '#e6b566'
         opacity: 1
         stack_group: tag
+        show:
+          legend_value: false
         data_generator: *schlaf_gen
         unit: h
+      # 7 Naechte, die Achse reicht vom ersten bis zum heutigen Tag 0 Uhr (Saeulen stehen auf 0 Uhr):
+      # graph_span 6d ab heute 0 Uhr minus 6 Tage (siehe "Schlaf-Diagramm" im Kopf)
       span:
-        end: day
+        start: day
+        offset: -6d
       stacked: true
     - type: custom:button-card
       show_icon: false
