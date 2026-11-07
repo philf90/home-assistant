@@ -59,6 +59,18 @@
 #   - Takt: alle 30 s wird neu gezeichnet; abgerufen wird, wenn der Stand
 #     aelter ist als 1 min (Spiel laeuft: 5 min vor bis 150 min nach Anstoss)
 #     bzw. 15 min (sonst), Vereinsspiele 30 min. Nach einem Fehler 1 min Pause.
+#   - Zeitlimit: Ein Abruf ohne Antwort nach 45 s wird abgebrochen und zaehlt als
+#     Fehler ("keine Antwort nach 45 s"). Gemessen 07.11.2026, rund 4 min nach
+#     einem Tor des FCK: getmatchesbyteamid/76/10/3 brauchte 29,2 s (HTTP 200),
+#     die acht Abrufe danach 0,7-0,9 s, Spieltag und Tabelle 0,6 s.
+#   - Fehler je Pfad (fb.fehlerPfad): fb.warte(was, pfade) zeigt den Fehler des
+#     ersten noch nicht geladenen Pfads. Ein gemeinsamer OpenLigaDB-Fehler wurde
+#     von jedem anderen erfolgreichen Abruf geloescht; waehrend eines Spiels
+#     (Spieltag und Tabelle jede Minute) stand deshalb "wird geladen" statt des
+#     Fehlers.
+#   - Vereinskarte wartet nur auf den Spieltag. Tabelle und Vereins-Spielplan
+#     sind dort Beiwerk (Platz, Punkte, Form); fehlen sie, steht "–" und ein
+#     Hinweis darunter.
 #   - Nach einem Abruf schreibt jede Karte ihren Bereich (data-fb) direkt neu,
 #     weil button-card ohne Entitaetsaenderung nicht neu rendert
 #     (shouldUpdate in v7.0.1).
@@ -262,7 +274,7 @@ button_card_templates:
           // Gemeinsamer Datenzugriff, einmal pro Seite in window.__fussball.
           // VERSION bei jeder Aenderung an diesem Block erhoehen: Eine offene Seite behaelt
           // sonst nach einem Dashboard-Update das alte Objekt (fehlende Funktionen).
-          const VERSION = 22, alt = window.__fussball;
+          const VERSION = 23, alt = window.__fussball;
           if (alt && alt.version === VERSION) { alt.hass = hass; return alt; }
           // Alte Instanz stilllegen, damit sie nicht weiter in die Karten zeichnet
           if (alt) { if (alt.subs) alt.subs.clear(); if (alt.timer) clearInterval(alt.timer); }
@@ -271,27 +283,34 @@ button_card_templates:
           // Spieldetails und der ganze DFB-Pokal.
           const BASIS = { oldb: 'https://api.openligadb.de/', espn: 'https://site.api.espn.com/apis/site/v2/sports/soccer/' };
           const F = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
-          const fb = { version: VERSION, F, hass, cache: {}, laeuft: {}, sperre: {}, fehler: null, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
+          const fb = { version: VERSION, F, hass, cache: {}, laeuft: {}, sperre: {}, fehlerEspn: null, fehlerPfad: {}, live: {}, subs: new Map() };
           fb.saison = () => { const d = new Date(); return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1; };
+          // Hoechstdauer eines Abrufs samt Antwort. Gemessen 07.11.2026, 4 min nach einem Tor:
+          // getmatchesbyteamid brauchte 29,2 s (danach 0,7-0,9 s); das Limit liegt darueber.
+          const ZEITLIMIT = 45e3;
           // Abruf mit Cache: liefert sofort den letzten Stand und holt im Hintergrund neu,
-          // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad.
-          // ESPN-Fehler stehen getrennt in fehlerEspn: ohne ESPN fehlt nur die Minute.
-          // fehlerPfad haelt den letzten Fehler je Pfad (fuer die Messung im Spiel-Popup).
+          // wenn er aelter als maxAlter ist. Nach einem Fehler 1 min Pause je Pfad (ESPN 5 min).
+          // Antwortet ein Pfad nicht binnen ZEITLIMIT, wird der Abruf abgebrochen und gilt als Fehler.
+          // fehlerPfad haelt den letzten Fehler je Pfad; die Karten melden ihn ueber fb.warte.
+          // ESPN-Fehler stehen zusaetzlich in fehlerEspn: ohne ESPN fehlt nur die Minute.
           fb.get = (pfad, maxAlter, quelle = 'oldb') => {
             const key = quelle === 'oldb' ? pfad : quelle + ':' + pfad;
             const c = fb.cache[key], now = Date.now();
             if ((!c || now - c.t > maxAlter) && !fb.laeuft[key] && !(fb.sperre[key] > now)) {
               fb.laeuft[key] = true;
-              fetch(BASIS[quelle] + pfad)
+              const ab = typeof AbortController === 'function' ? new AbortController() : null;
+              let zuLang = false;
+              const wecker = ab ? setTimeout(() => { zuLang = true; ab.abort(); }, ZEITLIMIT) : null;
+              fetch(BASIS[quelle] + pfad, ab ? { signal: ab.signal } : undefined)
                 .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-                .then(d => { fb.cache[key] = { t: Date.now(), d }; delete fb.fehlerPfad[key]; if (quelle === 'oldb') fb.fehler = null; else fb.fehlerEspn = null; })
+                .then(d => { fb.cache[key] = { t: Date.now(), d }; delete fb.fehlerPfad[key]; if (quelle === 'espn') fb.fehlerEspn = null; })
                 .catch(e => {
-                  const t = (e && e.message) || String(e);
-                  fb.fehlerPfad[key] = (e && e.name && e.name !== 'Error' ? e.name + ': ' : '') + t;
-                  if (quelle === 'oldb') fb.fehler = t; else fb.fehlerEspn = t;
+                  const t = zuLang ? `keine Antwort nach ${ZEITLIMIT / 1e3} s` : (e && e.message) || String(e);
+                  fb.fehlerPfad[key] = (!zuLang && e && e.name && e.name !== 'Error' ? e.name + ': ' : '') + t;
+                  if (quelle === 'espn') fb.fehlerEspn = t;
                   fb.sperre[key] = Date.now() + (quelle === 'oldb' ? MIN : 5 * MIN);
                 })
-                .finally(() => { fb.laeuft[key] = false; fb.neu(); });
+                .finally(() => { clearTimeout(wecker); fb.laeuft[key] = false; fb.neu(); });
             }
             return c ? c.d : undefined;
           };
@@ -320,7 +339,12 @@ button_card_templates:
               tore: g.map(x => ({ min: x.matchMinute, name: x.goalGetterName, h: x.scoreTeam1, g: x.scoreTeam2, et: x.isOwnGoal, elf: x.isPenalty }))
             };
           };
-          // Aktueller Spieltag einer Liga
+          // Aktueller Spieltag einer Liga. spieltagPfade: die Abrufe dafuer (fuer fb.warte);
+          // der zweite steht erst fest, wenn der Spieltag bekannt ist.
+          fb.spieltagPfade = L => {
+            const gr = fb.cache['getcurrentgroup/' + L];
+            return ['getcurrentgroup/' + L].concat(gr && gr.d && gr.d.groupOrderID ? [`getmatchdata/${L}/${fb.saison()}/${gr.d.groupOrderID}`] : []);
+          };
           fb.spieltag = L => {
             const gr = fb.get('getcurrentgroup/' + L, 15 * MIN);
             if (!gr || !gr.groupOrderID) return null;
@@ -409,14 +433,16 @@ button_card_templates:
             return m.zustand === 'in' && m.periode >= 5 ? 'i. E.' : uhr(m.ev);
           };
           // Tabelle einer Liga
+          fb.tabellePfad = L => `getbltable/${L}/${fb.saison()}`;
           fb.tabelle = L => {
-            const d = fb.get(`getbltable/${L}/${fb.saison()}`, fb.live[L] ? MIN : 15 * MIN);
+            const d = fb.get(fb.tabellePfad(L), fb.live[L] ? MIN : 15 * MIN);
             if (!Array.isArray(d)) return null;
             return d.map((t, i) => ({ platz: i + 1, id: t.teamInfoId, name: t.shortName || t.teamName, logo: t.teamIconUrl, sp: t.matches, td: t.goalDiff, pkt: t.points }));
           };
           // Verein: Form der letzten 5 Ligaspiele und naechstes Ligaspiel
+          fb.vereinPfad = id => `getmatchesbyteamid/${id}/10/3`;
           fb.verein = (id, L) => {
-            const d = fb.get(`getmatchesbyteamid/${id}/10/3`, 30 * MIN);
+            const d = fb.get(fb.vereinPfad(id), 30 * MIN);
             if (!Array.isArray(d)) return null;
             const s = fb.saison(), form = [];
             let naechstes = null;
@@ -1053,7 +1079,7 @@ button_card_templates:
               if (FAVE) FAV = FAVE;
             } else {
               sp = fb.spieltag(s.L); m = sp ? sp.spiele.find(x => x.id === s.id) : null;
-              if (!sp) return huelle(kopf('Spiel') + fb.warte('Spieltag'));
+              if (!sp) return huelle(kopf('Spiel') + fb.warte('Spieltag', fb.spieltagPfade(s.L)));
               if (!m) return huelle(kopf('Spiel') + fb.hinweis('Spiel nicht mehr im aktuellen Spieltag.'));
             }
             const k = fb.status(m), a = new Date(m.anstoss);
@@ -1264,7 +1290,8 @@ button_card_templates:
                   tore_ohne_minute: tore.filter(x => x.matchMinute == null).length,
                   tore_mit_kommentar: tore.filter(x => x.comment).length,
                   kommentar_beispiel: kurz((tore.find(x => x.comment) || {}).comment || '', 120),
-                  letzte_aenderung: roh.lastUpdateDateTime || null, felder_spiel: Object.keys(roh), fehler: fb.fehler || null
+                  letzte_aenderung: roh.lastUpdateDateTime || null, felder_spiel: Object.keys(roh),
+                  fehler: fb.fehlerPfad[`getmatchdata/${s.L}/${fb.saison()}/${sp.nr}`] || null
                 },
                 espn_scoreboard: {
                   pfad: es.pfad, geladen: es.geladen, fehler: es.fehler || null, event_id: e ? e.id : null,
@@ -1392,9 +1419,13 @@ button_card_templates:
           fb.hinweis = t => `<div style="${F}color:var(--nachtblau-text-sekundaer, #8794a5);font-size:12.5px;padding:2px;">${t}</div>`;
           // Unterzeile der Koepfe: Teile einzeln umbruchfrei, umgebrochen wird nur an " · "
           fb.teile = (...t) => t.filter(Boolean).map(x => `<span style="white-space:nowrap;">${x}</span>`).join(' · ');
-          fb.warte = was => fb.fehler
-            ? fb.hinweis('OpenLigaDB nicht erreichbar (' + fb.esc(fb.fehler) + ') – neuer Versuch in 1 Min.')
-            : fb.hinweis(was + ' wird geladen …');
+          // Ladehinweis zu OpenLigaDB-Pfaden: der Fehler des ersten noch nicht geladenen Pfads,
+          // sonst "wird geladen". Je Pfad, damit ein anderer erfolgreicher Abruf ihn nicht verdeckt.
+          fb.ladeText = (was, pfade) => {
+            const p = (pfade || []).find(x => !fb.cache[x] && fb.fehlerPfad[x]);
+            return p ? was + ': OpenLigaDB nicht erreichbar (' + fb.esc(fb.fehlerPfad[p]) + ') – neuer Versuch in 1 Min.' : was + ' wird geladen …';
+          };
+          fb.warte = (was, pfade) => fb.hinweis(fb.ladeText(was, pfade));
           fb.wappen = (url, name, px) => {
             const ini = fb.esc(String(name || '?').replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 3).toUpperCase());
             const img = url ? `<img src="${fb.esc(url)}" alt="" loading="lazy" style="position:absolute;inset:${Math.round(px * 0.08)}px;width:${Math.round(px * 0.84)}px;height:${Math.round(px * 0.84)}px;object-fit:contain;" onload="var w=this.parentNode;if(w){w.style.background='none';var k=w.querySelector('span');if(k)k.style.visibility='hidden'}" onerror="this.remove()">` : '';
@@ -1610,13 +1641,19 @@ button_card_templates:
       inhalt: |
         [[[
           // Spiel (live / naechstes / letztes, Liga oder DFB-Pokal nach fb.vereinAuswahl),
-          // Torschuetzen, Zeitstrahl, Platz, Punkte, Form (Liga)
+          // Torschuetzen, Zeitstrahl, Platz, Punkte, Form (Liga).
+          // Gewartet wird nur auf den Spieltag (laufendes Ligaspiel). Fehlen Tabelle oder
+          // Vereins-Spielplan (gemessen 07.11.2026: 29 s nach einem Tor), stehen Platz, Punkte
+          // bzw. Form auf "–" und darunter, was noch laedt oder fehlschlug.
           const fb = variables.fb, L = variables.liga, ID = variables.verein, IDE = variables.verein_espn, F = fb.F;
           return fb.bereich(this, 'inhalt', () => {
             const w = fb.vereinAuswahl(L, ID, IDE), s = w.s, v = w.v, t = fb.tabelle(L);
-            if (!s || !v || !t) return fb.warte('Vereinsdaten');
+            if (!s) return fb.warte('Spieltag', fb.spieltagPfade(L));
+            // Ohne Spiel im Spieltag kann das naechste Ligaspiel noch im Vereins-Spielplan stehen
+            if (!w.m && !w.nx && !v) return fb.warte('Vereinsdaten', [fb.vereinPfad(ID)]);
+            const fehlt = [!t && fb.ladeText('Tabelle', [fb.tabellePfad(L)]), !v && fb.ladeText('Form', [fb.vereinPfad(ID)])].filter(Boolean);
             // SL/SID: Wettbewerb und Vereins-ID in der Quelle des gezeigten Spiels
-            const z = t.find(r => r.id == ID) || {}, now = Date.now(), m = w.m, nx = w.nx, SL = w.L, SID = SL === 'pokal' ? IDE : ID;
+            const z = (t || []).find(r => r.id == ID) || {}, now = Date.now(), m = w.m, nx = w.nx, SL = w.L, SID = SL === 'pokal' ? IDE : ID;
             let heim, gast, hl, gl, th = null, tg = null, k = 'pre', a, tore = [], heimId = null;
             if (m) {
               a = Date.parse(m.anstoss); heim = m.heim; gast = m.gast; hl = m.heim_logo; gl = m.gast_logo;
@@ -1654,7 +1691,7 @@ button_card_templates:
             }).join('');
             // Pokalspiel vor Anpfiff: Wettbewerb und Stadion als Marke unter dem Spielstand
             const marke = m && SL === 'pokal' && k === 'pre' ? `<div style="display:flex;justify-content:center;"><span style="display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11.5px;font-weight:700;color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:9px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fb.pokalIcon(13)} DFB-Pokal${m.ort ? ' · ' + fb.esc(m.ort) : ''}</span></div>` : '';
-            const form = v.form.map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#10151d;background:${f === 'S' ? 'var(--nachtblau-gruen, #a6d49e)' : (f === 'N' ? 'var(--nachtblau-rot, #f0736a)' : 'var(--nachtblau-text-sekundaer, #8794a5)')};">${f}</i>`).join('');
+            const form = (v ? v.form : []).map(f => `<i style="width:18px;height:18px;border-radius:6px;font-style:normal;font-size:10px;font-weight:800;display:grid;place-items:center;color:#10151d;background:${f === 'S' ? 'var(--nachtblau-gruen, #a6d49e)' : (f === 'N' ? 'var(--nachtblau-rot, #f0736a)' : 'var(--nachtblau-text-sekundaer, #8794a5)')};">${f}</i>`).join('');
             const zelle = (n, inhalt) => `<div style="background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;padding:9px 11px;min-width:0;"><div style="font-size:11px;font-weight:600;color:var(--nachtblau-text-sekundaer, #8794a5);">${n}</div>${inhalt}</div>`;
             const wert = (wt, e) => `<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--nachtblau-text, #f2f5f8);">${wt}${e ? `<span style="font-size:0.62em;color:var(--nachtblau-text-sekundaer, #8794a5);font-weight:600;"> ${e}</span>` : ''}</div>`;
             return `<div style="${F}display:flex;flex-direction:column;gap:12px;">
@@ -1670,7 +1707,7 @@ button_card_templates:
                 ${zelle('Platz', wert(z.platz ?? '–'))}
                 ${zelle('Punkte', wert(z.pkt ?? '–', z.sp != null ? z.sp + ' Sp' : ''))}
                 ${zelle('Form', `<div style="display:flex;gap:4px;margin-top:4px;">${form || '<span style="color:var(--nachtblau-text-sekundaer, #8794a5);font-size:12px;">–</span>'}</div>`)}
-              </div></div>`;
+              </div>${fehlt.length ? fb.hinweis(fehlt.join(' · ')) : ''}</div>`;
           });
         ]]]
 
@@ -1719,7 +1756,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga, FAV = variables.fav;
           return fb.bereich(this, 'inhalt', () => {
             const s = fb.spieltag(L);
-            if (!s) return fb.warte('Spieltag');
+            if (!s) return fb.warte('Spieltag', fb.spieltagPfade(L));
             if (!s.spiele.length) return fb.hinweis('Keine Spiele für diesen Spieltag gemeldet.');
             return fb.spielListe(L, s.spiele, FAV);
           });
@@ -1759,7 +1796,7 @@ button_card_templates:
           const fb = variables.fb, L = variables.liga, FAV = variables.fav, F = fb.F;
           return fb.bereich(this, 'inhalt', () => {
             const rows = fb.tabelle(L);
-            if (!rows) return fb.warte('Tabelle');
+            if (!rows) return fb.warte('Tabelle', [fb.tabellePfad(L)]);
             // 2. Liga: 1-2 Aufstieg, 3 + 16 Relegation, 17-18 Abstieg;
             // 1. Liga: 1-4 Champions League, 16 Relegation, 17-18 Abstieg
             const zone = p => L === 'bl2'
