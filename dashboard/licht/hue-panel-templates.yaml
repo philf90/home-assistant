@@ -39,17 +39,18 @@
 #               Hue-Szene). Tipp startet sie mit hue.activate_scene, dynamische
 #               mit dynamic: true. Aktiv (Indigo gefuellt) = Zustand der
 #               Szenen-Auswahl.
-#   Fusszeile   "Alle Einstellungen": oeffnet das normale more-info
-#               (browser_mod.more_info mit ignore_popup_card), z. B. fuer die
-#               freie Farbwahl.
+#   Knopf im Kopf (Regler-Symbol) "Alle Einstellungen": oeffnet das normale
+#               more-info (browser_mod.more_info mit ignore_popup_card), z. B.
+#               fuer die freie Farbwahl.
 #
 # Klicks wie in fenster-karte.yaml: eigene touchend- und click-Handler
 # (button-card unterdrueckt nach touchend den click), mehr als 10 px Weg gilt
 # als Wischen. Handler in window.__nachtblauLichtPanel.
 #
-# Hoehe: das Szenen-Raster zeigt hoechstens 4,5 Reihen und scrollt darin;
-# so bleibt das Panel auch mit 13 Szenen und 12 Effekten unter den 629 px,
-# die ein Popup auf dem Galaxy S25 unter dem Dialogkopf hat (DESIGN.md,
+# Hoehe: alle Szenen sichtbar, kein Scrollen. Auf niedrigen Bildschirmen
+# (max-height: 760px, Galaxy S25 697 px hoch; iPhone 17 Pro 874 px) wird
+# das Panel enger, damit es mit 13 Szenen und 12 Effekten in die 629 px
+# passt, die ein Popup auf dem S25 unter dem Dialogkopf hat (DESIGN.md,
 # "Bildschirmbreiten").
 #
 # Voraussetzung: custom:button-card (v7), browser_mod (Popup, "Alle
@@ -189,6 +190,7 @@ button_card_templates:
                 <div style="font-size:15.5px;font-weight:750;letter-spacing:-0.01em;color:${TEXT};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(a.friendly_name || id)}</div>
                 <div style="font-size:12px;margin-top:1px;color:${on ? LICHT : SEK};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(sub)}</div>
               </div>
+              <span class="tap rund" ${klick('mehr', { id })} title="Alle Einstellungen" aria-label="Alle Einstellungen">${ico('mdi:tune-variant', 19, SEK)}</span>
               <span style="flex:none;display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;background:${on ? FUELL : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 14px -3px ${FLEUCH}` : 'none'};"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" style="color:${on ? AUF_AMBER : SEK}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></span>
             </div>`;
 
@@ -247,8 +249,6 @@ button_card_templates:
             </div>`;
           }).join('')}</div>` : '';
 
-          const mehr = `<div class="tap" ${klick('mehr', { id })} style="align-self:center;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:${SEK};padding:4px 8px;">${ico('mdi:tune-variant', 15, SEK)}Alle Einstellungen</div>`;
-
           const css = `<style>
             .tap { cursor:pointer; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; -webkit-user-select:none; }
             .hell { -webkit-appearance:none; appearance:none; box-sizing:border-box; display:block; width:100%; height:46px; margin:0; border-radius:14px; border:1px solid ${UKR};
@@ -263,20 +263,33 @@ button_card_templates:
             .chip { flex:none; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650; padding:7px 11px 7px 9px; border-radius:11px; white-space:nowrap;
               background:${NK}; border:1px solid ${UKR}; color:${TITEL}; }
             .chip.fx-an { background:${tint(VIOLETT, 22)}; border-color:${tint(VIOLETT, 50)}; color:${TEXT}; }
-            /* hoechstens 4,5 Reihen (je 40 px + 6 px Abstand), Rest scrollt: Popup bleibt unter 629 px */
-            .szenen { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; max-height:204px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
-            .szenen::-webkit-scrollbar { display:none; }
-            .szene { box-sizing:border-box; height:40px; min-width:0; display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:12px; background:${tint(INDIGO, 8)}; border:1px solid ${tint(INDIGO, 20)}; }
+            .panel { gap:12px; }
+            .rund { flex:none; display:inline-grid; place-items:center; width:38px; height:38px; border-radius:50%; background:${NK}; border:1px solid ${UKR}; }
+            .szenen { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+            .szene { box-sizing:border-box; min-height:40px; min-width:0; display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:12px; background:${tint(INDIGO, 8)}; border:1px solid ${tint(INDIGO, 20)}; }
             .szene .si { flex:none; width:24px; height:24px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:${tint(INDIGO, 16)}; }
-            .szene .s1 { display:block; font-size:12.5px; font-weight:700; line-height:1.2; color:${TEXT}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            /* Namen bis zwei Zeilen, deutsche Silbentrennung (lang="de" am Panel) */
+            .szene .s1 { font-size:12.5px; font-weight:700; line-height:1.2; color:${TEXT}; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; hyphens:auto; -webkit-hyphens:auto; overflow-wrap:break-word; }
             .szene .s2 { display:block; font-size:11px; color:${SEK}; font-variant-numeric:tabular-nums; white-space:nowrap; }
             .szene.sz-an { background:${INDIGO}; border-color:${INDIGO}; }
             .szene.sz-an .si { background:${tint(SEITE, 18)}; }
             .szene.sz-an .s1, .szene.sz-an .s2 { color:${SEITE}; }
+            /* Niedriger Bildschirm (Galaxy S25: 697 px hoch, Popup 629 px unter dem
+               Kopf; iPhone 17 Pro: 874 px): enger, damit auch 13 Szenen und
+               12 Effekte ohne Scrollen passen */
+            @media (max-height: 760px) {
+              ha-card { padding:12px 13px !important; }
+              .panel { gap:9px; }
+              .hell { height:40px; }
+              .punkt { width:29px; height:29px; }
+              .chip { padding:6px 10px 6px 8px; }
+              .szenen { gap:5px; }
+              .szene { min-height:36px; padding:4px 8px; }
+            }
           </style>`;
 
           return `${css}
-            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-              ${kopf}${regler}${favoriten}${effekte}${szenen}${mehr}
+            <div class="panel" lang="de" style="display:flex;flex-direction:column;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+              ${kopf}${regler}${favoriten}${effekte}${szenen}
             </div>`;
         ]]]
