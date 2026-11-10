@@ -1,0 +1,402 @@
+# ============================================================================
+# Lichter – Variante Raum-Reiter
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       licht
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   *_mac, kind_1/kind_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Lichter im Nachtblau-Stil, eine button-card. Mischform aus Raum-Karten
+# (lichter-raum-karte.yaml) und Raum-Reitern: immer nur ein Raum offen. Die
+# Hoehe richtet sich nach dem gewaehlten Raum, nicht nach der Zahl der Raeume
+# (Pruefstand 360 px: Windfang 292 px, Wohnzimmer 547 px).
+# Im Einsatz in der View "Licht & Fenster" seit 10.11.2026.
+#
+# Aufbau:
+#   Kopf     Icon-Kachel, "Lichter", Badge "N an" / "Alles aus"
+#            (sensor.lichter_an), Ausklapp-Pfeil. Tipp klappt auf und zu.
+#   Reiter   alle Raeume als 4x2-Raster, ohne Wischen sichtbar. Ein Reiter
+#            glueht, wenn im Raum etwas an ist, und zeigt die Zahl der
+#            eingeschalteten Leuchten. Tipp waehlt den Raum.
+#   Raum     Kopfzeile mit Icon-Kachel, "2 von 4 an" (dazu aktive Hue-Szene
+#            oder Helligkeit) und Schalter.
+#            Szenen: Lieblingsszenen als Chips, 1 Tipp startet sie; die
+#            aktive Szene ist gefuellt (Indigo). "Alle" oeffnet das
+#            Licht-Panel des Raums (hue-panel-karte.yaml).
+#            Leuchten: Chips im 2er-Raster, gefuellt in Amber, wenn an.
+#
+# Gesten (wie bisher): Tippen schaltet, Halten (ab 500 ms) oeffnet
+# more-info. Fuer Hue-Leuchten und Hue-Raeume ersetzt hue-panel-karte.yaml
+# das more-info durch das Licht-Panel (Helligkeit, Weiss, Farbe, Effekt,
+# alle Szenen). Mehr als 10 px Weg gilt als Wischen und loest nichts aus.
+#
+# Szenen-Chip: sucht die Hue-Szene ueber group_name (variables hue_gruppe)
+# und Namen und startet sie mit hue.activate_scene; dynamische Szenen
+# (Attribut is_dynamic) mit dynamic: true, dann wandern die Farben. Gibt es
+# die Szene nicht (umbenannt), faellt der Chip auf select.select_option der
+# Szenen-Auswahl zurueck. Favoriten, die in der Auswahl nicht (mehr)
+# vorkommen, blendet die Karte aus. Aktive Szene = Zustand der
+# Szenen-Auswahl (select.<raum>_szene der Hue-Integration), angezeigt nur,
+# wenn der Raum an ist.
+#
+# Bad: hue_gruppe "Bad" ist die Hue-Zone mit nur der Leuchte, nicht der Raum
+# "Badezimmer". Der Raum enthaelt den Heizluefter-Zwischenstecker; dessen
+# Szenen koennten ihn mit einschalten. Der Raum-Schalter schaltet wie in
+# lichter-raum-karte.yaml light.badezimmer, also den Stecker mit.
+#
+# Gewaehlter Reiter und Aufgeklappt merkt sich nur der Browser
+# (window.__nachtblauLicht), wie bei fenster-karte.yaml: Ein Helfer wuerde
+# den Reiter auf allen Geraeten umschalten. Nach dem Laden ist die Karte
+# offen und der erste Raum gewaehlt, in dem etwas an ist.
+#
+# Klicks: Die Karte selbst hat keine Aktion. button-card setzt dann
+# ha-card.disabled mit pointer-events: none; das Feld body holt die Klicks
+# mit pointer-events: auto zurueck. touchend- und click-Handler wie in
+# fenster-karte.yaml (button-card unterdrueckt nach touchend den click).
+# Neu gezeichnet wird, wenn sich eine gelesene Entitaet aendert (button-card
+# v7 merkt sich die Zugriffe auf states[...]); die Szenen-Suche liest
+# deshalb hass.states, sonst zeichnete jede Aenderung im Haus die Karte neu.
+#
+# Breite (gebaut fuer 360 px, Inhalt der Huelle 306 px; iPhone 17 Pro 348 px):
+#   Reiter 4 Spalten: (306 - 3 x 6) / 4 = 72 px (iPhone 82,5 px)
+#   Leuchten-Chip: (306 - 2 x 13 Rand - 8) / 2 = 136 px (iPhone 157 px)
+#   Namen brechen in bis zu zwei Zeilen um; lange Einzelwoerter mit weicher
+#   Trennstelle (\u00AD) in variables.raeume.
+#
+# Raeume: variables.raeume (id, name, kurz, icon, glyph, licht, hue_gruppe,
+# szene, favoriten, leuchten[entity, name, icon, glyph]).
+#   licht      Entitaet fuer Raum-Schalter und "Alle"; ohne leuchten zaehlt
+#              sie selbst als einzige Leuchte (Windfang, Garten)
+#   glyph      Mitte der Glyphe im 24er-Raster relativ zu (12, 12), gemessen
+#              im Frontend (Werte aus lichter-raum-karte.yaml)
+#
+# Voraussetzung: custom:button-card (v7), Integration Philips Hue (Szenen
+# und Szenen-Auswahl), sensor.lichter_an (Zahl der eingeschalteten Lichter),
+# Icons aus hass-hue-icons (hue:) und Custom Brand Icons (phu:); fuer das
+# Licht-Panel hue-panel-karte.yaml mit browser_mod.
+type: custom:button-card
+show_name: false
+show_state: false
+show_icon: false
+show_label: false
+show_ripple: false
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  raeume:
+    - id: wohnzimmer
+      name: Wohnzimmer
+      kurz: Wohnen
+      icon: mdi:sofa
+      glyph: [0, 1]
+      licht: light.wohnzimmer
+      hue_gruppe: Wohnzimmer
+      szene: select.wohnzimmer_wohnzimmer_szene
+      favoriten: [Tropendämmerung, Entspannen, Lesen, Gedimmt]
+      leuchten:
+        - { entity: light.stehlampe_2, name: Couch, icon: 'hue:signe' }
+        - { entity: light.lowboard, name: Lowboard, icon: 'hue:gradient-lightstrip' }
+        - { entity: light.hue_smart_plug_1, name: "Weihnachts\u00ADbaum", icon: 'phu:christmas-tree-v2' }
+        - { entity: light.hue_iris_1, name: Iris, icon: 'hue:iris' }
+    - id: bad
+      name: Bad
+      kurz: Bad
+      icon: mdi:shower
+      licht: light.badezimmer
+      hue_gruppe: Bad
+      szene: select.bad_szene
+      favoriten: [Bad, Entspannen, Konzentrieren, Nachtlicht]
+      leuchten:
+        - { entity: light.bad, name: Bad, icon: 'hue:iris' }
+        - { entity: switch.heizlufter, name: Heizlüfter, icon: 'hue:plug-eu', glyph: [0.54, 0] }
+    - id: kind_1
+      name: Kinderzimmer 1
+      kurz: Kind 1
+      icon: mdi:teddy-bear
+      licht: light.kinderzimmer
+      hue_gruppe: Kinderzimmer
+      szene: select.kinderzimmer_kind_1_kinderzimmer_szene
+      favoriten: [Nachtlicht]
+      leuchten:
+        - { entity: light.kinderbett, name: Bett, icon: 'hue:lightstrip' }
+        - { entity: light.hue_smart_plug_1_3, name: Lichterkette, icon: 'mdi:string-lights' }
+    - id: kind_2
+      name: Kinderzimmer 2
+      kurz: Kind 2
+      icon: mdi:teddy-bear
+      licht: light.kind_2
+      leuchten:
+        - { entity: light.kinderzimmer_kind_2_namenslicht, name: Namenslicht, icon: 'mdi:lightbulb' }
+    - id: schlafzimmer
+      name: Schlafzimmer
+      kurz: Schlafen
+      icon: mdi:bed-king
+      licht: light.schlafzimmer
+      leuchten:
+        - { entity: light.hue_go_1, name: Hue Go, icon: 'hue:go' }
+        - { entity: switch.schlafzimmer_shelly_plugin_g3_klimaanlage, name: Klimaanlage, icon: 'mdi:air-conditioner' }
+    - id: buero
+      name: Büro
+      kurz: Büro
+      icon: mdi:chair-rolling
+      glyph: [0, 0.5]
+      licht: light.buro
+      hue_gruppe: Büro
+      szene: select.buro_buro_szene
+      favoriten: [Konzentrieren, Lesen, Entspannen, Nordlichter]
+      leuchten:
+        - { entity: light.buro_lightstrip, name: Büro Lightstrip, icon: 'hue:lightstrip' }
+    - id: windfang
+      name: Windfang
+      kurz: Windfang
+      icon: hue:plug-eu
+      glyph: [0.54, 0]
+      licht: light.hue_smart_plug_1_2
+    - id: garten
+      name: Garten · Lichterkette
+      kurz: Garten
+      icon: mdi:string-lights
+      licht: light.shellyoutdoorsg3_mac_switch_0
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+  grid:
+    - grid-template-areas: '"body"'
+    - grid-template-columns: minmax(0, 1fr)
+  custom_fields:
+    # button-card setzt auf jedes Feld .ellipsis (nowrap, overflow hidden);
+    # zuruecksetzen, damit Namen umbrechen
+    body:
+      - width: 100%
+      - min-width: 0
+      - white-space: normal
+      # Ohne Aktion setzt button-card ha-card.disabled (pointer-events: none,
+      # bc-styles.ts); der Inhalt braucht Klicks
+      - pointer-events: auto
+custom_fields:
+  body: |
+    [[[
+      const TEXT   = 'var(--nachtblau-text, #f2f5f8)';
+      const TITEL  = 'var(--nachtblau-titel, #e7ecf3)';
+      const SEK    = 'var(--nachtblau-text-sekundaer, #8794a5)';
+      const GRUEN  = 'var(--nachtblau-gruen, #a6d49e)';
+      const LICHT  = 'var(--nachtblau-licht-an, #f0c274)';
+      const INDIGO = 'var(--nachtblau-indigo, #8ea2e6)';
+      const UK     = 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))';
+      const UKR    = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+      const NK     = 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))';
+      const ERH    = 'var(--nachtblau-flaeche-erhoeht, #222b3c)';
+      const FRAND  = 'var(--nachtblau-fuellung-rand-amber, rgba(240, 194, 116, 0.5))';
+      const FLEUCH = 'var(--nachtblau-leuchten-amber, rgba(240, 194, 116, 0.5))';
+      // Fuellungen bleiben in beiden Modi (wie lichter-raum-karte.yaml)
+      const FUELL  = 'linear-gradient(180deg,#f2cf93,#e6b566)';
+      const GLUT   = 'radial-gradient(circle at 50% 45%, rgba(242,207,147,0.9), rgba(240,194,116,0.3) 70%)';
+      const AUF_AMBER = '#3a2c12';
+      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+      const esc = (s) => String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+      // ---- Handler (Erklaerung im Dateikopf) ----
+      const L = window.__nachtblauLicht = window.__nachtblauLicht || {};
+      L.hass = hass;
+      L.raeume = variables.raeume || [];
+      {
+        L.start = (ev) => {
+          const t = ev.touches && ev.touches[0];
+          L.x = t ? t.clientX : ev.clientX;
+          L.y = t ? t.clientY : ev.clientY;
+          L.t0 = Date.now();
+        };
+        L.info = (el, id) => el.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: id }, bubbles: true, composed: true }));
+        L.ende = (ev, was) => {
+          ev.stopPropagation();
+          if (ev.type === 'touchend') {
+            const t = ev.changedTouches && ev.changedTouches[0];
+            if (t && Math.hypot(t.clientX - (L.x || 0), t.clientY - (L.y || 0)) > 10) { L.t0 = 0; return; }
+            if (ev.cancelable) ev.preventDefault();
+          }
+          const lang = !!L.t0 && Date.now() - L.t0 >= 500;
+          L.t0 = 0;
+          const el = ev.currentTarget;
+          const d = el.dataset || {};
+          const box = el.closest('[data-lk]');
+          if (was === 'kopf') {
+            L.auf = L.auf === false;
+            const inh = box && box.querySelector('[data-lk-inhalt]');
+            const pf = box && box.querySelector('[data-lk-pfeil]');
+            if (inh) inh.style.display = L.auf ? 'flex' : 'none';
+            if (pf) pf.style.transform = `rotate(${L.auf ? 180 : 0}deg)`;
+            return;
+          }
+          if (was === 'reiter') {
+            L.raum = d.raum;
+            if (!box) return;
+            box.querySelectorAll('[data-lk-raum]').forEach((p) => { p.style.display = p.dataset.lkRaum === d.raum ? '' : 'none'; });
+            box.querySelectorAll('[data-lk-reiter]').forEach((r) => { r.classList.toggle('sel', r.dataset.raum === d.raum); });
+            return;
+          }
+          if (was === 'schalten') {
+            if (lang) { L.info(el, d.id); return; }
+            L.hass.callService('homeassistant', 'toggle', { entity_id: d.id });
+            return;
+          }
+          if (was === 'alle') { L.info(el, d.id); return; }
+          if (was === 'szene') {
+            const r = L.raeume.find((x) => x.id === d.raum);
+            if (!r) return;
+            const sc = Object.values(L.hass.states).find((s) => s.entity_id.startsWith('scene.')
+              && s.attributes && s.attributes.group_name === r.hue_gruppe && s.attributes.name === d.name);
+            if (sc) L.hass.callService('hue', 'activate_scene', { entity_id: sc.entity_id, dynamic: !!sc.attributes.is_dynamic });
+            else if (r.szene) L.hass.callService('select', 'select_option', { entity_id: r.szene, option: d.name });
+          }
+        };
+      }
+      const klick = (was, daten) => {
+        const h = `window.__nachtblauLicht.ende(event, '${was}')`;
+        const attr = Object.entries(daten || {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
+        return `${attr} ontouchstart="window.__nachtblauLicht.start(event)" onmousedown="window.__nachtblauLicht.start(event)" ontouchend="${h}" onclick="${h}" oncontextmenu="event.preventDefault()"`;
+      };
+
+      // ---- Zustaende ----
+      const zustand = (id) => { const s = states[id]; return s ? s.state : 'unavailable'; };
+      const weg = (st) => st === 'unavailable' || st === 'unknown';
+      const pct = (id) => {
+        const s = states[id];
+        const b = s && s.state === 'on' && s.attributes ? s.attributes.brightness : null;
+        return b !== null && b !== undefined ? Math.round(b / 255 * 100) : null;
+      };
+      // Szenen nur ueber hass.states lesen (nicht verfolgt, siehe Dateikopf)
+      const alleSzenen = Object.values(hass.states).filter((s) => s.entity_id.startsWith('scene.'));
+      const raeume = L.raeume.map((r) => {
+        const ids = (r.leuchten && r.leuchten.length) ? r.leuchten.map((l) => l.entity) : [r.licht];
+        const an = ids.filter((id) => zustand(id) === 'on').length;
+        const sel = r.szene ? states[r.szene] : null;
+        const opts = sel && sel.attributes && Array.isArray(sel.attributes.options) ? sel.attributes.options : [];
+        const aktiv = sel && zustand(r.licht) === 'on' && opts.includes(sel.state) ? sel.state : null;
+        const favs = (r.favoriten || []).filter((n) => !sel || opts.includes(n)).map((n) => {
+          const sc = alleSzenen.find((s) => s.attributes && s.attributes.group_name === r.hue_gruppe && s.attributes.name === n);
+          return { name: n, dyn: !!(sc && sc.attributes.is_dynamic) };
+        });
+        return { ...r, ids, an, anzahl: ids.length, aktiv, favs, alleSzenen: opts.length };
+      });
+      if (!raeume.some((r) => r.id === L.raum)) {
+        const erster = raeume.find((r) => r.an > 0) || raeume[0];
+        L.raum = erster ? erster.id : null;
+      }
+      const auf = L.auf !== false;
+
+      // ---- Bausteine ----
+      // margin:0 gegen "ha-icon { margin: auto }" aus button-card (bc-styles.ts)
+      const ico = (icon, g, glyph, farbe) => {
+        const v = glyph || [0, 0];
+        return `<ha-icon icon="${esc(icon)}" style="flex:none;margin:0;--mdc-icon-size:${g}px;width:${g}px;height:${g}px;display:flex;color:${farbe};transform:translate(${-v[0] * g / 24}px, ${-v[1] * g / 24}px);"></ha-icon>`;
+      };
+      const svgPfeil = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+      const svgBirne = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 1 4 10.5c-.6.6-1 1.2-1 2H9c0-.8-.4-1.4-1-2A6 6 0 0 1 12 3ZM9 18h6"/></svg>';
+      const svgPower = (c) => `<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" style="color:${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>`;
+
+      // ---- Kopf ----
+      const ls = states['sensor.lichter_an'];
+      const nAn = ls ? parseInt(parseFloat(ls.state), 10) || 0 : 0;
+      const bc = nAn > 0 ? LICHT : SEK;
+      const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:${nAn > 0 ? tint(LICHT, 12) : NK};border:1px solid ${nAn > 0 ? tint(LICHT, 24) : UKR};font-size:13px;font-weight:700;padding:6px 12px;border-radius:12px;white-space:nowrap;">${svgBirne}${nAn > 0 ? `${nAn} an` : 'Alles aus'}</span>`;
+      const kopf = `
+        <div class="tap" ${klick('kopf')} style="display:flex;align-items:center;gap:10px;padding:2px 2px 0;">
+          <div style="flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${tint(GRUEN, 12)};border:1px solid ${tint(GRUEN, 24)};">${ico('mdi:home-lightbulb', 23, [0, -0.5], GRUEN)}</div>
+          <div style="min-width:0;flex:1;margin-left:4px;font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">Lichter</div>
+          ${badge}
+          <span data-lk-pfeil style="flex:none;display:inline-flex;color:${SEK};transform:rotate(${auf ? 180 : 0}deg);transition:transform .2s;">${svgPfeil}</span>
+        </div>`;
+
+      // ---- Reiter: 4x2, alle Raeume sichtbar ----
+      const reiter = raeume.map((r) => {
+        const on = r.an > 0;
+        const zahl = on ? `<span style="position:absolute;top:5px;right:6px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:${AUF_AMBER};background:${FUELL};font-variant-numeric:tabular-nums;">${r.an}</span>` : '';
+        return `
+          <div class="tap reiter${r.id === L.raum ? ' sel' : ''}" data-lk-reiter ${klick('reiter', { raum: r.id })}>
+            ${zahl}
+            <div style="width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${on ? GLUT : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 12px -3px ${FLEUCH}` : 'none'};">${ico(r.icon, 17, r.glyph, on ? AUF_AMBER : SEK)}</div>
+            <div style="max-width:100%;font-size:11.5px;font-weight:650;line-height:1.15;color:${on ? TEXT : TITEL};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.kurz || r.name)}</div>
+          </div>`;
+      }).join('');
+
+      // ---- Raum ----
+      const raumHtml = (r) => {
+        const st = zustand(r.licht);
+        const on = st === 'on';
+        let sub;
+        if (weg(st) && !r.an) sub = 'Nicht verfügbar';
+        else if (r.leuchten && r.leuchten.length) sub = r.an > 0 ? `${r.an}\u00a0von\u00a0${r.anzahl}\u00a0an` : 'Alles\u00a0aus';
+        else sub = on ? 'An' : 'Aus';
+        const p = pct(r.licht);
+        // geschuetztes Leerzeichen vor dem Punkt: Umbruch erst danach
+        if (on && r.aktiv) sub += `\u00a0· ${r.aktiv}`;
+        else if (on && p !== null) sub += `\u00a0· ${p} %`;
+        const kopfRaum = `
+          <div class="tap" ${klick('schalten', { id: r.licht })} style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${on ? GLUT : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 16px -3px ${FLEUCH}` : 'none'};">${ico(r.icon, 23, r.glyph, on ? AUF_AMBER : SEK)}</div>
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:15.5px;font-weight:750;letter-spacing:-0.01em;color:${TEXT};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(r.name)}</div>
+              <div style="font-size:12px;margin-top:1px;color:${on ? LICHT : SEK};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(sub)}</div>
+            </div>
+            <span style="flex:none;display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;background:${on ? FUELL : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 14px -3px ${FLEUCH}` : 'none'};">${svgPower(on ? AUF_AMBER : SEK)}</span>
+          </div>`;
+        const chipSzene = (f) => {
+          const a = f.name === r.aktiv;
+          return `<div class="tap szene" ${klick('szene', { raum: r.id, name: f.name })} style="background:${a ? INDIGO : tint(INDIGO, 10)};border-color:${a ? INDIGO : tint(INDIGO, 22)};color:${a ? 'var(--nachtblau-seite, #171d29)' : TITEL};">${ico(f.dyn ? 'mdi:animation-play-outline' : 'mdi:palette-outline', 15, null, a ? 'var(--nachtblau-seite, #171d29)' : INDIGO)}<span>${esc(f.name)}</span></div>`;
+        };
+        const szenen = r.favs.length
+          ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${r.favs.map(chipSzene).join('')}${r.alleSzenen > r.favs.length ? `<div class="tap szene" ${klick('alle', { id: r.licht })} style="background:${NK};border-color:${UKR};color:${TITEL};">${ico('mdi:dots-horizontal', 15, null, SEK)}<span>Alle ${r.alleSzenen}</span></div>` : ''}</div>`
+          : '';
+        const chip = (l) => {
+          const s = zustand(l.entity);
+          const lon = s === 'on';
+          const lp = pct(l.entity);
+          const ltxt = weg(s) ? 'Nicht verfügbar' : (lon ? (lp !== null ? `${lp} %` : 'An') : 'Aus');
+          return `
+            <div class="tap" ${klick('schalten', { id: l.entity })} style="min-width:0;display:flex;align-items:center;gap:8px;padding:8px 10px 8px 9px;border-radius:16px;background:${lon ? FUELL : UK};border:1px solid ${lon ? FRAND : UKR};opacity:${weg(s) ? 0.5 : 1};">
+              ${ico(l.icon || 'mdi:lightbulb', 18, l.glyph, lon ? AUF_AMBER : SEK)}
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:12.5px;font-weight:650;line-height:1.2;color:${lon ? AUF_AMBER : TITEL};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(l.name)}</div>
+                <div style="font-size:11px;margin-top:1px;color:${lon ? AUF_AMBER : SEK};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ltxt}</div>
+              </div>
+            </div>`;
+        };
+        const leuchten = (r.leuchten && r.leuchten.length)
+          ? `<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;">${r.leuchten.map(chip).join('')}</div>`
+          : '';
+        return `
+          <div data-lk-raum="${esc(r.id)}" style="${r.id === L.raum ? '' : 'display:none;'}background:${UK};border:1px solid ${UKR};border-radius:18px;padding:14px 13px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">${kopfRaum}${szenen}${leuchten}</div>
+          </div>`;
+      };
+
+      const css = `<style>
+        .tap { cursor:pointer; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; -webkit-user-select:none; }
+        .reiter { position:relative; min-width:0; display:flex; flex-direction:column; align-items:center; gap:5px; padding:9px 4px 8px; border-radius:14px; background:${UK}; border:1px solid ${UKR}; }
+        .reiter.sel { background:${ERH}; border-color:${tint(TEXT, 14)}; }
+        .szene { display:inline-flex; align-items:center; gap:6px; max-width:100%; font-size:12.5px; font-weight:650; line-height:1.2; padding:7px 11px 7px 9px; border-radius:11px; border:1px solid; }
+        .szene span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      </style>`;
+
+      return `${css}
+        <div data-lk style="display:flex;flex-direction:column;gap:12px;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+          ${kopf}
+          <div data-lk-inhalt style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:12px;">
+            <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:6px;">${reiter}</div>
+            ${raeume.map(raumHtml).join('')}
+          </div>
+        </div>`;
+    ]]]

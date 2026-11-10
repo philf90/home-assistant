@@ -415,7 +415,9 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-view.yaml`,
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)
-und die Lichter-View mit ihren beiden Karten `fenster-karte.yaml` und
+und die Lichter-View („Licht & Fenster“) mit `fenster-karte.yaml`,
+`lichter-reiter-karte.yaml` (seit 10.11.2026 im View) und dem Licht-Panel
+(`hue-panel-karte.yaml`, `hue-panel-templates.yaml`), dazu die Variante
 `lichter-raum-karte.yaml` (erste gefüllte Kachel mit `nachtblau-fuellung-rand-amber` und
 `nachtblau-leuchten-amber`), von der Energie-View die Templates
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
