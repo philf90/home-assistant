@@ -1,0 +1,282 @@
+# ============================================================================
+# Hue-Licht-Panel – button-card-Template nachtblau_licht_panel
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       licht
+# Status:        aktiv
+# Karten:        keine
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Inhalt des Licht-Panels, das hue-panel-karte.yaml statt des more-info
+# oeffnet. Eine Karte je Leuchte oder Hue-Raum:
+#
+#   type: custom:button-card
+#   template: nachtblau_licht_panel
+#   entity: light.stehlampe_2
+#   variables:
+#     szene: select.wohnzimmer_wohnzimmer_szene   # Szenen-Auswahl des Raums
+#     hue_gruppe: Wohnzimmer                       # group_name der Szenen
+#
+# Aufbau (Entwurf: Artefakt "Licht & Fenster Konzept", Weg B):
+#   Kopf        Icon-Kachel (glueht bei an), Name, "An · 62 % · Kerze",
+#               Schalter. Tipp auf den Kopf schaltet.
+#   Helligkeit  Regler 1-100 %; Wert beim Loslassen (light.turn_on mit
+#               brightness_pct). Bei ausgeschalteter Leuchte schaltet er sie
+#               ein.
+#   Favoriten   4 Weisstoene und 4 Farben (variables.favoriten), nur die, die
+#               die Leuchte kann (supported_color_modes). Die Punkte zeigen
+#               die Lichtfarbe selbst; diese Farben entstehen zur Laufzeit
+#               und sind keine Oberflaechenfarben der Palette.
+#   Effekte     Chips aus effect_list (ohne "off"), wischbar; der aktive ist
+#               gefuellt (Violett), erneuter Tipp schaltet ihn ab. Fehlt bei
+#               Hue-Raeumen (keine Effekte). Deutsche Namen: eigene
+#               Uebersetzung der englischen Werte, unbekannte bleiben englisch.
+#   Szenen      alle Szenen der Szenen-Auswahl im 2er-Raster mit Helligkeit
+#               und "dynamisch" (Attribute brightness, is_dynamic der
+#               Hue-Szene). Tipp startet sie mit hue.activate_scene, dynamische
+#               mit dynamic: true. Aktiv (Indigo gefuellt) = Zustand der
+#               Szenen-Auswahl.
+#   Fusszeile   "Alle Einstellungen": oeffnet das normale more-info
+#               (browser_mod.more_info mit ignore_popup_card), z. B. fuer die
+#               freie Farbwahl.
+#
+# Klicks wie in fenster-karte.yaml: eigene touchend- und click-Handler
+# (button-card unterdrueckt nach touchend den click), mehr als 10 px Weg gilt
+# als Wischen. Handler in window.__nachtblauLichtPanel.
+#
+# Hoehe: das Szenen-Raster zeigt hoechstens 4,5 Reihen und scrollt darin;
+# so bleibt das Panel auch mit 13 Szenen und 12 Effekten unter den 629 px,
+# die ein Popup auf dem Galaxy S25 unter dem Dialogkopf hat (DESIGN.md,
+# "Bildschirmbreiten").
+#
+# Voraussetzung: custom:button-card (v7), browser_mod (Popup, "Alle
+# Einstellungen"), Integration Philips Hue (Szenen, Szenen-Auswahl).
+button_card_templates:
+  nachtblau_licht_panel:
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    show_ripple: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    double_tap_action:
+      action: none
+    variables:
+      szene: null
+      hue_gruppe: null
+      # Weiss in Kelvin, Farben als [Farbton, Saettigung] (hs_color)
+      favoriten:
+        weiss: [2200, 2700, 4000, 6500]
+        farbe: [[28, 100], [0, 82], [285, 62], [215, 78]]
+    styles:
+      card:
+        - padding: 14px 15px
+        - border-radius: 20px
+        - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+        - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+        - box-shadow: none
+      grid:
+        - grid-template-areas: '"body"'
+        - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        # button-card setzt auf jedes Feld .ellipsis; zuruecksetzen
+        body:
+          - width: 100%
+          - min-width: 0
+          - white-space: normal
+          # Ohne Aktion setzt button-card ha-card.disabled (pointer-events:
+          # none, bc-styles.ts); der Inhalt braucht Klicks
+          - pointer-events: auto
+    custom_fields:
+      body: |
+        [[[
+          const TEXT   = 'var(--nachtblau-text, #f2f5f8)';
+          const TITEL  = 'var(--nachtblau-titel, #e7ecf3)';
+          const SEK    = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const LICHT  = 'var(--nachtblau-licht-an, #f0c274)';
+          const INDIGO = 'var(--nachtblau-indigo, #8ea2e6)';
+          const VIOLETT = 'var(--nachtblau-violett, #b399d4)';
+          const SEITE  = 'var(--nachtblau-seite, #171d29)';
+          const UK     = 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))';
+          const UKR    = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+          const NK     = 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))';
+          const FRAND  = 'var(--nachtblau-fuellung-rand-amber, rgba(240, 194, 116, 0.5))';
+          const FLEUCH = 'var(--nachtblau-leuchten-amber, rgba(240, 194, 116, 0.5))';
+          // Fuellungen bleiben in beiden Modi (wie lichter-raum-karte.yaml)
+          const FUELL  = 'linear-gradient(180deg,#f2cf93,#e6b566)';
+          const GLUT   = 'radial-gradient(circle at 50% 45%, rgba(242,207,147,0.9), rgba(240,194,116,0.3) 70%)';
+          const AUF_AMBER = '#3a2c12';
+          const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+          const esc = (s) => String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          const e = (typeof entity !== 'undefined') ? entity : null;
+          if (!e) return `<div style="color:${SEK};font-size:13px;">Entität fehlt</div>`;
+          const id = e.entity_id;
+          const a = e.attributes || {};
+          const on = e.state === 'on';
+          const weg = e.state === 'unavailable' || e.state === 'unknown';
+
+          // ---- Handler (Erklaerung im Dateikopf) ----
+          const P = window.__nachtblauLichtPanel = window.__nachtblauLichtPanel || {};
+          P.hass = hass;
+          P.start = (ev) => { const t = ev.touches && ev.touches[0]; if (t) { P.x = t.clientX; P.y = t.clientY; } };
+          P.tipp = (ev, was) => {
+            ev.stopPropagation();
+            if (ev.type === 'touchend') {
+              const t = ev.changedTouches && ev.changedTouches[0];
+              if (t && Math.hypot(t.clientX - (P.x || 0), t.clientY - (P.y || 0)) > 10) return;
+              if (ev.cancelable) ev.preventDefault();
+            }
+            const el = ev.currentTarget;
+            const d = el.dataset || {};
+            const h = P.hass;
+            if (was === 'schalten') h.callService('homeassistant', 'toggle', { entity_id: d.id });
+            else if (was === 'weiss') h.callService('light', 'turn_on', { entity_id: d.id, color_temp_kelvin: Number(d.k) });
+            else if (was === 'farbe') h.callService('light', 'turn_on', { entity_id: d.id, hs_color: [Number(d.h), Number(d.s)] });
+            else if (was === 'effekt') h.callService('light', 'turn_on', { entity_id: d.id, effect: d.fx });
+            else if (was === 'szene') {
+              if (d.scene) h.callService('hue', 'activate_scene', { entity_id: d.scene, dynamic: d.dyn === '1' });
+              else if (d.sel) h.callService('select', 'select_option', { entity_id: d.sel, option: d.name });
+            } else if (was === 'mehr') {
+              el.dispatchEvent(new CustomEvent('ll-custom', { bubbles: true, composed: true,
+                detail: { browser_mod: { service: 'browser_mod.more_info', data: { entity: d.id, ignore_popup_card: true } } } }));
+            }
+          };
+          P.zieh = (ev) => {
+            const el = ev.currentTarget;
+            el.style.setProperty('--p', `${el.value}%`);
+            const w = el.parentElement && el.parentElement.querySelector('[data-lp-wert]');
+            if (w) w.textContent = `${el.value} %`;
+          };
+          P.los = (ev) => {
+            const el = ev.currentTarget;
+            P.hass.callService('light', 'turn_on', { entity_id: el.dataset.id, brightness_pct: Number(el.value) });
+          };
+          const klick = (was, daten) => {
+            const h = `window.__nachtblauLichtPanel.tipp(event, '${was}')`;
+            const attr = Object.entries(daten || {}).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
+            return `${attr} ontouchstart="window.__nachtblauLichtPanel.start(event)" ontouchend="${h}" onclick="${h}"`;
+          };
+          // margin:0 gegen "ha-icon { margin: auto }" aus button-card (bc-styles.ts)
+          const ico = (icon, g, farbe) => `<ha-icon icon="${esc(icon)}" style="flex:none;margin:0;--mdc-icon-size:${g}px;width:${g}px;height:${g}px;display:flex;color:${farbe};"></ha-icon>`;
+          const lbl = (t, rechts) => `<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${SEK};"><span>${t}</span>${rechts ? `<span style="letter-spacing:0;text-transform:none;font-weight:600;">${rechts}</span>` : ''}</div>`;
+
+          // ---- Zustand ----
+          const pct = on && a.brightness !== null && a.brightness !== undefined ? Math.max(1, Math.round(a.brightness / 255 * 100)) : null;
+          const FX = { candle: 'Kerze', fire: 'Feuer', prism: 'Prisma', sparkle: 'Funkeln', opal: 'Opal', glisten: 'Glitzern',
+            underwater: 'Unterwasser', cosmos: 'Kosmos', sunbeam: 'Sonnenstrahl', enchant: 'Zauber', sunrise: 'Sonnenaufgang', sunset: 'Sonnenuntergang' };
+          const FXI = { candle: 'mdi:fire', fire: 'mdi:fire', underwater: 'mdi:waves', sunrise: 'mdi:weather-sunset-up', sunset: 'mdi:weather-sunset-down' };
+          const fxAktiv = on && a.effect && a.effect !== 'off' && a.effect !== 'none' ? a.effect : null;
+          const sel = variables.szene ? states[variables.szene] : null;
+          const opts = sel && sel.attributes && Array.isArray(sel.attributes.options) ? sel.attributes.options : [];
+          const szAktiv = on && sel && opts.includes(sel.state) ? sel.state : null;
+          let sub = weg ? 'Nicht verfügbar' : (on ? 'An' : 'Aus');
+          if (pct !== null) sub += ` · ${pct} %`;
+          if (fxAktiv) sub += ` · ${FX[fxAktiv] || fxAktiv}`;
+          else if (szAktiv) sub += ` · ${szAktiv}`;
+
+          // ---- Kopf ----
+          const kopf = `
+            <div class="tap" ${klick('schalten', { id })} style="display:flex;align-items:center;gap:12px;">
+              <div style="flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:${on ? GLUT : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 16px -3px ${FLEUCH}` : 'none'};">${ico(a.icon || (a.is_hue_group ? 'mdi:lightbulb-group' : 'mdi:lightbulb'), 23, on ? AUF_AMBER : SEK)}</div>
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:15.5px;font-weight:750;letter-spacing:-0.01em;color:${TEXT};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(a.friendly_name || id)}</div>
+                <div style="font-size:12px;margin-top:1px;color:${on ? LICHT : SEK};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${esc(sub)}</div>
+              </div>
+              <span style="flex:none;display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;background:${on ? FUELL : NK};border:1px solid ${on ? FRAND : UKR};box-shadow:${on ? `0 0 14px -3px ${FLEUCH}` : 'none'};"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" style="color:${on ? AUF_AMBER : SEK}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9M6.6 6.6a8 8 0 1 0 10.8 0"/></svg></span>
+            </div>`;
+
+          // ---- Helligkeit ----
+          const modes = Array.isArray(a.supported_color_modes) ? a.supported_color_modes : [];
+          const dimmbar = modes.some((m) => m !== 'onoff');
+          const hv = pct || 0;
+          const regler = dimmbar && !weg ? `
+            <div style="position:relative;">
+              <input class="hell" type="range" min="1" max="100" step="1" value="${Math.max(1, hv)}" data-id="${esc(id)}"
+                style="--p:${hv}%;" oninput="window.__nachtblauLichtPanel.zieh(event)" onchange="window.__nachtblauLichtPanel.los(event)" aria-label="Helligkeit">
+              <span data-lp-wert style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:14px;font-weight:700;color:${hv > 18 ? AUF_AMBER : TITEL};pointer-events:none;">${on ? `${hv} %` : 'Aus'}</span>
+            </div>` : '';
+
+          // ---- Favoriten (Lichtfarben zur Laufzeit, siehe Dateikopf) ----
+          const kRgb = (k) => {
+            const t = k / 100;
+            const r = t <= 66 ? 255 : 329.7 * Math.pow(t - 60, -0.1332);
+            const g = t <= 66 ? 99.47 * Math.log(t) - 161.12 : 288.12 * Math.pow(t - 60, -0.0755);
+            const b = t >= 66 ? 255 : (t <= 19 ? 0 : 138.52 * Math.log(t - 10) - 305.04);
+            const c = (v) => Math.round(Math.min(255, Math.max(0, v)));
+            return `rgb(${c(r)}, ${c(g)}, ${c(b)})`;
+          };
+          const fav = variables.favoriten || {};
+          const kannWeiss = modes.includes('color_temp');
+          const kannFarbe = modes.some((m) => ['xy', 'hs', 'rgb', 'rgbw', 'rgbww'].includes(m));
+          const istWeiss = (k) => on && a.color_mode === 'color_temp' && Math.abs((a.color_temp_kelvin || 0) - k) <= 150;
+          const istFarbe = (hs) => on && a.color_mode !== 'color_temp' && Array.isArray(a.hs_color)
+            && Math.min(Math.abs(a.hs_color[0] - hs[0]), 360 - Math.abs(a.hs_color[0] - hs[0])) <= 10 && Math.abs(a.hs_color[1] - hs[1]) <= 12;
+          const punkt = (bg, aktiv, was, daten) => `<span class="tap punkt${aktiv ? ' an' : ''}" ${klick(was, daten)} style="background:${bg};"></span>`;
+          const punkte = [
+            ...(kannWeiss ? (fav.weiss || []).map((k) => punkt(kRgb(k), istWeiss(k), 'weiss', { id, k })) : []),
+            ...(kannFarbe ? (fav.farbe || []).map((hs) => punkt(`hsl(${hs[0]}, ${hs[1]}%, 62%)`, istFarbe(hs), 'farbe', { id, h: hs[0], s: hs[1] })) : []),
+          ];
+          const favoriten = punkte.length && !weg ? `${lbl('Favoriten', kannWeiss && kannFarbe ? 'Weiß und Farbe' : '')}<div style="display:flex;justify-content:space-between;gap:6px;">${punkte.join('')}</div>` : '';
+
+          // ---- Effekte ----
+          const fxListe = (Array.isArray(a.effect_list) ? a.effect_list : []).filter((f) => f !== 'off' && f !== 'none');
+          const effekte = fxListe.length && !weg ? `${lbl('Effekte', String(fxListe.length))}<div class="reihe">${fxListe.map((f) => {
+            const akt = f === fxAktiv;
+            return `<span class="tap chip${akt ? ' fx-an' : ''}" ${klick('effekt', { id, fx: akt ? 'off' : f })}>${ico(FXI[f] || 'mdi:creation', 14, akt ? TEXT : VIOLETT)}${esc(FX[f] || f)}</span>`;
+          }).join('')}</div>` : '';
+
+          // ---- Szenen (hass.states: nicht verfolgt, Szenen aendern sich selten) ----
+          const szenenEnt = Object.values(hass.states).filter((s) => s.entity_id.startsWith('scene.')
+            && s.attributes && s.attributes.group_name === variables.hue_gruppe);
+          const szenen = opts.length ? `${lbl(`Szenen${variables.hue_gruppe ? ` ${esc(variables.hue_gruppe)}` : ''}`, String(opts.length))}<div class="szenen">${opts.map((n) => {
+            const sc = szenenEnt.find((s) => s.attributes.name === n);
+            const dyn = !!(sc && sc.attributes.is_dynamic);
+            const b = sc && typeof sc.attributes.brightness === 'number' ? Math.max(1, Math.round(sc.attributes.brightness / 255 * 100)) : null;
+            const meta = [b !== null ? `${b} %` : '', dyn ? 'dynamisch' : ''].filter(Boolean).join(' · ');
+            const akt = n === szAktiv;
+            return `<div class="tap szene${akt ? ' sz-an' : ''}" ${klick('szene', { scene: sc ? sc.entity_id : '', dyn: dyn ? '1' : '0', sel: variables.szene, name: n })}>
+              <span class="si">${ico(dyn ? 'mdi:animation-play-outline' : 'mdi:palette-outline', 15, akt ? SEITE : INDIGO)}</span>
+              <span style="min-width:0;flex:1;"><span class="s1">${esc(n)}</span>${meta ? `<span class="s2">${meta}</span>` : ''}</span>
+            </div>`;
+          }).join('')}</div>` : '';
+
+          const mehr = `<div class="tap" ${klick('mehr', { id })} style="align-self:center;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;color:${SEK};padding:4px 8px;">${ico('mdi:tune-variant', 15, SEK)}Alle Einstellungen</div>`;
+
+          const css = `<style>
+            .tap { cursor:pointer; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; -webkit-user-select:none; }
+            .hell { -webkit-appearance:none; appearance:none; box-sizing:border-box; display:block; width:100%; height:46px; margin:0; border-radius:14px; border:1px solid ${UKR};
+              background:linear-gradient(90deg, ${tint(LICHT, 45)} 0%, ${tint(LICHT, 80)} var(--p), ${NK} var(--p)); outline:none; touch-action:pan-y; }
+            .hell::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:4px; height:28px; border-radius:2px; background:${TEXT}; box-shadow:0 0 0 3px ${tint(TEXT, 18)}; }
+            .hell::-moz-range-thumb { width:4px; height:28px; border:none; border-radius:2px; background:${TEXT}; }
+            .hell:focus-visible { box-shadow:0 0 0 2px ${INDIGO}; }
+            .punkt { flex:none; box-sizing:border-box; width:32px; height:32px; border-radius:50%; border:2px solid ${tint(TEXT, 10)}; }
+            .punkt.an { box-shadow:0 0 0 2px ${SEITE}, 0 0 0 4px ${TEXT}; }
+            .reihe { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin-right:-15px; padding-right:15px; }
+            .reihe::-webkit-scrollbar { display:none; }
+            .chip { flex:none; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650; padding:7px 11px 7px 9px; border-radius:11px; white-space:nowrap;
+              background:${NK}; border:1px solid ${UKR}; color:${TITEL}; }
+            .chip.fx-an { background:${tint(VIOLETT, 22)}; border-color:${tint(VIOLETT, 50)}; color:${TEXT}; }
+            /* hoechstens 4,5 Reihen (je 40 px + 6 px Abstand), Rest scrollt: Popup bleibt unter 629 px */
+            .szenen { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; max-height:204px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+            .szenen::-webkit-scrollbar { display:none; }
+            .szene { box-sizing:border-box; height:40px; min-width:0; display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:12px; background:${tint(INDIGO, 8)}; border:1px solid ${tint(INDIGO, 20)}; }
+            .szene .si { flex:none; width:24px; height:24px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:${tint(INDIGO, 16)}; }
+            .szene .s1 { display:block; font-size:12.5px; font-weight:700; line-height:1.2; color:${TEXT}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .szene .s2 { display:block; font-size:11px; color:${SEK}; font-variant-numeric:tabular-nums; white-space:nowrap; }
+            .szene.sz-an { background:${INDIGO}; border-color:${INDIGO}; }
+            .szene.sz-an .si { background:${tint(SEITE, 18)}; }
+            .szene.sz-an .s1, .szene.sz-an .s2 { color:${SEITE}; }
+          </style>`;
+
+          return `${css}
+            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;line-height:1.3;color:${TEXT};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+              ${kopf}${regler}${favoriten}${effekte}${szenen}${mehr}
+            </div>`;
+        ]]]
