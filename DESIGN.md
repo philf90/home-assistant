@@ -417,7 +417,7 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)
 und die Lichter-View mit ihren beiden Karten `fenster-karte.yaml` und
 `lichter-raum-karte.yaml` (erste gefüllte Kachel mit `nachtblau-fuellung-rand-amber` und
-`nachtblau-leuchten-amber`), von der Energie-View die Templates
+`nachtblau-leuchten-amber`) samt der Variante `lichter-reiter-karte.yaml`, von der Energie-View die Templates
 (`energie-templates.yaml`), `energie-verbraucher-karte.yaml`,
 `energie-zaehler-karte.yaml`, `energie-solarbank-pv-karte.yaml` und
 `energie-monatsbilanz-karte.yaml` (Diagrammfarben per card-mod-CSS, weil
