@@ -60,9 +60,10 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
 | [`fenster-karte.yaml`](licht/fenster-karte.yaml) | karte | Fenster & Tueren – Status | button-card | – | aktiv |
-| [`fenster-lichter-karte.yaml`](licht/fenster-lichter-karte.yaml) | karte | Fenster & Lichter – Kachel | button-card | – | aktiv |
+| [`fenster-lichter-karte.yaml`](licht/fenster-lichter-karte.yaml) | karte | Licht & Fenster – Kachel | button-card | – | aktiv |
 | [`haustuer-ereignis-karte.yaml`](licht/haustuer-ereignis-karte.yaml) | karte | Haustuer-Ereignis | button-card | – | aktiv |
 | [`haustuer-lock-karte.yaml`](licht/haustuer-lock-karte.yaml) | karte | Haustuer-Schloss | button-card | – | aktiv |
+| [`hue-panel-karte.yaml`](licht/hue-panel-karte.yaml) | karte | Hue-Licht-Panel (ersetzt more-info der Hue-Leuchten) | popup-card, service-call | `kind_1/kind_2` | aktiv |
 | [`lichter-glow-karte.yaml`](licht/lichter-glow-karte.yaml) | karte | Lichter – Variante Glow-Kacheln | button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-mushroom-karte.yaml`](licht/lichter-mushroom-karte.yaml) | karte | Lichter & Steckdosen – Variante Mushroom | button-card, card-mod, mushroom-entity-card, mushroom-light-card | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-raum-karte.yaml`](licht/lichter-raum-karte.yaml) | karte | Lichter – Variante Raum-Karten | button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |

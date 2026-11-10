@@ -1,0 +1,292 @@
+# ============================================================================
+# Hue-Licht-Panel (ersetzt more-info der Hue-Leuchten)
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       licht
+# Status:        aktiv
+# Karten:        popup-card, service-call
+# Templates:     keine
+# Einfuegen:     jeden Listeneintrag einzeln: Karte hinzufuegen -> Manuell,
+#                in die View "Licht & Fenster"
+# Platzhalter:   kind_1/kind_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Eigenes Licht-Panel fuer die Hue-Farbleuchten und Hue-Raeume der
+# Lichter-Karte (lichter-raum-karte.yaml).
+#
+# Wie es wirkt:
+#   Jede custom:popup-card ersetzt das more-info der Entitaet unter
+#   target.entity_id. Die Lichter-Karte oeffnet beim Halten more-info,
+#   also erscheint dort jetzt dieses Panel: Helligkeit, Weiss, Farbfavoriten,
+#   Effekt (alles HA-Tile-Features) und darunter die Hue-Szenen des Raums.
+#   Tippen schaltet weiter nur an/aus.
+#   Die Popup-Karten selbst sind nur im Bearbeitungsmodus zu sehen und
+#   gelten nur in der View, in der sie liegen (popup_card_all_views: false).
+#
+# Szenen:
+#   - "Szene <Raum>": Auswahl-Entitaet der Hue-Integration
+#     (select.<raum>_szene). select_option ruft die Szene auf der Bridge
+#     ohne Dynamik-Parameter ab; der angezeigte Wert ist die Szene, die die
+#     Bridge als aktiv meldet ("unbekannt" = gerade keine).
+#   - "Dynamisch abspielen": nur fuer Szenen mit is_dynamic: true. Startet
+#     sie ausdruecklich mit hue.activate_scene und dynamic: true, damit die
+#     Farben wandern.
+#   - Bad und Raum "Bad" nutzen die Zone "Bad" (select.bad_szene), nicht den
+#     Raum "Badezimmer": Der Raum enthaelt den Heizluefter-Zwischenstecker,
+#     Raum-Szenen koennten ihn mit einschalten.
+#   - Farbverlaeufe (Signe, Lowboard) kann HA nicht direkt setzen; sie kommen
+#     ueber Szenen, die in der Hue-App angelegt werden. Neue Szenen erscheinen
+#     von selbst in der Auswahl; fuer "Dynamisch abspielen" hier ergaenzen.
+#   - Schlafzimmer (Hue Go) hat keine Hue-Szene, daher nur die Steuerung.
+#
+# Breite: Panel bis 520 px, auf dem Handy volle Breite (min()).
+# Dialogfarben wie im DWD-Popup (warnlage-templates.yaml, Erklaerung dort).
+#
+# Voraussetzung: Integration Philips Hue (Bridge v2, HA ab 2026.9 fuer das
+# Tile-Feature light-effect), browser_mod (HACS, getestet 3.4.2) und
+# Custom Features for Home Assistant Cards (HACS, getestet 4.11.3).
+# popup-card kommt aus browser_mod, service-call (Feature-Zeile) aus
+# Custom Features.
+
+- type: custom:popup-card
+  target: { entity_id: light.stehlampe_2 }
+  title: Couch
+  popup_card_all_views: false
+  style: &dialog |
+    --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+    --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+    --primary-background-color: var(--nachtblau-seite, #171d29);
+    --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+    --primary-text-color: var(--nachtblau-text, #f2f5f8);
+    --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+    --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+    --popup-min-width: min(100vw, 520px);
+    --popup-max-width: min(100vw, 520px);
+  card:
+    type: vertical-stack
+    cards:
+      - type: tile
+        entity: light.stehlampe_2
+        features_position: bottom
+        features: &steuerung
+          - type: light-brightness
+          - type: light-color-temp
+          - type: light-color-favorites
+          - type: light-effect
+      - &szene_wohnzimmer
+        type: tile
+        entity: select.wohnzimmer_wohnzimmer_szene
+        name: Szene Wohnzimmer
+        icon: mdi:palette-outline
+        features_position: bottom
+        features:
+          - type: select-options
+          - type: custom:service-call
+            entries:
+              - type: dropdown
+                icon: mdi:animation-play-outline
+                label: Dynamisch abspielen
+                options:
+                  - label: Frühlingsblüten
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_fruhlingsbluten }
+                      data: { dynamic: true }
+                  - label: Glowing grins
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_glowing_grins }
+                      data: { dynamic: true }
+                  - label: Nordlichter
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_nordlichter }
+                      data: { dynamic: true }
+                  - label: Sonnenuntergang Savanne
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_sonnenuntergang_savanne }
+                      data: { dynamic: true }
+                  - label: Tropendämmerung
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_tropendammerung }
+                      data: { dynamic: true }
+                  - label: Verlauf (default)
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.wohnzimmer_verlauf_default }
+                      data: { dynamic: true }
+
+- type: custom:popup-card
+  target: { entity_id: light.lowboard }
+  title: Lowboard
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.lowboard, features_position: bottom, features: *steuerung }
+      - *szene_wohnzimmer
+
+- type: custom:popup-card
+  target: { entity_id: light.hue_iris_1 }
+  title: Iris
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.hue_iris_1, features_position: bottom, features: *steuerung }
+      - *szene_wohnzimmer
+
+- type: custom:popup-card
+  target: { entity_id: light.wohnzimmer }
+  title: Wohnzimmer
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.wohnzimmer, features_position: bottom, features: *steuerung }
+      - *szene_wohnzimmer
+
+- type: custom:popup-card
+  target: { entity_id: light.bad }
+  title: Bad
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.bad, features_position: bottom, features: *steuerung }
+      - &szene_bad
+        type: tile
+        entity: select.bad_szene
+        name: Szene Bad
+        icon: mdi:palette-outline
+        features_position: bottom
+        features:
+          - type: select-options
+
+- type: custom:popup-card
+  target: { entity_id: light.badezimmer }
+  title: Bad (Raum)
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.badezimmer, features_position: bottom, features: *steuerung }
+      - *szene_bad
+
+- type: custom:popup-card
+  target: { entity_id: light.buro_lightstrip }
+  title: Büro Lightstrip
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.buro_lightstrip, features_position: bottom, features: *steuerung }
+      - &szene_buero
+        type: tile
+        entity: select.buro_buro_szene
+        name: Szene Büro
+        icon: mdi:palette-outline
+        features_position: bottom
+        features:
+          - type: select-options
+          - type: custom:service-call
+            entries:
+              - type: dropdown
+                icon: mdi:animation-play-outline
+                label: Dynamisch abspielen
+                options:
+                  - label: Frühlingsblüten
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.buro_fruhlingsbluten }
+                      data: { dynamic: true }
+                  - label: Nordlichter
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.buro_nordlichter }
+                      data: { dynamic: true }
+                  - label: Sonnenuntergang Savanne
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.buro_sonnenuntergang_savanne }
+                      data: { dynamic: true }
+                  - label: Tropendämmerung
+                    icon: mdi:play-circle-outline
+                    tap_action:
+                      action: perform-action
+                      perform_action: hue.activate_scene
+                      target: { entity_id: scene.buro_tropendammerung }
+                      data: { dynamic: true }
+
+- type: custom:popup-card
+  target: { entity_id: light.buro }
+  title: Büro
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.buro, features_position: bottom, features: *steuerung }
+      - *szene_buero
+
+- type: custom:popup-card
+  target: { entity_id: light.kinderbett }
+  title: Bett
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.kinderbett, features_position: bottom, features: *steuerung }
+      - &szene_kinderzimmer
+        type: tile
+        entity: select.kinderzimmer_kind_1_kinderzimmer_szene
+        name: Szene Kinderzimmer
+        icon: mdi:palette-outline
+        features_position: bottom
+        features:
+          - type: select-options
+
+- type: custom:popup-card
+  target: { entity_id: light.kinderzimmer }
+  title: Kinderzimmer 1
+  popup_card_all_views: false
+  style: *dialog
+  card:
+    type: vertical-stack
+    cards:
+      - { type: tile, entity: light.kinderzimmer, features_position: bottom, features: *steuerung }
+      - *szene_kinderzimmer
+
+- type: custom:popup-card
+  target: { entity_id: light.hue_go_1 }
+  title: Hue Go
+  popup_card_all_views: false
+  style: *dialog
+  card: { type: tile, entity: light.hue_go_1, features_position: bottom, features: *steuerung }
