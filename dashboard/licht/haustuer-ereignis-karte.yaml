@@ -78,7 +78,8 @@
 #   verloren -- genau das, was hier vermieden werden soll.
 #
 #   automation "Haustür: Paket vor der Tür merken"
-#     Trigger:   event.eingang_haustur_paket, not_to: [unknown, unavailable]
+#     Trigger:   event.received auf event.eingang_haustur_paket,
+#                event_type: detected (siehe "Warum event.received" unten)
 #     Bedingung: binary_sensor.haustur ist "off" seit 00:02:00
 #     Aktion:    input_boolean.turn_on + input_datetime.set_datetime ({{ now() }})
 #
@@ -87,7 +88,7 @@
 #     Aktion:    input_boolean.turn_off
 #
 #   automation "Haustür: Klingeln merken"
-#     Trigger:   event.haustur_turklingel (not_to: [unknown, unavailable])
+#     Trigger:   event.received auf event.haustur_turklingel, event_type: ring
 #                -- G4 Doorbell; die Door-Hub-Klingel gehoert zu einem anderen
 #                   Geraet und ist bewusst NICHT dabei.
 #                Frueher zusaetzlich binary_sensor.haustur_doorbell to "on".
@@ -98,6 +99,15 @@
 #                Ausfaelle der Event-Entitaet sind Neustarts von Home
 #                Assistant; dabei laeuft ohnehin keine Automation.
 #     Aktion:    input_boolean.turn_on
+#
+#   Warum event.received statt state-Trigger: Faellt UniFi Protect aus (z. B.
+#   beim naechtlichen Neustart der UDM SE), gehen die event-Entitaeten auf
+#   "unavailable" und kommen danach mit ihrem ALTEN Zeitstempel zurueck. Ein
+#   state-Trigger mit not_to: [unknown, unavailable] hielt das fuer ein neues
+#   Ereignis: Am 11.11.2026 um 03:26 meldeten Klingel und Paket so einen
+#   Fehlalarm, der Paket-Hinweis stand bis zum Morgen. event.received
+#   ueberspringt jeden Wechsel aus "unavailable", wertet aber den Wechsel aus
+#   "unknown" aus -- so kommt ein echtes Ereignis nach einem HA-Neustart an.
 #
 #   automation "Haustür: Klingel-Hinweis löschen"
 #     Trigger:   door.opened auf binary_sensor.haustur  ODER  Helfer "on"
