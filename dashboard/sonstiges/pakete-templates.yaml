@@ -17,10 +17,10 @@
 # Aufbau:
 #   pakete_daten        Bibliothek (variables.pk) mit Gruppierung, Texten und
 #                       Bausteinen; Entitaeten im Block KONFIGURATION
-#   pakete_kompakt      Karte fuer Home: nur die Sendungen in Zustellung;
-#                       Tippen oeffnet die View. Sichtbar nur, solange
-#                       sensor.pakete_in_zustellung ueber 0 liegt
-#                       (visibility in pakete-karte.yaml)
+#   pakete_kompakt      Karte fuer Home: Sendungen in Zustellung und
+#                       abholbereite; Tippen oeffnet die View. Sichtbar nur,
+#                       solange eines davon vorliegt (visibility in
+#                       pakete-karte.yaml)
 #   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
 #   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
 #                       unterwegs, zugestellt) als eigene Karte
@@ -93,7 +93,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 2, vorher = window.__nachtblauPakete;
+          const VERSION = 3, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -368,20 +368,33 @@ button_card_templates:
               <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
 
           // ---------- Karten ----------
-          // Home: nur Sendungen in Zustellung (hoechstens drei als Kachel). "Paket
-          // vor der Tuer" fehlt bewusst, das zeigt auf Home schon die Klingel-Karte;
-          // Abholbereit und "+ Sendung" stehen in der View.
+          // Abholbereit als getoente Kachel in Koralle-Orange, Stufe immer als Text
+          // (DESIGN.md); kleine Schrift auf der Toenung in Label-Grau
+          pk.abholKachel = p => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;background:color-mix(in srgb, ${KORALLE} 12%, transparent);border:1px solid color-mix(in srgb, ${KORALLE} 24%, transparent);">
+                ${pk.kachel('mdi:storefront-outline', KORALLE, 40, 12, 22)}
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${TEXT};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${pk.esc(pk.dienst(p).name)} · ${pk.esc(pk.name(p))}</div>
+                  <div style="font-size:12.5px;line-height:1.35;color:${LABEL};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;"><span style="color:${KORALLE};font-weight:700;">Abholbereit</span>${p.pickup_point ? ' · ' + pk.esc(p.pickup_point) : ''}</div>
+                </div></div>`;
+          // Home: Sendungen in Zustellung, dann abholbereite (je hoechstens drei
+          // als Kachel). "Paket vor der Tuer" fehlt bewusst, das zeigt auf Home
+          // schon die Klingel-Karte; Probleme und "+ Sendung" stehen in der View.
           pk.kompakt = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Pakete', 'Keine Daten', false) + pk.fehltHinweis());
-            const g = pk.gruppen(), z = pk.inZustellung(g);
+            const g = pk.gruppen(), z = pk.inZustellung(g), a = g.abholbereit;
             const weitere = g.heute.length - z.length + g.unterwegs.length;
-            const unter = (z.length === 0 ? 'Keine Sendung in Zustellung' : z.length === 1 ? '1 Sendung in Zustellung' : `${z.length} Sendungen in Zustellung`) + (weitere ? ` · ${weitere} weitere unterwegs` : '');
-            const kacheln = z.length
-              ? z.slice(0, 3).map(pk.hero).join('') + (z.length > 3 ? pk.hinweisText(`und ${z.length - 3} weitere, alle in der Pakete-Ansicht`) : '')
-              : pk.hinweisText('Gerade ist keine Sendung in Zustellung.');
+            const teile = [];
+            if (z.length) teile.push(`${z.length} in Zustellung`);
+            if (a.length) teile.push(`${a.length} abholbereit`);
+            if (weitere) teile.push(`${weitere} unterwegs`);
+            const mehr = (n, was) => n > 3 ? pk.hinweisText(`und ${n - 3} weitere ${was}, alle in der Pakete-Ansicht`) : '';
+            const kacheln = (z.length || a.length)
+              ? z.slice(0, 3).map(pk.hero).join('') + mehr(z.length, 'in Zustellung') + a.slice(0, 3).map(pk.abholKachel).join('') + mehr(a.length, 'abholbereit')
+              : pk.hinweisText('Gerade ist nichts in Zustellung oder abholbereit.');
             // Ganze Karte oeffnet die View
             return pk.block(`<div ${pk.tippAttr('window.__nachtblauPakete.navigiere()')} aria-label="Pakete-Ansicht öffnen" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;outline-offset:4px;">`
-              + pk.kopf('Pakete', pk.esc(unter), false) + kacheln + '</div>');
+              // Teile mit geschuetztem Leerzeichen: Umbruch nur an " · ", nicht in "1 abholbereit"
+              + pk.kopf('Pakete', pk.esc(teile.map(x => x.replace(/ /g, '\u00a0')).join(' · ') || 'Keine Sendung unterwegs'), false) + kacheln + '</div>');
           };
           pk.uebersicht = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Sendungen', 'Keine Daten', false) + pk.fehltHinweis());
