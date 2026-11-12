@@ -17,8 +17,10 @@
 # Aufbau:
 #   pakete_daten        Bibliothek (variables.pk) mit Gruppierung, Texten und
 #                       Bausteinen; Entitaeten im Block KONFIGURATION
-#   pakete_kompakt      Karte fuer Home: Kopf, naechste Lieferung, abholbereit,
-#                       "Paket vor der Tuer"; Tippen oeffnet die View
+#   pakete_kompakt      Karte fuer Home: nur die Sendungen in Zustellung;
+#                       Tippen oeffnet die View. Sichtbar nur, solange
+#                       sensor.pakete_in_zustellung ueber 0 liegt
+#                       (visibility in pakete-karte.yaml)
 #   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
 #   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
 #                       unterwegs, zugestellt) als eigene Karte
@@ -91,7 +93,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 1, vorher = window.__nachtblauPakete;
+          const VERSION = 2, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -325,16 +327,7 @@ button_card_templates:
               <div style="min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">${titel}</div>
               <div style="font-size:12.5px;line-height:1.35;color:${SEK};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${unter}</div></div>
               ${mitKnopf ? pk.knopf('+ Sendung', 'window.__nachtblauPakete.formularOeffnen()', BLAU) : ''}</div>`;
-          pk.zusammenfassung = g => {
-            const teile = [];
-            if (g.heute.length) teile.push(`${g.heute.length} heute`);
-            if (g.unterwegs.length) teile.push(`${g.unterwegs.length} unterwegs`);
-            if (g.abholbereit.length) teile.push(`${g.abholbereit.length} abholbereit`);
-            // Probleme stehen als rote Zeile darunter; im Untertitel haetten vier
-            // Teile bei 306 px Inhalt (S25) nicht mehr in zwei Zeilen gepasst
-            if (!teile.length && g.achtung.length) teile.push(g.achtung.length === 1 ? '1 Sendung mit Problem' : `${g.achtung.length} Sendungen mit Problem`);
-            return teile.length ? teile.join(' · ') : 'Keine Sendung unterwegs';
-          };
+          pk.inZustellung = g => g.heute.filter(p => p.status === 'out_for_delivery');
           // Untertitel der View: Zahl statt Liste je Dienst (sechs Dienste passten
           // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst
           pk.aktivText = g => {
@@ -342,10 +335,9 @@ button_card_templates:
             const z = g.zugestellt.length;
             return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
           };
-          // Naechste Lieferung: in Zustellung gefuellt (Amber), sonst getoent
-          pk.hero = g => {
-            const p = g.heute[0] || g.unterwegs.find(x => zeit(x.planned_from) !== null);
-            if (!p) return '';
+          // Sendung als Kachel: in Zustellung gefuellt (Amber, Schrift #3a2c12 7,2:1),
+          // sonst getoent (heute Amber, spaeter Blau)
+          pk.hero = p => {
             const d = pk.dienst(p), unterwegs = p.status === 'out_for_delivery';
             const zeile2 = (unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung') + (pk.fenster(p) ? ' · ' + pk.fenster(p) : '');
             const ic = unterwegs ? 'mdi:truck-delivery' : 'mdi:calendar-clock';
@@ -376,15 +368,20 @@ button_card_templates:
               <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
 
           // ---------- Karten ----------
+          // Home: nur Sendungen in Zustellung (hoechstens drei als Kachel). "Paket
+          // vor der Tuer" fehlt bewusst, das zeigt auf Home schon die Klingel-Karte;
+          // Abholbereit und "+ Sendung" stehen in der View.
           pk.kompakt = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Pakete', 'Keine Daten', false) + pk.fehltHinweis());
-            const g = pk.gruppen();
-            const abhol = g.abholbereit.length
-              ? pk.streifen('mdi:storefront-outline', KORALLE, g.abholbereit.length === 1 ? 'Abholbereit' : `${g.abholbereit.length} abholbereit`, pk.esc(g.abholbereit.map(p => `${pk.dienst(p).name} · ${p.pickup_point || pk.name(p)}`).join(' · ')))
-              : '';
-            // Ganze Karte oeffnet die View; der Knopf "+ Sendung" haelt den Tipp selbst an
+            const g = pk.gruppen(), z = pk.inZustellung(g);
+            const weitere = g.heute.length - z.length + g.unterwegs.length;
+            const unter = (z.length === 0 ? 'Keine Sendung in Zustellung' : z.length === 1 ? '1 Sendung in Zustellung' : `${z.length} Sendungen in Zustellung`) + (weitere ? ` · ${weitere} weitere unterwegs` : '');
+            const kacheln = z.length
+              ? z.slice(0, 3).map(pk.hero).join('') + (z.length > 3 ? pk.hinweisText(`und ${z.length - 3} weitere, alle in der Pakete-Ansicht`) : '')
+              : pk.hinweisText('Gerade ist keine Sendung in Zustellung.');
+            // Ganze Karte oeffnet die View
             return pk.block(`<div ${pk.tippAttr('window.__nachtblauPakete.navigiere()')} aria-label="Pakete-Ansicht öffnen" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;outline-offset:4px;">`
-              + pk.kopf('Pakete', pk.esc(pk.zusammenfassung(g)), true) + pk.achtung(g) + pk.hero(g) + abhol + pk.tuer() + '</div>');
+              + pk.kopf('Pakete', pk.esc(unter), false) + kacheln + '</div>');
           };
           pk.uebersicht = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Sendungen', 'Keine Daten', false) + pk.fehltHinweis());

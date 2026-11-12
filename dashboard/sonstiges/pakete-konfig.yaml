@@ -13,6 +13,11 @@
 # (pakete-karte.yaml).
 #
 # Inhalt:
+#   sensor.pakete_in_zustellung  Zahl der Sendungen mit Status
+#                                out_for_delivery, je Sendungsnummer einmal
+#                                (Amazon und Zusteller koennen dieselbe
+#                                Sendung melden); steuert die Sichtbarkeit
+#                                der Home-Karte (pakete-karte.yaml)
 #   script.paket_hinzufuegen     traegt eine Sendungsnummer bei DHL, Hermes,
 #                                GLS oder UPS ein (Formular "+ Sendung");
 #                                Felder nummer und dienst (dhl, hermes, gls,
@@ -58,7 +63,11 @@
 #     packages:
 #       pakete: !include pakete-konfig.yaml
 # Danach Home Assistant neu starten oder unter Einstellungen -> Werkzeuge ->
-# YAML Skripte und Automationen neu laden.
+# YAML Template-Entitaeten, Skripte und Automationen neu laden.
+#
+# Den Sensor kann man stattdessen auch in der UI anlegen (Einstellungen ->
+# Geraete & Dienste -> Helfer -> Template -> Template-Sensor, Name "Pakete in
+# Zustellung", Zustand wie unten); dann den template:-Block hier weglassen.
 #
 # Ohne Paket: Skript und Automation einzeln einfuegen (Neues Skript bzw. Neue
 # Automation -> Drei-Punkte-Menue -> In YAML bearbeiten). Einzufuegen ist beim
@@ -68,6 +77,20 @@
 # Voraussetzung: Integrationen DHL, DPD, Hermes, GLS, UPS, Amazon und Parcel
 #                Aggregator (HACS, Familie ha-parcel-integrations), Home
 #                Assistant Companion App fuer die Meldungen.
+
+template:
+  - sensor:
+      - name: Pakete in Zustellung
+        unique_id: pakete_in_zustellung
+        icon: mdi:truck-delivery
+        state_class: measurement
+        # Ohne Parcel Aggregator 0, die Home-Karte bleibt dann verborgen
+        state: >-
+          {% set p = (state_attr('sensor.parcel_aggregator_incoming_parcels', 'parcels') or [])
+             | selectattr('status', 'eq', 'out_for_delivery') | list %}
+          {% set mit = p | selectattr('barcode') | map(attribute='barcode') | map('string')
+             | map('replace', ' ', '') | map('upper') | unique | list | count %}
+          {{ mit + (p | rejectattr('barcode') | list | count) }}
 
 script:
   paket_hinzufuegen:
