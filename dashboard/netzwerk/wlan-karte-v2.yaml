@@ -31,6 +31,22 @@
 # Ein weiteres Netz: Anker anlegen, in netze eintragen, eine Zeile und ein
 # Pop-up mit eigenem Hash ergaenzen, Entitaeten in triggers_update.
 #
+# Zustaende je Netz, nach dem Schalter "Aktiviert":
+#   an               Pille "aktiv" (Gruen), Geraetezahl, QR-Code und Zugang
+#   aus              Pille "aus" (neutral), Pop-up ohne Code und Zugang
+#   nicht verfuegbar Schalter fehlt oder steht auf unavailable/unknown: Pille
+#                    "prüfen" (Amber), Kopf zaehlt das Netz als "nicht
+#                    verfügbar". Das Pop-up zeigt QR-Code und Zugang, soweit
+#                    vorhanden (das WLAN kann trotzdem laufen), und nennt den
+#                    Schalter. Frueher erschien dieser Fall als "aus".
+# Typische Ursache: UniFi vergibt einem WLAN eine neue interne ID (etwa die
+# Umstellung von 24-stelligen Hex-IDs auf UUIDs bei einem Update der
+# Network-App). Die Integration legt dann ein zweites Geraet mit Entitaeten
+# auf "_2" an, das QR-Bild wieder deaktiviert; die alten Entitaeten stehen
+# dauerhaft auf unavailable. Abhilfe: alte Entitaeten umbenennen oder mit
+# ihrem Geraet loeschen, QR-Bild aktivieren, neue Entitaeten auf die IDs der
+# Karte umbenennen (oder die IDs in der Karte anpassen).
+#
 # Die UniFi-Integration legt QR-Bild und Schalter nur an, wenn ihr Konto in
 # der Network-App die Site-Rolle admin hat. Das QR-Bild ist danach
 # standardmaessig deaktiviert und muss in HA aktiviert werden. Es erzeugt den
@@ -109,13 +125,19 @@ cards:
           - input_text.wlan_gaeste_passwort
         label: |
           [[[
-            const an = (variables.netze || []).filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
+            const netze = variables.netze || [];
+            // nicht verfuegbar: Schalter fehlt oder steht auf unavailable/unknown
+            const nv = netze.filter((n) => !states[n.schalter] || ['unavailable', 'unknown'].includes(states[n.schalter].state)).length;
+            const an = netze.filter((n) => states[n.schalter] && states[n.schalter].state === 'on');
             const summe = an.reduce((s, n) => {
               const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
               return isNaN(z) ? s : s + z;
             }, 0);
-            if (!an.length) return 'kein WLAN aktiv';
-            return `${an.length} ${an.length === 1 ? 'Netz' : 'Netze'} · ${summe} ${summe === 1 ? 'Gerät' : 'Geräte'}`;
+            if (netze.length && nv === netze.length) return 'Status nicht verfügbar';
+            const basis = an.length
+              ? `${an.length} ${an.length === 1 ? 'Netz' : 'Netze'} · ${summe} ${summe === 1 ? 'Gerät' : 'Geräte'}`
+              : 'kein WLAN aktiv';
+            return nv ? `${basis} · ${nv} nicht verfügbar` : basis;
           ]]]
         tap_action:
           action: none
@@ -153,6 +175,15 @@ cards:
             - font-size: 13px
             - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
             - margin-top: 2px
+            # "1 Netz · 47 Geräte · 1 nicht verfügbar" passt bei 360 px nicht
+            # in eine Zeile: zweizeilig statt abgeschnitten (DESIGN.md, "Text")
+            - white-space: normal
+            - text-align: left
+            - overflow: hidden
+            - display: '-webkit-box'
+            - -webkit-box-orient: vertical
+            - -webkit-line-clamp: 2
+            - text-wrap: balance
 
       # ---------- Zeile intern ----------
       - type: custom:button-card
@@ -184,29 +215,39 @@ cards:
             [[[
               const n = variables.netz;
               const B = 'var(--nachtblau-blau, #7fb3d5)', G = 'var(--nachtblau-gruen, #a6d49e)';
+              const A = 'var(--nachtblau-amber, #e6b566)';
               const T = 'var(--nachtblau-text, #f2f5f8)', M = 'var(--nachtblau-text-sekundaer, #8794a5)';
               const ents = hass.entities || {}, devs = hass.devices || {};
               const d = devs[(ents[n.clients] || {}).device_id];
               const name = d ? (d.name_by_user || d.name) : n.rolle;
               const esc = (t) => String(t).replace(/[&<>"]/g, (z) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[z]);
-              const an = !!(states[n.schalter] && states[n.schalter].state === 'on');
+              // Zustand: an, aus oder nv (Schalter fehlt, unavailable, unknown).
+              // nv ist kein "aus": das WLAN kann laufen, nur HA kennt den Stand nicht.
+              const s = states[n.schalter];
+              const zst = !s || ['unavailable', 'unknown'].includes(s.state) ? 'nv' : (s.state === 'on' ? 'an' : 'aus');
+              const an = zst === 'an';
               const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
-              const sub = !an ? 'ausgeschaltet' : (isNaN(z) ? n.rolle : `${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden`);
+              const sub = zst === 'nv' ? (s ? 'nicht verfügbar' : 'nicht verfügbar · Schalter fehlt')
+                : (!an ? 'ausgeschaltet' : (isNaN(z) ? n.rolle : `${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden`));
               // an: Blau getoent (0,16 / 0,24), aus: neutrale Kachel
               const kachel = an
                 ? `background:color-mix(in srgb, ${B} 16%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};`
                 : `background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--nachtblau-muted, #6e7988);`;
+              // Pille: an Gruen, nicht verfuegbar Amber (Hinweis, 0,12 / 0,24), aus neutral
               const pille = an
                 ? `color:${G};background:color-mix(in srgb, ${G} 12%, transparent);border:1px solid color-mix(in srgb, ${G} 24%, transparent);`
-                : `color:${M};background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));`;
+                : (zst === 'nv'
+                  ? `color:${A};background:color-mix(in srgb, ${A} 12%, transparent);border:1px solid color-mix(in srgb, ${A} 24%, transparent);`
+                  : `color:${M};background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));`);
+              const pillenText = an ? 'aktiv' : (zst === 'nv' ? 'prüfen' : 'aus');
               return `<div style="display:grid;grid-template-columns:auto minmax(0, 1fr) auto auto;align-items:center;gap:12px;text-align:left;">
                 <div style="width:40px;height:40px;border-radius:13px;display:grid;place-items:center;${kachel}">
                   <ha-icon icon="${n.icon}" style="--mdc-icon-size:21px;width:21px;height:21px;display:flex;color:inherit;"></ha-icon></div>
                 <div style="min-width:0;">
-                  <div style="font-size:15px;font-weight:680;color:${T};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</div>
+                  <div style="font-size:15px;font-weight:680;color:${T};line-height:1.25;white-space:normal;overflow-wrap:anywhere;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${esc(name)}</div>
                   <div style="font-size:12.5px;color:${M};margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${sub}</div></div>
                 <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:11px;white-space:nowrap;${pille}">
-                  <span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>${an ? 'aktiv' : 'aus'}</span>
+                  <span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>${pillenText}</span>
                 <div style="width:38px;height:38px;border-radius:12px;display:grid;place-items:center;${kachel}">
                   <ha-icon icon="mdi:qrcode" style="--mdc-icon-size:20px;width:20px;height:20px;display:flex;color:inherit;"></ha-icon></div>
               </div>`;
@@ -275,13 +316,19 @@ cards:
               const d = devs[(ents[n.clients] || {}).device_id];
               const name = d ? (d.name_by_user || d.name) : n.rolle;
               const esc = (t) => String(t).replace(/[&<>"]/g, (z) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[z]);
-              const an = !!(states[n.schalter] && states[n.schalter].state === 'on');
+              // Zustand wie in der Zeile: an, aus oder nv (Schalter fehlt, unavailable,
+              // unknown). Bei nv bleiben QR-Code und Zugang sichtbar, soweit vorhanden:
+              // das WLAN kann laufen, nur HA kennt den Stand nicht.
+              const s = states[n.schalter];
+              const zst = !s || ['unavailable', 'unknown'].includes(s.state) ? 'nv' : (s.state === 'on' ? 'an' : 'aus');
+              const an = zst === 'an';
               const z = states[n.clients] ? parseInt(states[n.clients].state, 10) : NaN;
-              const zeile2 = n.rolle + (an && !isNaN(z) ? ` · ${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden` : '');
+              const zeile2 = n.rolle + (zst === 'nv' ? ' · Status nicht verfügbar'
+                : (an && !isNaN(z) ? ` · ${z} ${z === 1 ? 'Gerät' : 'Geräte'} verbunden` : ''));
               const q = states[n.qr];
               const src = q && q.state !== 'unavailable' ? q.attributes.entity_picture : '';
               const rahmen = `width:min(100%, 250px);aspect-ratio:1;border-radius:16px;border:1px dashed var(--nachtblau-aus, #3a4453);display:grid;place-items:center;padding:16px;text-align:center;font-size:13px;color:${M};`;
-              const code = !an
+              const code = zst === 'aus'
                 ? `<div style="width:min(100%, 250px);border-radius:16px;border:1px dashed var(--nachtblau-aus, #3a4453);padding:18px 16px;text-align:center;font-size:13px;color:${M};">Dieses WLAN ist ausgeschaltet</div>`
                 : (src
                   ? `<img src="${esc(src)}" alt="QR-Code ${esc(name)}" style="display:block;width:min(100%, 250px);height:auto;border-radius:16px;">`
@@ -306,7 +353,7 @@ cards:
               const knopf = 'width:36px;height:36px;padding:0;border-radius:11px;display:grid;place-items:center;cursor:pointer;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent;color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
               // Funktionen einmal pro Seite in window.__nachtblauWlan. VERSION bei jeder
               // Aenderung an diesem Block erhoehen, sonst behaelt eine offene Seite den alten.
-              const VERSION = 2;
+              const VERSION = 3;
               if (!window.__nachtblauWlan || window.__nachtblauWlan.version !== VERSION) {
                 const wl = { version: VERSION };
                 wl.tipp = (e, el, fn) => {
@@ -380,14 +427,19 @@ cards:
                     <button type="button" aria-label="Passwort anzeigen" ${tippAttr('zeigen')} style="${knopf}"><span data-auf style="display:flex;pointer-events:none;">${svg(AUGE)}</span><span data-zu style="display:none;pointer-events:none;">${svg(AUGE_ZU)}</span></button>
                     <button type="button" aria-label="Passwort kopieren" ${tippAttr('kopieren')} style="${knopf}"><span style="display:flex;pointer-events:none;">${svg(KOPIE)}</span></button></span>`
                 : '';
-              const zugang = !an ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;pointer-events:auto;cursor:default;white-space:normal;">
+              const zugang = zst === 'aus' ? '' : `<div data-pw="${esc(pw)}" style="display:flex;flex-direction:column;gap:6px;pointer-events:auto;cursor:default;white-space:normal;">
                 <div style="background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:14px;">
                   ${zeile('SSID', `<span style="font-size:14.5px;color:${T};overflow-wrap:anywhere;min-width:0;">${esc(name)}</span>`)}
                   <div style="height:1px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));"></div>
                   ${zeile('Passwort', pwInhalt, pwKnoepfe)}</div>
                 <div data-meldung style="font-size:12px;color:var(--nachtblau-gruen, #a6d49e);text-align:center;min-height:16px;"></div></div>`;
-              const hinweis = !an ? 'Einschalten in der UniFi-App'
-                : (pw ? 'Kamera-App öffnen und auf den Code richten, oder Netz wählen und Passwort eingeben' : 'Kamera-App öffnen und auf den Code richten');
+              // Hinweis bei nv in Amber mit dem Schalter, damit klar ist, was fehlt.
+              // Die Zeile setzt white-space: normal (Feld ist nowrap, siehe oben),
+              // sonst endet ein zweizeiliger Hinweis mit "…".
+              const hinweis = zst === 'aus' ? 'Einschalten in der UniFi-App'
+                : (zst === 'nv'
+                  ? `<span style="color:var(--nachtblau-amber, #e6b566);">${esc(n.schalter)} ${s ? 'nicht verfügbar' : 'fehlt'} – UniFi-Integration prüfen</span>`
+                  : (pw ? 'Kamera-App öffnen und auf den Code richten, oder Netz wählen und Passwort eingeben' : 'Kamera-App öffnen und auf den Code richten'));
               return `<div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
                 <div style="display:grid;grid-template-columns:auto minmax(0, 1fr);align-items:center;gap:14px;">
                   <div style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb, ${B} 16%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};">
@@ -397,7 +449,7 @@ cards:
                     <div style="font-size:13px;color:${M};margin-top:2px;">${esc(zeile2)}</div></div></div>
                 <div style="display:flex;justify-content:center;">${code}</div>
                 ${zugang}
-                <div style="font-size:12.5px;color:${M};text-align:center;">${hinweis}</div>
+                <div style="font-size:12.5px;color:${M};text-align:center;white-space:normal;overflow-wrap:anywhere;">${hinweis}</div>
               </div>`;
             ]]]
 
