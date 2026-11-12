@@ -1,0 +1,585 @@
+# ============================================================================
+# Pakete – button-card-Templates
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor,
+#                oberste Ebene unter button_card_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Bibliothek fuer die Pakete-Karte (pakete-karte.yaml) und die Pakete-View
+# (pakete-view.yaml). Daten kommen aus dem Parcel Aggregator, der alle
+# Paketdienste der Familie ha-parcel-integrations zusammenfasst.
+#
+# Aufbau:
+#   pakete_daten        Bibliothek (variables.pk) mit Gruppierung, Texten und
+#                       Bausteinen; Entitaeten im Block KONFIGURATION
+#   pakete_kompakt      Karte fuer Home: Sendungen in Zustellung und
+#                       abholbereite; Tippen oeffnet die View. Sichtbar nur,
+#                       solange eines davon vorliegt (visibility in
+#                       pakete-karte.yaml)
+#   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
+#   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
+#                       unterwegs, zugestellt) als eigene Karte
+#   pakete_popup        Formular "Sendung hinzufuegen" (browser_mod-Popup)
+#
+# Daten (README des Parcel Aggregators, Stand 2.9.0): die Sensoren
+#   sensor.parcel_aggregator_incoming_parcels   aktive eingehende Pakete
+#   sensor.parcel_aggregator_awaiting_pickup    am Abholort
+#   sensor.parcel_aggregator_delivered_parcels  kuerzlich zugestellt (Fenster
+#                                               je Dienst, Amazon 7 Tage)
+# tragen im Attribut "parcels" je Paket: carrier, barcode, sender, status,
+# raw_status, delivered, delivered_at, planned_from, planned_to, pickup,
+# pickup_point, url, history (nur mit Option "Parcel history" je Dienst).
+#
+# Doppelte Pakete: Eine Amazon-Bestellung kann zugleich bei Amazon und beim
+# Zusteller stehen. Amazon gibt sie an die DHL-Integration ab (README
+# ha-amazon, "Hand-off to carrier integrations"), an DPD und Hermes aber
+# nicht. Die Bibliothek fasst Pakete mit gleicher Sendungsnummer zusammen und
+# behaelt dabei den Eintrag des Zustellers, weil der Zeitfenster und Verlauf
+# kennt.
+#
+# Gruppen (pk.gruppe):
+#   achtung      status problem oder returning
+#   abholbereit  status at_pickup_point
+#   heute        status out_for_delivery oder Zeitfenster liegt ganz auf heute
+#                (DPD meldet bis kurz vor der Zustellung den ganzen Tag)
+#   unterwegs    alle anderen aktiven, nach planned_from sortiert
+#   zugestellt   aus dem Sensor "delivered", neueste zuerst
+#
+# Farben (DESIGN.md): Unterwegs Blau getoent, In Zustellung Amber gefuellt
+# (Schrift #3a2c12 7,2:1), Abholbereit Koralle-Orange getoent und immer mit
+# Text, Zugestellt Gruen getoent, Problem und Ruecksendung Rot gefuellt
+# (Schrift #3d1512 5,6:1), Angekuendigt und Unbekannt Sekundaertext ohne
+# Toenung. Bereichsfarbe Blau (More-Menue "Zuhause"). Die Paketdienste
+# tragen ein neutrales Kuerzel; ihre Markenfarben stehen nicht in der Palette.
+#
+# Formular: Eingabe und Dienst-Auswahl leben nur im Popup-DOM, abgeschickt
+# wird ueber script.paket_hinzufuegen (pakete-konfig.yaml). Der Dienst wird
+# aus der Nummer vorgeschlagen (Muster aus den READMEs: 1Z... UPS; JJD, 3S,
+# CR, LX und 10 Ziffern DHL; 14 Ziffern oder H + 19 Ziffern Hermes), bleibt
+# aber waehlbar. DPD fehlt bewusst: ha-dpd hat keine Aktion zum Hinzufuegen,
+# DPD-Sendungen kommen nur ueber das myDPD-Konto.
+#
+# Klickbarkeit und Touch wie in sicherheit-templates.yaml: Felder mit
+# Knoepfen setzen pointer-events: auto, Knoepfe halten touchstart/-end,
+# click und pointerdown selbst an. Aufgeklappte Pakete merkt sich pk.offen,
+# damit sie ein neues Rendern ueberstehen.
+# Icons: --ha-icon-display: block; Glyphenmitte gemessen an @mdi/js 7.4.47,
+# eingetragen nur ab 0,4 Einheiten (mdi:calendar-clock 1, 0).
+#
+# Update-sicher: window.__nachtblauPakete traegt eine VERSION; eine hoehere
+# Version ersetzt nach einem Dashboard-Update das alte Objekt der offenen
+# Seite.
+#
+# Voraussetzung: custom:button-card (v7), browser_mod (Popup), Integrationen
+#                aus der Familie ha-parcel-integrations (DHL, DPD, Hermes, GLS,
+#                UPS, Amazon) und Parcel Aggregator (HACS), Skript aus
+#                pakete-konfig.yaml, Helfer input_boolean.paket_vor_der_tur und
+#                input_datetime.paket_erkannt_um (Paket-Erkennung der Kamera,
+#                siehe sicherheit-templates.yaml).
+# ============================================================================
+button_card_templates:
+  pakete_daten:
+    triggers_update:
+    - sensor.parcel_aggregator_incoming_parcels
+    - sensor.parcel_aggregator_awaiting_pickup
+    - sensor.parcel_aggregator_delivered_parcels
+    - input_boolean.paket_vor_der_tur
+    variables:
+      pk: |
+        [[[
+          // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
+          const VERSION = 3, vorher = window.__nachtblauPakete;
+          if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
+
+          // ---------- KONFIGURATION ----------
+          const CFG = {
+            eingehend: 'sensor.parcel_aggregator_incoming_parcels',
+            abholbereit: 'sensor.parcel_aggregator_awaiting_pickup',
+            zugestellt: 'sensor.parcel_aggregator_delivered_parcels',
+            tuer: 'input_boolean.paket_vor_der_tur',
+            tuerZeit: 'input_datetime.paket_erkannt_um',
+            skript: 'paket_hinzufuegen',
+            pfad: '/dashboard-home/pakete',
+          };
+
+          const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif";
+          const F = 'font-family:' + SANS + ';';
+          const GRUEN = 'var(--nachtblau-gruen, #a6d49e)', AMBER = 'var(--nachtblau-amber, #e6b566)', ROT = 'var(--nachtblau-rot, #f0736a)';
+          const KORALLE = 'var(--nachtblau-koralle, #e7936e)', BLAU = 'var(--nachtblau-blau, #7fb3d5)';
+          const TEXT = 'var(--nachtblau-text, #f2f5f8)', TITEL = 'var(--nachtblau-titel, #e7ecf3)', LABEL = 'var(--nachtblau-label, #b4c0cf)', SEK = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const NK = 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))', UK = 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))';
+          const UKR = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))', RAND = 'var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))';
+          const pk = { version: VERSION, hass, CFG, F, offen: new Set(), form: { dienst: null } };
+
+          // ---------- Daten ----------
+          pk.s = id => pk.hass && pk.hass.states ? pk.hass.states[id] : undefined;
+          pk.z = id => { const s = pk.s(id); return s ? s.state : undefined; };
+          pk.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+          pk.fehlt = () => !pk.s(CFG.eingehend);
+          const liste = id => { const s = pk.s(id); return s && Array.isArray(s.attributes.parcels) ? s.attributes.parcels : []; };
+          const amazon = p => /amazon/i.test(p.carrier || '');
+          pk.schluessel = p => {
+            const b = String(p.barcode || '').replace(/\s/g, '').toUpperCase();
+            return b || [p.carrier, p.sender, p.planned_from, p.delivered_at].join('|');
+          };
+          // Alle Pakete, je Sendungsnummer einmal; der Zusteller schlaegt Amazon
+          pk.alle = () => {
+            const m = new Map();
+            [CFG.eingehend, CFG.abholbereit, CFG.zugestellt].forEach(id => liste(id).forEach(p => {
+              if (!p) return;
+              const k = pk.schluessel(p), alt = m.get(k);
+              if (!alt || (amazon(alt) && !amazon(p))) m.set(k, p);
+            }));
+            return [...m.values()];
+          };
+
+          // ---------- Paketdienste und Status ----------
+          const DIENSTE = [
+            { re: /dhl/i, kurz: 'DHL', name: 'DHL' },
+            { re: /dpd/i, kurz: 'DPD', name: 'DPD' },
+            { re: /hermes/i, kurz: 'HER', name: 'Hermes' },
+            { re: /gls/i, kurz: 'GLS', name: 'GLS', domain: 'gls' },
+            { re: /ups/i, kurz: 'UPS', name: 'UPS', domain: 'ups' },
+            { re: /amazon/i, kurz: 'AMZ', name: 'Amazon' },
+          ];
+          pk.dienst = p => DIENSTE.find(d => d.re.test(p.carrier || '')) || { kurz: String(p.carrier || '?').slice(0, 3).toUpperCase(), name: p.carrier || 'Paket' };
+          const STATUS = {
+            registered: { text: 'Angekündigt', farbe: SEK, grau: true },
+            in_transit: { text: 'Unterwegs', farbe: BLAU },
+            out_for_delivery: { text: 'In Zustellung', farbe: AMBER, voll: true },
+            at_pickup_point: { text: 'Abholbereit', farbe: KORALLE },
+            delivered: { text: 'Zugestellt', farbe: GRUEN },
+            returning: { text: 'Rücksendung', farbe: ROT, voll: true },
+            problem: { text: 'Problem', farbe: ROT, voll: true },
+            unknown: { text: 'Unbekannt', farbe: SEK, grau: true },
+          };
+          pk.status = st => STATUS[st] || STATUS.unknown;
+
+          // ---------- Zeit ----------
+          const p2 = n => String(n).padStart(2, '0');
+          const zeit = iso => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? t : null; };
+          const tagBeginn = (t, plus) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + (plus || 0)); return d.getTime(); };
+          pk.uhr = t => { const d = new Date(t); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+          pk.tag = t => {
+            const tage = Math.round((tagBeginn(t) - tagBeginn(Date.now())) / 86400000);
+            if (tage === 0) return 'heute';
+            if (tage === 1) return 'morgen';
+            if (tage === -1) return 'gestern';
+            const d = new Date(t);
+            return d.toLocaleDateString('de-DE', { weekday: 'short' }) + ', ' + `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
+          };
+          pk.wann = t => t === null ? '' : `${pk.tag(t)} ${pk.uhr(t)}`;
+          // Zeitfenster: "heute 10:15–12:15 Uhr", ganzer Tag nur "morgen",
+          // mehrere Tage "Mi., 12.11. bis Fr., 14.11."
+          pk.fenster = p => {
+            const von = zeit(p.planned_from), bis = zeit(p.planned_to);
+            if (von === null) return '';
+            const ganzerTag = bis !== null && bis - von >= 20 * 3600000;
+            if (bis !== null && bis > tagBeginn(von, 1) + 60000) return `${pk.tag(von)} bis ${pk.tag(bis - 60000)}`;
+            if (bis === null || ganzerTag) return pk.tag(von);
+            return `${pk.tag(von)} ${pk.uhr(von)}–${pk.uhr(bis)} Uhr`;
+          };
+          pk.istHeute = p => {
+            const von = zeit(p.planned_from), bis = zeit(p.planned_to);
+            if (von === null || tagBeginn(von) !== tagBeginn(Date.now())) return false;
+            return bis === null || bis <= tagBeginn(Date.now(), 1) + 60000;
+          };
+
+          // ---------- Gruppen ----------
+          pk.gruppe = p => {
+            const st = p.status;
+            if (st === 'delivered' || p.delivered === true) return 'zugestellt';
+            if (st === 'problem' || st === 'returning') return 'achtung';
+            if (st === 'at_pickup_point') return 'abholbereit';
+            if (st === 'out_for_delivery' || pk.istHeute(p)) return 'heute';
+            return 'unterwegs';
+          };
+          const nachPlan = (a, b) => (zeit(a.planned_from) ?? Infinity) - (zeit(b.planned_from) ?? Infinity);
+          pk.gruppen = () => {
+            const g = { achtung: [], heute: [], abholbereit: [], unterwegs: [], zugestellt: [] };
+            pk.alle().forEach(p => g[pk.gruppe(p)].push(p));
+            g.heute.sort((a, b) => (b.status === 'out_for_delivery') - (a.status === 'out_for_delivery') || nachPlan(a, b));
+            g.unterwegs.sort(nachPlan);
+            g.zugestellt.sort((a, b) => (zeit(b.delivered_at) ?? 0) - (zeit(a.delivered_at) ?? 0));
+            return g;
+          };
+          pk.name = p => p.sender || `${pk.dienst(p).name} …${String(p.barcode || '').slice(-6)}`;
+          pk.unter = p => {
+            const g = pk.gruppe(p), fe = pk.fenster(p);
+            if (g === 'zugestellt') { const t = zeit(p.delivered_at); return t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t); }
+            if (g === 'abholbereit') return p.pickup_point || 'am Abholort';
+            if (g === 'achtung') return p.raw_status || pk.status(p.status).text;
+            if (g === 'heute') return fe || 'heute';
+            return fe ? 'voraussichtlich ' + fe : (p.raw_status || pk.status(p.status).text);
+          };
+
+          // ---------- Bausteine ----------
+          const GLYPHE = { 'mdi:calendar-clock': [1, 0] };
+          pk.glyphe = (icon, px) => { const g = GLYPHE[icon] || [0, 0]; return `translate(${-g[0] * px / 24}px, ${-g[1] * px / 24}px)`; };
+          pk.icon = (icon, c, px) => `<ha-icon icon="${icon}" style="--mdc-icon-size:${px}px;--ha-icon-display:block;width:${px}px;height:${px}px;margin:0;display:block;flex:none;color:${c};transform:${pk.glyphe(icon, px)};"></ha-icon>`;
+          pk.kachel = (icon, c, px, r, ip) => `<span style="width:${px}px;height:${px}px;border-radius:${r}px;flex:none;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">${pk.icon(icon, c, ip)}</span>`;
+          const VOLL_AMBER = 'background:linear-gradient(180deg, #f2cf93 0%, #e6b566 100%);border:1px solid var(--nachtblau-fuellung-rand-amber, rgba(240, 194, 116, 0.5));color:#3a2c12;box-shadow:0 0 14px -3px var(--nachtblau-leuchten-amber, rgba(240, 194, 116, 0.5));';
+          const VOLL_ROT = 'background:#f0736a;border:1px solid var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5));color:#3d1512;box-shadow:0 0 14px -3px var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5));';
+          pk.pille = st => {
+            const s = pk.status(st);
+            const stil = s.voll ? (s.farbe === AMBER ? VOLL_AMBER : VOLL_ROT)
+              : s.grau ? `color:${SEK};background:transparent;border:1px solid ${UKR};`
+              : `color:${s.farbe};background:color-mix(in srgb, ${s.farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${s.farbe} 24%, transparent);`;
+            return `<span style="${F}display:inline-flex;align-items:center;${stil}font-size:12px;font-weight:700;padding:4px 9px;border-radius:10px;white-space:nowrap;flex:none;">${s.text}</span>`;
+          };
+          pk.titel = (t, n) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:${LABEL};padding:2px 2px 0;"><span>${t}</span>${n !== undefined ? `<span style="font-variant-numeric:tabular-nums;color:${SEK};">${n}</span>` : ''}</div>`;
+          pk.hinweisText = t => `<div style="${F}color:${SEK};font-size:12.5px;padding:2px;white-space:normal;">${t}</div>`;
+          pk.block = inhalt => `<div ${pk.touchAttr} style="${F}pointer-events:auto;white-space:normal;text-align:left;display:flex;flex-direction:column;gap:10px;color:${TEXT};">${inhalt}</div>`;
+          // Hinweis statt leerer Karte, wenn der Aggregator fehlt
+          pk.fehltHinweis = () => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:13px;background:color-mix(in srgb, ${AMBER} 12%, transparent);border:1px solid color-mix(in srgb, ${AMBER} 24%, transparent);">
+              <span style="flex:none;">${pk.icon('mdi:alert-circle', AMBER, 19)}</span>
+              <div style="min-width:0;"><div style="font-size:13.5px;font-weight:700;color:${TEXT};">Parcel Aggregator fehlt</div>
+              <div style="font-size:12px;color:${LABEL};">${pk.esc(CFG.eingehend)} ist nicht da. Integration aus HACS laden und einrichten (Kopf von pakete-templates.yaml).</div></div></div>`;
+
+          // ---------- Bedienung ----------
+          pk.dienstAufruf = (domain, service, data) => pk.hass.callService(domain, service, data);
+          pk.touchAttr = 'ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()" ontouchcancel="event.stopPropagation()" onpointerdown="event.stopPropagation()"';
+          // Antippen wie in sicherheit-templates.yaml (touchend nur bei echtem Tipp)
+          pk.tipp = (e, aktion) => {
+            e.stopPropagation();
+            if (e.type === 'touchstart') { const t = e.touches && e.touches[0]; pk._tipp = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null; return; }
+            if (e.type === 'touchend') {
+              const t = e.changedTouches && e.changedTouches[0], st = pk._tipp;
+              pk._tipp = null;
+              if (!t || !st || Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10 || Date.now() - st.z > 800) return;
+              if (e.cancelable) e.preventDefault();
+              pk._tippZeit = Date.now();
+              if (aktion) aktion();
+              return;
+            }
+            if (e.type === 'click') { e.preventDefault(); if (Date.now() - (pk._tippZeit || 0) < 700) return; if (aktion) aktion(); }
+          };
+          pk.tippAttr = js => `role="button" tabindex="0" onpointerdown="event.stopPropagation()" ontouchstart="window.__nachtblauPakete.tipp(event)" ontouchend="window.__nachtblauPakete.tipp(event,()=>{${js}})" onclick="window.__nachtblauPakete.tipp(event,()=>{${js}})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();${js}}"`;
+          pk.knopf = (text, js, farbe) => `<span ${pk.tippAttr(js)} style="${F}display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:11px;cursor:pointer;white-space:nowrap;flex:none;${farbe ? `color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);` : `color:${LABEL};background:${NK};border:1px solid ${UKR};`}">${text}</span>`;
+
+          // Aufklappen ohne neues Rendern; pk.offen haelt den Zustand
+          pk.umschalten = (el, k) => {
+            const p = el.closest('[data-pk-paket]');
+            const auf = !pk.offen.has(k);
+            if (auf) pk.offen.add(k); else pk.offen.delete(k);
+            if (p) { p.querySelector('[data-pk-verlauf]').style.display = auf ? 'flex' : 'none'; el.setAttribute('aria-expanded', String(auf)); }
+          };
+          // Navigation wie tap_action navigate (Frontend hoert auf location-changed)
+          pk.navigiere = () => { history.pushState(null, '', CFG.pfad); window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } })); };
+          pk.oeffneSeite = url => { if (url) window.open(url, '_blank', 'noopener'); };
+          pk.kopiere = (el, text) => {
+            const ok = () => { el.textContent = 'Kopiert'; setTimeout(() => { el.textContent = 'Nummer kopieren'; }, 1500); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok).catch(() => { el.textContent = text; });
+            else el.textContent = text;
+          };
+          // Nicht mehr verfolgen: erster Tipp fragt nach, zweiter fuehrt aus
+          pk.entferne = (el, domain, code) => {
+            if (el.dataset.pkSicher !== '1') { el.dataset.pkSicher = '1'; el.textContent = 'Wirklich entfernen?'; setTimeout(() => { if (el.isConnected) { el.dataset.pkSicher = ''; el.textContent = 'Nicht mehr verfolgen'; } }, 4000); return; }
+            el.textContent = 'Wird entfernt …';
+            pk.dienstAufruf(domain, 'untrack_parcel', { tracking_code: code }).catch(e => { el.textContent = 'Fehler: ' + (e && e.message ? e.message : e); });
+          };
+
+          // ---------- Paketzeile ----------
+          pk.zeile = p => {
+            const k = pk.schluessel(p), d = pk.dienst(p), auf = pk.offen.has(k), kj = pk.esc(JSON.stringify(k));
+            const code = String(p.barcode || '');
+            const verlauf = Array.isArray(p.history) && p.history.length
+              ? p.history.slice().reverse().slice(0, 8).map((h, i) => `<div style="position:relative;padding:0 0 9px 16px;">
+                  <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? pk.status(p.status).farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
+                  <div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;">${pk.esc(pk.wann(zeit(h.timestamp)))}</div>
+                  <div style="font-size:12.5px;color:${LABEL};">${pk.esc(h.raw_status || pk.status(h.status).text)}</div></div>`).join('')
+              : `<div style="font-size:12.5px;color:${LABEL};">${pk.esc(p.raw_status || pk.status(p.status).text)}</div>
+                 <div style="font-size:12px;color:${SEK};">Verlauf: in der Integration ${pk.esc(d.name)} die Option „Parcel history“ einschalten.</div>`;
+            const knoepfe = [
+              p.url ? pk.knopf('Beim Dienst öffnen', `window.__nachtblauPakete.oeffneSeite(${pk.esc(JSON.stringify(p.url))})`) : '',
+              code ? pk.knopf('Nummer kopieren', `window.__nachtblauPakete.kopiere(this,${pk.esc(JSON.stringify(code))})`) : '',
+              d.domain && code && pk.gruppe(p) !== 'zugestellt' ? pk.knopf('Nicht mehr verfolgen', `window.__nachtblauPakete.entferne(this,'${d.domain}',${pk.esc(JSON.stringify(code))})`) : '',
+            ].join('');
+            return `<div data-pk-paket style="background:${UK};border:1px solid ${UKR};border-radius:13px;">
+                <div ${pk.tippAttr(`window.__nachtblauPakete.umschalten(this,${kj})`)} aria-expanded="${auf}" style="display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;">
+                  <span style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${LABEL};background:${NK};border:1px solid ${UKR};">${pk.esc(d.kurz)}</span>
+                  <span style="min-width:0;">
+                    <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.esc(pk.name(p))}</span>
+                    <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
+                  </span>
+                  ${pk.pille(p.status)}
+                </div>
+                <div data-pk-verlauf style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:6px;padding:2px 12px 12px 60px;">
+                  ${code ? `<div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(d.name)} · ${pk.esc(code)}</div>` : ''}
+                  <div>${verlauf}</div>
+                  ${knoepfe ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${knoepfe}</div>` : ''}
+                </div>
+              </div>`;
+          };
+          pk.liste = (g, leer) => {
+            const l = pk.gruppen()[g] || [];
+            return l.length ? `<div style="display:flex;flex-direction:column;gap:6px;">${l.map(pk.zeile).join('')}</div>` : pk.hinweisText(leer);
+          };
+
+          // ---------- Kopf, Hero, "vor der Tuer" ----------
+          pk.kopf = (titel, unter, mitKnopf) => `<div style="display:grid;grid-template-columns:min-content minmax(0,1fr) auto;align-items:center;gap:0 14px;">
+              ${pk.kachel('mdi:package-variant-closed', BLAU, 44, 13, 23)}
+              <div style="min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">${titel}</div>
+              <div style="font-size:12.5px;line-height:1.35;color:${SEK};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${unter}</div></div>
+              ${mitKnopf ? pk.knopf('+ Sendung', 'window.__nachtblauPakete.formularOeffnen()', BLAU) : ''}</div>`;
+          pk.inZustellung = g => g.heute.filter(p => p.status === 'out_for_delivery');
+          // Untertitel der View: Zahl statt Liste je Dienst (sechs Dienste passten
+          // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst
+          pk.aktivText = g => {
+            const n = g.achtung.length + g.heute.length + g.abholbereit.length + g.unterwegs.length;
+            const z = g.zugestellt.length;
+            return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
+          };
+          // Sendung als Kachel: in Zustellung gefuellt (Amber, Schrift #3a2c12 7,2:1),
+          // sonst getoent (heute Amber, spaeter Blau)
+          pk.hero = p => {
+            const d = pk.dienst(p), unterwegs = p.status === 'out_for_delivery';
+            const zeile2 = (unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung') + (pk.fenster(p) ? ' · ' + pk.fenster(p) : '');
+            const ic = unterwegs ? 'mdi:truck-delivery' : 'mdi:calendar-clock';
+            const c = pk.gruppe(p) === 'heute' ? AMBER : BLAU;
+            const kachelVoll = `<span style="width:40px;height:40px;border-radius:12px;flex:none;display:grid;place-items:center;background:rgba(58, 44, 18, 0.12);border:1px solid rgba(58, 44, 18, 0.24);">${pk.icon(ic, '#3a2c12', 22)}</span>`;
+            return `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;${unterwegs ? VOLL_AMBER : `background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`}">
+                ${unterwegs ? kachelVoll : pk.kachel(ic, c, 40, 12, 22)}
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${unterwegs ? '#3a2c12' : TEXT};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${pk.esc(d.name)} · ${pk.esc(pk.name(p))}</div>
+                  <div style="font-size:12.5px;line-height:1.35;color:${unterwegs ? '#3a2c12' : LABEL};">${pk.esc(zeile2)}</div>
+                </div></div>`;
+          };
+          // Kleine Schrift auf getoenter Flaeche in Label-Grau (DESIGN.md, "Text")
+          pk.streifen = (icon, c, titel, text) => `<div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">
+              ${pk.kachel(icon, c, 34, 11, 19)}
+              <div style="min-width:0;"><div style="font-size:13.5px;font-weight:700;line-height:1.25;color:${c};">${titel}</div>
+              <div style="font-size:12px;line-height:1.3;color:${LABEL};">${text}</div></div></div>`;
+          pk.tuer = () => {
+            if (pk.z(CFG.tuer) !== 'on') return '';
+            const t = zeit(String(pk.z(CFG.tuerZeit) || '').replace(' ', 'T'));
+            return pk.streifen('mdi:package-down', AMBER, 'Paket vor der Tür', t === null ? 'Kamera Eingang' : 'Kamera Eingang · seit ' + pk.wann(t));
+          };
+          pk.achtung = g => g.achtung.map(p => `<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:13px;${VOLL_ROT}">
+              <span style="flex:none;">${pk.icon('mdi:alert-circle', '#3d1512', 18)}</span>
+              <span style="font-size:13px;font-weight:600;white-space:normal;">${pk.esc(pk.dienst(p).name)} · ${pk.esc(pk.name(p))}: ${pk.esc(p.raw_status || pk.status(p.status).text)}</span></div>`).join('');
+          pk.zahl = (n, text, c) => `<div style="background:${UK};border:1px solid ${UKR};border-radius:13px;padding:8px 4px;text-align:center;min-width:0;">
+              <div style="font-size:20px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;color:${n ? c : SEK};">${n}</div>
+              <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
+
+          // ---------- Karten ----------
+          // Abholbereit als getoente Kachel in Koralle-Orange, Stufe immer als Text
+          // (DESIGN.md); kleine Schrift auf der Toenung in Label-Grau
+          pk.abholKachel = p => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;background:color-mix(in srgb, ${KORALLE} 12%, transparent);border:1px solid color-mix(in srgb, ${KORALLE} 24%, transparent);">
+                ${pk.kachel('mdi:storefront-outline', KORALLE, 40, 12, 22)}
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${TEXT};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${pk.esc(pk.dienst(p).name)} · ${pk.esc(pk.name(p))}</div>
+                  <div style="font-size:12.5px;line-height:1.35;color:${LABEL};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;"><span style="color:${KORALLE};font-weight:700;">Abholbereit</span>${p.pickup_point ? ' · ' + pk.esc(p.pickup_point) : ''}</div>
+                </div></div>`;
+          // Home: Sendungen in Zustellung, dann abholbereite (je hoechstens drei
+          // als Kachel). "Paket vor der Tuer" fehlt bewusst, das zeigt auf Home
+          // schon die Klingel-Karte; Probleme und "+ Sendung" stehen in der View.
+          pk.kompakt = () => {
+            if (pk.fehlt()) return pk.block(pk.kopf('Pakete', 'Keine Daten', false) + pk.fehltHinweis());
+            const g = pk.gruppen(), z = pk.inZustellung(g), a = g.abholbereit;
+            const weitere = g.heute.length - z.length + g.unterwegs.length;
+            const teile = [];
+            if (z.length) teile.push(`${z.length} in Zustellung`);
+            if (a.length) teile.push(`${a.length} abholbereit`);
+            if (weitere) teile.push(`${weitere} unterwegs`);
+            const mehr = (n, was) => n > 3 ? pk.hinweisText(`und ${n - 3} weitere ${was}, alle in der Pakete-Ansicht`) : '';
+            const kacheln = (z.length || a.length)
+              ? z.slice(0, 3).map(pk.hero).join('') + mehr(z.length, 'in Zustellung') + a.slice(0, 3).map(pk.abholKachel).join('') + mehr(a.length, 'abholbereit')
+              : pk.hinweisText('Gerade ist nichts in Zustellung oder abholbereit.');
+            // Ganze Karte oeffnet die View
+            return pk.block(`<div ${pk.tippAttr('window.__nachtblauPakete.navigiere()')} aria-label="Pakete-Ansicht öffnen" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;outline-offset:4px;">`
+              // Teile mit geschuetztem Leerzeichen: Umbruch nur an " · ", nicht in "1 abholbereit"
+              + pk.kopf('Pakete', pk.esc(teile.map(x => x.replace(/ /g, '\u00a0')).join(' · ') || 'Keine Sendung unterwegs'), false) + kacheln + '</div>');
+          };
+          pk.uebersicht = () => {
+            if (pk.fehlt()) return pk.block(pk.kopf('Sendungen', 'Keine Daten', false) + pk.fehltHinweis());
+            const g = pk.gruppen();
+            const zahlen = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;">
+                ${pk.zahl(g.heute.length, 'Heute', AMBER)}
+                ${pk.zahl(g.unterwegs.length, 'Unter&shy;wegs', BLAU)}
+                ${pk.zahl(g.abholbereit.length, 'Abhol&shy;bereit', KORALLE)}
+                ${pk.zahl(g.zugestellt.length, 'Zu&shy;gestellt', GRUEN)}</div>`;
+            return pk.block(pk.kopf('Sendungen', pk.esc(pk.aktivText(g)), true) + zahlen + pk.achtung(g) + pk.tuer());
+          };
+          const LISTEN = {
+            heute: ['Heute', 'Heute kommt nichts.'],
+            abholbereit: ['Abholbereit', 'Nichts liegt zur Abholung bereit.'],
+            unterwegs: ['Unterwegs', 'Keine weitere Sendung unterwegs.'],
+            zugestellt: ['Zuletzt zugestellt', 'In den letzten Tagen wurde nichts zugestellt.'],
+          };
+          pk.listenKarte = gruppe => {
+            if (pk.fehlt()) return pk.block(pk.fehltHinweis());
+            const [t, leer] = LISTEN[gruppe] || [gruppe, ''];
+            return pk.block(pk.titel(t, (pk.gruppen()[gruppe] || []).length) + pk.liste(gruppe, leer));
+          };
+
+          // ---------- Formular "Sendung hinzufuegen" ----------
+          // Oberflaeche wie das Fahrzeiten-Popup (fahrzeiten-templates.yaml)
+          pk.popupStil = '--ha-card-background: var(--nachtblau-huelle-oben, #1b2231);'
+            + '--card-background-color: var(--nachtblau-huelle-oben, #1b2231);'
+            + '--primary-background-color: var(--nachtblau-seite, #171d29);'
+            + '--secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);'
+            + '--primary-text-color: var(--nachtblau-text, #f2f5f8);'
+            + '--secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);'
+            + '--mdc-dialog-scrim-color: rgba(0,0,0,0.62);'
+            + '--popup-min-width: min(100vw, 720px);--popup-max-width: min(100vw, 720px);';
+          pk.formularOeffnen = () => {
+            pk.form = { dienst: null };
+            if (!window.browser_mod) return;
+            window.browser_mod.service('popup', {
+              title: 'Sendung hinzufügen',
+              style: pk.popupStil,
+              content: { type: 'custom:button-card', template: 'pakete_popup' },
+            });
+          };
+          const FORM_DIENSTE = [['dhl', 'DHL'], ['hermes', 'Hermes'], ['gls', 'GLS'], ['ups', 'UPS']];
+          pk.vorschlag = n => {
+            if (/^1Z[0-9A-Z]{16}$/.test(n)) return ['ups', 'UPS erkannt (beginnt mit 1Z).'];
+            if (/^(JJD|3S|CR|LX)/.test(n)) return ['dhl', 'DHL erkannt.'];
+            if (/^\d{10}$/.test(n)) return ['dhl', 'Zehn Ziffern: DHL Express.'];
+            if (/^H\d{19}$/.test(n) || /^\d{14}$/.test(n)) return ['hermes', 'Hermes vorgeschlagen. Bitte prüfen.'];
+            return [null, n ? 'Kein eindeutiges Muster. Bitte den Dienst wählen.' : 'Nummer eingeben, der Dienst wird vorgeschlagen.'];
+          };
+          const chipStil = an => an
+            ? 'color:#132a3c;background:#7fb3d5;border:1px solid var(--nachtblau-fuellung-rand-blau, rgba(127, 179, 213, 0.5));'
+            : `color:${LABEL};background:${NK};border:1px solid ${UKR};`;
+          pk.waehle = (el, d) => {
+            const root = el.getRootNode();
+            pk.form.dienst = d;
+            root.querySelectorAll('[data-pk-dienst]').forEach(c => { const an = c.dataset.pkDienst === d; c.setAttribute('aria-pressed', String(an)); c.style.cssText = c.dataset.pkBasis + chipStil(an); });
+            pk.pruefe(root);
+          };
+          pk.pruefe = root => {
+            const feld = root.querySelector('input[data-pk-nummer]'), b = root.querySelector('[data-pk-senden]');
+            const ok = !!(pk.form.dienst && feld && feld.value.replace(/\s/g, '').length >= 8);
+            if (b) { b.style.opacity = ok ? '1' : '0.45'; b.setAttribute('aria-disabled', String(!ok)); }
+            return ok;
+          };
+          pk.eingabe = el => {
+            const root = el.getRootNode(), n = el.value.replace(/\s/g, '').toUpperCase(), v = pk.vorschlag(n);
+            const m = root.querySelector('[data-pk-erkannt]');
+            if (m) m.textContent = v[1];
+            if (v[0]) { const chip = root.querySelector(`[data-pk-dienst="${v[0]}"]`); if (chip) pk.waehle(chip, v[0]); }
+            else pk.pruefe(root);
+          };
+          pk.senden = el => {
+            const root = el.getRootNode(), feld = root.querySelector('input[data-pk-nummer]'), m = root.querySelector('[data-pk-meldung]');
+            if (!pk.pruefe(root)) { if (m) { m.style.color = SEK; m.textContent = 'Erst Nummer und Dienst angeben.'; } return; }
+            const nummer = feld.value.replace(/\s/g, '').toUpperCase().slice(0, 40), dienst = pk.form.dienst;
+            if (m) { m.style.color = SEK; m.textContent = 'Wird übergeben …'; }
+            pk.dienstAufruf('script', CFG.skript, { nummer, dienst }).then(() => {
+              if (m) { m.style.color = GRUEN; m.textContent = 'Wird verfolgt. Die Sendung erscheint mit der nächsten Abfrage.'; }
+              setTimeout(() => { if (window.browser_mod) window.browser_mod.service('close_popup', {}); }, 1600);
+            }).catch(e => { if (m) { m.style.color = ROT; m.textContent = 'Fehler: ' + (e && e.message ? e.message : e); } });
+          };
+          // Tastatur: Ereignisse anhalten, sonst loesen Buchstaben die
+          // Tastenkuerzel des HA-Frontends aus (wie fahrzeiten-templates.yaml).
+          pk.formular = () => {
+            const basis = `${F}font-size:13.5px;font-weight:700;padding:8px 12px;border-radius:11px;cursor:pointer;white-space:nowrap;`;
+            const chips = FORM_DIENSTE.map(([d, t]) => `<span data-pk-dienst="${d}" data-pk-basis="${basis}" aria-pressed="false" ${pk.tippAttr(`window.__nachtblauPakete.waehle(this,'${d}')`)} style="${basis}${chipStil(false)}">${t}</span>`).join('')
+              + `<span title="DPD nur über das myDPD-Konto" style="${basis}cursor:not-allowed;color:${SEK};background:transparent;border:1px dashed ${UKR};">DPD</span>`;
+            return pk.block(`
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <label for="pk-nummer" style="font-size:12.5px;font-weight:600;color:${LABEL};">Sendungsnummer</label>
+                <input id="pk-nummer" data-pk-nummer type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="z. B. JJD000390007855342"
+                  oninput="window.__nachtblauPakete.eingabe(this)"
+                  onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
+                  onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__nachtblauPakete.senden(this)}"
+                  style="font:inherit;font-size:16px;font-family:ui-monospace,'SF Mono','Roboto Mono',Menlo,monospace;color:${TEXT};background:var(--nachtblau-flaeche-vertieft, #10151d);width:100%;box-sizing:border-box;border:1px solid ${UKR};border-radius:12px;padding:10px 12px;outline:none;">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:12.5px;font-weight:600;color:${LABEL};">Paketdienst</div>
+                <div role="group" aria-label="Paketdienst" style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>
+                <div data-pk-erkannt style="font-size:12px;color:${SEK};">Nummer eingeben, der Dienst wird vorgeschlagen.</div>
+              </div>
+              <div style="font-size:12px;line-height:1.4;color:${SEK};"><b style="color:${LABEL};font-weight:600;">DPD</b> lässt sich nicht von Hand eintragen: die Sendung in myDPD hinzufügen, dann kommt sie über das Konto. Sendungen aus den Konten von DHL, DPD, Hermes und Amazon erscheinen von selbst.</div>
+              <span data-pk-senden aria-disabled="true" ${pk.tippAttr('window.__nachtblauPakete.senden(this)')} style="${F}display:block;text-align:center;font-size:14px;font-weight:700;padding:11px 14px;border-radius:13px;cursor:pointer;opacity:0.45;color:#132a3c;background:#7fb3d5;border:1px solid var(--nachtblau-fuellung-rand-blau, rgba(127, 179, 213, 0.5));">Verfolgen</span>
+              <div data-pk-meldung role="status" aria-live="polite" style="font-size:12.5px;min-height:1.4em;color:${SEK};"></div>`);
+          };
+
+          window.__nachtblauPakete = pk;
+          return pk;
+        ]]]
+
+  # Gemeinsame Huelle der Karten (DESIGN.md, "Kartenhuelle")
+  pakete_huelle:
+    template: pakete_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    show_ripple: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+      - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+      - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+      - cursor: default
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - width: 100%
+        - pointer-events: auto
+
+  # Die Karte selbst hat keine Aktion: pk.block haelt Touch-Ereignisse an, die
+  # Navigation zur View laeuft ueber pk.navigiere (Tipp auf den Inhalt).
+  pakete_kompakt:
+    template: pakete_huelle
+    custom_fields:
+      inhalt: |
+        [[[ return variables.pk.kompakt(); ]]]
+
+  pakete_uebersicht:
+    template: pakete_huelle
+    custom_fields:
+      inhalt: |
+        [[[ return variables.pk.uebersicht(); ]]]
+
+  pakete_liste:
+    template: pakete_huelle
+    custom_fields:
+      inhalt: |
+        [[[ return variables.pk.listenKarte(variables.gruppe); ]]]
+
+  pakete_popup:
+    template: pakete_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    show_ripple: false
+    triggers_update: []
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+      - padding: 4px 18px 18px
+      - background: none
+      - box-shadow: none
+      - border: none
+      - cursor: default
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - width: 100%
+        - pointer-events: auto
+    custom_fields:
+      inhalt: |
+        [[[ return variables.pk.formular(); ]]]
