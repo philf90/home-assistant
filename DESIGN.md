@@ -420,7 +420,7 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `top-navigation-karte.yaml`) sowie von der Home-View
 `haustuer-ereignis-karte.yaml`, `person-presence-karte.yaml`,
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
-`pollenflug-karte.yaml`, `wlan-karte-v2.yaml`, `muellabfuhr-karte-v2.yaml`,
+`pollenflug-karte-v2.yaml`, `wlan-karte-v2.yaml`, `muellabfuhr-karte-v2.yaml`,
 `meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-view.yaml`,
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)
@@ -702,8 +702,8 @@ gilt hell über den Schalter:
   Alternative; er läge nur ΔE₀₀ 9,2 neben Rosé und 8,8 neben Dragonfruit
   (Entwurf `warnung-animiert.html`).
 
-**Pollenflug** (`pollenflug-karte.yaml`, Popup `nachtblau_pollen_popup` in
-`warnlage-templates.yaml`): in Chromium mit allen Stufen (gering, mittel,
+**Pollenflug** (bis 14.11.2026 `pollenflug-karte.yaml`, jetzt im Archiv;
+Popup `nachtblau_pollen_popup` in `warnlage-templates.yaml`): in Chromium mit allen Stufen (gering, mittel,
 hoch, keine, keine Daten) gemessen, 49 Elemente je Modus. Schrift in der
 Stufenfarbe auf ihrer Tönung 0,12 mindestens 4,57:1 hell und 4,63:1 dunkel
 („hoch“ im Popup, Chip im hellsten Teil des Blockverlaufs bei langer
@@ -804,9 +804,12 @@ Pflanze: Baum mit Kätzchen oder Blütenbüscheln (Hasel, Erle, Birke, Esche),
 Gras mit Ähre (Gräser, Roggen mit Grannen), Kraut (Beifuß, Ambrosia).
 Zweige und Stängel stehen in `nachtblau-label` 0,3 bis 0,45, Blüten und
 Pollenkörner in der Stufenfarbe, Schein 0,18, Wind Wolkengrau 0,16; je
-Stufe fliegen mehr und schnellere Körner (3 bis 15). Die Detailkarte
-Pollenflug steht deshalb nur noch auf Home. Für alle Animationen gilt
-zusätzlich:
+Stufe fliegen mehr und schnellere Körner (3 bis 15). Die Kachel ist das
+Template `nachtblau_pollen_kachel`; auf Home steht sie mit eigenem Kopf in
+eigener Hülle (`pollenflug-karte-v2.yaml`, Entwurf `home-pollen.html`) und
+blendet sich aus, solange weder heute noch morgen eine Art belastet ist. Die
+frühere Detailkarte (`pollenflug-karte.yaml`) liegt seit 14.11.2026 im
+Archiv. Für alle Animationen gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in

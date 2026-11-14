@@ -25,8 +25,11 @@
 #   nachtblau_pollen_popup  Tippen: Popup "Pollenflug" mit allen acht Arten fuer
 #                       heute, morgen und uebermorgen; belastete Arten oben,
 #                       Arten ohne Belastung in einer Zeile. Langes Druecken:
-#                       more-info. Genutzt von pollenflug-karte.yaml und
-#                       "Warnlage & Pollen".
+#                       more-info. Genutzt von nachtblau_pollen_kachel.
+#   nachtblau_pollen_kachel Pollenkachel: hoechste Stufe, alle Arten, Szenen im
+#                       Wechsel, Verlauf ueber drei Tage (seit 14.11.2026).
+#                       In "Warnlage & Pollen" (wetter-view.yaml) und mit
+#                       eigenem Kopf auf Home (pollenflug-karte-v2.yaml).
 #   nachtblau_warn_fx       Animierte Szene und bewegte Icons je DWD-Ereignis
 #                       (seit 14.11.2026, Entwurf warnung-animiert.html).
 #                       nachtblau_dwd_popup erbt es, der Popup-Inhalt bindet
@@ -40,7 +43,7 @@
 # und Lesbarkeitsregeln; Erklaerung der Breiten-Fesseln im DWD-Block.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> alle vier Eintraege unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> alle fuenf Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
 # Voraussetzung: custom:button-card und browser_mod (HACS), Integrationen
@@ -551,7 +554,7 @@ button_card_templates:
                 // Quelle: DWD Pollenflug (hacs_dwd_pollenflug). Zustand = heute,
                 // Attribute state_tomorrow / state_in_2_days und *_desc.
                 // Werte 0 bis 3 in halben Stufen; Text und Farbe aus pfx.stufe()
-                // (nachtblau_pollen_fx), wie Pollenkachel und pollenflug-karte.yaml.
+                // (nachtblau_pollen_fx), wie in nachtblau_pollen_kachel.
                 const value = 'var(--nachtblau-text, #f2f5f8)';
                 const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
                 const label = 'var(--nachtblau-label, #b4c0cf)';
@@ -633,6 +636,198 @@ button_card_templates:
               ]]]
     hold_action:
       action: more-info
+
+  # ==========================================================================
+  # nachtblau_pollen_kachel -- Pollenkachel fuer Wetter-View und Home
+  # --------------------------------------------------------------------------
+  # Seit 14.11.2026 (Entwuerfe pollen-kachel.html, home-pollen.html): hoechste
+  # Stufe von heute als Pille, alle belasteten Arten, Szenen aus
+  # nachtblau_pollen_fx im Wechsel (je 5 s; Name und Spur der gezeigten Art
+  # heben sich hervor) und der Verlauf heute/morgen/uebermorgen je Art. Erst
+  # ab morgen belastet: Vorschau "Ab morgen ...". Tippen und Bibliothek ueber
+  # nachtblau_pollen_popup.
+  #
+  # Zwei Einsatzorte:
+  #   ohne kopf  Kachel ohne eigene Huelle, steht immer da (Wetter-View,
+  #              Raster in "Warnlage & Pollen"; ruhige Kachel ohne Belastung)
+  #   kopf: true eigene Nachtblau-Huelle mit Kopf "Pollenflug" (Home,
+  #              pollenflug-karte-v2.yaml); blendet sich aus, solange weder
+  #              heute noch morgen eine Art belastet ist
+  # Keine Minutenuhr noetig: Die Sensoren rechnen jede volle Stunde neu, auch
+  # um Mitternacht; gleiche Werte ergeben denselben HTML-Text, die Szenen
+  # starten also nicht neu.
+  # ==========================================================================
+  nachtblau_pollen_kachel:
+    template: nachtblau_pollen_popup
+    entity: sensor.pollenflug_graeser_101
+    triggers_update:
+      - sensor.pollenflug_graeser_101
+      - sensor.pollenflug_ambrosia_101
+      - sensor.pollenflug_beifuss_101
+      - sensor.pollenflug_birke_101
+      - sensor.pollenflug_erle_101
+      - sensor.pollenflug_esche_101
+      - sensor.pollenflug_hasel_101
+      - sensor.pollenflug_roggen_101
+    show_name: false
+    show_state: false
+    show_icon: false
+    show_label: false
+    variables:
+      kopf: false
+      pollen:
+        - {name: Gräser, entity: sensor.pollenflug_graeser_101}
+        - {name: Ambrosia, entity: sensor.pollenflug_ambrosia_101}
+        - {name: Beifuß, entity: sensor.pollenflug_beifuss_101}
+        - {name: Birke, entity: sensor.pollenflug_birke_101}
+        - {name: Erle, entity: sensor.pollenflug_erle_101}
+        - {name: Esche, entity: sensor.pollenflug_esche_101}
+        - {name: Hasel, entity: sensor.pollenflug_hasel_101}
+        - {name: Roggen, entity: sensor.pollenflug_roggen_101}
+      # kopf: sichtbar, wenn heute oder morgen eine Art belastet ist (Vorschau)
+      sichtbar: |
+        [[[
+          return (variables.pollen || []).some((p) => {
+            const s = states[p.entity];
+            if (!s) return false;
+            const h = parseFloat(s.state), m = parseFloat(s.attributes ? s.attributes.state_tomorrow : NaN);
+            return (!isNaN(h) && h > 0) || (!isNaN(m) && m > 0);
+          });
+        ]]]
+    styles:
+      card:
+        - padding: '[[[ return variables.kopf === true ? "16px 18px" : "0"; ]]]'
+        - border-radius: '[[[ return variables.kopf === true ? "22px" : "0"; ]]]'
+        - background: '[[[ return variables.kopf === true ? "linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)" : "none"; ]]]'
+        - border: '[[[ return variables.kopf === true ? "1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))" : "none"; ]]]'
+        - box-shadow: '[[[ return variables.kopf === true ? "0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))" : "none"; ]]]'
+        - overflow: '[[[ return variables.kopf === true ? "hidden" : "visible"; ]]]'
+        - display: '[[[ return (variables.kopf !== true || variables.sichtbar) ? "block" : "none"; ]]]'
+      grid:
+        - grid-template-areas: '"body"'
+        - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        body:
+          - width: 100%
+          - min-width: 0
+          # button-card setzt class="ellipsis" (nowrap): Umbruch erlauben
+          - white-space: normal
+    custom_fields:
+      body: |
+        [[[
+          const value = 'var(--nachtblau-text, #f2f5f8)', muted = 'var(--nachtblau-text-sekundaer, #8794a5)', label = 'var(--nachtblau-label, #b4c0cf)';
+          const green = 'var(--nachtblau-gruen, #a6d49e)', amber = 'var(--nachtblau-amber, #e6b566)';
+          const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+          const modus = (dunkel, hell) => `color-mix(in srgb, ${dunkel} var(--nachtblau-dunkel-anteil, 100%), ${hell})`;
+          const esc = (x) => String(x === null || x === undefined ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const pfx = variables.pfx;
+          // kopf (Home, pollenflug-karte-v2.yaml): eigener Kopf ueber der Kachel, Huelle ueber styles.card
+          const kopf = variables.kopf === true;
+          const mitKopf = (inhalt, c) => !kopf ? inhalt : `
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:14px;padding:2px 2px 8px;">
+                <div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${pfx.icon('blume', c, 23)}</div>
+                <div style="min-width:0;text-align:left;">
+                  <div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${value};">Pollenflug</div>
+                  <div style="font-size:12.5px;color:${muted};margin-top:2px;">Tippen für Details</div>
+                </div>
+              </div>
+              ${inhalt}
+            </div>`;
+          const zahl = (v) => (v === null || v === undefined || v === '' || isNaN(parseFloat(v))) ? null : parseFloat(v);
+
+          // ---------- Alle Arten: heute (Zustand), morgen, uebermorgen ----------
+          let naechste = null, daten = false;
+          const liste = (variables.pollen || []).map((p) => {
+            const s = states[p.entity], a = s && s.attributes ? s.attributes : {};
+            const h = s ? zahl(s.state) : null;
+            if (h !== null) daten = true;
+            const nu = a.next_update ? new Date(a.next_update) : null;
+            if (nu && !isNaN(nu.getTime()) && (!naechste || nu < naechste)) naechste = nu;
+            return { name: p.name, form: pfx.form(p.name), h, m: zahl(a.state_tomorrow), u: zahl(a.state_in_2_days) };
+          });
+          const heute = liste.filter((p) => p.h > 0).sort((x, y) => (y.h - x.h) || ((y.m || 0) - (x.m || 0)));
+          const neuMorgen = liste.filter((p) => !(p.h > 0) && p.m > 0).sort((x, y) => y.m - x.m);
+          const spaeter = liste.filter((p) => !(p.h > 0) && !(p.m > 0) && p.u > 0);
+          const vorschau = !heute.length && neuMorgen.length > 0;
+
+          // ---------- Ruhige Kachel: keine Belastung oder keine Daten ----------
+          const tag = (d) => {
+            const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+            const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+            const diff = Math.round((dd - t0) / 86400000);
+            return diff === 0 ? 'heute' : diff === 1 ? 'morgen' : d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+          };
+          const ruhig = (titel, text, c) => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
+              <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${pfx.icon('blume', c, 22)}</div>
+              <div style="min-width:0;text-align:left;">
+                <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;">${titel}</div>
+                <div style="font-size:12px;color:${muted};margin-top:2px;line-height:1.35;">${text}</div>
+              </div>
+            </div>`;
+          if (!daten) return mitKopf(ruhig('Keine Daten', 'DWD-Pollenflug', muted), muted);
+          if (!heute.length && !vorschau) {
+            const t = naechste ? `Nächste Vorhersage ${tag(naechste)} ${naechste.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : `Pollenflug · ${liste.length} Arten`;
+            return mitKopf(ruhig('Keine Belastung', t, green), green);
+          }
+
+          // ---------- Kopfzeile ----------
+          const zeige = vorschau ? neuMorgen : heute, n = zeige.length, top = zeige[0];
+          const st = vorschau ? null : pfx.stufe(top.h);
+          const c = vorschau ? amber : st.c;
+          const titel = vorschau ? (n === 1 ? `Ab morgen ${top.name}` : `Ab morgen ${n} Pollenarten`) : (n === 1 ? top.name : `${n} Pollenarten`);
+          const pillStil = 'display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;border-radius:999px;padding:3px 8px;white-space:nowrap;';
+          const pill = (txt, farbe, schrift) => `<span style="${pillStil}color:${schrift};background:${tint(farbe, 12)};border:1px solid ${tint(farbe, 24)};">${esc(txt)}</span>`;
+          const neutral = (txt) => `<span style="${pillStil}color:${label};background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">${esc(txt)}</span>`;
+          // Vorschau: Amber-Schrift auf zweifacher Toenung dunkel 5,18:1, hell Primaertext
+          let pills = vorschau ? pill('Vorschau', amber, modus(amber, value)) : pill(st.titel, c, st.pille);
+          if (!vorschau) {
+            const maxH = top.h, morgen = heute.map((p) => p.m).concat(neuMorgen.map((p) => p.m)).filter((v) => v !== null);
+            // Trend nur bei mehreren Arten; bei einer steht der Ausblick in der zweiten Zeile
+            if (neuMorgen.length) pills += neutral(`+${neuMorgen.length} ab morgen`);
+            else if (n > 1 && morgen.length && Math.max(...morgen) > maxH) pills += neutral('Morgen stärker');
+            else if (n > 1 && morgen.length && Math.max(...morgen) < maxH) pills += neutral('Morgen schwächer');
+          }
+          const kurz = (v) => pfx.stufe(v).kurz;
+          const zeile2 = n === 1
+            ? `<div style="font-size:12px;color:${muted};line-height:1.35;">${esc(`Morgen ${kurz(top.m)}, übermorgen ${kurz(top.u)}`)}</div>`
+            : `<div style="font-size:12.5px;color:${muted};line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${zeige.slice(0, 4).map((p, i) => `<span class="wl-name" style="${pfx.wechselStil('name', i, n)}">${esc(p.name)}</span>`).join(' · ')}${n > 4 ? ` · +${n - 4}` : ''}</div>`;
+
+          // ---------- Szenen im Wechsel ----------
+          const s4 = zeige.slice(0, 4);
+          const szene = pfx.wechsel(s4.map((p) => ({ form: p.form, wert: vorschau ? p.m : p.h, vorschau })));
+
+          // ---------- Verlauf: je Art eine Spur, heute / morgen / uebermorgen ----------
+          // Ohne Angabe (DWD "-1") schraffiert; die Spur der gezeigten Art hebt sich mit hervor
+          const zelle = (v) => v === null
+            ? `<i style="height:4px;border-radius:2px;background:repeating-linear-gradient(135deg, color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 40%, transparent) 0 2px, rgba(205, 214, 224, 0) 2px 4px);"></i>`
+            : `<i style="height:4px;border-radius:2px;background:${v > 0 ? pfx.stufe(v).c : 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'};"></i>`;
+          const spuren = heute.concat(neuMorgen, spaeter).map((p) => {
+            const i = s4.indexOf(p);
+            const hl = s4.length > 1 ? (i >= 0 ? pfx.wechselStil('lane', i, s4.length) : 'opacity:0.45;') : '';
+            return `<div class="wl-lane" style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:2px;${hl}">${zelle(p.h)}${zelle(p.m)}${zelle(p.u)}</div>`;
+          }).join('');
+          const verlauf = `<div style="display:flex;flex-direction:column;gap:3px;">
+              <div style="display:flex;flex-direction:column;gap:2px;">${spuren}</div>
+              <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:2px;font-size:11px;color:${label};"><span>Heute</span><span style="text-align:center;">Morgen</span><span style="text-align:right;">Übermorgen</span></div>
+            </div>`;
+
+          const kachel = `
+            <div style="position:relative;overflow:hidden;display:flex;flex-direction:column;gap:10px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;text-align:left;color:${value};">
+              <div style="display:flex;align-items:center;gap:12px;position:relative;">
+                <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${pfx.icon(top.form, c, 22)}</div>
+                <div style="min-width:0;flex:0 1 auto;display:flex;flex-direction:column;gap:4px;">
+                  <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${esc(titel)}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;">${pills}</div>
+                  ${zeile2}
+                </div>
+                <div class="pf-slot" style="margin:-12px -14px -4px 0;">${szene}</div>
+              </div>
+              ${verlauf}
+            </div>`;
+          return mitKopf(kachel, c);
+        ]]]
 
   # ==========================================================================
   # nachtblau_warn_fx -- animierte Szene je DWD-Warnereignis
@@ -1097,7 +1292,7 @@ button_card_templates:
   # nachtblau_pollen_fx -- Szenen und Stufen fuer den Pollenflug
   # --------------------------------------------------------------------------
   # Seit 14.11.2026 (Entwurf pollen-kachel.html). nachtblau_pollen_popup erbt
-  # es, damit die Pollenkachel in "Warnlage & Pollen" und pollenflug-karte.yaml
+  # es, damit nachtblau_pollen_kachel (Wetter-View und Home)
   # Bibliothek und Keyframes haben; der Popup-Inhalt bindet es selbst ein
   # (eigene button-card, eigenes Shadow-DOM).
   #
@@ -1135,7 +1330,7 @@ button_card_templates:
     variables:
       pfx: |
         [[[
-          const VERSION = 1, alt = window.__nachtblauPollenFx;
+          const VERSION = 2, alt = window.__nachtblauPollenFx;
           if (alt && alt.version === VERSION) return alt;
 
           const R = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -1181,7 +1376,7 @@ button_card_templates:
           };
           const istGras = (f) => f === 'gras' || f === 'roggen';
 
-          // ---------- Icons (wie pollenflug-karte.yaml, Pollen bewegt) ----------
+          // ---------- Icons (Blume und Halm, Pollen bewegt) ----------
           const icon = (f, farbe, px) => {
             const punkte = (lst) => lst.map(([x, y, d]) => `<circle class="pf-ic-dot" cx="${x}" cy="${y}" r="0.6" fill="currentColor" stroke="none" style="animation-delay:-${d}s"/>`).join('');
             const kopf = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:${farbe};width:${px}px;height:${px}px;display:block;overflow:visible;"`;
