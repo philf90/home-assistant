@@ -565,9 +565,11 @@ button_card_templates:
                 const widthCap = 'width:94vw;width:min(704px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;white-space:normal;';
 
                 // Halbe Stufen zaehlen seit 14.11.2026 zur hoeheren Farbe (1,5 Amber, 2,5 Koralle)
-                const stufe = (v) => {
+                // Ohne Wert: "keine Daten", wenn der Sensor selbst keinen liefert; fehlt nur
+                // die Vorhersage (DWD "-1", meist uebermorgen), "ohne Angabe" wie in der Kachel
+                const stufe = (v, daten) => {
                   const st = variables.pfx.stufe(v);
-                  if (st.wert === null) return { txt: 'keine Daten', c: muted, an: false };
+                  if (st.wert === null) return { txt: daten ? 'ohne Angabe' : 'keine Daten', c: muted, an: false };
                   if (!st.an) return { txt: 'keine', c: muted, an: false };
                   return { txt: st.kurz, c: st.c, an: true };
                 };
@@ -582,9 +584,10 @@ button_card_templates:
                   const a = s ? (s.attributes || {}) : {};
                   const lu = toDate(a.last_update); if (lu && (!stand || lu > stand)) stand = lu;
                   const nu = toDate(a.next_update); if (nu && (!naechste || nu < naechste)) naechste = nu;
+                  const daten = !!s && !isNaN(parseFloat(s.state));
                   const tage = TAGE.map(([t, key, desc]) => {
                     const v = key ? a[key] : (s ? s.state : NaN);
-                    return { tag: t, v: parseFloat(v), st: stufe(v), desc: a[desc] || '' };
+                    return { tag: t, v: parseFloat(v), st: stufe(v, daten), desc: a[desc] || '' };
                   });
                   const max = Math.max(...tage.map((t) => (isNaN(t.v) ? 0 : t.v)));
                   return { name: p.name, tage, max };
