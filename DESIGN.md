@@ -675,6 +675,19 @@ gilt hell über den Schalter:
   3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
   2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
+- **Stufe 4** (extremes Unwetter) ist in beiden Modi gefüllt: Kachel und
+  Pille deckend in der DWD-Farbe, Icon und Schrift nach Kontrast (bei der
+  CAP-Farbe Dunkelrot `136, 14, 79` Hell, 8,64:1), Rand und Leuchten in
+  `nachtblau-fuellung-rand-rot` und `nachtblau-leuchten-rot`. Getönt hob
+  sich die Kachel dunkel nur mit 1,03:1 von der Hülle ab, und Icon und
+  Schrift fielen auf Hell zurück; Stufe 4 wirkte dadurch neutraler als
+  Stufe 3. Gefüllt statt getönt folgt dem Muster für kritische Werte
+  (siehe „Bausteine“). Gerechnet: Fläche zur Hülle dunkel 1,68:1, hell
+  8,65:1; Rand dunkel 2,35:1, hell 5,49:1. Dunkel bleibt der Rand damit
+  unter 3:1, die Stufe steht aber immer auch als Text in der Pille und
+  im Icon (8,64:1). Ein heller Purpur als neue Palettenfarbe war die
+  Alternative; er läge nur ΔE₀₀ 9,2 neben Rosé und 8,8 neben Dragonfruit
+  (Entwurf `warnung-animiert.html`).
 
 **Pollenflug** (`pollenflug-karte.yaml`, Popup `nachtblau_pollen_popup` in
 `warnlage-templates.yaml`): in Chromium mit allen Stufen (gering, mittel,
@@ -721,12 +734,35 @@ sechs Stufen. Weil die Karte bei jedem Sensor-Update neu zeichnet (gemessen
 etwa alle 2 s), hängt die Phase an der Uhrzeit (negativer
 `animation-delay`); sonst begänne der Fluss jedes Mal von vorn. Nur die
 Quelle mit dem größten Anteil sendet einen Puls-Ring aus. Inaktive Leitungen
-sind gestrichelt in Weiß mit Deckkraft und stehen still. Dafür gilt zusätzlich:
+sind gestrichelt in Weiß mit Deckkraft und stehen still. Die DWD-Warnungen
+(Template `nachtblau_warn_fx` in `warnlage-templates.yaml`, genutzt von
+`meteoalarm-karte.yaml` und dem Popup `nachtblau_dwd_popup`; Entwurf,
+Varianten und Zuordnung aller Ereigniscodes in `warnung-animiert.html`)
+haben je Ereignis eine Szene rechts neben dem Text, gewählt nach dem
+Ereigniscode `warning_N_type` (DWD-ii-Code aus dem CAP-DWD-Profil 2.1.13;
+in der Instanz geprüft: FROST liefert 22). Die Szene ist das letzte
+Flex-Kind der Zeile und beginnt so genau am Ende der Textspalte, ohne
+Messung; die Spalte lässt ihr mindestens 64 px (Popup 72 px), lange Namen
+brechen zweizeilig um, kombinierte Gewitter-Namen stehen in der Karte
+gekürzt da („SCHWERES GEWITTER“, darunter „mit ORKANBÖEN, …“). Gerendert
+mit dem echten Template-Code bei 360 und 402 px, hell und dunkel: Abstand
+Text zu Szene mindestens 12 px, kein Text abgeschnitten. Bei Gewittern
+bestimmt der Code auch Regen, Hagel und Böen (Gruppen RAIN, HAIL, WIND,
+nur die Pflicht-Mitglieder). Die Stufe skaliert Dichte und Tempo; ab
+Stufe 3 kommen ein roter Schein und eine leuchtende Icon-Kachel dazu, Stufe
+4 hat gefüllte Kachel und Pille (siehe „Sonderfarben im hellen Modus“,
+DWD-Karte). Die Icons bewegen sich mit (Blitz synchron zum Doppelblitz,
+Quecksilber sinkt bei Frost), Tauwetter und Leiterseilschwingungen haben
+eigene Icons. Hitze zeigt aufsteigende Wärme ohne Sonne, damit sie sich von
+UV (Sonne mit Strahlen) unterscheidet. Für alle Animationen gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in
   Sonnengelb, Nacht in Indigo, Unwetter in Rot, Sterne, Schnee und Blitz in
-  Weiß mit Deckkraft.
+  Weiß mit Deckkraft. Bei den Warnungen außerdem Frostschein in Blau
+  (Frost ist Blau, siehe „Temperaturstufen“), Eis und Kristalle in Weiß mit
+  Deckkraft, Hitze in Koralle (Stufe 1) und Rot (ab Stufe 3), UV in
+  Sonnengelb.
 - Die Kachel „Bedingung“ der Wetter-Karte zeigt die Farbe ihrer Szene, damit
   Kachel und Hintergrund übereinstimmen. Ausnahmen: Gewitter in Amber (Warnung)
   sowie Schnee, Schneeregen und Hagel in Türkis. Weiß mit Deckkraft trägt als
@@ -796,6 +832,13 @@ umgeschaltet über `nachtblau-dunkel-anteil`; dunkel bleibt alles wie bisher.
 
 - **Energiefluss:** Leitungen in den Knotenfarben, inaktive Leitungen in
   `nachtblau-unterkachel-rand`.
+- **DWD-Warnungen** (`nachtblau_warn_fx`): ohne Opt-in, die Karte ist
+  ohnehin für beide Modi gebaut. Jede Rolle nimmt hell ihren Tiefton mit dem
+  Faktor aus der Tabelle oben (Wolke × 1,8, Regen × 1,33, Weiß → Eis hell
+  × 1,88, Blitz → Sonnengelb 0,72, Schein × 1); Koralle und Rot behalten
+  ihre Deckkraft. Die Faktoren sind übernommen, nicht für jede Warnszene
+  einzeln gemessen. Text steht nie auf der Szene, deshalb hängt die
+  Lesbarkeit nicht von ihnen ab.
 - **Heizung** (`heizung-templates.yaml`): Wellen und Luftzug hell mit
   höherer Deckkraft, gleicher Kontrast zur Kachel wie dunkel.
 - **Hausgeräte** (`hausgeraete-templates.yaml`): Welle und Glanz hell mit
