@@ -363,12 +363,12 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
   `#ff8080`, Stufe 1 `#ffeb3b`, Stufe 2 `#fb8c00`, Stufe 3 `#e53935`,
   Stufe 4 `#880e4f`, dazu die Sonderfarben Starke Hitze `#cc99ff`, Extreme
   Hitze `#9e46f8` und UV `#fe68fe`. Nicht anpassen, nur für DWD-Warnungen
-  (Icon-Kachel, Stufen-Pille, Rand des Popup-Blocks). Die Karten setzen sie
-  nicht fest ein, sondern übernehmen die gelieferte Farbe. Nur wenn die
-  fehlt, greifen die Rückfallwerte `#7c8ba1`, `#f2c500`, `#fb9a12`,
-  `#e6480e` und `#c0392b`; sie standen bis 14.11.2026 als „offizielle
-  Stufenfarben“ in der Palette, weichen aber vom CAP-Profil ab. Dazu
-  `#4ade80` für „aktiv“.
+  (Icon-Kachel, Stufen-Pille, Rand des Popup-Blocks). Die Karten übernehmen
+  die gelieferte Farbe und nutzen dieselben Werte als Rückfall, wenn keine
+  kommt (Hitze und UV nach Ereigniscode). Bis 14.11.2026 standen hier
+  abweichende Werte (`#7c8ba1`, `#f2c500`, `#fb9a12`, `#e6480e`,
+  `#c0392b`) als „offizielle Stufenfarben“; sie entsprachen nicht dem
+  CAP-Profil und sind entfernt. Dazu `#4ade80` für „aktiv“.
 - **World of Warcraft:** offizielle Qualitätsfarben der Items, nur in der
   WoW-Karte (`wow-arsenal-karte.yaml`, `wow-templates.yaml`): Schlecht `#9d9d9d`, Ungewöhnlich `#1eff00`,
   Selten `#0070dd`, Episch `#a335ee`, Legendär `#ff8000`, Artefakt
@@ -659,7 +659,7 @@ der Hülle ab; die Kante trägt also der Rand. Varianten gibt es für Amber
 | Avatar-Platzhalter | unverändert, eigene Fläche | – |
 | Vereinsrot `#e30613` | nur als Fläche mit weißer Schrift | Weiß darauf 4,88:1, als Schrift 4,47:1 |
 | Flugradar-Gelb `#f2c94c` | nur auf dunklem Kartengrund | 1,45:1 |
-| DWD-Stufen 0–4 | nur als Fläche; Schrift Navy (Stufe 0–2) bzw. Weiß (Stufe 4); Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 4,87 · 10,26 · 7,82 · 4,26; Weiß Stufe 3 3,96, Stufe 4 5,44 |
+| DWD-Stufen 0–4 (CAP) | nur als Fläche; Schrift Navy (Stufe 0–3) bzw. Hell (Stufe 4), gewählt nach Kontrast; Stufe 3 nur große, fette Schrift ab 18,66 px | Navy 6,95 · 13,82 · 7,12 · 3,99; Hell Stufe 4 8,64 (gerechnet) |
 | Warnung aktiv `#4ade80` | nur als Punkt mit Text daneben | 1,60:1 |
 | WoW-Qualitätsfarben | nur in der WoW-Karte, die in beiden Modi dunkel bleibt; in der Werte-Karte als Rand der Item-Symbole auch auf heller Hülle (Symbol trägt die Information) | Ungewöhnlich auf heller Hülle 1,25:1 |
 | WoW-Lebensbalken und -Klassenfarben | als gefüllte Kachel der Werte-Karte und als Klassenpunkt der Gilden-Karte (mit Klassenname als Text), Füllung und Schrift in beiden Modi gleich; Rand halb Farbe, halb `nachtblau-text` | Schrift ab 4,90:1; Rand zur hellen Hülle ab 3,22:1 |
@@ -675,14 +675,18 @@ gilt hell über den Schalter:
   der Karte).
 - Stufen- und „aktiv“-Pille: Tönung 0,12 und Rand 0,24 der DWD-Farbe,
   Schrift `nachtblau-text`.
-- Gemessen (Chromium, Stufen `#ffeb3b`, `#fb9a12`, `#e6480e`, `#c0392b`):
-  Icon 13,82 · 7,82 · 4,26 · 4,97:1, Pillenschrift 13,63–16,45:1.
+- Gerechnet (WCAG-Formel, CAP-Farben `#ff8080`, `#ffeb3b`, `#fb8c00`,
+  `#e53935`, `#880e4f`): Icon 6,95 · 13,82 · 7,12 · 3,99 · 8,64:1,
+  Pillenschrift 12,41–15,17:1, bei Stufe 4 (gefüllt) 8,64:1. Bis 14.11.2026
+  standen hier in Chromium gemessene Werte für die alten, vom CAP-Profil
+  abweichenden Rückfallfarben.
 - Dunkel stehen Icon und Schrift im DWD-Ton auf seiner Tönung, solange er
   dort 3:1 (Icon) bzw. 4,5:1 (Schrift) hält; sonst in Hell `#f2f5f8`. Die
   Karte rechnet das aus der gelieferten Farbe (Funktion `lesbar`), die
-  Fläche bleibt immer im DWD-Ton. Gemessen mit `#e6480e`: Pillenschrift
-  3,60 → 13,05:1, Icon bleibt im Ton (3,45:1); mit `#c0392b`: Schrift
-  2,71 → 13,46:1, Icon 2,63 → 13,06:1. Stufe 1 und 2 bleiben im Ton.
+  Fläche bleibt immer im DWD-Ton. Gerechnet mit den CAP-Farben:
+  Vorabinformation, Stufe 1 und 2 bleiben im Ton (Pille ab 5,41:1, Icon ab
+  5,02:1); Stufe 3 `#e53935`: Pillenschrift 3,43 → 13,25:1 in Hell, Icon
+  bleibt im Ton (3,30:1); Stufe 4 ist gefüllt (8,64:1, siehe unten).
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
 - **Stufe 4** (extremes Unwetter) ist in beiden Modi gefüllt: Kachel und
   Pille deckend in der DWD-Farbe, Icon und Schrift nach Kontrast (bei der
