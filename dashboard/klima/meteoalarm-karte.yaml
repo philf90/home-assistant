@@ -14,11 +14,15 @@
 # Ersetzt die custom:meteoalarm-card durch einen custom:button-card-Nachbau,
 # damit dieselbe Nachtblau-Huelle, Palette und Typografie greift.
 #
-# - conditional-Wrapper blendet die Karte aus, wenn keine Warnung aktiv ist
-#   (entspricht hide_when_no_warning: true der alten Karte).
-# - Icon-Kachel und "Stufe"-Pille faerben sich in der offiziellen DWD-Warnfarbe
-#   (Attribut warning_1_color), Icon je nach Warnungstyp (Wind/Gewitter/...).
-# - Liegt mehr als eine Warnung an, wird "+N weitere" angezeigt.
+# - conditional-Wrapper blendet die Karte aus, wenn weder eine Warnung noch eine
+#   Vorabinformation vorliegt (seit 14.11.2026 auch Vorabinformationen).
+# - Oben die wichtigste Warnung: aktuelle Warnungen nach Stufe, dann Beginn,
+#   danach Vorabinformationen (seit 14.11.2026; vorher immer warning_1 in der
+#   Reihenfolge des DWD-Servers). Icon-Kachel und Pille in der DWD-Warnfarbe,
+#   bei Vorabinformationen in der CAP-Vorabfarbe mit Pille "Vorabinformation".
+# - Weitere Warnungen stehen darunter als Liste mit Icon, Name, Stufe und
+#   Zeitraum, hoechstens drei, danach "+N weitere" (Entwurf warn-weitere.html,
+#   Variante C). Bis 14.11.2026 nur "+N weitere".
 # - Tippen oeffnet ein eigenes Popup (browser_mod.popup) mit allen Warnungen in
 #   normalisierter Form statt des rohen more-info-Dialogs. Langes Druecken
 #   oeffnet weiterhin das Standard-more-info mit allen Roh-Attributen.
@@ -27,7 +31,7 @@
 #   Wetter-View es oeffnet.
 # - Seit 14.11.2026 animiert (Template nachtblau_warn_fx, ueber
 #   nachtblau_dwd_popup geerbt; Entwurf warnung-animiert.html): Szene je
-#   Ereignis rechts neben dem Text, nach dem Ereigniscode warning_1_type;
+#   Ereignis rechts neben dem Text, nach dem Ereigniscode der obersten Warnung;
 #   das Icon bewegt sich mit. Ab Stufe 3 roter Schein und leuchtende
 #   Icon-Kachel, Stufe 4 mit gefuellter Kachel und Pille (DESIGN.md,
 #   "Animierte Hintergruende"). Text steht nie auf der Szene: Die Textspalte
@@ -39,17 +43,24 @@
 # nachtblau_dwd_popup und nachtblau_warn_fx aus warnlage-templates.yaml. Sensoren der
 # DWD-Integration (dwd_weather_warnings) -> "aktuelle Warnstufe" + "Vorwarnstufe".
 type: conditional
+# Sichtbar bei einer aktuellen Warnung oder einer Vorabinformation; numeric_state
+# ist bei unavailable/unknown falsch, die Karte bleibt dann aus
 conditions:
-  - entity: sensor.warnregion_aktuelle_warnstufe
-    state_not: '0'
-  - entity: sensor.warnregion_aktuelle_warnstufe
-    state_not: unavailable
-  - entity: sensor.warnregion_aktuelle_warnstufe
-    state_not: unknown
+  - condition: or
+    conditions:
+      - condition: numeric_state
+        entity: sensor.warnregion_aktuelle_warnstufe
+        above: 0
+      - condition: numeric_state
+        entity: sensor.warnregion_vorwarnstufe
+        above: 0
 card:
   type: custom:button-card
   entity: sensor.warnregion_aktuelle_warnstufe
   template: nachtblau_dwd_popup
+  triggers_update:
+    - sensor.warnregion_aktuelle_warnstufe
+    - sensor.warnregion_vorwarnstufe
   # Langes Druecken zeigt weiterhin die Roh-Attribute des Sensors
   hold_action:
     action: more-info
@@ -118,33 +129,51 @@ card:
           return ok ? c : HELL;
         };
 
-        const e = entity;
-        const a = (e && e.attributes) ? e.attributes : {};
-        const lvl = parseInt(e ? e.state : '0') || 0;
-        const count = parseInt(a.warning_count) || 0;
-        if (lvl <= 0 || count <= 0) return '';
-
-        // ---------- Warnungsdaten (erste/hoechste Warnung) ----------
-        const w1 = (a.warning_1 && typeof a.warning_1 === 'object') ? a.warning_1 : {};
-        const name = a.warning_1_name || w1.event || a.warning_1_headline || 'Wetterwarnung';
-        const wlvl = parseInt(a.warning_1_level) || lvl;
-        // DWD-Ereigniscode (ii), waehlt Szene und Icon (FROST = 22)
-        const typ = (a.warning_1_type !== undefined && a.warning_1_type !== null) ? a.warning_1_type : w1.event_code;
-
-        // Offizielle DWD-Farbe, sonst Fallback nach Stufe
+        // ---------- Alle Warnungen beider Sensoren, sortiert ----------
+        // Die Integration liefert warning_1, warning_2, ... in der Reihenfolge des
+        // DWD-Servers, ohne Sortierung (dwdwfsapi fragt ohne sortBy an). Seit
+        // 14.11.2026 sortiert die Karte selbst wie die Warnlage-Kachel der
+        // Wetter-View: aktuelle Warnungen nach Stufe (hoechste zuerst), bei gleicher
+        // Stufe nach Beginn; danach die Vorabinformationen ebenso. Bis dahin stand
+        // oben immer warning_1, eine Unwetterwarnung konnte in "+N weitere" stehen.
+        const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
         // Rueckfall ohne gelieferte Farbe: dieselben Werte, die die Integration
-        // sonst liefert (CAP-DWD-Profil 2.1.13, Kap. 3.5), Hitze und UV nach Ereigniscode
+        // sonst liefert (CAP-DWD-Profil 2.1.13, Kap. 3.5), Hitze und UV nach
+        // Ereigniscode; Vorabinformation immer in der CAP-Vorabfarbe
         const lvlColor = { 1:'#ffeb3b', 2:'#fb8c00', 3:'#e53935', 4:'#880e4f' };
         const sonderColor = { 246:'#fe68fe', 247:'#cc99ff', 248:'#9e46f8' };
-        const color = a.warning_1_color || w1.color || sonderColor[parseInt(typ)] || lvlColor[wlvl] || '#fb8c00';
-        const lvlLabel = { 1:'Wetterwarnung', 2:'Markante Warnung', 3:'Unwetterwarnung', 4:'Extreme Warnung' }[wlvl] || ('Stufe ' + wlvl);
+        const VORAB = '#ff8080';
+        const lesen = (id, vorab) => {
+          const s = states[id], a = s && s.attributes ? s.attributes : {}, n = parseInt(a.warning_count) || 0, out = [];
+          for (let i = 1; i <= n; i++) {
+            const o = (a['warning_' + i] && typeof a['warning_' + i] === 'object') ? a['warning_' + i] : {};
+            const p = (k) => a['warning_' + i + '_' + k];
+            const lv = parseInt((p('level') !== undefined && p('level') !== null) ? p('level') : o.level) || 0;
+            // DWD-Ereigniscode (ii), waehlt Szene und Icon (FROST = 22)
+            const ii = (p('type') !== undefined && p('type') !== null) ? p('type') : o.event_code;
+            const nm = String(p('name') || o.event || p('headline') || 'Wetterwarnung').replace(/^VORABINFORMATION\s+/, '');
+            out.push({ name: nm, ii, level: lv, vorab,
+              color: vorab ? VORAB : (p('color') || o.color || sonderColor[parseInt(ii)] || lvlColor[lv] || '#fb8c00'),
+              // warning_N_start/_end; aeltere Versionen und warning_N-Objekt: *_time
+              start: toDate(p('start') || p('start_time') || o.start_time || o.start),
+              end: toDate(p('end') || p('end_time') || o.end_time || o.end) });
+          }
+          return out;
+        };
+        const ordnen = (x, y) => (y.level - x.level) || ((x.start ? x.start.getTime() : 0) - (y.start ? y.start.getTime() : 0));
+        const alle = lesen('sensor.warnregion_aktuelle_warnstufe', false).sort(ordnen)
+          .concat(lesen('sensor.warnregion_vorwarnstufe', true).sort(ordnen));
+        if (!alle.length) return '';
+
+        // ---------- Oben die erste Warnung, darunter die weiteren ----------
+        const top = alle[0], rest = alle.slice(1);
+        const name = top.name, typ = top.ii, color = top.color, vorab = top.vorab;
+        const wlvl = top.level || 1;
+        const LABEL = { 1:'Wetterwarnung', 2:'Markante Warnung', 3:'Unwetterwarnung', 4:'Extreme Warnung' };
+        const lvlLabel = vorab ? 'Vorabinformation' : (LABEL[wlvl] || ('Stufe ' + wlvl));
 
         // ---------- Zeitraum ----------
-        // dwd_weather_warnings liefert warning_N_start/_end; aeltere Versionen
-        // und das verschachtelte warning_N-Objekt nutzen *_time - beides lesen.
-        const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
-        const start = toDate(a.warning_1_start || a.warning_1_start_time || w1.start_time || w1.start);
-        const end   = toDate(a.warning_1_end   || a.warning_1_end_time   || w1.end_time   || w1.end);
+        const start = top.start, end = top.end;
         const fmtT = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         const dayLabel = (d) => {
           const t0 = new Date(); t0.setHours(0,0,0,0);
@@ -168,13 +197,14 @@ card:
         // ---------- Szene, Icon und Kachel (Template nachtblau_warn_fx) ----------
         const wfx = variables.wfx;
         const key = wfx.szene(typ, name);
-        const szene = wfx.fx(key, wlvl, typ, false, 'karte');
-        const alarm = wlvl >= 3;
+        // Vorabinformation: Szene abgeschwaecht (wie in der Warnlage-Kachel), ohne Alarm
+        const szene = wfx.fx(key, wlvl, typ, vorab, 'karte');
+        const alarm = !vorab && wlvl >= 3;
         // Stufe 4: Kachel und Pille deckend in der DWD-Farbe, Schrift nach Kontrast,
         // Rand und Leuchten in Rot (gefuellte Rot-Kachel). Getoent waere die
         // DWD-Farbe der Stufe 4 (dunkles Purpurrot laut CAP-Profil) nur 1,03:1 zur
         // Huelle, Icon und Schrift fielen auf Hell.
-        const extrem = wlvl >= 4;
+        const extrem = !vorab && wlvl >= 4;
         const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
         const leuchtenRot = 'var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5))';
         const kachel = extrem
@@ -195,7 +225,42 @@ card:
           ? `color:${aufFlaeche(color)};background:${color};border:1px solid ${randRot};`
           : `color:${modus(lesbar(color, 0.12, 4.5), value)};background:${tint(color, 12)};border:1px solid ${tint(color, 24)};`;
         const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;${pillFarben}border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
-        const more = count > 1 ? `<span style="font-size:12px;color:${muted};white-space:nowrap;">+${count - 1} weitere</span>` : '';
+
+        // ---------- Weitere Warnungen: Liste (Entwurf warn-weitere.html, Variante C) ----------
+        // Je Warnung Icon in ihrer Farbe, Name, Stufe und Zeitraum; hoechstens drei
+        // Zeilen, danach "+N weitere" (Tippen oeffnet das Popup mit allen).
+        const NB = String.fromCharCode(160); // Tag und Uhrzeit nicht trennen
+        const cap = (t) => String(t || '').split(' ').map((x) => (x.length > 1 && x === x.toUpperCase() && /[A-ZÄÖÜ]/.test(x)) ? x.charAt(0) + x.slice(1).toLowerCase() : x).join(' ');
+        const zeitraum = (w) => (w.start && w.end)
+          ? (w.start.toDateString() === w.end.toDateString() ? `${dayLabel(w.start)}${NB}${fmtT(w.start)}–${fmtT(w.end)}` : `${dayLabel(w.start)}${NB}${fmtT(w.start)} – ${dayLabel(w.end)}${NB}${fmtT(w.end)}`)
+          : (w.start ? `ab ${dayLabel(w.start)}${NB}${fmtT(w.start)}` : '');
+        const MAX = 3;
+        const eintrag = (w) => {
+          const voll = !w.vorab && w.level >= 4, c = w.color, k2 = wfx.szene(w.ii, w.name);
+          const kachel2 = voll
+            ? `background:${c};border:1px solid ${randRot};`
+            : `background:${modus(tint(c, 16), c)};border:1px solid ${modus(tint(c, 24), c)};`;
+          const icon2 = voll ? aufFlaeche(c) : modus(lesbar(c, 0.16, 3), aufFlaeche(c));
+          const pill2 = voll
+            ? `color:${aufFlaeche(c)};background:${c};border:1px solid ${randRot};`
+            : `color:${modus(lesbar(c, 0.12, 4.5), value)};background:${tint(c, 12)};border:1px solid ${tint(c, 24)};`;
+          return `
+            <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+              <div style="flex:none;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;box-sizing:border-box;${kachel2}">${wfx.icon(k2, icon2, 17)}</div>
+              <div style="min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:2px;">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 7px;min-width:0;">
+                  <span style="font-size:14px;font-weight:650;letter-spacing:-0.01em;line-height:1.2;">${esc(cap(wfx.kurz(w.name).titel))}</span>
+                  <span style="font-size:10.5px;font-weight:700;line-height:1;border-radius:999px;padding:2px 6px;white-space:nowrap;${pill2}">${w.vorab ? 'Vorabinformation' : (LABEL[w.level] || 'Wetterwarnung')}</span>
+                </div>
+                <div style="font-size:12px;color:${muted};line-height:1.25;">${esc(zeitraum(w))}</div>
+              </div>
+            </div>`;
+        };
+        const liste = rest.length ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:flex;flex-direction:column;gap:10px;position:relative;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+            ${rest.slice(0, MAX).map(eintrag).join('')}
+            ${rest.length > MAX ? `<div style="font-size:12px;color:${muted};padding-left:42px;">+${rest.length - MAX} weitere · Tippen für alle</div>` : ''}
+          </div>` : '';
 
         // ---------- Aufbau ----------
         return `
@@ -210,8 +275,7 @@ card:
                 ${pill}
                 <span style="font-size:12.5px;color:${muted};line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${range}</span>
               </div>
-              ${more ? `<div style="margin-top:1px;">${more}</div>` : ''}
             </div>
-            ${szene ? `<div class="wf-slot">${szene}</div>` : ''}
-          </div>`;
+            ${szene ? `<div class="wf-slot"${rest.length ? ' style="margin-bottom:0;"' : ''}>${szene}</div>` : ''}
+          </div>${liste}`;
       ]]]
