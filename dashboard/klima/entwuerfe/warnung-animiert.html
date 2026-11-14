@@ -242,8 +242,10 @@ footer.src a { color: var(--accent); }
 /* Frost */
 .wf-cold { position: absolute; right: -40%; top: -55%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(127, 179, 213, 0.18), rgba(127, 179, 213, 0) 65%); }
 .wf-cr { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); overflow: visible; }
-.wf-cr path { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: wf-grow var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
-@keyframes wf-grow { 0% { stroke-dashoffset: 1; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.wf-cr path { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; animation: wf-grow-arm var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+.wf-cr path.zweig { animation-name: wf-grow-zweig; }
+@keyframes wf-grow-arm { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { stroke-dashoffset: 0.96; opacity: 1; } 28% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes wf-grow-zweig { 0%, 28% { stroke-dashoffset: 1; opacity: 0; } 29% { stroke-dashoffset: 0.93; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
 .wf-spk { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); background: rgba(255, 255, 255, 0.5); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: wf-tw var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
 @keyframes wf-tw { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
 .wf-rime { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(0deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)); }
@@ -574,7 +576,11 @@ footer.src a { color: var(--accent); }
     .map(([y, hh, d, p]) => `<div class="wf-fog" style="--y:${y}%;--h:${hh}%;--d:${(d / t).toFixed(1)}s;--p:${p}"></div>`).join('');
   // Eiskristall: sechs Arme mit Seitenzweigen (wie das Glaette-Icon), waechst per stroke-dash
   const CRYSTAL = 'M12 2.5V21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
-  const crystal = (x, y, s, d, p) => `<svg class="wf-cr" style="--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}" viewBox="0 0 24 24">${CRYSTAL.split('M').filter(Boolean).map((seg) => `<path pathLength="1" d="M${seg}"/>`).join('')}</svg>`;
+  // Arme wachsen von der Mitte nach aussen, Seitenzweige danach (wie nachtblau_warn_fx ab VERSION 2)
+  const ARME = 'M12 12V2.5M12 12V21.5M12 12 20.23 7.25M12 12 3.77 16.75M12 12 20.23 16.75M12 12 3.77 7.25';
+  const ZWEIGE = 'M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
+  const teile = (pfad, cls) => pfad.split('M').filter(Boolean).map((seg) => `<path class="${cls}" pathLength="1" d="M${seg}"/>`).join('');
+  const crystal = (x, y, s, d, p) => `<svg class="wf-cr" style="--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}" viewBox="0 0 24 24">${teile(ARME, 'arm')}${teile(ZWEIGE, 'zweig')}</svg>`;
   const sparks = (n, top, span, t) => {
     let h = '';
     for (let i = 0; i < n; i++) {
@@ -827,7 +833,7 @@ footer.src a { color: var(--accent); }
       label: 'Frost', codes: '22, 82', def: 1,
       levels: { 1: [22, 'FROST'], 2: [82, 'STRENGER FROST'] },
       vorab: null,
-      what: 'Eiskristalle wachsen in 5 s, bleiben stehen und tauen weg; dazu Funkeln und kalter Schein in Blau. Strenger Frost mit mehr Kristallen und Raureif am Rand.',
+      what: 'Eiskristalle wachsen aus der Mitte (erst die Arme, dann die Seitenzweige), bleiben stehen und tauen weg; dazu Funkeln und kalter Schein in Blau. Strenger Frost mit mehr Kristallen und Raureif am Rand.',
       colors: [['#7fb3d5', 'Blau 0,18'], ['#ffffff80', 'Weiß 0,5']],
       sample: (l) => (l === 1 ? {
         desc: 'Es tritt leichter Frost bis -3 °C auf.', params: { 'Lufttemperatur': '>-3 °C' },
