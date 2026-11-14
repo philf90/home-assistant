@@ -217,7 +217,7 @@ footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13
   <section class="sec" id="karte">
     <header>
       <h2>Pollenflug-Karte auf Home</h2>
-      <p>Die Detailkarte (<code>pollenflug-karte.yaml</code>) steht nur noch auf Home; in der Wetter-View zeigt die Kachel Arten, Stufe und Verlauf. Auf Home nimmt sie die neuen Stufen. Der Stufentext bricht zweizeilig um: Neben dem Icon bleiben bei 306 px rund 87 px, „Hohe Belastung“ endete dort vorher auf „…“. Fall „Juni“:</p>
+      <p>Die Detailkarte (<code>pollenflug-karte.yaml</code>) steht nur noch auf Home; in der Wetter-View zeigt die Kachel Arten, Stufe und Verlauf. Auf Home nimmt sie die neuen Stufen und ordnet die Arten mit der höchsten Stufe zuerst. Der Stufentext bricht zweizeilig um: Neben dem Icon bleiben bei 306 px rund 87 px, „Hohe Belastung“ endete dort vorher auf „…“. Fall „Juni“:</p>
     </header>
     <div class="stage" id="kartenStage"></div>
   </section>
@@ -240,7 +240,7 @@ footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13
         <h3>Datenlage (geprüft)</h3>
         <ul>
           <li>Acht Sensoren der Region 101, Zustand = heute, Attribute <code>state_tomorrow</code> und <code>state_in_2_days</code>.</li>
-          <li>Übermorgen kann fehlen: Liefert der DWD „-1“, setzt die Integration den Wert auf leer. Der Verlauf zeigt diesen Tag schraffiert.</li>
+          <li>Übermorgen kann fehlen: Liefert der DWD „-1“, setzt die Integration den Wert auf leer. Der Verlauf zeigt diesen Tag schraffiert, Kachel und Popup schreiben „ohne Angabe“. „keine Daten“ steht nur, wenn ein Sensor selbst keinen Wert liefert.</li>
           <li>Neue Daten einmal am Tag, laut <code>next_update</code> um 11:00. Laut Quellcode der Integration (aktueller Stand) rechnen die Sensoren jede volle Stunde nach, also auch um Mitternacht. Eine Minutenuhr wie bei der Warnlage braucht die Kachel nicht.</li>
           <li>Heute (14.11.2026) haben alle acht Arten für alle drei Tage den Wert 0.</li>
         </ul>
@@ -257,7 +257,7 @@ footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13
         <h3>2 · Detailkarte</h3>
         <ul>
           <li>In der Wetter-View entfernt: Arten, Stufe und Verlauf stehen in der Kachel, Einzelheiten im Popup.</li>
-          <li>Auf Home bleibt sie, mit den neuen Stufen und zweizeiligem Stufentext.</li>
+          <li>Auf Home bleibt sie, mit den neuen Stufen, zweizeiligem Stufentext und der höchsten Stufe zuerst (#368).</li>
         </ul>
         <p class="rec">Entschieden am 14.11.2026, umgesetzt in #366.</p>
       </div>
@@ -520,7 +520,8 @@ footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13
     // wie pollenflug-karte.yaml: Zellen mit Stufentext, zweizeilig; Gras-Icon nur fuer Graeser
     const a = auswerten(fall);
     const maxH = Math.max(...a.heute.map((p) => p.h)), hc = STUFE[maxH].c;
-    const zellen = a.heute.map((p) => {
+    // hoechste Stufe zuerst, gleiche Stufe in Listenreihenfolge (#368)
+    const zellen = daten(fall).filter((p) => p.h > 0).sort((x, y) => y.h - x.h).map((p) => {
       const s = STUFE[p.h];
       return `<div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:16px;background:${tint(s.c, 12)};border:1px solid ${tint(s.c, 24)};min-width:0;">
         <div style="flex:none;width:24px;height:24px;display:grid;place-items:center;">${(p.k === 'graeser' ? gras : blume)(s.c, false).replace('<svg ', '<svg width="23" height="23" ')}</div>
