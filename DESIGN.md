@@ -358,8 +358,17 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
 - **Fußball:** Vereinsrot `#e30613`, Tor `#ff8a80`, Vereinshülle
   `#2a1418`→`#1f1013`.
 - **Flugradar:** Hervorhebung `#f2c94c`.
-- **Wetterwarnungen:** offizielle DWD-Stufenfarben (`#7c8ba1`, `#f2c500`,
-  `#fb9a12`, `#e6480e`, `#c0392b`) und `#4ade80` für „aktiv“. Nicht anpassen.
+- **Wetterwarnungen:** die DWD-Farben laut CAP-DWD-Profil 2.1.13, Kap. 3.5,
+  so wie die Integration sie in `warning_N_color` liefert: Vorabinformation
+  `#ff8080`, Stufe 1 `#ffeb3b`, Stufe 2 `#fb8c00`, Stufe 3 `#e53935`,
+  Stufe 4 `#880e4f`, dazu die Sonderfarben Starke Hitze `#cc99ff`, Extreme
+  Hitze `#9e46f8` und UV `#fe68fe`. Nicht anpassen, nur für DWD-Warnungen
+  (Icon-Kachel, Stufen-Pille, Rand des Popup-Blocks). Die Karten setzen sie
+  nicht fest ein, sondern übernehmen die gelieferte Farbe. Nur wenn die
+  fehlt, greifen die Rückfallwerte `#7c8ba1`, `#f2c500`, `#fb9a12`,
+  `#e6480e` und `#c0392b`; sie standen bis 14.11.2026 als „offizielle
+  Stufenfarben“ in der Palette, weichen aber vom CAP-Profil ab. Dazu
+  `#4ade80` für „aktiv“.
 - **World of Warcraft:** offizielle Qualitätsfarben der Items, nur in der
   WoW-Karte (`wow-arsenal-karte.yaml`, `wow-templates.yaml`): Schlecht `#9d9d9d`, Ungewöhnlich `#1eff00`,
   Selten `#0070dd`, Episch `#a335ee`, Legendär `#ff8000`, Artefakt
