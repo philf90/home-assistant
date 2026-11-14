@@ -12,7 +12,7 @@
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Zwei button-card-Templates, die das Antippen festlegen, dazu die
-# Szenen-Bibliothek fuer die Warnungen. Eine Karte bindet sie mit
+# Szenen-Bibliotheken fuer Warnungen und Pollenflug. Eine Karte bindet sie mit
 # "template: nachtblau_dwd_popup" bzw. "nachtblau_pollen_popup" ein.
 #
 #   nachtblau_dwd_popup     Tippen: browser_mod-Popup "Wetterwarnungen" mit allen
@@ -31,12 +31,16 @@
 #                       (seit 14.11.2026, Entwurf warnung-animiert.html).
 #                       nachtblau_dwd_popup erbt es, der Popup-Inhalt bindet
 #                       es selbst ein. Beschreibung am Template unten.
+#   nachtblau_pollen_fx     Stufen des Pollenflug-Index und Szene je Pollenart
+#                       (seit 14.11.2026, Entwurf pollen-kachel.html).
+#                       nachtblau_pollen_popup erbt es, der Popup-Inhalt
+#                       bindet es selbst ein. Beschreibung am Template unten.
 #
 # Beide Popups haben dieselbe Oberflaeche (Nachtblau, Breite bis 720 px)
 # und Lesbarkeitsregeln; Erklaerung der Breiten-Fesseln im DWD-Block.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> alle drei Eintraege unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> alle vier Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
 # Voraussetzung: custom:button-card und browser_mod (HACS), Integrationen
@@ -468,6 +472,8 @@ button_card_templates:
                   </div>`;
               ]]]
   nachtblau_pollen_popup:
+    # Stufen, Szenen und Keyframes fuer die Karte, die dieses Template nutzt
+    template: nachtblau_pollen_fx
     tap_action:
       action: call-service
       service: browser_mod.popup
@@ -486,6 +492,8 @@ button_card_templates:
           --popup-max-width: min(100vw, 720px);
         content:
           type: custom:button-card
+          # eigene button-card im Popup: braucht die Stufen aus der Bibliothek selbst
+          template: nachtblau_pollen_fx
           entity: sensor.pollenflug_graeser_101
           triggers_update:
             - sensor.pollenflug_graeser_101
@@ -542,16 +550,13 @@ button_card_templates:
                 // ================= Popup: Pollenflug heute, morgen, uebermorgen =================
                 // Quelle: DWD Pollenflug (hacs_dwd_pollenflug). Zustand = heute,
                 // Attribute state_tomorrow / state_in_2_days und *_desc.
-                // Werte 0 bis 3 in halben Stufen; Farbe wie pollenflug-karte.yaml:
-                // bis 1 gering (gruen), bis 2 mittel (amber), darueber hoch (rot).
+                // Werte 0 bis 3 in halben Stufen; Text und Farbe aus pfx.stufe()
+                // (nachtblau_pollen_fx), wie Pollenkachel und pollenflug-karte.yaml.
                 const value = 'var(--nachtblau-text, #f2f5f8)';
                 const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
                 const label = 'var(--nachtblau-label, #b4c0cf)';
                 const line  = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
                 const panel = 'linear-gradient(180deg, var(--nachtblau-flaeche-erhoeht, #222b3c) 0%, var(--nachtblau-huelle-unten, #171d29) 100%)';
-                const green = 'var(--nachtblau-gruen, #a6d49e)';
-                const amber = 'var(--nachtblau-amber, #e6b566)';
-                const red   = 'var(--nachtblau-rot, #f0736a)';
                 const tint  = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
                 const esc = (s) => String(s === null || s === undefined ? '' : s)
                   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -559,14 +564,12 @@ button_card_templates:
                 // als width, damit der Inhalt nicht auf seinen Text schrumpft
                 const widthCap = 'width:94vw;width:min(704px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;white-space:normal;';
 
+                // Halbe Stufen zaehlen seit 14.11.2026 zur hoeheren Farbe (1,5 Amber, 2,5 Koralle)
                 const stufe = (v) => {
-                  const x = parseFloat(v);
-                  if (isNaN(x)) return { txt: 'keine Daten', c: muted, an: false };
-                  if (x <= 0) return { txt: 'keine', c: muted, an: false };
-                  const n = parseInt(x);
-                  if (n <= 1) return { txt: 'gering', c: green, an: true };
-                  if (n <= 2) return { txt: 'mittel', c: amber, an: true };
-                  return { txt: 'hoch', c: red, an: true };
+                  const st = variables.pfx.stufe(v);
+                  if (st.wert === null) return { txt: 'keine Daten', c: muted, an: false };
+                  if (!st.an) return { txt: 'keine', c: muted, an: false };
+                  return { txt: st.kurz, c: st.c, an: true };
                 };
                 const toDate = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d : null; };
                 const fmt = (d) => d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -1085,4 +1088,233 @@ button_card_templates:
       @keyframes ic-glint { 0%, 70%, 100% { opacity: 0; } 80% { opacity: 1; } }
       @media (prefers-reduced-motion: reduce) {
         .wf *, .wf *::before, .wf *::after, .wf-ic *, .wf-alarm, .wl-layer, .wl-dots i, .wl-name { animation-play-state: paused !important; transition: none !important; }
+      }
+
+  # ==========================================================================
+  # nachtblau_pollen_fx -- Szenen und Stufen fuer den Pollenflug
+  # --------------------------------------------------------------------------
+  # Seit 14.11.2026 (Entwurf pollen-kachel.html). nachtblau_pollen_popup erbt
+  # es, damit die Pollenkachel in "Warnlage & Pollen" und pollenflug-karte.yaml
+  # Bibliothek und Keyframes haben; der Popup-Inhalt bindet es selbst ein
+  # (eigene button-card, eigenes Shadow-DOM).
+  #
+  # Stufen des DWD-Pollenflug-Gefahrenindex: 0, 0-1, 1, 1-2, 2, 2-3, 3; die
+  # Integration DWD Pollenflug liefert sie als 0, 0.5, ... 3. Halbe Stufen
+  # zaehlen zur hoeheren Farbe (bis 14.11.2026 per parseInt zur niedrigeren):
+  # 0,5 und 1 Gruen, 1,5 und 2 Amber, 2,5 Koralle, 3 Rot.
+  #
+  # Aufbau:
+  #   variables.pfx  Bibliothek, einmal pro Seite in window.__nachtblauPollenFx.
+  #                  VERSION bei jeder Aenderung erhoehen.
+  #     stufe(wert)               -> { an, wert, kurz, titel, c, pille }
+  #                                  (c Farbe der Stufe, pille Schriftfarbe der
+  #                                  Pille in einer getoenten Kachel)
+  #     form(name)                -> Pflanzenform der Art ('hasel', 'gras', ...)
+  #     icon(form, farbe, px)     -> Blume oder Halm, Pollen bewegt
+  #     szene(form, wert, vorschau) -> HTML der Ebene (Baum, Gras oder Kraut)
+  #     wechsel(szenen)           -> mehrere Szenen im Wechsel, je 5 s, hoechstens
+  #                                  vier (wie wechsel() in nachtblau_warn_fx)
+  #     wechselStil(art, i, n)    -> dieselbe Taktung fuer Punkte ('dot'), Namen
+  #                                  ('name') und Spuren im Verlauf ('lane')
+  #   extra_styles   Keyframes und Klassen der Ebene ".pf".
+  #
+  # Szenen: Baum mit Kaetzchen (Hasel lang, Birke mittel, Erle kurz in
+  # Bueschen) oder Bluetenbueschel (Esche), Gras mit Aehre (Roggen mit
+  # Grannen), Kraut (Beifuss Rispe, Ambrosia Aehren). Zweige und Staengel in
+  # nachtblau-label 0,45, Bluete und Koerner in der Stufenfarbe, Schein 0,18,
+  # Wind Wolkengrau 0,16. Mehr und schnellere Koerner je Stufe (3 bis 15).
+  # Vorschau (Belastung erst ab morgen): hohle Koerner, Ebene 0,55. Gleicher
+  # Zustand ergibt denselben HTML-Text (feste Pseudo-Zufallswerte), die Szene
+  # startet beim Neuzeichnen also nicht neu.
+  # "Bewegung reduzieren" zeigt ein Standbild.
+  # ==========================================================================
+  nachtblau_pollen_fx:
+    variables:
+      pfx: |
+        [[[
+          const VERSION = 1, alt = window.__nachtblauPollenFx;
+          if (alt && alt.version === VERSION) return alt;
+
+          const R = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+          const f1 = (n) => n.toFixed(1);
+
+          // ---------- Stufen ----------
+          const GRUEN = 'var(--nachtblau-gruen, #a6d49e)', AMBER = 'var(--nachtblau-amber, #e6b566)';
+          const KORALLE = 'var(--nachtblau-koralle, #e7936e)', ROT = 'var(--nachtblau-rot, #f0736a)';
+          const TEXT = 'var(--nachtblau-text, #f2f5f8)';
+          const modus = (dunkel, hell) => `color-mix(in srgb, ${dunkel} var(--nachtblau-dunkel-anteil, 100%), ${hell})`;
+          // Pille in einer Kachel, die selbst getoent ist (zweimal 0,12): dunkel
+          // Gruen 5,18:1 und Amber 5,18:1 bleiben farbig, Koralle (4,42:1) und
+          // Rot (3,95:1) nehmen Primaertext; hell fallen alle unter 4,5:1 und
+          // nehmen Primaertext (DESIGN.md, Pollenflug)
+          const ST = [
+            { bis: 0.5, kurz: 'keine bis gering', titel: 'Keine bis gering', c: GRUEN, farbig: true },
+            { bis: 1, kurz: 'gering', titel: 'Geringe Belastung', c: GRUEN, farbig: true },
+            { bis: 1.5, kurz: 'gering bis mittel', titel: 'Gering bis mittel', c: AMBER, farbig: true },
+            { bis: 2, kurz: 'mittel', titel: 'Mittlere Belastung', c: AMBER, farbig: true },
+            { bis: 2.5, kurz: 'mittel bis hoch', titel: 'Mittel bis hoch', c: KORALLE, farbig: false },
+            { bis: 99, kurz: 'hoch', titel: 'Hohe Belastung', c: ROT, farbig: false }
+          ];
+          const stufe = (v) => {
+            const x = (v === null || v === undefined || v === '') ? NaN : parseFloat(v);
+            if (isNaN(x)) return { an: false, wert: null, kurz: 'ohne Angabe', titel: 'Keine Daten', c: null };
+            if (x <= 0) return { an: false, wert: 0, kurz: 'keine', titel: 'Keine Belastung', c: GRUEN };
+            const s = ST.find((t) => x <= t.bis);
+            return { an: true, wert: Math.min(3, Math.ceil(x * 2) / 2), kurz: s.kurz, titel: s.titel, c: s.c, pille: s.farbig ? modus(s.c, TEXT) : TEXT };
+          };
+
+          // ---------- Arten ----------
+          const form = (name) => {
+            const n = String(name || '').toLowerCase();
+            if (/hasel/.test(n)) return 'hasel';
+            if (/erle/.test(n)) return 'erle';
+            if (/birke/.test(n)) return 'birke';
+            if (/esche/.test(n)) return 'esche';
+            if (/roggen/.test(n)) return 'roggen';
+            if (/gr(ä|ae)ser|gras/.test(n)) return 'gras';
+            if (/beifu/.test(n)) return 'beifuss';
+            if (/ambrosia/.test(n)) return 'ambrosia';
+            return 'gras';
+          };
+          const istGras = (f) => f === 'gras' || f === 'roggen';
+
+          // ---------- Icons (wie pollenflug-karte.yaml, Pollen bewegt) ----------
+          const icon = (f, farbe, px) => {
+            const punkte = (lst) => lst.map(([x, y, d]) => `<circle class="pf-ic-dot" cx="${x}" cy="${y}" r="0.6" fill="currentColor" stroke="none" style="animation-delay:-${d}s"/>`).join('');
+            const kopf = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:${farbe};width:${px}px;height:${px}px;display:block;overflow:visible;"`;
+            return istGras(f)
+              ? `${kopf} stroke-width="1.9"><path d="M12 21v-9"/><path d="M12 12c0-3.2-1.8-5.6-4.8-6.4.2 3.2 2 5.6 4.8 6.4Z"/><path d="M12 12c0-3.2 1.8-5.6 4.8-6.4-.2 3.2-2 5.6-4.8 6.4Z"/>${punkte([[18.6, 4.2, 0], [20.4, 6, 0.8], [5.4, 4.4, 1.6]])}</svg>`
+              : `${kopf} stroke-width="1.7"><circle cx="12" cy="14" r="2.1"/><circle cx="12" cy="9.4" r="2.1"/><circle cx="15.9" cy="11.7" r="2.1"/><circle cx="14.6" cy="16.3" r="2.1"/><circle cx="9.4" cy="16.3" r="2.1"/><circle cx="8.1" cy="11.7" r="2.1"/>${punkte([[18.5, 5, 0], [20.5, 6.7, 0.8], [18.2, 7.4, 1.6]])}</svg>`;
+          };
+
+          // ---------- Szenen ----------
+          const KOERNER = { 0.5: 3, 1: 5, 1.5: 7, 2: 9, 2.5: 12, 3: 15 };
+          const DAUER = { 0.5: 4.4, 1: 4, 1.5: 3.6, 2: 3.2, 2.5: 2.9, 3: 2.6 };
+          const PFL = 'stroke:var(--nachtblau-label, #b4c0cf);fill:none;stroke-linecap:round;';
+          const kaetzchen = (x, y, seg, rx, c, fo) => {
+            let h = `<line x1="${x}" y1="${y - 3}" x2="${x}" y2="${y + 1}" style="${PFL}stroke-opacity:0.5;stroke-width:1"/>`;
+            for (let i = 0; i < seg; i++) h += `<ellipse cx="${x + (i % 2 ? 0.5 : -0.5)}" cy="${f1(y + 3 + i * 3.3)}" rx="${rx}" ry="2.2" style="fill:${c};fill-opacity:${fo};stroke:${c};stroke-opacity:0.7;stroke-width:0.5"/>`;
+            return h;
+          };
+          const szene = (f, wert, vorschau) => {
+            const w = Math.min(3, Math.max(0.5, Math.ceil((parseFloat(wert) || 0.5) * 2) / 2));
+            const c = vorschau ? AMBER : stufe(w).c, fo = vorschau ? 0.3 : 0.55;
+            const seed = { hasel: 1, erle: 2, birke: 3, esche: 4, gras: 5, roggen: 6, beifuss: 7, ambrosia: 8 }[f] || 9;
+            let pfl = '', pkt = [], ri, gy = 36;
+            if (['hasel', 'erle', 'birke', 'esche'].includes(f)) {
+              pfl += `<path d="M152 7 C 128 11, 104 5, 62 17" style="${PFL}stroke-opacity:0.45;stroke-width:2.2"/>`;
+              pfl += `<path d="M120 9 l-4 -6 M94 9 l3 -6 M76 13 l-3 -6" style="${PFL}stroke-opacity:0.4;stroke-width:1.2"/>`;
+              [[78, 14], [97, 10], [117, 10], [136, 9]].forEach(([x, y], i) => {
+                let k = '';
+                if (f === 'hasel') { k = kaetzchen(x, y, 8, 2.3, c, fo); pkt.push([x, y + 20], [x, y + 28]); }
+                if (f === 'birke') { k = kaetzchen(x, y, 6, 2.7, c, fo); pkt.push([x, y + 16], [x, y + 22]); }
+                if (f === 'erle') { k = kaetzchen(x - 3, y, 4, 2.4, c, fo) + kaetzchen(x + 3, y + 1, 3, 2.4, c, fo); pkt.push([x, y + 14]); }
+                if (f === 'esche') {
+                  k = `<line x1="${x}" y1="${y - 2}" x2="${x}" y2="${y + 4}" style="${PFL}stroke-opacity:0.5;stroke-width:1"/>`;
+                  for (let j = 0; j < 7; j++) { const a = j / 7 * Math.PI * 2; k += `<circle cx="${f1(x + Math.cos(a) * 4.5)}" cy="${f1(y + 7 + Math.sin(a) * 3.5)}" r="1.9" style="fill:${c};fill-opacity:${fo + 0.1}"/>`; }
+                  pkt.push([x, y + 8]);
+                }
+                pfl += `<g class="pf-sway" style="transform-origin:${x}px ${y - 3}px;--a1:${-3 - i}deg;--a2:${3 + i}deg;animation-delay:${-i * 0.7}s">${k}</g>`;
+              });
+              ri = { dx: [-95, -55], dy: [12, 34] }; gy = 34;
+            } else if (istGras(f)) {
+              pfl += `<path d="M90 96 q-6 -22 -16 -30 M118 96 q8 -20 18 -26 M104 96 q-2 -18 -10 -28" style="${PFL}stroke-opacity:0.3;stroke-width:1.4"/>`;
+              const lang = f === 'roggen' ? 9 : 6, schritt = f === 'roggen' ? 3.1 : 3.6;
+              [[84, 26], [100, 14], [114, 24], [129, 16]].forEach(([x, top], i) => {
+                let k = `<path d="M${x + 4} 96 Q ${x + 2} ${(96 + top) / 2} ${x} ${f1(top + lang * schritt)}" style="${PFL}stroke-opacity:0.45;stroke-width:1.3"/>`;
+                for (let j = 0; j < lang; j++) {
+                  const yy = top + j * schritt, ox = j % 2 ? 1.8 : -1.8;
+                  k += `<ellipse cx="${f1(x + ox)}" cy="${f1(yy)}" rx="${f === 'roggen' ? 1.4 : 1.8}" ry="2.6" transform="rotate(${ox > 0 ? 18 : -18} ${f1(x + ox)} ${f1(yy)})" style="fill:${c};fill-opacity:${fo}"/>`;
+                  if (f === 'roggen') k += `<line x1="${f1(x + ox)}" y1="${f1(yy - 2)}" x2="${f1(x + ox * 3.2)}" y2="${f1(yy - 9)}" style="stroke:${c};stroke-opacity:0.5;stroke-width:0.6"/>`;
+                }
+                pfl += `<g class="pf-sway" style="transform-origin:${x + 4}px 96px;--a1:${-2 - i * 0.5}deg;--a2:${2.5 + i * 0.5}deg;animation-delay:${-i * 0.9}s">${k}</g>`;
+                pkt.push([x, top + 6], [x, top + 14]);
+              });
+              ri = { dx: [-85, -50], dy: [-14, 10] }; gy = 30;
+            } else {
+              const x = 108;
+              pfl += `<path d="M${x} 96 L${x - 1} 8" style="${PFL}stroke-opacity:0.45;stroke-width:1.6"/>`;
+              if (f === 'beifuss') {
+                [[20, -1], [30, 1], [42, -1], [54, 1], [66, -1]].forEach(([y, s], i) => {
+                  const ex = x + s * (18 - i), ey = y + 8;
+                  let k = `<path d="M${x} ${y} Q ${x + s * 8} ${y + 1} ${ex} ${ey}" style="${PFL}stroke-opacity:0.4;stroke-width:1.1"/>`;
+                  for (let j = 1; j <= 3; j++) { const t = j / 3.4, hx = x + (ex - x) * t, hy = y + (ey - y) * t * t + 3; k += `<ellipse cx="${f1(hx)}" cy="${f1(hy)}" rx="1.5" ry="2" style="fill:${c};fill-opacity:${fo + 0.1}"/>`; pkt.push([hx, hy]); }
+                  pfl += `<g class="pf-sway" style="transform-origin:${x}px ${y}px;--a1:-3deg;--a2:3deg;animation-delay:${-i * 0.6}s">${k}</g>`;
+                });
+              } else {
+                pfl += `<path d="M${x} 80 l-12 -6 l4 -3 l-8 -4 M${x} 70 l11 -7 l-3 -3 l8 -4" style="${PFL}stroke-opacity:0.32;stroke-width:1.1;stroke-linejoin:round"/>`;
+                [[x - 1, 8, 0], [x - 12, 22, -14], [x + 10, 24, 14]].forEach(([ax, ay, rot], i) => {
+                  let k = `<line x1="${x}" y1="${ay + 14}" x2="${ax}" y2="${ay}" style="${PFL}stroke-opacity:0.4;stroke-width:1"/>`;
+                  for (let j = 0; j < 5; j++) { const py = ay + j * 3.2, px = ax + (x - ax) * (j * 3.2) / 14; k += `<path d="M${f1(px - 2)} ${f1(py)} a2 2 0 0 0 4 0 z" style="fill:${c};fill-opacity:${fo + 0.1}"/>`; pkt.push([px, py + 1]); }
+                  pfl += `<g class="pf-sway" style="transform-origin:${x}px ${ay + 14}px;--a1:${-2 + rot / 10}deg;--a2:${2 + rot / 10}deg;animation-delay:${-i * 0.8}s">${k}</g>`;
+                });
+              }
+              ri = { dx: [-70, -35], dy: [-38, -12], steigt: true };
+            }
+            // Koerner: Anzahl und Tempo nach Stufe, Lage fest (R)
+            const n = KOERNER[w], dur = DAUER[w] * (vorschau ? 1.3 : 1);
+            let k = '';
+            for (let i = 0; i < n; i++) {
+              const p = pkt[i % pkt.length];
+              const x = p[0] + (R(i, seed) - 0.5) * 6, y = p[1] + (R(i, seed + 10) - 0.5) * 6;
+              const dx = ri.dx[0] + R(i, seed + 20) * (ri.dx[1] - ri.dx[0]), dy = ri.dy[0] + R(i, seed + 30) * (ri.dy[1] - ri.dy[0]);
+              const d = dur * (0.8 + R(i, seed + 40) * 0.45), del = -R(i, seed + 50) * d;
+              const fuell = vorschau ? `fill:none;stroke:${c};stroke-width:0.8` : `fill:${c}`;
+              k += `<circle class="pf-k${ri.steigt ? ' steigt' : ''}" cx="${f1(x)}" cy="${f1(y)}" r="${(1.1 + R(i, seed + 60) * 0.8).toFixed(2)}" style="${fuell};--dx:${f1(dx)}px;--dy:${f1(dy)}px;animation-duration:${d.toFixed(2)}s;animation-delay:${del.toFixed(2)}s"/>`;
+            }
+            const wind = [[26, 5.2, 0], [58, 6.6, -2.3]].map(([y, d, del]) => `<path class="pf-wind" d="M150 ${y} h-26" style="stroke:var(--nachtblau-wolkengrau, #cdd6e0);stroke-opacity:0.16;stroke-width:1.2;stroke-linecap:round;fill:none;animation-duration:${d}s;animation-delay:${del}s"/>`).join('');
+            // Schein als Verlauf; gleiche id heisst gleicher Inhalt, doppelte ids im Shadow-DOM schaden so nicht
+            const gid = `pfg-${f}-${w * 10}-${vorschau ? 1 : 0}`;
+            const schein = `<defs><radialGradient id="${gid}"><stop offset="0" style="stop-color:${c};stop-opacity:${vorschau ? 0.1 : 0.18}"/><stop offset="1" style="stop-color:${c};stop-opacity:0"/></radialGradient></defs><ellipse cx="104" cy="${gy}" rx="52" ry="40" fill="url(#${gid})"/>`;
+            return `<div class="pf${vorschau ? ' vorab' : ''}"><svg viewBox="0 0 150 96" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">${schein}${wind}${pfl}${k}</svg></div>`;
+          };
+
+          // ---------- Mehrere Szenen im Wechsel (wie nachtblau_warn_fx) ----------
+          const WECHSEL_T = 5, WECHSEL_BLENDE = 0.6;
+          const wechselStil = (art, i, n) => (n > 1 && i < 4)
+            ? `animation:wl-${art}-${Math.min(n, 4)} ${Math.min(n, 4) * WECHSEL_T}s linear ${-(((Math.min(n, 4) - i) % Math.min(n, 4)) * WECHSEL_T + WECHSEL_BLENDE)}s infinite;` : '';
+          const wechsel = (szenen) => {
+            const s = szenen.slice(0, 4), n = s.length;
+            let h = s.map((x, i) => `<div class="wl-layer" style="${wechselStil('show', i, n)}">${szene(x.form, x.wert, x.vorschau)}</div>`).join('');
+            if (n > 1) h += `<div class="wl-dots">${s.map((x, i) => `<i style="${wechselStil('dot', i, n)}"></i>`).join('')}</div>`;
+            return h;
+          };
+
+          const lib = { version: VERSION, stufe, form, istGras, icon, szene, wechsel, wechselStil };
+          window.__nachtblauPollenFx = lib;
+          return lib;
+        ]]]
+    extra_styles: |
+      .pf-slot { position: relative; flex: 1 0 64px; align-self: stretch; min-width: 64px; }
+      .pf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px); mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px); }
+      .pf.vorab { opacity: 0.55; }
+      .pf svg { width: 100%; height: 100%; display: block; }
+      .pf-k { animation: pf-drift linear infinite; }
+      .pf-k.steigt { animation-name: pf-rise; }
+      .pf-sway { transform-box: view-box; animation: pf-sway 3.4s ease-in-out infinite alternate; }
+      .pf-wind { animation: pf-wind linear infinite; }
+      .pf-ic-dot { transform-box: fill-box; animation: pf-ic 2.4s ease-in-out infinite; }
+      @keyframes pf-drift { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } 78% { opacity: 0.9; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+      @keyframes pf-rise { 0% { transform: translate(0, 0) scale(0.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; } }
+      @keyframes pf-sway { from { transform: rotate(var(--a1, -4deg)); } to { transform: rotate(var(--a2, 4deg)); } }
+      @keyframes pf-wind { 0% { transform: translateX(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateX(-70px); opacity: 0; } }
+      @keyframes pf-ic { 0%, 100% { transform: translate(0, 0); opacity: 0.35; } 50% { transform: translate(1px, -2px); opacity: 1; } }
+      /* Szenen im Wechsel: dieselben Keyframes wie nachtblau_warn_fx, dazu die Spuren im Verlauf */
+      .wl-layer { position: absolute; inset: 0; }
+      .wl-dots { position: absolute; right: 12px; bottom: 6px; display: flex; gap: 4px; z-index: 2; }
+      .wl-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--nachtblau-label, #b4c0cf); opacity: 0.35; }
+      @keyframes wl-show-2 { 0% { opacity: 0; } 6% { opacity: 1; } 50% { opacity: 1; } 56% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-show-3 { 0% { opacity: 0; } 4% { opacity: 1; } 33.33% { opacity: 1; } 37.33% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-show-4 { 0% { opacity: 0; } 3% { opacity: 1; } 25% { opacity: 1; } 28% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-dot-2 { 0% { opacity: 0.35; } 6% { opacity: 1; } 50% { opacity: 1; } 56% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-dot-3 { 0% { opacity: 0.35; } 4% { opacity: 1; } 33.33% { opacity: 1; } 37.33% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-dot-4 { 0% { opacity: 0.35; } 3% { opacity: 1; } 25% { opacity: 1; } 28% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-name-2 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 6% { color: var(--nachtblau-text, #f2f5f8); } 50% { color: var(--nachtblau-text, #f2f5f8); } 56% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
+      @keyframes wl-name-3 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 4% { color: var(--nachtblau-text, #f2f5f8); } 33.33% { color: var(--nachtblau-text, #f2f5f8); } 37.33% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
+      @keyframes wl-name-4 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 3% { color: var(--nachtblau-text, #f2f5f8); } 25% { color: var(--nachtblau-text, #f2f5f8); } 28% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
+      @keyframes wl-lane-2 { 0% { opacity: 0.45; } 6% { opacity: 1; } 50% { opacity: 1; } 56% { opacity: 0.45; } 100% { opacity: 0.45; } }
+      @keyframes wl-lane-3 { 0% { opacity: 0.45; } 4% { opacity: 1; } 33.33% { opacity: 1; } 37.33% { opacity: 0.45; } 100% { opacity: 0.45; } }
+      @keyframes wl-lane-4 { 0% { opacity: 0.45; } 3% { opacity: 1; } 25% { opacity: 1; } 28% { opacity: 0.45; } 100% { opacity: 0.45; } }
+      @media (prefers-reduced-motion: reduce) {
+        .pf *, .pf-ic-dot, .wl-layer, .wl-dots i, .wl-name, .wl-lane { animation-play-state: paused !important; transition: none !important; }
       }

@@ -15,12 +15,17 @@
 #
 # - Nur Pollenarten mit Belastung > 0 werden angezeigt.
 # - Die ganze Karte blendet sich aus, wenn keine Art belastet ist (Saison-Ende).
-# - Farbe je Stufe: gering -> gruen, mittel -> amber, hoch -> rot.
+# - Farbe je Stufe aus nachtblau_pollen_fx: bis 1 gruen, bis 2 amber,
+#   2,5 (mittel bis hoch) koralle, 3 rot. Halbe Stufen zaehlen seit 14.11.2026
+#   zur hoeheren Farbe; Text wie der DWD ("Gering bis mittel").
 # - Kopf-Icon faerbt sich nach der hoechsten aktuellen Belastung.
 #
 # - Tippen oeffnet das Popup "Pollenflug" (Template nachtblau_pollen_popup aus
 #   warnlage-templates.yaml) mit allen Arten fuer heute, morgen und
 #   uebermorgen; langes Druecken die more-info.
+#
+# Steht auf Home. In der Wetter-View seit 14.11.2026 nicht mehr: Dort zeigt
+# die Pollenkachel in "Warnlage & Pollen" Arten, Stufe und Verlauf.
 #
 # Weitere/andere Region: Eintraege unter variables.pollen und triggers_update
 # anpassen (hier DWD-Region 101).
@@ -96,19 +101,19 @@ custom_fields:
   body: |
     [[[
       // ---------- Palette ----------
-      const green = 'var(--nachtblau-gruen, #a6d49e)';
       const value = 'var(--nachtblau-text, #f2f5f8)';
       const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
-      const amber = 'var(--nachtblau-amber, #e6b566)';
-      const red   = 'var(--nachtblau-rot, #f0736a)';
+      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
 
       const list = variables.pollen || [];
 
       // ---------- Stufen-Info ----------
-      const lvlInfo = (n) => {
-        if (n <= 1) return { text: 'Geringe Belastung', color: green, tint: 'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 12%, transparent)', border: 'color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 24%, transparent)' };
-        if (n <= 2) return { text: 'Mittlere Belastung', color: amber, tint: 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 12%, transparent)', border: 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)' };
-        return { text: 'Hohe Belastung', color: red, tint: 'color-mix(in srgb, var(--nachtblau-rot, #f0736a) 12%, transparent)', border: 'color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent)' };
+      // Text und Farbe aus pfx.stufe() (nachtblau_pollen_fx, ueber das Template
+      // nachtblau_pollen_popup). Halbe Stufen zaehlen seit 14.11.2026 zur
+      // hoeheren Farbe: 1,5 Amber, 2,5 Koralle.
+      const lvlInfo = (v) => {
+        const st = variables.pfx.stufe(v);
+        return { text: st.titel, color: st.c, tint: tint(st.c, 12), border: tint(st.c, 24) };
       };
 
       // ---------- Icons ----------
@@ -135,12 +140,13 @@ custom_fields:
         const s = states[p.entity];
         const v = s ? parseFloat(s.state) : NaN;
         if (isNaN(v) || v <= 0) return;
-        const n = parseInt(s.state);
-        if (n > maxN) maxN = n;
-        active.push({ name: p.name, kind: p.kind, n: n });
+        if (v > maxN) maxN = v;
+        active.push({ name: p.name, kind: p.kind, n: v });
       });
 
       // ---------- Zellen ----------
+      // Stufentext zweizeilig statt abgeschnitten: bei 306 px bleiben neben dem
+      // Icon rund 87 px, "Hohe Belastung" endete bis 14.11.2026 auf "...".
       const cells = active.map((p) => {
         const info = lvlInfo(p.n);
         const icon = (p.kind === 'grass') ? grassSvg(info.color) : flowerSvg(info.color);
@@ -149,7 +155,7 @@ custom_fields:
             <div style="flex:0 0 auto; width:24px; height:24px; display:grid; place-items:center;">${icon}</div>
             <div style="min-width:0;">
               <div style="font-size:15px; font-weight:700; letter-spacing:-0.01em; color:${value}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
-              <div style="font-size:12.5px; font-weight:600; color:${info.color}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${info.text}</div>
+              <div style="font-size:12.5px; font-weight:600; color:${info.color}; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;">${info.text}</div>
             </div>
           </div>`;
       }).join('');

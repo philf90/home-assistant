@@ -1,0 +1,572 @@
+<!--
+============================================================================
+Pollen-Kachel – Pollenflug im Muster der Warnlage
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       klima
+Status:        entwurf
+Gehoert-zu:    wetter-view.yaml, warnlage-templates.yaml, pollenflug-karte.yaml
+Platzhalter:   keine
+============================================================================
+Vorschau der Pollenkachel in "Warnlage & Pollen" (Wetter-View): bisher und
+neu, sechs Faelle, Szenen je Pollenart, Stufen des DWD. Entscheidungen vom
+14.11.2026: halbe Stufen zaehlen zur hoeheren Farbe (2,5 Koralle), die
+Detailkarte Pollenflug steht nur noch auf Home, Szenen wie gezeigt.
+Umsetzung: nachtblau_pollen_fx in warnlage-templates.yaml.
+Im Browser oeffnen; Schriften kommen von Google Fonts.
+-->
+<title>Pollen-Kachel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Entwurfsblatt wie warnlage-kachel.html. Oben bisher und neu in Handybreite, darunter alle Fälle,
+   die Szenen je Pollenart, die DWD-Stufen, die Datenlage und offene Entscheidungen. Bewusst nur dunkel wie das Dashboard. */
+:root {
+  color-scheme: dark;
+  --bg: #10151d; --page: #171d29; --hull-top: #1b2231; --hull-bot: #171d29; --raised: #222b3c;
+  --text: #f2f5f8; --title: #e7ecf3; --label: #b4c0cf; --soft: #8794a5;
+  --line: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.05);
+  --accent: #7fb3d5; --green: #a6d49e; --amber: #e6b566; --koralle: #e7936e; --red: #f0736a; --wolke: #cdd6e0;
+  --f-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --f-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --f-ha: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--text); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 52px; }
+h1, h2, h3 { font-family: var(--f-display); color: var(--title); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.08; }
+h2 { font-size: 24px; }
+h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+code { font-family: var(--f-mono); font-size: 0.86em; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--label); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+.lead { color: var(--label); font-size: 17px; }
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec > header { display: flex; flex-direction: column; gap: 8px; }
+.sec > header p { color: var(--label); }
+.controls { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, var(--hull-top), var(--hull-bot) 55%); }
+.ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ctl-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); min-width: 72px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 280px; }
+.seg button { font: 500 13px/1 var(--f-body); color: var(--label); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+.seg button:hover { background: var(--raised); color: var(--text); }
+.seg button[aria-pressed="true"] { background: rgba(127, 179, 213, 0.12); border-color: rgba(127, 179, 213, 0.5); color: var(--text); }
+.seg button:focus-visible, .toggle input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--label); cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle .sw { width: 34px; height: 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); position: relative; flex: none; }
+.toggle .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--soft); transition: transform 0.2s; }
+.toggle input:checked + .sw { background: rgba(127, 179, 213, 0.5); }
+.toggle input:checked + .sw::after { transform: translateX(14px); background: var(--text); }
+.stage { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start; }
+.device { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; min-width: 0; }
+.device-cap { font-size: 12.5px; color: var(--soft); text-align: center; }
+.device-cap b { color: var(--label); font-weight: 600; }
+.phone-scroll { max-width: 100%; overflow-x: auto; border-radius: 30px; }
+.phone { width: var(--pw, 360px); background: var(--page); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 30px; padding: 14px 8px 18px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8); }
+.note { font-size: 12.5px; color: var(--soft); max-width: 420px; text-align: center; }
+
+/* ---------- Mockup Warnlage & Pollen (wetter-view.yaml) ---------- */
+.ha { font-family: var(--f-ha); color: var(--text); text-align: left; }
+.hull { border-radius: 22px; border: 1px solid var(--edge); background: linear-gradient(180deg, var(--hull-top) 0%, var(--hull-bot) 55%); box-shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.hhead { display: flex; align-items: center; gap: 14px; padding: 2px 2px 8px; }
+.hicon { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex: none; }
+.hicon svg { width: 23px; height: 23px; display: block; }
+.hname { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.hlabel { font-size: 12.5px; color: var(--soft); margin-top: 2px; }
+.tiles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.tiles.zwei { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.tile { position: relative; overflow: hidden; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+.trow { display: flex; align-items: center; gap: 12px; position: relative; }
+.ticon { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+.ticon > svg { width: 22px; height: 22px; display: block; overflow: visible; }
+.tcol { min-width: 0; flex: 0 1 auto; display: flex; flex-direction: column; gap: 4px; }
+.tcol.voll { flex: 1 1 auto; }
+.ttitle { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+.tsub { font-size: 12px; color: var(--soft); line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tpills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pill { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; line-height: 1; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.pill.neutral { color: var(--label); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.names { font-size: 12.5px; line-height: 1.35; color: var(--soft); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.names .n { color: var(--soft); }
+/* Szene in der Kachel: wie in der Warnungskachel bis an den Kachelrand */
+.tile .wf-slot { position: relative; margin: -12px -14px -4px 0; flex: 1 0 64px; min-width: 64px; align-self: stretch; -webkit-mask-image: linear-gradient(90deg, transparent, #cdd6e0 22px); mask-image: linear-gradient(90deg, transparent, #cdd6e0 22px); }
+.wl-layer { position: absolute; inset: 0; }
+.wl-layer svg { width: 100%; height: 100%; display: block; }
+.wl-dots { position: absolute; right: 12px; bottom: 6px; display: flex; gap: 4px; z-index: 2; }
+.wl-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--label); opacity: 0.35; }
+/* Verlauf: je Pollenart eine Spur, drei Tage */
+.vl { display: flex; flex-direction: column; gap: 3px; }
+.vl-lanes { display: flex; flex-direction: column; gap: 2px; }
+.vl-lane { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
+.vl-cell { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.06); }
+.vl-cell.ka { background: repeating-linear-gradient(135deg, rgba(205, 214, 224, 0.32) 0 2px, transparent 2px 4px); }
+.vl-ticks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; font-size: 11px; color: var(--label); }
+.vl-ticks span:nth-child(2) { text-align: center; }
+.vl-ticks span:nth-child(3) { text-align: right; }
+
+/* Szenen (Pflanze neutral, Bluete und Koerner in der Stufenfarbe) */
+.pf-k { animation: pf-drift linear infinite; }
+.pf-k.steigt { animation-name: pf-rise; }
+.pf-sway { transform-box: view-box; animation: pf-sway 3.4s ease-in-out infinite alternate; }
+.pf-wind { animation: pf-wind linear infinite; }
+.pf-ic-dot { animation: pf-ic 2.4s ease-in-out infinite; transform-box: fill-box; }
+@keyframes pf-drift { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: 1; } 78% { opacity: 0.9; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+@keyframes pf-rise { 0% { transform: translate(0, 0) scale(0.6); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; } }
+@keyframes pf-sway { from { transform: rotate(var(--a1, -4deg)); } to { transform: rotate(var(--a2, 4deg)); } }
+@keyframes pf-wind { 0% { transform: translateX(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateX(-70px); opacity: 0; } }
+@keyframes pf-ic { 0%, 100% { transform: translate(0, 0); opacity: 0.35; } 50% { transform: translate(1px, -2px); opacity: 1; } }
+
+/* Faelle, Szenen, Regeln */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 22px 20px; }
+.gitem { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gitem .hull { width: min(342px, 100%); }
+.gcap { max-width: 386px; padding: 0 4px; display: flex; flex-direction: column; gap: 4px; }
+.gcap p { font-size: 13.5px; color: var(--label); }
+.scenes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 14px; }
+.scene { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, var(--hull-top), var(--hull-bot)); display: flex; flex-direction: column; min-width: 0; }
+.scene .pic { position: relative; height: 96px; }
+.scene .cap { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); }
+.scene .cap b { font-size: 14px; color: var(--title); }
+.scene .cap span { font-size: 12.5px; color: var(--soft); }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 10px; }
+.strip .scene .pic { height: 84px; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); background: rgba(255, 255, 255, 0.02); }
+td { color: var(--label); }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+.sw-c { display: inline-flex; align-items: center; gap: 8px; }
+.sw-c i { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+.diff { color: var(--amber); font-weight: 600; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.rule { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: rgba(255, 255, 255, 0.028); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rule ul { margin: 0; padding-left: 18px; color: var(--label); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.rule.open { border-color: rgba(230, 181, 102, 0.24); background: rgba(230, 181, 102, 0.04); }
+.rule.open h3 { color: var(--amber); }
+.rule .rec { font-size: 13px; color: var(--green); }
+footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: var(--soft); display: flex; flex-direction: column; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .wl-layer, .wl-dots i, .names .n, .vl-lane, .pf-k, .pf-sway, .pf-wind, .pf-ic-dot { animation-play-state: paused !important; } }
+.rm .wl-layer, .rm .wl-dots i, .rm .names .n, .rm .vl-lane, .rm .pf-k, .rm .pf-sway, .rm .pf-wind, .rm .pf-ic-dot { animation-play-state: paused !important; }
+</style>
+<style id="cyccss"></style>
+
+<div class="wrap" id="wrap">
+  <header class="sec">
+    <div class="eyebrow">Entwurf · Klima · Wetter-View</div>
+    <h1>Pollenflug im Muster der Warnlage</h1>
+    <p class="lead">Die Pollenkachel in „Warnlage &amp; Pollen“ bekommt dasselbe Muster wie die Warnungskachel: höchste Stufe als Pille, alle belasteten Pollenarten, eine Szene je Art im Wechsel und statt der 24-Stunden-Zeitleiste den Verlauf über die drei Tage, die der DWD vorhersagt.</p>
+  </header>
+
+  <section class="sec" id="vorschau">
+    <header>
+      <h2>Bisher und neu</h2>
+      <p>Im Rahmen der echten Handybreite. Die Warnungskachel steht im Zustand „Keine Warnung“ daneben, damit beide Kacheln zusammen beurteilt werden können.</p>
+    </header>
+    <div class="controls">
+      <div class="ctl-row"><span class="ctl-label">Fall</span><div class="seg" id="caseSeg" role="group" aria-label="Fall"></div></div>
+      <div class="ctl-row"><span class="ctl-label">Breite</span><div class="seg" id="widthSeg" role="group" aria-label="Breite"></div></div>
+      <div class="ctl-row">
+        <label class="toggle" for="rmToggle"><input type="checkbox" id="rmToggle"><span class="sw" aria-hidden="true"></span>Bewegung reduzieren (Standbild)</label>
+      </div>
+    </div>
+    <div class="stage" id="stage"></div>
+    <p class="note" id="caseNote" style="margin: 0 auto;"></p>
+  </section>
+
+  <section class="sec" id="faelle">
+    <header>
+      <h2>Alle Fälle</h2>
+      <p>Neue Kachel in der Breite des Galaxy S25 (306 px Inhalt). Werte sind Beispiele für typische Abschnitte der Saison, außer „Keine Belastung“: Das ist der Stand der Instanz am 14.11.2026.</p>
+    </header>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="sec" id="szenen">
+    <header>
+      <h2>Szenen je Pollenart</h2>
+      <p>Drei Pflanzenformen mit Varianten je Art. Stängel und Zweige stehen neutral in Hellgrau, Blüten, Kätzchen und Körner in der Farbe der Stufe. Mit steigender Stufe fliegen mehr Körner und schneller. Alle acht Arten auf Stufe 2:</p>
+    </header>
+    <div class="scenes" id="scenes"></div>
+    <h3>Birke über alle Stufen</h3>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <section class="sec" id="stufen">
+    <header>
+      <h2>Stufen des DWD</h2>
+      <p>Der Pollenflug-Gefahrenindex hat sieben Stufen. Die Integration macht aus „0-1“ den Wert 0,5, aus „1-2“ den Wert 1,5 und so weiter. Die Texte liefert sie in <code>state_today_desc</code>, <code>state_tomorrow_desc</code> und <code>state_in_2_days_desc</code>.</p>
+    </header>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Wert</th><th>DWD-Text</th><th>Pille neu</th><th>Farbe bisher</th><th>Farbe neu</th><th>Körner</th></tr></thead>
+        <tbody id="stufenBody"></tbody>
+      </table>
+    </div>
+    <p style="color: var(--label); font-size: 14px;">Bisher rundet <code>parseInt</code> halbe Stufen ab: 1,5 erscheint als „Gering“ (grün), 2,5 als „Mittel“ (amber). Der Vorschlag rundet auf und nimmt für 2,5 Koralle-Orange, das die Palette genau für „zwischen Amber und Rot, immer mit Text“ vorsieht. Kontrast der Stufenfarbe auf ihrer Tönung 0,12: Grün 7,25:1, Amber 6,63:1, Koralle 5,44:1, Rot 4,72:1 (jeweils auf dem helleren Grund der Hülle).</p>
+  </section>
+
+  <section class="sec" id="karte">
+    <header>
+      <h2>Pollenflug-Karte darunter</h2>
+      <p>Die Detailkarte (<code>pollenflug-karte.yaml</code>) zeigt jede belastete Art mit dem heutigen Stand. Mit der neuen Kachel stehen Arten und höchste Stufe schon oben. Zwei Wege: Die Karte entfällt wie die Warnkarte, oder jede Zelle bekommt den Verlauf über drei Tage. So sähe die zweite Variante im Fall „Juni“ aus:</p>
+    </header>
+    <div class="stage" id="kartenStage"></div>
+  </section>
+
+  <section class="sec" id="regeln">
+    <header><h2>Regeln und Entscheidungen</h2></header>
+    <div class="rules">
+      <div class="rule">
+        <h3>Was die Kachel zeigt</h3>
+        <ul>
+          <li>Titel: die Art, bei mehreren „3 Pollenarten“.</li>
+          <li>Pille: höchste Stufe von heute. Daneben „+1 ab morgen“, wenn morgen eine neue Art beginnt, sonst bei mehreren Arten „Morgen stärker“ oder „Morgen schwächer“.</li>
+          <li>Zweite Zeile: bei einer Art der Ausblick auf morgen und übermorgen, bei mehreren die Namen; der gerade gezeigte leuchtet auf.</li>
+          <li>Szenen im Wechsel wie bei den Warnungen, höchstens vier, je 5 s; die Spur der gezeigten Art im Verlauf hebt sich mit hervor.</li>
+          <li>Ohne Belastung heute, aber morgen: „Ab morgen …“, Szene als Vorschau mit hohlen Körnern.</li>
+          <li>Ohne Belastung: ruhige Kachel wie bisher, zweite Zeile mit der nächsten Vorhersage aus <code>next_update</code>.</li>
+        </ul>
+      </div>
+      <div class="rule">
+        <h3>Datenlage (geprüft)</h3>
+        <ul>
+          <li>Acht Sensoren der Region 101, Zustand = heute, Attribute <code>state_tomorrow</code> und <code>state_in_2_days</code>.</li>
+          <li>Übermorgen kann fehlen: Liefert der DWD „-1“, setzt die Integration den Wert auf leer. Der Verlauf zeigt diesen Tag schraffiert.</li>
+          <li>Neue Daten einmal am Tag, laut <code>next_update</code> um 11:00. Laut Quellcode der Integration (aktueller Stand) rechnen die Sensoren jede volle Stunde nach, also auch um Mitternacht. Eine Minutenuhr wie bei der Warnlage braucht die Kachel nicht.</li>
+          <li>Heute (14.11.2026) haben alle acht Arten für alle drei Tage den Wert 0.</li>
+        </ul>
+      </div>
+      <div class="rule open">
+        <h3>1 · Halbe Stufen</h3>
+        <ul>
+          <li>Aufrunden mit Koralle für 2,5 (Vorschlag), oder wie bisher abrunden.</li>
+          <li>Betrifft dann auch die Detailkarte und das Popup, damit überall dieselbe Farbe steht.</li>
+        </ul>
+        <p class="rec">Entschieden am 14.11.2026: aufrunden.</p>
+      </div>
+      <div class="rule open">
+        <h3>2 · Detailkarte</h3>
+        <ul>
+          <li>Entfallen lassen: Arten, Stufe und Verlauf stehen in der Kachel, Einzelheiten im Popup.</li>
+          <li>Oder behalten und um den Verlauf je Zelle ergänzen.</li>
+        </ul>
+        <p class="rec">Entschieden am 14.11.2026: entfällt in der Wetter-View, bleibt auf Home.</p>
+      </div>
+      <div class="rule open">
+        <h3>3 · Szenen</h3>
+        <ul>
+          <li>Drei Pflanzenformen (Baum mit Kätzchen, Gras mit Ähre, Kraut) mit Varianten je Art, wie oben.</li>
+          <li>Die Szenen kommen als eigene Bibliothek <code>nachtblau_pollen_fx</code> neben <code>nachtblau_warn_fx</code>, mit demselben Wechsel (<code>wechsel()</code>, <code>wechselStil()</code>).</li>
+        </ul>
+        <p class="rec">Entschieden am 14.11.2026: wie gezeigt.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="src">
+    <span>Quellen: Instanz (acht Sensoren <code>sensor.pollenflug_*_101</code>, Stand 14.11.2026, 11:00), Integration DWD Pollenflug (Werte, Stufentexte, Aktualisierung), <code>wetter-view.yaml</code> und <code>pollenflug-karte.yaml</code> im Repo, Farben aus <code>design/palette.yaml</code>.</span>
+    <span>Heller Modus ist hier nicht gezeigt; er folgt wie bei der Warnungskachel den Theme-Variablen.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  const C = { green: '#a6d49e', amber: '#e6b566', koralle: '#e7936e', red: '#f0736a', label: '#b4c0cf', soft: '#8794a5', text: '#f2f5f8', wolke: '#cdd6e0' };
+  const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  // ---------- DWD-Stufen ----------
+  const STUFE = {
+    0.5: { text: 'keine bis geringe Belastung', pill: 'Keine bis gering', kurz: 'keine bis gering', c: C.green, alt: C.green, altText: 'Gering' },
+    1: { text: 'geringe Belastung', pill: 'Geringe Belastung', kurz: 'gering', c: C.green, alt: C.green, altText: 'Gering' },
+    1.5: { text: 'geringe bis mittlere Belastung', pill: 'Gering bis mittel', kurz: 'gering bis mittel', c: C.amber, alt: C.green, altText: 'Gering' },
+    2: { text: 'mittlere Belastung', pill: 'Mittlere Belastung', kurz: 'mittel', c: C.amber, alt: C.amber, altText: 'Mittel' },
+    2.5: { text: 'mittlere bis hohe Belastung', pill: 'Mittel bis hoch', kurz: 'mittel bis hoch', c: C.koralle, alt: C.amber, altText: 'Mittel' },
+    3: { text: 'hohe Belastung', pill: 'Hohe Belastung', kurz: 'hoch', c: C.red, alt: C.red, altText: 'Hoch' }
+  };
+  const KOERNER = { 0.5: 3, 1: 5, 1.5: 7, 2: 9, 2.5: 12, 3: 15 };
+  const DAUER = { 0.5: 4.4, 1: 4, 1.5: 3.6, 2: 3.2, 2.5: 2.9, 3: 2.6 };
+
+  const ARTEN = {
+    hasel: { name: 'Hasel', form: 'hasel', gruppe: 'Baum', info: 'lange Kätzchen, Januar bis März' },
+    erle: { name: 'Erle', form: 'erle', gruppe: 'Baum', info: 'kurze Kätzchen in Büscheln, Februar bis April' },
+    birke: { name: 'Birke', form: 'birke', gruppe: 'Baum', info: 'hängende Kätzchen, April bis Mai' },
+    esche: { name: 'Esche', form: 'esche', gruppe: 'Baum', info: 'Blütenbüschel am Zweig, März bis Mai' },
+    graeser: { name: 'Gräser', form: 'gras', gruppe: 'Gras', info: 'Ähren, Mai bis August' },
+    roggen: { name: 'Roggen', form: 'roggen', gruppe: 'Gras', info: 'Ähre mit Grannen, Mai bis Juni' },
+    beifuss: { name: 'Beifuß', form: 'beifuss', gruppe: 'Kraut', info: 'Rispe mit kleinen Köpfchen, Juli bis September' },
+    ambrosia: { name: 'Ambrosia', form: 'ambrosia', gruppe: 'Kraut', info: 'Ähren mit Körbchen, August bis Oktober' }
+  };
+  const REIHE = ['graeser', 'ambrosia', 'beifuss', 'birke', 'erle', 'esche', 'hasel', 'roggen']; // Reihenfolge wie variables.pollen
+
+  // ---------- Faelle ----------
+  const FAELLE = [
+    { key: 'fruehjahr', btn: 'März: Hasel und Erle', cap: 'Zwei Bäume, Hasel mittel und morgen stärker. Die Szenen wechseln zwischen langen und kurzen Kätzchen.',
+      d: { hasel: [2, 2.5, 1.5], erle: [1, 1.5, 1] } },
+    { key: 'birke', btn: 'April: Birke hoch', cap: 'Birke hoch, Esche gering bis mittel. Die Pille wird rot, morgen bleibt es hoch.',
+      d: { birke: [3, 3, 2.5], esche: [1.5, 1, 1] } },
+    { key: 'sommer', btn: 'Juni: drei Arten', cap: 'Gräser mittel bis hoch (Koralle), Roggen mittel, Beifuß beginnt. Drei Szenen im Wechsel.',
+      d: { graeser: [2.5, 3, 2], roggen: [2, 2, 1.5], beifuss: [0.5, 0.5, 1] } },
+    { key: 'ambrosia', btn: 'Eine Art, Lücke', cap: 'Nur Ambrosia. Die zweite Zeile zeigt den Ausblick; für übermorgen hat der DWD nichts geliefert (schraffiert).',
+      d: { ambrosia: [1, 2, null] } },
+    { key: 'morgen', btn: 'Ab morgen', cap: 'Heute nichts, ab morgen Hasel. Szene als Vorschau mit hohlen Körnern, Pille in Amber wie bisher „Morgen beginnt Pollenflug“.',
+      d: { hasel: [0, 0.5, 1] } },
+    { key: 'keine', btn: 'Keine Belastung (heute)', cap: 'Stand der Instanz am 14.11.2026: alle acht Arten 0. Ruhige Kachel wie bisher, aber mit der nächsten Vorhersage statt „8 Arten“.',
+      d: {} }
+  ];
+  const daten = (fall) => REIHE.map((k) => { const v = fall.d[k] || [0, 0, 0]; return { k, art: ARTEN[k], h: v[0], m: v[1], u: v[2] }; });
+
+  // ---------- Zufall mit Startwert, damit die Szenen stabil bleiben ----------
+  const rnd = (seed) => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  let uid = 0;
+
+  // ---------- Szenen ----------
+  const PL = C.label; // Pflanze neutral
+  function koerner(r, punkte, n, dur, c, richtung, vorschau) {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const p = punkte[i % punkte.length];
+      const x = p[0] + (r() - 0.5) * 6, y = p[1] + (r() - 0.5) * 6;
+      const dx = richtung.dx[0] + r() * (richtung.dx[1] - richtung.dx[0]);
+      const dy = richtung.dy[0] + r() * (richtung.dy[1] - richtung.dy[0]);
+      const d = dur * (0.8 + r() * 0.45), del = -r() * d;
+      const rad = 1.1 + r() * 0.8;
+      const stil = vorschau ? `fill="none" stroke="${c}" stroke-width="0.8"` : `fill="${c}"`;
+      h += `<circle class="pf-k${richtung.steigt ? ' steigt' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad.toFixed(2)}" ${stil} style="--dx:${dx.toFixed(1)}px;--dy:${dy.toFixed(1)}px;animation-duration:${d.toFixed(2)}s;animation-delay:${del.toFixed(2)}s"></circle>`;
+    }
+    return h;
+  }
+  function wind(r) {
+    let h = '';
+    [[26, 5.2], [58, 6.6]].forEach(([y, d], i) => {
+      h += `<path class="pf-wind" d="M150 ${y} h-26" stroke="${C.wolke}" stroke-opacity="0.16" stroke-width="1.2" stroke-linecap="round" fill="none" style="animation-duration:${d}s;animation-delay:${-(i * 2.3)}s"></path>`;
+    });
+    return h;
+  }
+  function kaetzchen(x, y, seg, rx, c, fo) {
+    let h = `<line x1="${x}" y1="${y - 3}" x2="${x}" y2="${y + 1}" stroke="${PL}" stroke-opacity="0.5" stroke-width="1"></line>`;
+    for (let i = 0; i < seg; i++) h += `<ellipse cx="${x + (i % 2 ? 0.5 : -0.5)}" cy="${(y + 3 + i * 3.3).toFixed(1)}" rx="${rx}" ry="2.2" fill="${c}" fill-opacity="${fo}" stroke="${c}" stroke-opacity="0.7" stroke-width="0.5"></ellipse>`;
+    return h;
+  }
+  function szene(form, stufe, vorschau, seed) {
+    const r = rnd(seed || 7), c = vorschau ? C.amber : STUFE[stufe].c, id = 'g' + (++uid);
+    const n = KOERNER[stufe], dur = DAUER[stufe] * (vorschau ? 1.3 : 1), fo = vorschau ? 0.3 : 0.55;
+    let pflanze = '', punkte = [], richtung, gx = 104, gy = 40;
+    if (['hasel', 'erle', 'birke', 'esche'].includes(form)) {
+      pflanze += `<path d="M152 7 C 128 11, 104 5, 62 17" stroke="${PL}" stroke-opacity="0.45" stroke-width="2.2" stroke-linecap="round" fill="none"></path>`;
+      pflanze += `<path d="M120 9 l-4 -6 M94 9 l3 -6 M76 13 l-3 -6" stroke="${PL}" stroke-opacity="0.4" stroke-width="1.2" stroke-linecap="round" fill="none"></path>`;
+      const haken = [[78, 14], [97, 10], [117, 10], [136, 9]];
+      haken.forEach(([x, y], i) => {
+        let k = '';
+        if (form === 'hasel') { k = kaetzchen(x, y, 8, 2.3, c, fo); punkte.push([x, y + 20], [x, y + 28]); }
+        if (form === 'birke') { k = kaetzchen(x, y, 6, 2.7, c, fo); punkte.push([x, y + 16], [x, y + 22]); }
+        if (form === 'erle') { k = kaetzchen(x - 3, y, 4, 2.4, c, fo) + kaetzchen(x + 3, y + 1, 3, 2.4, c, fo); punkte.push([x, y + 14]); }
+        if (form === 'esche') {
+          for (let j = 0; j < 7; j++) { const a = j / 7 * Math.PI * 2; k += `<circle cx="${(x + Math.cos(a) * 4.5).toFixed(1)}" cy="${(y + 7 + Math.sin(a) * 3.5).toFixed(1)}" r="1.9" fill="${c}" fill-opacity="${fo + 0.1}"></circle>`; }
+          k = `<line x1="${x}" y1="${y - 2}" x2="${x}" y2="${y + 4}" stroke="${PL}" stroke-opacity="0.5" stroke-width="1"></line>` + k; punkte.push([x, y + 8]);
+        }
+        pflanze += `<g class="pf-sway" style="transform-origin:${x}px ${y - 3}px;--a1:${-3 - i}deg;--a2:${3 + i}deg;animation-delay:${-i * 0.7}s">${k}</g>`;
+      });
+      richtung = { dx: [-95, -55], dy: [12, 34] }; gy = 34;
+    } else if (form === 'gras' || form === 'roggen') {
+      const halme = [[84, 26], [100, 14], [114, 24], [129, 16]];
+      pflanze += `<path d="M90 96 q-6 -22 -16 -30 M118 96 q8 -20 18 -26 M104 96 q-2 -18 -10 -28" stroke="${PL}" stroke-opacity="0.3" stroke-width="1.4" fill="none" stroke-linecap="round"></path>`;
+      halme.forEach(([x, top], i) => {
+        const lang = form === 'roggen' ? 9 : 6, schritt = form === 'roggen' ? 3.1 : 3.6;
+        let k = `<path d="M${x + 4} 96 Q ${x + 2} ${(96 + top) / 2} ${x} ${top + lang * schritt}" stroke="${PL}" stroke-opacity="0.45" stroke-width="1.3" fill="none" stroke-linecap="round"></path>`;
+        for (let j = 0; j < lang; j++) {
+          const yy = top + j * schritt, ox = j % 2 ? 1.8 : -1.8;
+          k += `<ellipse cx="${(x + ox).toFixed(1)}" cy="${yy.toFixed(1)}" rx="${form === 'roggen' ? 1.4 : 1.8}" ry="2.6" fill="${c}" fill-opacity="${fo}" transform="rotate(${ox > 0 ? 18 : -18} ${(x + ox).toFixed(1)} ${yy.toFixed(1)})"></ellipse>`;
+          if (form === 'roggen') k += `<line x1="${(x + ox).toFixed(1)}" y1="${(yy - 2).toFixed(1)}" x2="${(x + ox * 3.2).toFixed(1)}" y2="${(yy - 9).toFixed(1)}" stroke="${c}" stroke-opacity="0.5" stroke-width="0.6"></line>`;
+        }
+        pflanze += `<g class="pf-sway" style="transform-origin:${x + 4}px 96px;--a1:${-2 - i * 0.5}deg;--a2:${2.5 + i * 0.5}deg;animation-delay:${-i * 0.9}s">${k}</g>`;
+        punkte.push([x, top + 6], [x, top + 14]);
+      });
+      richtung = { dx: [-85, -50], dy: [-14, 10] }; gy = 30;
+    } else {
+      // Kraut: Beifuss (Rispe) oder Ambrosia (Aehren)
+      const x = 108;
+      pflanze += `<path d="M${x} 96 L${x - 1} 8" stroke="${PL}" stroke-opacity="0.45" stroke-width="1.6" fill="none" stroke-linecap="round"></path>`;
+      if (form === 'beifuss') {
+        [[20, -1], [30, 1], [42, -1], [54, 1], [66, -1]].forEach(([y, s], i) => {
+          const ex = x + s * (18 - i), ey = y + 8;
+          let k = `<path d="M${x} ${y} Q ${x + s * 8} ${y + 1} ${ex} ${ey}" stroke="${PL}" stroke-opacity="0.4" stroke-width="1.1" fill="none"></path>`;
+          for (let j = 1; j <= 3; j++) { const t = j / 3.4, hx = x + (ex - x) * t, hy = y + (ey - y) * t * t + 3; k += `<ellipse cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" rx="1.5" ry="2" fill="${c}" fill-opacity="${fo + 0.1}"></ellipse>`; punkte.push([hx, hy]); }
+          pflanze += `<g class="pf-sway" style="transform-origin:${x}px ${y}px;--a1:-3deg;--a2:3deg;animation-delay:${-i * 0.6}s">${k}</g>`;
+        });
+      } else {
+        pflanze += `<path d="M${x} 80 l-12 -6 l4 -3 l-8 -4 M${x} 70 l11 -7 l-3 -3 l8 -4" stroke="${PL}" stroke-opacity="0.32" stroke-width="1.1" fill="none" stroke-linejoin="round"></path>`;
+        [[x - 1, 8, 0], [x - 12, 22, -14], [x + 10, 24, 14]].forEach(([ax, ay, rot], i) => {
+          let k = `<line x1="${x}" y1="${ay + 14}" x2="${ax}" y2="${ay}" stroke="${PL}" stroke-opacity="0.4" stroke-width="1"></line>`;
+          for (let j = 0; j < 5; j++) { const py = ay + j * 3.2, px = ax + (x - ax) * (j * 3.2) / 14; k += `<path d="M${(px - 2).toFixed(1)} ${py.toFixed(1)} a2 2 0 0 0 4 0 z" fill="${c}" fill-opacity="${fo + 0.1}"></path>`; punkte.push([px, py + 1]); }
+          pflanze += `<g class="pf-sway" style="transform-origin:${x}px ${ay + 14}px;--a1:${-2 + rot / 10}deg;--a2:${2 + rot / 10}deg;animation-delay:${-i * 0.8}s">${k}</g>`;
+        });
+      }
+      richtung = { dx: [-70, -35], dy: [-38, -12], steigt: true }; gy = 36;
+    }
+    const glow = `<radialGradient id="${id}" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="${c}" stop-opacity="${vorschau ? 0.1 : 0.18}"></stop><stop offset="1" stop-color="${c}" stop-opacity="0"></stop></radialGradient>`;
+    return `<svg viewBox="0 0 150 96" preserveAspectRatio="xMaxYMid slice" aria-hidden="true"><defs>${glow}</defs><ellipse cx="${gx}" cy="${gy}" rx="52" ry="40" fill="url(#${id})"></ellipse>${wind(r)}${pflanze}${koerner(r, punkte, n, dur, c, richtung, vorschau)}</svg>`;
+  }
+
+  // ---------- Icons ----------
+  const blume = (c, anim) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:${c};"><circle cx="12" cy="14" r="2.1"/><circle cx="12" cy="9.4" r="2.1"/><circle cx="15.9" cy="11.7" r="2.1"/><circle cx="14.6" cy="16.3" r="2.1"/><circle cx="9.4" cy="16.3" r="2.1"/><circle cx="8.1" cy="11.7" r="2.1"/>${anim ? [[18.5, 5, 0], [20.5, 6.7, 0.8], [18.2, 7.4, 1.6]].map(([x, y, d]) => `<circle class="pf-ic-dot" cx="${x}" cy="${y}" r="0.6" fill="currentColor" stroke="none" style="animation-delay:-${d}s"/>`).join('') : ''}</svg>`;
+  const gras = (c, anim) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};"><path d="M12 21v-9"/><path d="M12 12c0-3.2-1.8-5.6-4.8-6.4.2 3.2 2 5.6 4.8 6.4Z"/><path d="M12 12c0-3.2 1.8-5.6 4.8-6.4-.2 3.2-2 5.6-4.8 6.4Z"/>${anim ? [[18.6, 4.2, 0], [20.4, 6, 0.8], [5.4, 4.4, 1.6]].map(([x, y, d]) => `<circle class="pf-ic-dot" cx="${x}" cy="${y}" r="0.6" fill="currentColor" stroke="none" style="animation-delay:-${d}s"/>`).join('') : ''}</svg>`;
+  const schild = (c) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg>`;
+
+  // ---------- Wechsel (wie wechselStil in nachtblau_warn_fx) ----------
+  const T = 5, B = 0.6;
+  const stil = (art, i, n) => (n > 1 && i < 4) ? `animation:wl-${art}-${Math.min(n, 4)} ${Math.min(n, 4) * T}s linear ${-(((Math.min(n, 4) - i) % Math.min(n, 4)) * T + B)}s infinite;` : '';
+  function cycCss() {
+    let css = '';
+    for (let n = 2; n <= 4; n++) {
+      const f = +(B / (n * T) * 100).toFixed(2), e = +(100 / n).toFixed(2), e2 = +(e + f).toFixed(2);
+      css += `@keyframes wl-show-${n} { 0% { opacity: 0; } ${f}% { opacity: 1; } ${e}% { opacity: 1; } ${e2}% { opacity: 0; } 100% { opacity: 0; } }\n`;
+      css += `@keyframes wl-dot-${n} { 0% { opacity: 0.35; } ${f}% { opacity: 1; } ${e}% { opacity: 1; } ${e2}% { opacity: 0.35; } 100% { opacity: 0.35; } }\n`;
+      css += `@keyframes wl-name-${n} { 0% { color: ${C.soft}; } ${f}% { color: ${C.text}; } ${e}% { color: ${C.text}; } ${e2}% { color: ${C.soft}; } 100% { color: ${C.soft}; } }\n`;
+      css += `@keyframes wl-lane-${n} { 0% { opacity: 0.45; } ${f}% { opacity: 1; } ${e}% { opacity: 1; } ${e2}% { opacity: 0.45; } 100% { opacity: 0.45; } }\n`;
+    }
+    document.getElementById('cyccss').textContent = css;
+  }
+
+  // ---------- Neue Kachel ----------
+  const pill = (txt, c, schrift) => `<span class="pill" style="color:${schrift || c};background:${tint(c, 12)};border:1px solid ${tint(c, 24)};">${esc(txt)}</span>`;
+  const kurz = (v) => v === null || v === undefined ? 'ohne Angabe' : v === 0 ? 'keine' : STUFE[v].kurz;
+  function auswerten(fall) {
+    const liste = daten(fall);
+    const ord = (a, b) => (b.h - a.h) || ((b.m || 0) - (a.m || 0));
+    const heute = liste.filter((p) => p.h > 0).sort(ord);
+    const neuMorgen = liste.filter((p) => !(p.h > 0) && p.m > 0).sort((a, b) => b.m - a.m);
+    const spaeter = liste.filter((p) => !(p.h > 0) && !(p.m > 0) && p.u > 0);
+    return { heute, neuMorgen, verlauf: heute.concat(neuMorgen, spaeter), vorschau: !heute.length && neuMorgen.length > 0 };
+  }
+  function verlauf(list, zeige) {
+    const n = Math.min(zeige.length, 4);
+    const lanes = list.map((p) => {
+      const i = zeige.indexOf(p);
+      const cell = (v) => v === null || v === undefined ? '<i class="vl-cell ka"></i>' : `<i class="vl-cell" style="${v > 0 ? `background:${STUFE[v].c};` : ''}"></i>`;
+      const st = (i >= 0 && n > 1) ? stil('lane', i, n) : (n > 1 ? 'opacity:0.45;' : '');
+      return `<div class="vl-lane" style="${st}">${cell(p.h)}${cell(p.m)}${cell(p.u)}</div>`;
+    }).join('');
+    return `<div class="vl"><div class="vl-lanes">${lanes}</div><div class="vl-ticks"><span>Heute</span><span>Morgen</span><span>Übermorgen</span></div></div>`;
+  }
+  function neueKachel(fall) {
+    const a = auswerten(fall);
+    if (!a.heute.length && !a.vorschau) {
+      const c = C.green;
+      return `<div class="tile" style="background:${tint(c, 12)};border:1px solid ${tint(c, 24)};"><div class="trow">
+        <div class="ticon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${blume(c, false)}</div>
+        <div class="tcol voll"><div class="ttitle">Keine Belastung</div><div class="tsub">Nächste Vorhersage morgen 11:00</div></div></div></div>`;
+    }
+    const zeige = a.vorschau ? a.neuMorgen : a.heute, n = zeige.length, top = zeige[0];
+    const sv = a.vorschau ? null : top.h;
+    const c = a.vorschau ? C.amber : STUFE[sv].c;
+    const icon = top.art.gruppe === 'Gras' ? gras(c, true) : blume(c, true);
+    const titel = a.vorschau ? (n === 1 ? `Ab morgen ${top.art.name}` : `Ab morgen ${n} Pollenarten`) : (n === 1 ? top.art.name : `${n} Pollenarten`);
+    let pills = a.vorschau ? pill('Vorschau', C.amber) : pill(STUFE[sv].pill, c, (c === C.koralle || c === C.red) ? C.text : c);
+    if (!a.vorschau) {
+      const maxH = Math.max(...a.heute.map((p) => p.h)), maxM = Math.max(0, ...a.heute.map((p) => p.m || 0), ...a.neuMorgen.map((p) => p.m));
+      if (a.neuMorgen.length) pills += `<span class="pill neutral">+${a.neuMorgen.length} ab morgen</span>`;
+      else if (n > 1 && maxM > maxH) pills += '<span class="pill neutral">Morgen stärker</span>';
+      else if (n > 1 && maxM < maxH) pills += '<span class="pill neutral">Morgen schwächer</span>';
+    }
+    const zeile2 = n === 1
+      ? `<div class="tsub">${a.vorschau ? `Morgen ${kurz(top.m)}, übermorgen ${kurz(top.u)}` : `Morgen ${kurz(top.m)}, übermorgen ${kurz(top.u)}`}</div>`
+      : `<div class="names">${zeige.slice(0, 4).map((p, i) => `<span class="n" style="${stil('name', i, n)}">${esc(p.art.name)}</span>`).join(' · ')}${n > 4 ? ` · +${n - 4}` : ''}</div>`;
+    const s = zeige.slice(0, 4);
+    let szenen = s.map((p, i) => `<div class="wl-layer" style="${stil('show', i, s.length)}">${szene(p.art.form, a.vorschau ? p.m : p.h, a.vorschau, 11 + i * 17)}</div>`).join('');
+    if (s.length > 1) szenen += `<div class="wl-dots">${s.map((p, i) => `<i style="${stil('dot', i, s.length)}"></i>`).join('')}</div>`;
+    return `<div class="tile" style="background:${tint(c, 12)};border:1px solid ${tint(c, 24)};">
+      <div class="trow">
+        <div class="ticon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${icon}</div>
+        <div class="tcol"><div class="ttitle">${esc(titel)}</div><div class="tpills">${pills}</div>${zeile2}</div>
+        <div class="wf-slot">${szenen}</div>
+      </div>
+      ${verlauf(a.verlauf, s)}
+    </div>`;
+  }
+  // ---------- Bisherige Kachel (wetter-view.yaml, Stand main) ----------
+  function alteKachel(fall) {
+    const liste = daten(fall);
+    let top = null, aktiv = 0, morgen = 0;
+    liste.forEach((p) => { if (p.m > morgen) morgen = p.m; if (!(p.h > 0)) return; aktiv++; if (!top || p.h > top.v) top = { name: p.art.name, v: p.h }; });
+    let wert, text, c;
+    if (!top) { wert = 'Keine Belastung'; text = morgen > 0 ? 'Morgen beginnt Pollenflug' : `Pollenflug · ${liste.length} Arten`; c = morgen > 0 ? C.amber : C.green; }
+    else { const n = parseInt(top.v); const st = n <= 1 ? ['Gering', C.green] : n <= 2 ? ['Mittel', C.amber] : ['Hoch', C.red]; wert = `${st[0]} · ${top.name}`; text = aktiv > 1 ? `${aktiv} Arten mit Belastung` : 'Pollenflug heute'; c = st[1]; }
+    return `<div class="tile" style="background:${tint(c, 12)};border:1px solid ${tint(c, 24)};"><div class="trow">
+      <div class="ticon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${blume(c, false)}</div>
+      <div class="tcol voll"><div class="ttitle">${esc(wert)}</div><div class="tsub">${esc(text)}</div></div></div></div>`;
+  }
+  const warnKachel = () => { const c = C.green; return `<div class="tile" style="background:${tint(c, 12)};border:1px solid ${tint(c, 24)};"><div class="trow">
+      <div class="ticon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${schild(c)}</div>
+      <div class="tcol voll"><div class="ttitle">Keine Warnung</div><div class="tsub">DWD-Wetter&shy;warnung</div></div></div></div>`; };
+  function huelle(pollen, zwei) {
+    const c = C.green;
+    return `<div class="ha hull"><div class="hhead"><div class="hicon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${schild(c)}</div>
+      <div><div class="hname">Warnlage &amp; Pollen</div><div class="hlabel">Tippen für Details</div></div></div>
+      <div class="tiles${zwei ? ' zwei' : ''}">${warnKachel()}${pollen}</div></div>`;
+  }
+
+  // ---------- Detailkarte mit Verlauf (Variante) ----------
+  function karte(fall) {
+    const a = auswerten(fall);
+    const maxH = Math.max(...a.heute.map((p) => p.h)), hc = STUFE[maxH].c;
+    const zellen = a.heute.map((p) => {
+      const s = STUFE[p.h];
+      const cell = (v) => v === null || v === undefined ? '<i class="vl-cell ka"></i>' : `<i class="vl-cell" style="${v > 0 ? `background:${STUFE[v].c};` : ''}"></i>`;
+      return `<div style="display:flex;flex-direction:column;gap:8px;padding:11px 13px;border-radius:16px;background:${tint(s.c, 12)};border:1px solid ${tint(s.c, 24)};min-width:0;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;"><div style="flex:none;width:24px;height:24px;display:grid;place-items:center;">${(p.art.gruppe === 'Gras' ? gras : blume)(s.c, false).replace('<svg ', '<svg width="23" height="23" ')}</div>
+        <div style="min-width:0;"><div style="font-size:15px;font-weight:700;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(p.art.name)}</div>
+        <div style="font-size:12.5px;font-weight:600;color:${s.c};line-height:1.3;">${esc(s.pill)}</div></div></div>
+        <div class="vl-lane">${cell(p.h)}${cell(p.m)}${cell(p.u)}</div></div>`;
+    }).join('');
+    return `<div class="ha hull" style="width:100%;"><div style="display:flex;align-items:center;gap:15px;">
+      <div class="hicon" style="width:46px;height:46px;border-radius:14px;background:${tint(hc, 12)};border:1px solid ${tint(hc, 24)};">${blume(hc, false)}</div>
+      <div><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;">Pollenflug</div><div style="font-size:13px;color:${C.soft};margin-top:2px;">${a.heute.length} Pollenarten mit Belastung</div></div></div>
+      <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">${zellen}</div>
+      <div class="vl-ticks" style="margin-top:2px;"><span>Heute</span><span>Morgen</span><span>Übermorgen</span></div></div>`;
+  }
+
+  // ---------- Steuerung ----------
+  const BREITEN = [
+    { key: 's25', btn: 'Galaxy S25 · 360 px', pw: 360, zwei: false, cap: 'Galaxy S25, 360 px', inhalt: '306 px Inhalt' },
+    { key: 'ip', btn: 'iPhone 17 Pro · 402 px', pw: 402, zwei: false, cap: 'iPhone 17 Pro, 402 px', inhalt: '348 px Inhalt' },
+    { key: 'tab', btn: 'Zwei Spalten · 560 px', pw: 560, zwei: true, cap: 'Breiter als 440 px', inhalt: 'zwei Kacheln nebeneinander' }
+  ];
+  let fallKey = 'sommer', breiteKey = 's25';
+  function seg(el, items, cur, on) {
+    el.innerHTML = items.map((x) => `<button type="button" data-k="${x.key}" aria-pressed="${x.key === cur}">${esc(x.btn)}</button>`).join('');
+    el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => on(b.dataset.k)));
+  }
+  function render() {
+    seg(document.getElementById('caseSeg'), FAELLE, fallKey, (k) => { fallKey = k; render(); });
+    seg(document.getElementById('widthSeg'), BREITEN, breiteKey, (k) => { breiteKey = k; render(); });
+    const f = FAELLE.find((x) => x.key === fallKey), b = BREITEN.find((x) => x.key === breiteKey);
+    const dev = (titel, inhalt) => `<div class="device"><div class="phone-scroll"><div class="phone" style="--pw:${b.pw}px">${inhalt}</div></div><div class="device-cap"><b>${titel}</b> · ${b.cap}, ${b.inhalt}</div></div>`;
+    document.getElementById('stage').innerHTML = dev('Bisher', huelle(alteKachel(f), b.zwei)) + dev('Neu', huelle(neueKachel(f), b.zwei));
+    document.getElementById('caseNote').textContent = f.cap;
+  }
+  function statisch() {
+    document.getElementById('gallery').innerHTML = FAELLE.map((f) => `<div class="gitem"><div class="ha hull">${neueKachel(f)}</div><div class="gcap"><h3>${esc(f.btn)}</h3><p>${esc(f.cap)}</p></div></div>`).join('');
+    document.getElementById('scenes').innerHTML = REIHE.slice().sort((x, y) => ['hasel', 'erle', 'birke', 'esche', 'graeser', 'roggen', 'beifuss', 'ambrosia'].indexOf(x) - ['hasel', 'erle', 'birke', 'esche', 'graeser', 'roggen', 'beifuss', 'ambrosia'].indexOf(y))
+      .map((k, i) => `<div class="scene"><div class="pic"><div class="wl-layer">${szene(ARTEN[k].form, 2, false, 31 + i * 7)}</div></div><div class="cap"><b>${ARTEN[k].name}</b><span>${ARTEN[k].gruppe}: ${ARTEN[k].info}</span></div></div>`).join('');
+    document.getElementById('strip').innerHTML = [0.5, 1, 1.5, 2, 2.5, 3].map((v) => `<div class="scene"><div class="pic"><div class="wl-layer">${szene('birke', v, false, 5)}</div></div><div class="cap"><b>${String(v).replace('.', ',')}</b><span>${STUFE[v].text}, ${KOERNER[v]} Körner</span></div></div>`).join('');
+    document.getElementById('stufenBody').innerHTML = [0, 0.5, 1, 1.5, 2, 2.5, 3].map((v) => {
+      if (v === 0) return `<tr><td class="num">0</td><td>keine Belastung</td><td>ruhige Kachel</td><td><span class="sw-c"><i style="background:${C.green}"></i>Grün</span></td><td><span class="sw-c"><i style="background:${C.green}"></i>Grün</span></td><td class="num">0</td></tr>`;
+      const s = STUFE[v], nm = (c) => ({ [C.green]: 'Grün', [C.amber]: 'Amber', [C.koralle]: 'Koralle', [C.red]: 'Rot' })[c];
+      return `<tr><td class="num">${String(v).replace('.', ',')}</td><td>${s.text}</td><td>${pill(s.pill, s.c)}</td><td><span class="sw-c"><i style="background:${s.alt}"></i>${nm(s.alt)} („${s.altText}“)</span></td><td><span class="sw-c${s.alt !== s.c ? ' diff' : ''}"><i style="background:${s.c}"></i>${nm(s.c)}</span></td><td class="num">${KOERNER[v]}</td></tr>`;
+    }).join('');
+    document.getElementById('kartenStage').innerHTML = `<div class="device"><div class="phone-scroll"><div class="phone" style="--pw:360px">${karte(FAELLE.find((x) => x.key === 'sommer'))}</div></div><div class="device-cap"><b>Variante mit Verlauf</b> · Galaxy S25, 306 px Inhalt</div></div>`;
+  }
+  document.getElementById('rmToggle').addEventListener('change', (e) => document.getElementById('wrap').classList.toggle('rm', e.target.checked));
+  cycCss(); render(); statisch();
+})();
+</script>

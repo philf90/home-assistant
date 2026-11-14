@@ -49,6 +49,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind und Sonne | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template nachtblau_wetter_fx | – | – | aktiv |
 | [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card | `sensor.warnregion_*` | aktiv |
+| [`pollen-kachel.html`](klima/entwuerfe/pollen-kachel.html) | entwurf | Pollen-Kachel – Pollenflug im Muster der Warnlage | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml`, `pollenflug-karte.yaml` |
 | [`warnlage-kachel.html`](klima/entwuerfe/warnlage-kachel.html) | entwurf | Warnlage-Kachel – konsolidierte DWD-Warnungen mit Szenen im Wechsel | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml` |
 | [`warnung-animiert.html`](klima/entwuerfe/warnung-animiert.html) | entwurf | DWD-Warnszenen – Entwurf, Varianten und Zuordnung der Ereigniscodes | – | – | Entwurf zu `warnlage-templates.yaml`, `meteoalarm-karte.yaml` |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
