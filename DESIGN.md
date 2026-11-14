@@ -767,7 +767,16 @@ Stufe 3 kommen ein roter Schein und eine leuchtende Icon-Kachel dazu, Stufe
 DWD-Karte). Die Icons bewegen sich mit (Blitz synchron zum Doppelblitz,
 Quecksilber sinkt bei Frost), Tauwetter und Leiterseilschwingungen haben
 eigene Icons. Hitze zeigt aufsteigende Wärme ohne Sonne, damit sie sich von
-UV (Sonne mit Strahlen) unterscheidet. Für alle Animationen gilt zusätzlich:
+UV (Sonne mit Strahlen) unterscheidet. Die Warnungskachel in „Warnlage &
+Pollen“ der Wetter-View (Entwurf `warnlage-kachel.html`) fasst alle
+Warnungen beider DWD-Sensoren zusammen: höchste Stufe als Pille, alle
+Ereignisse, eine Zeitleiste der nächsten 24 Stunden (je Warnung eine Spur,
+Vorabinformationen schraffiert wie beim DWD) und die Szenen im Wechsel
+(`wechsel()` in `nachtblau_warn_fx`, je 5 s, höchstens vier; das gezeigte
+Ereignis leuchtet im Text in `nachtblau-text` auf, die übrigen stehen in
+`nachtblau-text-sekundaer`). Gelbe Spuren bekommen im hellen Modus eine
+Kante in Navy 0,24, weil Gelb auf der hellen Kachel kaum absetzt. Die
+Warnkarte steht deshalb nur noch auf Home. Für alle Animationen gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in

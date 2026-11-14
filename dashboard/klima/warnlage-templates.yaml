@@ -650,6 +650,9 @@ button_card_templates:
   #     icon(szene, farbe, px)   -> SVG mit Animationsklassen
   #     kurz(name)               -> { titel, zusatz } (Schnitt am " mit ")
   #     trenn(html)              -> weiche Trennstellen fuer lange Namen
+  #     wechsel(szenen)          -> mehrere Szenen im Wechsel, je 5 s (ab VERSION 3,
+  #                                 Warnlage-Kachel der Wetter-View)
+  #     wechselStil(art, i, n)   -> dieselbe Taktung fuer Punkte und Text
   #   extra_styles   Keyframes und Klassen der Ebene ".wf".
   #
   # Die Karte setzt die Ebene als letztes Flex-Kind in ihre Zeile
@@ -674,7 +677,7 @@ button_card_templates:
     variables:
       wfx: |
         [[[
-          const VERSION = 2, alt = window.__nachtblauWarnFx;
+          const VERSION = 3, alt = window.__nachtblauWarnFx;
           if (alt && alt.version === VERSION) return alt;
 
           const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -912,7 +915,22 @@ button_card_templates:
             }
           };
 
-          const lib = { version: VERSION, szene, kurz, trenn, fx, icon };
+          // ---------- Mehrere Szenen im Wechsel (Warnlage-Kachel der Wetter-View) ----------
+          // Jede Szene steht WECHSEL_T Sekunden, Ueberblendung WECHSEL_BLENDE; hoechstens
+          // vier. Der Verzug startet die erste Szene sichtbar, auch als Standbild bei
+          // "Bewegung reduzieren". wechselStil(art, i, n) liefert dieselbe Taktung fuer
+          // die Punkte ('dot') und das hervorgehobene Ereignis im Text ('name').
+          const WECHSEL_T = 5, WECHSEL_BLENDE = 0.6;
+          const wechselStil = (art, i, n) => (n > 1 && i < 4)
+            ? `animation:wl-${art}-${Math.min(n, 4)} ${Math.min(n, 4) * WECHSEL_T}s linear ${-(((Math.min(n, 4) - i) % Math.min(n, 4)) * WECHSEL_T + WECHSEL_BLENDE)}s infinite;` : '';
+          const wechsel = (szenen) => {
+            const s = szenen.slice(0, 4), n = s.length;
+            let h = s.map((x, i) => `<div class="wl-layer" style="${wechselStil('show', i, n)}">${fx(x.key, x.stufe, x.ii, x.vorab, 'popup')}</div>`).join('');
+            if (n > 1) h += `<div class="wl-dots">${s.map((x, i) => `<i style="${wechselStil('dot', i, n)}"></i>`).join('')}</div>`;
+            return h;
+          };
+
+          const lib = { version: VERSION, szene, kurz, trenn, fx, icon, wechsel, wechselStil };
           window.__nachtblauWarnFx = lib;
           return lib;
         ]]]
@@ -1029,6 +1047,19 @@ button_card_templates:
       @keyframes wf-pulse { from { opacity: 0.55; } to { opacity: 1; } }
       .wf-glow { position: absolute; right: -45%; bottom: -70%; width: 150%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-rot18), rgba(240, 115, 106, 0) 66%); animation: wf-pulse 3.5s ease-in-out infinite alternate; }
       .wf-glow.l4 { background: radial-gradient(circle, var(--wf-rot24), rgba(240, 115, 106, 0) 66%); animation-duration: 2.4s; }
+      /* Szenen im Wechsel (wechsel(), Warnlage-Kachel): 2 bis 4 Szenen je 5 s, Ueberblendung 0,6 s */
+      .wl-layer { position: absolute; inset: 0; }
+      .wl-dots { position: absolute; right: 12px; bottom: 6px; display: flex; gap: 4px; z-index: 2; }
+      .wl-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--nachtblau-label, #b4c0cf); opacity: 0.35; }
+      @keyframes wl-show-2 { 0% { opacity: 0; } 6% { opacity: 1; } 50% { opacity: 1; } 56% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-show-3 { 0% { opacity: 0; } 4% { opacity: 1; } 33.33% { opacity: 1; } 37.33% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-show-4 { 0% { opacity: 0; } 3% { opacity: 1; } 25% { opacity: 1; } 28% { opacity: 0; } 100% { opacity: 0; } }
+      @keyframes wl-dot-2 { 0% { opacity: 0.35; } 6% { opacity: 1; } 50% { opacity: 1; } 56% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-dot-3 { 0% { opacity: 0.35; } 4% { opacity: 1; } 33.33% { opacity: 1; } 37.33% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-dot-4 { 0% { opacity: 0.35; } 3% { opacity: 1; } 25% { opacity: 1; } 28% { opacity: 0.35; } 100% { opacity: 0.35; } }
+      @keyframes wl-name-2 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 6% { color: var(--nachtblau-text, #f2f5f8); } 50% { color: var(--nachtblau-text, #f2f5f8); } 56% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
+      @keyframes wl-name-3 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 4% { color: var(--nachtblau-text, #f2f5f8); } 33.33% { color: var(--nachtblau-text, #f2f5f8); } 37.33% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
+      @keyframes wl-name-4 { 0% { color: var(--nachtblau-text-sekundaer, #8794a5); } 3% { color: var(--nachtblau-text, #f2f5f8); } 25% { color: var(--nachtblau-text, #f2f5f8); } 28% { color: var(--nachtblau-text-sekundaer, #8794a5); } 100% { color: var(--nachtblau-text-sekundaer, #8794a5); } }
       /* Icon-Kachel: Leuchten ab Stufe 3 (0 0 14px -3px, Farbe aus --wf-glow) */
       .wf-alarm { animation: wf-kachel 3.5s ease-in-out infinite alternate; }
       .wf-alarm.l4 { animation-duration: 2.4s; }
@@ -1053,5 +1084,5 @@ button_card_templates:
       .ic-glint { animation: ic-glint 5.5s ease-in-out infinite; }
       @keyframes ic-glint { 0%, 70%, 100% { opacity: 0; } 80% { opacity: 1; } }
       @media (prefers-reduced-motion: reduce) {
-        .wf *, .wf *::before, .wf *::after, .wf-ic *, .wf-alarm { animation-play-state: paused !important; transition: none !important; }
+        .wf *, .wf *::before, .wf *::after, .wf-ic *, .wf-alarm, .wl-layer, .wl-dots i, .wl-name { animation-play-state: paused !important; transition: none !important; }
       }
