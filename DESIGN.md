@@ -806,6 +806,14 @@ und, oben, die abgeschwächte Szene ohne Alarmleuchten. Bis dahin zeigte die
 Karte `warning_1` in der Reihenfolge des DWD-Servers und den Rest als
 „+N weitere“; eine Unwetterwarnung konnte so hinter einer Stufe-1-Warnung
 verschwinden.
+Warnnamen stehen auf Home und in der Warnlage-Kachel in Normalschreibung
+(`wfx.schreib`): „Schweres Gewitter“, darunter „mit Orkanböen, heftigem
+Starkregen und Hagel“, „UV-Index“. Der DWD liefert sie groß. Klein werden
+nur die Adjektive aus den Ereignislisten des CAP-DWD-Profils 2.1.13
+(Kap. 3.1), alle übrigen Wörter gelten als Substantiv. Bis 14.11.2026 stand
+der Titel der Home-Karte groß („FROST“), während die Liste darunter schon
+„Windböen“ schrieb. Das Popup zeigt den vollen DWD-Namen weiter
+unverändert.
 Die Pollenkachel daneben folgt demselben Muster (Entwurf
 `pollen-kachel.html`, Bibliothek `nachtblau_pollen_fx`): höchste Stufe von
 heute als Pille, alle belasteten Arten, Szenen im Wechsel und statt der

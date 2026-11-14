@@ -851,6 +851,11 @@ button_card_templates:
   #     icon(szene, farbe, px)   -> SVG mit Animationsklassen
   #     kurz(name)               -> { titel, zusatz } (Schnitt am " mit ")
   #     trenn(html)              -> weiche Trennstellen fuer lange Namen
+  #                                 (Gross- und Kleinschreibung egal, ab VERSION 4)
+  #     schreib(text, anfang)    -> DWD-Namen in Normalschreibung (ab VERSION 4):
+  #                                 "SCHWERES GEWITTER" -> "Schweres Gewitter",
+  #                                 "mit HEFTIGEM STARKREGEN" -> "mit heftigem
+  #                                 Starkregen", "UV-INDEX" -> "UV-Index"
   #     wechsel(szenen)          -> mehrere Szenen im Wechsel, je 5 s (ab VERSION 3,
   #                                 Warnlage-Kachel der Wetter-View)
   #     wechselStil(art, i, n)   -> dieselbe Taktung fuer Punkte und Text
@@ -878,7 +883,7 @@ button_card_templates:
     variables:
       wfx: |
         [[[
-          const VERSION = 3, alt = window.__nachtblauWarnFx;
+          const VERSION = 4, alt = window.__nachtblauWarnFx;
           if (alt && alt.version === VERSION) return alt;
 
           const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -934,9 +939,33 @@ button_card_templates:
             return i > 0 ? { titel: n.slice(0, i), zusatz: n.slice(i + 1) } : { titel: n, zusatz: '' };
           };
           const trenn = (html) => String(html || '')
-            .replace('LEITERSEILSCHWINGUNGEN', 'LEITERSEIL&shy;SCHWINGUNGEN')
-            .replace('SCHNEEVERWEHUNG', 'SCHNEE&shy;VERWEHUNG')
-            .replace('VORABINFORMATION', 'VORAB&shy;INFORMATION');
+            .replace(/(LEITERSEIL)(SCHWINGUNGEN)/i, '$1&shy;$2')
+            .replace(/(SCHNEE)(VERWEHUNG)/i, '$1&shy;$2')
+            .replace(/(VORAB)(INFORMATION)/i, '$1&shy;$2');
+
+          // DWD schreibt die Ereignisnamen gross ("SCHWERES GEWITTER mit
+          // HEFTIGEM STARKREGEN"). Normalschreibung: Substantive gross, die
+          // Adjektive klein, am Anfang (anfang = true) gross. KLEIN sind alle
+          // Adjektive und Adverbien aus den Ereignislisten des CAP-DWD-Profils
+          // 2.1.13, Kap. 3.1.1 bis 3.1.5; unbekannte Woerter gelten als
+          // Substantiv. Bindestrich-Teile einzeln (UV bleibt Abkuerzung),
+          // Woerter mit Kleinbuchstaben ("mit", Hochsee "schwerer Sturm")
+          // bleiben, nur am Anfang wird der erste Buchstabe gross.
+          const KLEIN = new Set(['starkes', 'starker', 'starke', 'schweres', 'schwere',
+            'extrem', 'extreme', 'extremes', 'extremen', 'heftiger', 'heftigem',
+            'ergiebiger', 'orkanartige', 'leichter', 'strenger', 'geringe']);
+          const ABK = new Set(['UV']);
+          const gross1 = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+          const schreibWort = (x, anfang) => {
+            if (x !== x.toUpperCase() || !/[A-ZÄÖÜ]/.test(x)) return anfang ? gross1(x) : x;
+            return x.split('-').map((t, j) => {
+              if (ABK.has(t)) return t;
+              const klein = t.toLowerCase();
+              return (KLEIN.has(klein.replace(/[^a-zäöüß]/g, '')) && !(anfang && j === 0)) ? klein : gross1(klein);
+            }).join('-');
+          };
+          const schreib = (text, anfang = true) => String(text || '').split(' ')
+            .map((x, i) => schreibWort(x, anfang && i === 0)).join(' ');
 
           // Stufe -> Dichte k und Tempo t (Vorabinformation: 0)
           const LV = { 0: { k: 0.8, t: 0.7 }, 1: { k: 1, t: 1 }, 2: { k: 1.35, t: 1.15 }, 3: { k: 1.75, t: 1.3 }, 4: { k: 2.2, t: 1.5 } };
@@ -1131,7 +1160,7 @@ button_card_templates:
             return h;
           };
 
-          const lib = { version: VERSION, szene, kurz, trenn, fx, icon, wechsel, wechselStil };
+          const lib = { version: VERSION, szene, kurz, trenn, schreib, fx, icon, wechsel, wechselStil };
           window.__nachtblauWarnFx = lib;
           return lib;
         ]]]
