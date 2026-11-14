@@ -42,17 +42,19 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`heizung-templates.yaml`](klima/heizung-templates.yaml) | templates | Heizungs-Animation – button-card-Template nachtblau_heizung_fx | – | – | aktiv |
 | [`meteoalarm-karte.yaml`](klima/meteoalarm-karte.yaml) | karte | DWD-Wetterwarnung | button-card | `sensor.warnregion_*` | aktiv |
-| [`pollenflug-karte.yaml`](klima/pollenflug-karte.yaml) | karte | Pollenflug-Index | button-card | – | aktiv |
+| [`pollenflug-karte-v2.yaml`](klima/pollenflug-karte-v2.yaml) | karte | Pollenflug v2 – Pollenkachel mit eigenem Kopf | button-card | – | aktiv |
 | [`temperaturen-karte-v2.yaml`](klima/temperaturen-karte-v2.yaml) | karte | Temperaturen v2 – Raumliste mit 24-h-Sparkline | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
 | [`warnlage-templates.yaml`](klima/warnlage-templates.yaml) | templates | Warnlage – Popups fuer DWD-Warnungen und Pollenflug | button-card | `sensor.warnregion_*` | aktiv |
 | [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind und Sonne | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template nachtblau_wetter_fx | – | – | aktiv |
 | [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card | `sensor.warnregion_*` | aktiv |
-| [`pollen-kachel.html`](klima/entwuerfe/pollen-kachel.html) | entwurf | Pollen-Kachel – Pollenflug im Muster der Warnlage | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml`, `pollenflug-karte.yaml` |
+| [`home-pollen.html`](klima/entwuerfe/home-pollen.html) | entwurf | Pollen auf Home – Pollenflug auf der Home-View, bisher und zwei Varianten | – | – | Entwurf zu `pollenflug-karte-v2.yaml`, `warnlage-templates.yaml` |
+| [`pollen-kachel.html`](klima/entwuerfe/pollen-kachel.html) | entwurf | Pollen-Kachel – Pollenflug im Muster der Warnlage | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml` |
 | [`warnlage-kachel.html`](klima/entwuerfe/warnlage-kachel.html) | entwurf | Warnlage-Kachel – konsolidierte DWD-Warnungen mit Szenen im Wechsel | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml` |
 | [`warnung-animiert.html`](klima/entwuerfe/warnung-animiert.html) | entwurf | DWD-Warnszenen – Entwurf, Varianten und Zuordnung der Ereigniscodes | – | – | Entwurf zu `warnlage-templates.yaml`, `meteoalarm-karte.yaml` |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
+| [`pollenflug-karte.yaml`](klima/archiv/pollenflug-karte.yaml) | karte | Pollenflug-Index | button-card | – | archiv, ersetzt durch `pollenflug-karte-v2.yaml` |
 | [`temperaturen-karte.yaml`](klima/archiv/temperaturen-karte.yaml) | karte | Raum-Temperaturen v1 | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | archiv, ersetzt durch `temperaturen-karte-v2.yaml` |
 | [`thermostate-karte-v2.yaml`](klima/archiv/thermostate-karte-v2.yaml) | karte | Thermostate v2 – radiale Soll-Regler | button-card, card-mod | – | archiv, ersetzt durch `thermostate-karte-v3.yaml` |
 | [`thermostate-karte.yaml`](klima/archiv/thermostate-karte.yaml) | karte | Thermostate v1 | button-card, card-mod | – | archiv, ersetzt durch `thermostate-karte-v2.yaml` |
