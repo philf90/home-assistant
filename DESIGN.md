@@ -711,6 +711,19 @@ DWD-Beschreibung), Icons mindestens 4,61:1. „keine“ und „keine Daten“ im
 Popup stehen auf der neutralen Kachel in Label-Grau; in Sekundär-Grau fielen
 sie dort dunkel auf 4,35:1 (jetzt 7,28:1, hell 8,49:1).
 
+Seit 14.11.2026 zählen halbe Stufen zur höheren Farbe (`stufe()` in
+`nachtblau_pollen_fx`, Entwurf `pollen-kachel.html`): 0,5 und 1 Grün, 1,5
+und 2 Amber, 2,5 Koralle, 3 Rot. Bis dahin rundete `parseInt` ab, „gering
+bis mittel“ stand grün da. Koralle passt zu seiner Rolle („zwischen Amber und
+Rot, immer mit Text“); die Stufe steht immer als Text daneben, wie der DWD
+sie nennt („Mittel bis hoch“). Koralle auf seiner Tönung 0,12 dunkel 5,44:1,
+hell 4,62:1, also über Rot (4,72:1 und 4,61:1). In der Pollenkachel der
+Wetter-View steht die Pille in einer Kachel, die selbst getönt ist (zweimal
+0,12): Dort bleibt die Schrift dunkel nur in Grün und Amber farbig (5,18:1),
+Koralle (4,42:1) und Rot (3,95:1) nehmen Primärtext, hell alle (unter
+4,2:1). In der Detailkarte bricht der Stufentext zweizeilig um, neben dem
+Icon bleiben bei 306 px rund 87 px.
+
 ## Animierte Hintergründe
 
 Wetter-Karte, Wind-Karte und Begrüßungs-Banner haben eine animierte Ebene
@@ -781,7 +794,19 @@ Zeitleiste beginnt immer bei „jetzt“: `sensor.date_time` (Integration
 einem eigenen Feld `zeit`; das Feld `body` mit Icon, Text und Szene bleibt
 dabei unverändert, button-card ersetzt es nicht und die Szene läuft weiter.
 Neu gezeichnet wird `body` nur, wenn sich die Warnungen ändern oder um
-Mitternacht „Heute“ zu „Gestern“ wird. Die Warnkarte steht nur noch auf Home. Für alle Animationen gilt zusätzlich:
+Mitternacht „Heute“ zu „Gestern“ wird. Die Warnkarte steht nur noch auf Home.
+Die Pollenkachel daneben folgt demselben Muster (Entwurf
+`pollen-kachel.html`, Bibliothek `nachtblau_pollen_fx`): höchste Stufe von
+heute als Pille, alle belasteten Arten, Szenen im Wechsel und statt der
+Zeitleiste der Verlauf über die drei Tage, die der DWD vorhersagt (je Art
+eine Spur, ohne Angabe schraffiert in Wolkengrau 0,4). Die Szenen zeigen die
+Pflanze: Baum mit Kätzchen oder Blütenbüscheln (Hasel, Erle, Birke, Esche),
+Gras mit Ähre (Gräser, Roggen mit Grannen), Kraut (Beifuß, Ambrosia).
+Zweige und Stängel stehen in `nachtblau-label` 0,3 bis 0,45, Blüten und
+Pollenkörner in der Stufenfarbe, Schein 0,18, Wind Wolkengrau 0,16; je
+Stufe fliegen mehr und schnellere Körner (3 bis 15). Die Detailkarte
+Pollenflug steht deshalb nur noch auf Home. Für alle Animationen gilt
+zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in
@@ -859,6 +884,10 @@ umgeschaltet über `nachtblau-dunkel-anteil`; dunkel bleibt alles wie bisher.
 
 - **Energiefluss:** Leitungen in den Knotenfarben, inaktive Leitungen in
   `nachtblau-unterkachel-rand`.
+- **Pollenflug** (`nachtblau_pollen_fx`): ohne Opt-in. Alle Farben sind
+  Theme-Variablen (`nachtblau-label`, die Stufenfarben, `nachtblau-wolkengrau`)
+  mit fester Deckkraft; im hellen Modus gelten ihre hellen Werte aus dem
+  Theme. Nicht einzeln gemessen; Text steht nie auf der Szene.
 - **DWD-Warnungen** (`nachtblau_warn_fx`): ohne Opt-in, die Karte ist
   ohnehin für beide Modi gebaut. Jede Rolle nimmt hell ihren Tiefton mit dem
   Faktor aus der Tabelle oben (Wolke × 1,8, Regen × 1,33, Weiß → Eis hell
