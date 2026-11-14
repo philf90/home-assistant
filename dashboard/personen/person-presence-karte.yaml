@@ -7,7 +7,7 @@
 # Karten:        button-card
 # Templates:     keine
 # Einfuegen:     Karte hinzufuegen -> Manuell
-# Platzhalter:   person.bewohner, sensor.iphone_*
+# Platzhalter:   person.bewohner, sensor.iphone_*, sensor.places_bewohner
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Personen-Präsenzkarte im Nachtblau-Stil
@@ -31,7 +31,40 @@
 # zu nah am Kartenhintergrund #1b2231, um als Rand erkennbar zu sein.
 # Beim Laden (charging_entity = ..._battery_state): gruener Akku + Lade-Blitz.
 #
-# Voraussetzung: custom:button-card (HACS).
+# Ort unterwegs: Statt "Unterwegs" steht die Strasse, darunter Ort und Alter
+# der letzten Position ("<Ort> · vor 3 Min"). Zwei Quellen:
+#   - geocoded_entity: Adress-Sensor der Companion App (iOS: Apple, Android:
+#     Geocoder des Systems). Attribute thoroughfare/locality, auf iOS mit
+#     Grossbuchstaben und Leerzeichen; "N/A" und "null" gelten als leer.
+#   - places_prefix: Integration Places (OpenStreetMap). Liefert zusaetzlich
+#     die Strassennummer (route_number, bei Landesstrassen teils in street)
+#     und die Richtung zu Hause.
+# Genommen wird die Quelle, die zur letzten Position der Person passt
+# (hoechstens 2 min aelter); passen beide, gewinnt die App. In Tests auf dem
+# Android-Handy kam der App-Sensor unterwegs nicht mit, Places schon; auf dem
+# iPhone umgekehrt zuverlaessig. Daher beide.
+# Faehrt die Person (Tempo ab 30 km/h oder Aktivitaet Automotive/in_vehicle,
+# Position juenger als 10 min) und Places kennt eine Strassennummer, steht
+# sie als Schild neben dem Tempo ("A 1  119 km/h"), darunter "bei <Ort>"
+# und die Richtung (Places "towards home" -> "Heimweg", "away from home" ->
+# "entfernt sich"). Ohne Strassennummer: Strasse, darunter Ort und Tempo.
+# Zu Fuss zeigt die Karte keine Richtung, weil sie bei 20-90 m
+# GPS-Genauigkeit hin und her springt. Bei 168 px Kartenbreite (S25) passt
+# neben Symbol und Schild nur ein kurzer Wert, deshalb steht der Ort darunter.
+# Ist die letzte Position 60 min alt oder aelter, steht wieder "Unterwegs",
+# darunter "zuletzt <Ort> · vor 1 Std". 15 min waeren zu kurz: Das iPhone
+# meldete im Stehen ausserhalb bis zu 30 min lang keine Position.
+# sensor.time laesst die Karte jede Minute neu zeichnen (Altersangabe).
+# Zonen (Zuhause, Arbeit) haben Vorrang vor der Adresse.
+#
+# Voraussetzung: custom:button-card (HACS), sensor.time (Integration "Time &
+# Date"). Optional fuer den Ort: Adress-Sensor ..._geocoded_location und
+# Aktivitaet (iOS ..._activity, Android ..._detected_activity) der Companion
+# App, in Home Assistant und in der App eingeschaltet; Integration Places
+# (HACS) je Person mit eingeschalteten Untersensoren _street,
+# _route_number, _city, _last_updated und _direction_of_travel (Places legt
+# street, route_number und last_updated deaktiviert an). Ohne diese Sensoren
+# zeigt die Karte wie bisher "Unterwegs".
 type: horizontal-stack
 cards:
   - type: custom:button-card
@@ -39,6 +72,9 @@ cards:
     variables:
       battery_entity: sensor.iphone_battery_level
       charging_entity: sensor.iphone_battery_state
+      geocoded_entity: sensor.iphone_geocoded_location
+      activity_entity: sensor.iphone_activity
+      places_prefix: sensor.places_bewohner
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
     tap_action:
       action: more-info
@@ -98,6 +134,77 @@ cards:
           const accent = home ? green : (inZone ? blau : muted);
           const fb = variables.avatar_fallback || 'linear-gradient(160deg,#4a5a74,#33404f)';
 
+          // ---------- Ort unterwegs: Adress-Sensor der App + Places ----------
+          states['sensor.time']; // liest die Uhrzeit, damit button-card jede Minute neu zeichnet (Alter)
+          const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const leer = (v) => v === undefined || v === null || ['', 'unknown', 'unavailable', 'null', 'n/a', 'none'].includes(String(v).trim().toLowerCase());
+          const zeit = (v) => { if (leer(v)) return null; const t = Date.parse(String(v).trim().replace(' ', 'T')); return isNaN(t) ? null : t; };
+          // Attribut ohne Ruecksicht auf Schreibweise: iOS "Thoroughfare", Android "thoroughfare"
+          const attr = (o, k) => {
+            if (!o || !o.attributes) return null;
+            const key = Object.keys(o.attributes).find((x) => x.toLowerCase().replace(/ /g, '_') === k);
+            return key && !leer(o.attributes[key]) ? String(o.attributes[key]).trim() : null;
+          };
+          const pz = variables.places_prefix || '';
+          const pl = (s) => { const o = pz ? states[pz + '_' + s] : null; return o && !leer(o.state) ? String(o.state).trim() : null; };
+          const posT = e ? zeit(e.last_updated) : null;
+          const frisch = (t) => t !== null && posT !== null && t >= posT - 120000;
+          const geo = states[variables.geocoded_entity];
+          const geoT = geo && !leer(geo.state) ? zeit(geo.last_updated) : null;
+          const geoStr = attr(geo, 'thoroughfare');
+          const geoOrt = attr(geo, 'locality');
+          const plT = zeit(pl('last_updated'));
+          const plStr = pl('street');
+          const plOrt = pl('city');
+          const geoOk = geoT !== null && !!(geoStr || geoOrt);
+          const plOk = plT !== null && !!(plStr || plOrt);
+          // Quelle passend zur letzten Position; passen beide, gewinnt die App
+          let quelle = null;
+          if (geoOk && frisch(geoT)) quelle = 'geo';
+          else if (plOk && frisch(plT)) quelle = 'places';
+          else if (geoOk || plOk) quelle = (geoOk && (!plOk || geoT >= plT)) ? 'geo' : 'places';
+          const strasse = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
+          const ort = quelle === 'geo' ? (geoOrt || plOrt) : (quelle === 'places' ? (plOrt || geoOrt) : null);
+          // Strassennummer nur aus Places (route_number, bei Landesstrassen in street)
+          const refMuster = /^(A|B|L|K|St|S|E)\s?\d+[a-z]?$/i;
+          const plRefRoh = pl('route_number') || (plStr && refMuster.test(plStr) ? plStr : null);
+          const strRef = plRefRoh && frisch(plT) ? plRefRoh.split(';')[0].trim().replace(/^([A-Za-z]+)\s?(\d)/, '$1 $2') : null;
+          // Alter der letzten Position
+          const alterMin = posT !== null ? Math.max(0, Math.floor((Date.now() - posT) / 60000)) : null;
+          const alterTxt = alterMin === null ? '' : (alterMin < 1 ? 'gerade eben' : (alterMin < 60 ? `vor ${alterMin} Min` : `vor ${Math.floor(alterMin / 60)} Std`));
+          const veraltet = alterMin !== null && alterMin >= 60;
+          // Faehrt? Tempo (m/s) ab 30 km/h oder Aktivitaet Auto, Position juenger als 10 min
+          const speed = e && e.attributes && typeof e.attributes.speed === 'number' ? e.attributes.speed : null;
+          const akt = states[variables.activity_entity];
+          const aktT = akt ? zeit(akt.last_updated) : null;
+          const imAuto = !!akt && ['automotive', 'in_vehicle'].includes(String(akt.state).toLowerCase()) && aktT !== null && Date.now() - aktT < 900000;
+          const faehrt = alterMin !== null && alterMin < 10 && ((speed !== null && speed >= 8.3) || imAuto);
+          const kmh = speed !== null && speed > 0 ? `${Math.round(speed * 3.6)} km/h` : null;
+          const richtungMap = { 'towards home': 'Heimweg', 'away from home': 'entfernt sich' };
+          const richtung = frisch(plT) ? (richtungMap[String(pl('direction_of_travel') || '').toLowerCase()] || null) : null;
+          // Zeilen: Status (Strasse oder Schild + "bei Ort") und Unterzeile
+          let zeile1 = esc(statusLabel);
+          let zeile2 = '';
+          let schild = '';
+          const unterwegs = !home && !inZone && raw === 'not_home' && !!quelle;
+          if (unterwegs) {
+            if (veraltet) {
+              zeile1 = 'Unterwegs';
+              zeile2 = ['zuletzt ' + esc(strasse || ort), alterTxt].join(' · ');
+            } else if (faehrt && strRef) {
+              // Schild und Tempo sind kurz und passen in eine Zeile, Ort und Richtung bekommen die volle Breite
+              schild = esc(strRef);
+              zeile1 = kmh || '';
+              zeile2 = [ort ? 'bei ' + esc(ort) : null, richtung].filter(Boolean).join(' · ') || alterTxt;
+            } else {
+              zeile1 = esc(strasse || ort);
+              const teile = [];
+              if (strasse && ort) teile.push(esc(ort));
+              teile.push(faehrt ? kmh : alterTxt);
+              zeile2 = teile.filter(Boolean).join(' · ');
+            }
+          }
+
           // ---------- Akku ----------
           const bat = states[variables.battery_entity];
           const batBad = !bat || bat.state === 'unavailable' || bat.state === 'unknown';
@@ -119,7 +226,14 @@ cards:
           const icoZoneStatus = zoneIcon
             ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:13px;width:13px;height:13px;display:flex;flex:none;color:${blau};"></ha-icon>`
             : icoAwayStatus.replace(`color:${muted}`, `color:${blau}`);
-          const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : icoAwayStatus);
+          const icoCarStatus = `<ha-icon icon="mdi:car" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;color:${muted};"></ha-icon>`;
+          const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : (unterwegs && faehrt && !veraltet ? icoCarStatus : icoAwayStatus));
+          // Strassennummer als Schild, getoent in Blau (Info-Wert)
+          const schildHtml = schild
+            ? `<span style="flex:none;font-size:11.5px;font-weight:700;line-height:17px;padding:0 6px;border-radius:5px;white-space:nowrap;color:${blau};background:color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent);border:1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent);">${schild}</span>`
+            : '';
+          // Texte brechen in bis zu zwei Zeilen um (DESIGN.md, Bildschirmbreiten)
+          const zweiZeilen = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
 
           const badgeHome = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
             <path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.6V19h12v-8.4"/></svg>`;
@@ -172,8 +286,9 @@ cards:
               <div style="min-width:0;">
                 <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
                 <div style="display:flex;align-items:center;gap:5px;margin-top:3px;color:${muted};font-size:13px;line-height:1.2;min-width:0;">
-                  ${statusIcon}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${statusLabel}</span>
+                  ${statusIcon}${schildHtml}${zeile1 ? `<span style="min-width:0;${zweiZeilen}">${zeile1}</span>` : ''}
                 </div>
+                ${zeile2 ? `<div style="margin-top:3px;color:${muted};font-size:12px;line-height:1.25;min-width:0;${zweiZeilen}">${zeile2}</div>` : ''}
               </div>
             </div>`;
         ]]]
@@ -183,6 +298,9 @@ cards:
     variables:
       battery_entity: sensor.iphone_2_battery_level
       charging_entity: sensor.iphone_2_battery_state
+      geocoded_entity: sensor.iphone_2_geocoded_location
+      activity_entity: sensor.iphone_2_activity
+      places_prefix: sensor.places_bewohner_2
       avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
     tap_action:
       action: more-info
