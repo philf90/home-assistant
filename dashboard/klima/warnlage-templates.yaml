@@ -11,8 +11,9 @@
 # Platzhalter:   sensor.warnregion_*
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Zwei button-card-Templates, die nur das Antippen festlegen. Eine Karte
-# bindet sie mit "template: nachtblau_dwd_popup" bzw. "nachtblau_pollen_popup" ein.
+# Zwei button-card-Templates, die das Antippen festlegen, dazu die
+# Szenen-Bibliothek fuer die Warnungen. Eine Karte bindet sie mit
+# "template: nachtblau_dwd_popup" bzw. "nachtblau_pollen_popup" ein.
 #
 #   nachtblau_dwd_popup     Tippen: browser_mod-Popup "Wetterwarnungen" mit allen
 #                       Warnungen und Vorabinformationen beider DWD-Sensoren,
@@ -26,12 +27,16 @@
 #                       Arten ohne Belastung in einer Zeile. Langes Druecken:
 #                       more-info. Genutzt von pollenflug-karte.yaml und
 #                       "Warnlage & Pollen".
+#   nachtblau_warn_fx       Animierte Szene und bewegte Icons je DWD-Ereignis
+#                       (seit 14.11.2026, Entwurf warnung-animiert.html).
+#                       nachtblau_dwd_popup erbt es, der Popup-Inhalt bindet
+#                       es selbst ein. Beschreibung am Template unten.
 #
 # Beide Popups haben dieselbe Oberflaeche (Nachtblau, Breite bis 720 px)
 # und Lesbarkeitsregeln; Erklaerung der Breiten-Fesseln im DWD-Block.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> beide Eintraege unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> alle drei Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
 # Voraussetzung: custom:button-card und browser_mod (HACS), Integrationen
@@ -39,6 +44,8 @@
 # Region 101).
 button_card_templates:
   nachtblau_dwd_popup:
+    # Szenen-Bibliothek und Keyframes fuer die Karte, die dieses Template nutzt
+    template: nachtblau_warn_fx
     tap_action:
       action: call-service
       service: browser_mod.popup
@@ -68,6 +75,8 @@ button_card_templates:
           --popup-max-width: min(100vw, 720px);
         content:
           type: custom:button-card
+          # Eigene button-card im Popup: braucht Bibliothek und Keyframes selbst
+          template: nachtblau_warn_fx
           entity: sensor.warnregion_aktuelle_warnstufe
           # Popup soll sich auch bei neuen Vorabinformationen aktualisieren
           triggers_update:
@@ -245,25 +254,14 @@ button_card_templates:
                   return { txt: 'läuft', live: true };
                 };
 
-                // ---------- Icon nach Warnungstyp ----------
-                const iconFor = (n, color, px) => {
-                  const s = (n || '').toLowerCase();
-                  const S = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${color};width:${px}px;height:${px}px;flex:none;">${inner}</svg>`;
-                  // Gewitter zuerst: DWD-Namen wie "GEWITTER mit ORKANBÖEN" sollen den Blitz zeigen
-                  if (/(gewitter|blitz)/.test(s))            return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>');
-                  if (/(wind|böen|boen|sturm|orkan)/.test(s)) return S('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
-                  if (/(stark ?regen|dauerregen|regen)/.test(s)) return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>');
-                  if (/(schnee|schneefall)/.test(s))         return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>');
-                  // Frost: Thermometer mit Schneeflocke (unter 0 °C) statt Sternchen; Gegenstueck
-                  // zum Hitze-Thermometer und klar getrennt von Schnee (Wolke mit Flocken)
-                  if (/frost/.test(s))                       return S('<path d="M8.4 14.8V5.6a1.7 1.7 0 0 0-3.4 0v9.2a3.2 3.2 0 1 0 3.4 0Z"/><circle cx="6.7" cy="17.5" r="1.2" fill="currentColor" stroke="none"/><path stroke-width="1.8" d="M16.5 3v12M21.7 6 11.3 12M21.7 12 11.3 6M16.5 12.7l-1.3 1.4M16.5 12.7l1.3 1.4M13.3 10.9l-1.9-.5M13.3 10.9l-.5 1.8M13.3 7.1l-.5-1.8M13.3 7.1l-1.9.5M16.5 5.3l1.3-1.4M16.5 5.3l-1.3-1.4M19.7 7.1l1.9.5M19.7 7.1l.5-1.8M19.7 10.9l.5 1.8M19.7 10.9l1.9-.5"/>');
-                  // Glaette/Glatteis: Schneeflocke mit Seitenzweigen an allen sechs Armen
-                  if (/(glätte|glaette|eis)/.test(s))        return S('<path d="M12 2.5 12 21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9 -0.78M7.06 14.85l-0.78 2.9M7.06 9.15l-0.78 -2.9M7.06 9.15l-2.9 0.78M12 6.3l2.12 -2.12M12 6.3l-2.12 -2.12M16.94 9.15l2.9 0.78M16.94 9.15l0.78 -2.9M16.94 14.85l0.78 2.9M16.94 14.85l2.9 -0.78"/>');
-                  if (/(hitze|wärme|waerme)/.test(s))        return S('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><circle cx="12" cy="17.4" r="1.8" fill="currentColor" stroke="none"/>');
-                  if (/(nebel)/.test(s))                     return S('<path d="M5 9h14M4 13h16M6 17h12"/>');
-                  if (/(uv|sonne)/.test(s))                  return S('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
-                  return S('<path d="M12 3.5 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none"/>');
-                };
+                // ---------- Szene und Icon: Template nachtblau_warn_fx ----------
+                // Szene nach dem Ereigniscode warning_N_type, sonst nach dem Namen;
+                // Icons kommen aus derselben Quelle wie in der Warnkarte.
+                const wfx = variables.wfx;
+                // Stufe 4: Kachel und Pille deckend in der DWD-Farbe, Schrift nach Kontrast,
+                // Rand und Leuchten in Rot (gefuellte Rot-Kachel, DESIGN.md "Bausteine")
+                const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
+                const leuchtenRot = 'var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5))';
 
                 // ---------- Fliesstext / Handlungsempfehlungen normalisieren ----------
                 // DWD liefert "Hinweis auf: \n · a\n\nHandlungsempfehlungen: \n · b"
@@ -346,7 +344,9 @@ button_card_templates:
                     start:    toDate(p('start') || p('start_time') || o.start_time || o.start),
                     end:      toDate(p('end') || p('end_time') || o.end_time || o.end),
                     params:   p('parameters') || o.parameters || {},
-                    urgency:  String(p('urgency') || o.urgency || '').toLowerCase()
+                    urgency:  String(p('urgency') || o.urgency || '').toLowerCase(),
+                    // DWD-Ereigniscode (ii), waehlt die Szene; FROST = 22
+                    type:     (p('type') !== undefined && p('type') !== null) ? p('type') : o.event_code
                   };
                 };
 
@@ -357,14 +357,25 @@ button_card_templates:
                   const st    = statusText(w.start, w.end);
                   const dur   = (w.start && w.end) ? span(w.end - w.start) : '';
                   const urg   = urgencyLabel[w.urgency] || '';
+                  const alarm  = !advance && w.level >= 3;
+                  const extrem = !advance && w.level >= 4;
+                  const key    = wfx.szene(w.type, w.name);
+                  const szene  = wfx.fx(key, w.level, w.type, advance, 'popup');
+                  const kachel = extrem
+                    ? `background:${color};border:1px solid ${randRot};--wf-glow:${leuchtenRot};`
+                    : `background:${modus(tint(color, 16), color)};border:1px solid ${modus(tint(color, 24), color)};--wf-glow:${tint(color, 50)};`;
+                  const iconFarbe = extrem ? aufFlaeche(color) : modus(lesbar(color, 0.16, 3), aufFlaeche(color));
 
                   const pill = (txt, c, filled) =>
                     `<span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;color:${filled ? modus(lesbar(c, 0.12, 4.5), value) : c};`
                     + `background:${filled ? tint(c, 12) : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'};border:1px solid ${filled ? tint(c, 24) : line};`
                     + `border-radius:999px;padding:4px 9px;white-space:nowrap;">${esc(txt)}</span>`;
 
+                  const stufenPill = extrem
+                    ? `<span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;color:${aufFlaeche(color)};background:${color};border:1px solid ${randRot};border-radius:999px;padding:4px 9px;white-space:nowrap;">${esc(meta.label)}</span>`
+                    : pill(advance ? 'Vorabinformation' : meta.label, color, true);
                   const pills = [
-                    pill(advance ? 'Vorabinformation' : meta.label, color, true),
+                    stufenPill,
                     st.live ? pill('aktiv', '#4ade80', true) : '',
                     (!st.live && urg) ? pill(urg, label, false) : ''
                   ].filter(Boolean).join('');
@@ -374,16 +385,17 @@ button_card_templates:
                     ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;overflow-wrap:anywhere;">${esc(w.headline)}</div>` : '';
 
                   return `
-                    <div style="background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;${widthCap}">
+                    <div style="position:relative;overflow:hidden;background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;${widthCap}">
                       <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;background:${modus(tint(color, 16), color)};border:1px solid ${modus(tint(color, 24), color)};">
-                          ${iconFor(w.name, modus(lesbar(color, 0.16, 3), aufFlaeche(color)), 22)}
+                        <div class="${alarm ? 'wf-alarm' : ''}${extrem ? ' l4' : ''}" style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;${kachel}">
+                          ${wfx.icon(key, iconFarbe, 22)}
                         </div>
-                        <div style="min-width:0;flex:1 1 auto;">
-                          <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:anywhere;">${esc(w.name)}</div>
+                        <div style="min-width:0;flex:${szene ? '0 1 auto' : '1 1 auto'};">
+                          <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:break-word;">${wfx.trenn(esc(w.name))}</div>
                           ${headlineExtra}
                           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${pills}</div>
                         </div>
+                        ${szene ? `<div class="wf-slot pop">${szene}</div>` : ''}
                       </div>
 
                       <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:12px;padding-top:12px;border-top:1px solid ${line};">
@@ -611,3 +623,421 @@ button_card_templates:
               ]]]
     hold_action:
       action: more-info
+
+  # ==========================================================================
+  # nachtblau_warn_fx -- animierte Szene je DWD-Warnereignis
+  # --------------------------------------------------------------------------
+  # Genutzt von nachtblau_dwd_popup (erbt es, damit Warnkarte und "Warnlage &
+  # Pollen" die Bibliothek haben) und vom Popup-Inhalt selbst (eigene
+  # button-card, eigenes Shadow-DOM, braucht die Keyframes noch einmal).
+  # Entwurf, Varianten und Entscheidungen: warnung-animiert.html.
+  #
+  # Szene nach dem Ereigniscode warning_N_type (DWD-ii-Code, CAP-DWD-Profil
+  # 2.1.13, Kap. 3.1); fehlt er, nach dem Namen wie bisher beim Icon. Bei
+  # Gewittern bestimmt der Code auch Regen, Hagel und Boeen (Gruppen RAIN,
+  # HAIL, WIND, Kap. 3.3; nur Pflicht-Mitglieder, nicht die geklammerten).
+  # Stufe (warning_N_level) skaliert Dichte und Tempo, ab Stufe 3 roter Schein.
+  #
+  # Aufbau:
+  #   variables.wfx  Bibliothek, einmal pro Seite in window.__nachtblauWarnFx.
+  #                  VERSION bei jeder Aenderung erhoehen.
+  #     szene(ii, name)          -> Szenenschluessel ('keine' = ohne Szene)
+  #     fx(szene, stufe, ii, vorab, ort)  -> HTML der Ebene (ort 'karte'|'popup')
+  #     icon(szene, farbe, px)   -> SVG mit Animationsklassen
+  #     kurz(name)               -> { titel, zusatz } (Schnitt am " mit ")
+  #     trenn(html)              -> weiche Trennstellen fuer lange Namen
+  #   extra_styles   Keyframes und Klassen der Ebene ".wf".
+  #
+  # Die Karte setzt die Ebene als letztes Flex-Kind in ihre Zeile
+  # (<div class="wf-slot">...</div>): Sie beginnt dadurch genau rechts neben
+  # dem Text, ohne Messung, und reicht ueber negative Raender bis an den
+  # Kartenrand. Text steht nie auf der Animation; die Ebene blendet ueber
+  # 26 px ein, mindestens 64 px (Popup 72 px) bleiben fuer sie.
+  #
+  # Farben nur aus design/palette.yaml (DESIGN.md, "Animierte Hintergruende"):
+  # Wolken, Nebel, Wind Wolkengrau; dunkle Wolken Muted; Regen, Frostschein
+  # Blau; Schnee, Eis, Kristalle Weiss mit Deckkraft; Blitz Weiss 0,18; UV
+  # Sonnengelb; Hitze Koralle (Stufe 1) und Rot (ab Stufe 3); Schein Rot.
+  # Heller Modus ueber --nachtblau-dunkel-anteil: jedes Element nimmt den
+  # Tiefton seiner Rolle mit dem Faktor aus DESIGN.md, "Wetteranimation im
+  # hellen Modus" (Wolke x1,8, Regen x1,33, Weiss -> Eis hell x1,88, Blitz ->
+  # Sonnengelb 0,72, Schein x1).
+  #
+  # "Bewegung reduzieren" zeigt ein Standbild (Animationen pausiert, SMIL
+  # weggelassen). Blitz: Doppelblitz alle 8 s (WCAG 2.3.1).
+  # ==========================================================================
+  nachtblau_warn_fx:
+    variables:
+      wfx: |
+        [[[
+          const VERSION = 1, alt = window.__nachtblauWarnFx;
+          if (alt && alt.version === VERSION) return alt;
+
+          const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+          // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text
+          const R = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+          const f2 = (n) => n.toFixed(2);
+
+          // ---------- Ereigniscodes -> Szene (CAP-DWD-Profil 2.1.13) ----------
+          const SZENE = {};
+          const setz = (s, codes) => codes.forEach((c) => { SZENE[c] = s; });
+          setz('gewitter', [31, 33, 34, 36, 38, 40, 41, 42, 44, 45, 46, 48, 49, 90, 91, 92, 93, 95, 96]);
+          setz('wind', [11, 12, 13, 51, 52, 53, 54, 55, 56, 57, 58]);
+          setz('nebel', [59]);
+          setz('starkregen', [61, 62, 66]);
+          setz('dauerregen', [63, 64, 65]);
+          setz('schnee', [70, 71, 72, 73]);
+          setz('verwehung', [74, 75, 76]);
+          setz('leiter', [79]);
+          setz('frost', [22, 82]);
+          setz('glaette', [84, 87]);
+          setz('glatteis', [85, 86]);
+          setz('tauwetter', [88, 89]);
+          setz('uv', [246]);
+          setz('hitze', [247, 248]);
+          const GRP_WIND = [33, 36, 38, 40, 41, 44, 45, 48, 49, 96];
+          const GRP_RAIN = [34, 36, 38, 42, 44, 45, 46, 48, 49, 95, 96];
+          const GRP_HAIL = [38, 46, 48, 49, 95, 96];
+
+          // Rueckfall ohne Code: Namenserkennung, Gewitter zuerst
+          const nachName = (n) => {
+            const s = String(n || '').toLowerCase();
+            if (/(gewitter|blitz)/.test(s)) return 'gewitter';
+            if (/verwehung/.test(s)) return 'verwehung';
+            if (/(wind|böen|boen|sturm|orkan)/.test(s)) return 'wind';
+            if (/dauerregen|ergiebig/.test(s)) return 'dauerregen';
+            if (/regen/.test(s)) return 'starkregen';
+            if (/schnee/.test(s)) return 'schnee';
+            if (/frost/.test(s)) return 'frost';
+            if (/glatteis/.test(s)) return 'glatteis';
+            if (/(glätte|glaette)/.test(s)) return 'glaette';
+            if (/tauwetter/.test(s)) return 'tauwetter';
+            if (/leiterseil/.test(s)) return 'leiter';
+            if (/(hitze|wärme|waerme)/.test(s)) return 'hitze';
+            if (/(uv|sonne)/.test(s)) return 'uv';
+            if (/nebel/.test(s)) return 'nebel';
+            return 'keine';
+          };
+          const szene = (ii, name) => SZENE[parseInt(ii)] || nachName(name);
+
+          // "SCHWERES GEWITTER mit ORKANBÖEN, ..." -> Titel und Zusatzzeile
+          const kurz = (name) => {
+            const n = String(name || ''), i = n.indexOf(' mit ');
+            return i > 0 ? { titel: n.slice(0, i), zusatz: n.slice(i + 1) } : { titel: n, zusatz: '' };
+          };
+          const trenn = (html) => String(html || '')
+            .replace('LEITERSEILSCHWINGUNGEN', 'LEITERSEIL&shy;SCHWINGUNGEN')
+            .replace('SCHNEEVERWEHUNG', 'SCHNEE&shy;VERWEHUNG')
+            .replace('VORABINFORMATION', 'VORAB&shy;INFORMATION');
+
+          // Stufe -> Dichte k und Tempo t (Vorabinformation: 0)
+          const LV = { 0: { k: 0.8, t: 0.7 }, 1: { k: 1, t: 1 }, 2: { k: 1.35, t: 1.15 }, 3: { k: 1.75, t: 1.3 }, 4: { k: 2.2, t: 1.5 } };
+
+          // ---------- Bausteine ----------
+          const wolken = (dunkel, n) => [[8, 4, 62, 0.24, 9, 0.1], [46, 18, 50, 0.24, 11, 0.6], [24, 30, 44, 0.18, 10, 0.35]].slice(0, n)
+            .map(([x, y, w, o, d, p]) => `<div class="wf-cl${dunkel ? ' dunkel' : ''}" style="--x:${x}%;--y:${y}%;--w:${w}px;--o:${dunkel ? o : o / 2};--d:${d}s;--p:${p}"></div>`).join('');
+          const tropfen = (n, basis, len, t) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const x = ((i + R(i, 1) * 0.8) / n * 100).toFixed(1);
+              const d = (basis * (0.85 + 0.3 * R(i, 2)) / t).toFixed(2);
+              h += `<i class="wf-dr" style="--x:${x}%;--d:${d}s;--p:${f2(R(i, 3))};--len:${len}px;--a:${i % 3 === 0 ? 0.5 : 0.24}"></i>`;
+            }
+            return h;
+          };
+          const flocken = (n, basis, gr, t, hagel) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const x = ((i + R(i, 21) * 0.8) / n * 100).toFixed(1);
+              const d = (basis * (0.8 + 0.4 * R(i, 22)) / t).toFixed(2);
+              h += `<i class="wf-fl${hagel ? ' hagel' : ''}" style="--x:${x}%;--d:${d}s;--p:${f2(R(i, 23))};--s:${gr}px;--sw:${(2 + R(i, 24) * 2).toFixed(1)}s"></i>`;
+            }
+            return h;
+          };
+          const fall = (inner, neig) => `<div class="wf-fall" style="--neig:${neig}deg">${inner}</div>`;
+          const ringe = (n, t, weiss, unten) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              h += `<i class="wf-sp${weiss ? ' weiss' : ''}" style="--x:${(12 + (i + R(i, 31) * 0.7) / n * 80).toFixed(1)}%;--d:${(1.1 / t * (0.8 + 0.4 * R(i, 32))).toFixed(2)}s;--p:${f2(R(i, 33))};${unten ? '--b:' + unten + ';' : ''}"></i>`;
+            }
+            return h;
+          };
+          const schlieren = (n, basis, len, t, boe, weiss) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const y = (14 + (i + R(i, 4) * 0.9) / n * 72).toFixed(1);
+              const d = (basis * (0.8 + 0.4 * R(i, 5)) / t).toFixed(2);
+              const w = Math.round(len * (0.7 + 0.6 * R(i, 7)));
+              h += `<div class="wf-dw" style="--y:${y}%;--w:${w}px;--d:${d}s;--p:${f2(R(i, 6))}"><i class="wf-st${boe ? ' boe' : ''}${weiss ? ' weiss' : ''}" style="--a:${i % 2 === 0 ? 0.5 : 0.24};--wv:${(1.4 + R(i, 8) * 1.6).toFixed(2)}s"></i></div>`;
+            }
+            return h;
+          };
+          const treiben = (n, basis, t) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              const y = (8 + (i + R(i, 41) * 0.9) / n * 80).toFixed(1);
+              const d = (basis * (0.75 + 0.5 * R(i, 42)) / t).toFixed(2);
+              const s = R(i, 43) > 0.6 ? 3.5 : 2.5;
+              h += `<div class="wf-dw" style="--y:${y}%;--w:${s}px;--d:${d}s;--p:${f2(R(i, 44))}"><i class="wf-bf" style="--s:${s}px;--wv:${(0.8 + R(i, 45)).toFixed(2)}s"></i></div>`;
+            }
+            return h;
+          };
+          const blitz = '<div class="wf-flash"></div><svg class="wf-bolt" viewBox="0 0 18 46" fill="none"><path d="M11 0 4 20h7L5 46" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+          const nebel = (t) => [[6, 30, 22, 0.1], [32, 34, 28, 0.5], [60, 30, 20, 0.8], [80, 26, 26, 0.3]]
+            .map(([y, hh, d, p]) => `<div class="wf-fog" style="--y:${y}%;--h:${hh}%;--d:${(d / t).toFixed(1)}s;--p:${p}"></div>`).join('');
+          // Eiskristall: sechs Arme mit Seitenzweigen, waechst per stroke-dash
+          const KRISTALL = 'M12 2.5V21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
+          const kristall = (x, y, s, d, p) => `<svg class="wf-cr" style="--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}" viewBox="0 0 24 24">`
+            + KRISTALL.split('M').filter(Boolean).map((seg) => `<path pathLength="1" d="M${seg}"/>`).join('') + '</svg>';
+          const funkeln = (n, oben, hoehe, t) => {
+            let h = '';
+            for (let i = 0; i < n; i++) {
+              h += `<i class="wf-spk" style="--x:${(30 + R(i, 51) * 64).toFixed(1)}%;--y:${(oben + R(i, 52) * hoehe).toFixed(1)}%;--s:${R(i, 53) > 0.6 ? 7 : 5}px;--d:${((1.8 + R(i, 54) * 2.2) / t).toFixed(2)}s;--p:${f2(R(i, 55))}"></i>`;
+            }
+            return h;
+          };
+          const zapfen = (n, t) => {
+            let h = '<div class="wf-icebar"></div>';
+            for (let i = 0; i < n; i++) {
+              const x = (32 + (i + R(i, 61) * 0.6) / n * 62).toFixed(1), w = 5 + Math.round(R(i, 62) * 3), hh = 12 + Math.round(R(i, 63) * 14);
+              h += `<i class="wf-icl" style="--x:${x}%;--w:${w}px;--h:${hh}px"></i><i class="wf-dp" style="--x:${x}%;--w:${w}px;--h:${hh}px;--d:${(2.6 / t * (0.8 + 0.4 * R(i, 64))).toFixed(2)}s;--p:${f2(R(i, 65))}"></i>`;
+            }
+            return h;
+          };
+          const pegel = (cls, h, d) => `<div class="wf-lvl${cls}" style="--h:${h}%;--d:${d.toFixed(1)}s"></div>`;
+          // Hitze: aufsteigende Waerme (Entscheidung 14.11.2026, warnung-animiert.html)
+          const waerme = (n, t, rot) => {
+            let h = `<div class="wf-heatglow${rot ? ' rot' : ''}"></div>`;
+            for (let i = 0; i < n; i++) {
+              const farbe = i % 2 ? 'gelb' : (rot ? 'rot' : 'koralle');
+              h += `<i class="wf-ember ${farbe}" style="--x:${(14 + (i + R(i, 81) * 0.8) / n * 80).toFixed(1)}%;--s:${R(i, 82) > 0.6 ? 3 : 2}px;--d:${(3.2 / t * (0.75 + 0.5 * R(i, 83))).toFixed(2)}s;--p:${f2(R(i, 84))};--dx:${Math.round((R(i, 85) - 0.5) * 16)}px"></i>`;
+            }
+            return h;
+          };
+          const seil = (t) => {
+            const dur = (1.8 / t).toFixed(2);
+            const draht = (y0, sag, cls, phase) => {
+              const a = `M0 ${y0} Q50 ${y0 + sag} 100 ${y0}`, b = `M0 ${y0} Q50 ${y0 - sag * 0.7} 100 ${y0}`;
+              const anim = ruhig ? '' : `<animate attributeName="d" dur="${dur}s" begin="-${phase}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" values="${a};${b};${a}"/>`;
+              return `<path class="${cls}" d="${a}" vector-effect="non-scaling-stroke">${anim}</path>`;
+            };
+            return `<svg class="wf-cab" viewBox="0 0 100 60" preserveAspectRatio="none">${draht(14, 22, 'wf-wire', 0)}${draht(34, 18, 'wf-wire leise', (0.4 / t).toFixed(2))}<path class="wf-mast" d="M99 0V60" vector-effect="non-scaling-stroke"/></svg>`;
+          };
+
+          // ---------- Szenen ----------
+          const SZENEN = {
+            gewitter: (l, t, k, ii) => {
+              const c = parseInt(ii);
+              let h = wolken(true, l >= 3 ? 3 : 2);
+              if (GRP_RAIN.includes(c)) h += fall(tropfen(Math.round(10 * k), 0.7, 14, t), -10);
+              if (GRP_HAIL.includes(c)) h += fall(flocken(Math.round(6 * k), 1.4, 3, t, true), -10);
+              if (GRP_WIND.includes(c)) h += schlieren(Math.round(2 * k), 2.6, 60, t, l >= 3, false);
+              return h + blitz;
+            },
+            wind: (l, t, k) => schlieren(Math.round(4 * k), 2.6, 70, t, l >= 3, false),
+            starkregen: (l, t, k) => wolken(true, 2) + fall(tropfen(Math.round(14 * k), 0.5, 16, t), -12) + ringe(Math.round(3 * k), t, false),
+            dauerregen: (l, t, k) => wolken(true, 1) + fall(tropfen(Math.round(10 * k), 1.0, 10, t), -4) + pegel('', 20 + l * 4, 18 / t),
+            schnee: (l, t, k) => fall(flocken(Math.round(9 * k), 5, l >= 3 ? 3.5 : 3, t, false), -4) + pegel(' schnee', 16 + l * 3, 22 / t),
+            verwehung: (l, t, k) => treiben(Math.round(10 * k), 1.9, t) + schlieren(Math.round(2 * k), 1.8, 50, t, false, true)
+              + `<svg class="wf-dune" style="--d:${(8 / t).toFixed(1)}s" viewBox="0 0 400 30" preserveAspectRatio="none"><path d="M0 30V18Q25 6 50 18T100 18T150 18T200 18T250 18T300 18T350 18T400 18V30Z"/></svg>`,
+            glaette: (l, t, k) => '<div class="wf-ice"></div>' + `<div class="wf-sheen" style="--d:${(5.5 / t).toFixed(1)}s"></div>` + funkeln(Math.round(3 * k), 66, 26, t),
+            glatteis: (l, t, k) => '<div class="wf-ice"></div>' + fall(tropfen(Math.round(7 * k), 1.0, 9, t), -5)
+              + ringe(Math.round(3 * k), t * 0.7, true, '12%') + `<div class="wf-sheen" style="--d:${(5.5 / t).toFixed(1)}s"></div>`,
+            frost: (l, t) => {
+              let h = '<div class="wf-cold"></div>';
+              [[40, 6, 30, 0.0], [70, 40, 22, 0.45], [52, 52, 18, 0.7], [80, 2, 16, 0.25]].slice(0, l >= 2 ? 4 : 2)
+                .forEach(([x, y, s, p], i) => { h += kristall(x, y, s, (10 / t + i).toFixed(1), p); });
+              h += funkeln(l >= 2 ? 5 : 3, 10, 70, t);
+              return h + (l >= 2 ? '<div class="wf-rime"></div>' : '');
+            },
+            tauwetter: (l, t, k) => zapfen(Math.round(3 * k), t) + ringe(Math.round(2 * k), t * 0.6, false) + pegel('', 14 + l * 3, 20 / t),
+            nebel: (l, t) => nebel(t),
+            hitze: (l, t, k) => waerme(Math.round(8 * k), t, l >= 3),
+            uv: () => '<div class="wf-uvrays"></div><div class="wf-uvsun"></div><div class="wf-ring"></div><div class="wf-ring" style="animation-delay:-1.6s"></div>',
+            leiter: (l, t) => seil(t)
+          };
+
+          const fx = (key, stufe, ii, vorab, ort) => {
+            const bau = SZENEN[key];
+            if (!bau) return '';
+            const l = Math.max(1, Math.min(4, parseInt(stufe) || 1));
+            const lv = LV[vorab ? 0 : l];
+            const schein = (!vorab && l >= 3) ? `<div class="wf-glow${l >= 4 ? ' l4' : ''}"></div>` : '';
+            return `<div class="wf${ort === 'popup' ? ' pop' : ''}${vorab ? ' vorab' : ''}" aria-hidden="true">${schein}${bau(l, lv.t, lv.k, ii)}</div>`;
+          };
+
+          // ---------- Icons (Pfade wie bisher in iconFor, plus Bewegung) ----------
+          const icon = (key, farbe, px) => {
+            const S = (inner) => `<svg class="wf-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${farbe};width:${px}px;height:${px}px;flex:none;display:block;overflow:visible;" aria-hidden="true">${inner}</svg>`;
+            const WOLKE = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/>';
+            const fallend = (d, dl, extra) => `<path class="ic-fall" style="animation-duration:${d};animation-delay:${dl};${extra || ''}"`;
+            switch (key) {
+              case 'gewitter': return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path class="ic-bolt" d="M12.5 13l-2.5 4h3l-2 4"/>');
+              case 'wind': return S('<path class="ic-flow" d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5"/><path class="ic-flow" style="animation-delay:-0.5s" d="M3 12h15a3 3 0 1 1-3 3"/><path class="ic-flow" style="animation-delay:-1s" d="M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
+              case 'starkregen': case 'dauerregen': {
+                const d = key === 'starkregen' ? '1s' : '1.6s';
+                return S(WOLKE + fallend(d, '0s') + ' d="M8.5 18l-1 2.2"/>' + fallend(d, '-0.4s') + ' d="M12 18l-1 2.2"/>' + fallend(d, '-0.8s') + ' d="M15.5 18l-1 2.2"/>');
+              }
+              case 'schnee': case 'verwehung': {
+                const x = key === 'verwehung' ? 'animation-name:ic-slide;' : '';
+                const d = key === 'verwehung' ? '1.2s' : '2.4s';
+                return S(WOLKE + fallend(d, '0s', x) + ' d="M9 18.5h.01"/>' + fallend(d, '-0.8s', x) + ' d="M12 20h.01"/>' + fallend(d, '-1.6s', x) + ' d="M15 18.5h.01"/>');
+              }
+              // Frost: Thermometer mit Schneeflocke; die Saeule sinkt, die Flocke dreht sich
+              case 'frost': return S('<path d="M8.4 14.8V5.6a1.7 1.7 0 0 0-3.4 0v9.2a3.2 3.2 0 1 0 3.4 0Z"/><path class="ic-down" stroke-width="1.6" d="M6.7 16.4V9.2"/><circle cx="6.7" cy="17.5" r="1.2" fill="currentColor" stroke="none"/><g class="ic-spin" style="animation-duration:20s"><path stroke-width="1.8" d="M16.5 3v12M21.7 6 11.3 12M21.7 12 11.3 6M16.5 12.7l-1.3 1.4M16.5 12.7l1.3 1.4M13.3 10.9l-1.9-.5M13.3 10.9l-.5 1.8M13.3 7.1l-.5-1.8M13.3 7.1l-1.9.5M16.5 5.3l1.3-1.4M16.5 5.3l-1.3-1.4M19.7 7.1l1.9.5M19.7 7.1l.5-1.8M19.7 10.9l.5 1.8M19.7 10.9l1.9-.5"/></g>');
+              case 'glaette': case 'glatteis': return S(`<g class="ic-spin" style="animation-duration:${key === 'glatteis' ? 16 : 30}s"><path d="${KRISTALL}"/></g><circle class="ic-glint" cx="18.5" cy="5" r="1.1" fill="currentColor" stroke="none"/>`);
+              case 'hitze': return S('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path class="ic-up" stroke-width="1.8" d="M12 15.6V7.6"/><circle cx="12" cy="17.4" r="1.8" fill="currentColor" stroke="none"/>');
+              case 'nebel': return S('<path class="ic-slide" d="M5 9h14"/><path class="ic-slide" style="animation-delay:-1.6s" d="M4 13h16"/><path class="ic-slide" style="animation-delay:-0.8s" d="M6 17h12"/>');
+              case 'uv': return S('<circle cx="12" cy="12" r="4"/><g class="ic-spin" style="animation-duration:18s"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>');
+              // neu: Eiszapfen mit Tropfen
+              case 'tauwetter': return S('<path d="M3.5 4h17"/><path d="M6 4l1.4 5.5L8.8 4M10.6 4l1.5 8 1.5-8M15.4 4l1.3 5 1.3-5"/><circle class="ic-drip" cx="12.1" cy="15.4" r="1.25" fill="currentColor" stroke="none"/><path d="M8 20.5h8"/>');
+              // neu: zwei Masten, schwingendes Seil
+              case 'leiter': {
+                const a = 'M4 7Q12 15 20 7', b = 'M4 7Q12 1.5 20 7';
+                const anim = ruhig ? '' : `<animate attributeName="d" dur="1.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" values="${a};${b};${a}"/>`;
+                return S(`<path d="M4 4v16M20 4v16M2.5 6h3M18.5 6h3"/><path d="${a}">${anim}</path>`);
+              }
+              // Rueckfall: Warndreieck ohne Bewegung
+              default: return S('<path d="M12 3.5 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none"/>');
+            }
+          };
+
+          const lib = { version: VERSION, szene, kurz, trenn, fx, icon };
+          window.__nachtblauWarnFx = lib;
+          return lib;
+        ]]]
+    extra_styles: |
+      .wf-slot { position: relative; flex: 1 0 64px; align-self: stretch; margin: -16px -18px -16px 0; min-width: 64px; }
+      .wf-slot.pop { flex-basis: 72px; min-width: 72px; margin: -14px -16px -12px 0; }
+      .wf {
+        position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+        -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px); mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px);
+        /* Farbrollen dunkel / hell (Faktoren aus DESIGN.md, "Wetteranimation im hellen Modus") */
+        --wf-d: var(--nachtblau-dunkel-anteil, 100%);
+        --wf-wolke: color-mix(in srgb, #cdd6e0 var(--wf-d), var(--nachtblau-wolkengrau, #cdd6e0));
+        --wf-wolke12: color-mix(in srgb, rgba(205, 214, 224, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 21.5%, transparent));
+        --wf-wolke24: color-mix(in srgb, rgba(205, 214, 224, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 43%, transparent));
+        --wf-wolke50: color-mix(in srgb, rgba(205, 214, 224, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 81%, transparent));
+        --wf-blau: color-mix(in srgb, #7fb3d5 var(--wf-d), var(--nachtblau-blau, #7fb3d5));
+        --wf-blau12: color-mix(in srgb, rgba(127, 179, 213, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent));
+        --wf-blau18: color-mix(in srgb, rgba(127, 179, 213, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent));
+        --wf-blau24: color-mix(in srgb, rgba(127, 179, 213, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 32%, transparent));
+        --wf-blau50: color-mix(in srgb, rgba(127, 179, 213, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 67%, transparent));
+        --wf-w12: color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 23%, transparent));
+        --wf-w24: color-mix(in srgb, rgba(255, 255, 255, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 45%, transparent));
+        --wf-w50: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 94%, transparent));
+        --wf-eis18: color-mix(in srgb, rgba(207, 227, 242, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 34%, transparent));
+        --wf-blitz: color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--wf-d), rgba(230, 193, 90, 0.72));
+        --wf-blitzlinie: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wf-d), rgba(230, 193, 90, 0.72));
+        --wf-rot18: color-mix(in srgb, rgba(240, 115, 106, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 18%, transparent));
+        --wf-rot24: color-mix(in srgb, rgba(240, 115, 106, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent));
+        --wf-rot50: color-mix(in srgb, rgba(240, 115, 106, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 50%, transparent));
+        --wf-koralle18: color-mix(in srgb, rgba(231, 147, 110, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-koralle, #e7936e) 18%, transparent));
+        --wf-koralle50: color-mix(in srgb, rgba(231, 147, 110, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-koralle, #e7936e) 50%, transparent));
+        --wf-gelb18: color-mix(in srgb, rgba(230, 193, 90, 0.18) var(--wf-d), rgba(230, 193, 90, 0.45));
+        --wf-gelb24: color-mix(in srgb, rgba(230, 193, 90, 0.24) var(--wf-d), rgba(230, 193, 90, 0.6));
+        --wf-gelb50: color-mix(in srgb, rgba(230, 193, 90, 0.5) var(--wf-d), rgba(230, 193, 90, 0.9));
+        --wf-k-wolke: calc(180% - 0.8 * var(--wf-d));
+        --wf-k-regen: calc(133% - 0.33 * var(--wf-d));
+      }
+      .wf.pop {
+        -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px), linear-gradient(0deg, rgba(205, 214, 224, 0) 0, #cdd6e0 18px);
+        -webkit-mask-composite: source-in;
+        mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px), linear-gradient(0deg, rgba(205, 214, 224, 0) 0, #cdd6e0 18px);
+        mask-composite: intersect;
+      }
+      .wf.vorab { opacity: 0.55; }
+      .wf * { will-change: transform; }
+      .wf-cl { position: absolute; left: var(--x); top: var(--y); width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: var(--wf-wolke); opacity: calc(var(--o) * var(--wf-k-wolke)); animation: wf-sway var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wf-cl.dunkel { background: var(--nachtblau-muted, #6e7988); opacity: var(--o); }
+      .wf-cl::before, .wf-cl::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+      .wf-cl::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }
+      .wf-cl::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }
+      @keyframes wf-sway { from { transform: translateX(-7px); } to { transform: translateX(7px); } }
+      .wf-fall { position: absolute; inset: -12% -18%; transform: rotate(var(--neig, -8deg)); }
+      .wf-dr, .wf-fl { position: absolute; top: 0; height: 100%; left: var(--x); animation: wf-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+      .wf-dr { width: 1.5px; opacity: calc(var(--a) * var(--wf-k-regen)); }
+      .wf-dr::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), var(--wf-blau)); }
+      .wf-fl { width: var(--s); }
+      .wf-fl::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-w50); animation: wf-bob var(--sw) ease-in-out infinite alternate; }
+      .wf-fl.hagel::after { border-radius: 1px; background: var(--wf-wolke50); animation: none; }
+      @keyframes wf-bob { from { transform: translateX(-5px); } to { transform: translateX(5px); } }
+      .wf-sp { position: absolute; bottom: var(--b, 7%); left: var(--x); width: 12px; height: 4px; margin-left: -6px; border: 1px solid var(--wf-blau50); border-radius: 50%; opacity: 0; animation: wf-splash var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wf-sp.weiss { border-color: var(--wf-w50); }
+      @keyframes wf-splash { 0% { transform: scale(0.2); opacity: 0.9; } 100% { transform: scale(1.5); opacity: 0; } }
+      .wf-dw { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wf-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
+      .wf-st { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(205, 214, 224, 0), var(--wf-wolke) 70%, rgba(205, 214, 224, 0)); opacity: calc(var(--a) * (170% - 0.7 * var(--wf-d))); animation: wf-wave var(--wv) ease-in-out infinite alternate; }
+      .wf-st.weiss { background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--wf-w50) 70%, rgba(255, 255, 255, 0)); opacity: var(--a); }
+      .wf-st.boe { height: 2px; }
+      @keyframes wf-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
+      .wf-bf { position: absolute; right: 100%; top: 0; width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-w50); animation: wf-wave var(--wv) ease-in-out infinite alternate; }
+      .wf-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 85% 75% at 60% 0%, var(--wf-blitz), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wf-flash 8s linear infinite; animation-delay: -5s; }
+      .wf-bolt { position: absolute; left: 54%; top: 22%; width: 18px; height: 46px; opacity: 0; overflow: visible; stroke: var(--wf-blitzlinie); animation: wf-flash 8s linear infinite; animation-delay: -5s; }
+      @keyframes wf-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }
+      .wf-fog { position: absolute; left: -40%; width: 180%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), var(--wf-wolke12) 50%, rgba(205, 214, 224, 0)); animation: wf-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-haze { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+      .wf-cold { position: absolute; right: -40%; top: -55%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-blau18), rgba(127, 179, 213, 0) 65%); }
+      .wf-cr { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); overflow: visible; }
+      .wf-cr path { fill: none; stroke: var(--wf-w50); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: wf-grow var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-grow { 0% { stroke-dashoffset: 1; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+      .wf-spk { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); background: var(--wf-w50); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: wf-tw var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-tw { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+      .wf-rime { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(0deg, var(--wf-w12), rgba(255, 255, 255, 0)); }
+      .wf-ice { position: absolute; left: 0; right: 0; bottom: 0; height: 36%; background: linear-gradient(0deg, var(--wf-eis18), rgba(207, 227, 242, 0)); }
+      .wf-sheen { position: absolute; bottom: 0; height: 36%; left: 0; width: 42%; background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--wf-w24), rgba(255, 255, 255, 0)); animation: wf-sheen var(--d, 5.5s) ease-in-out infinite; }
+      @keyframes wf-sheen { 0% { transform: skewX(-24deg) translateX(-170%); } 55%, 100% { transform: skewX(-24deg) translateX(280%); } }
+      .wf-icebar { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--wf-w12); }
+      .wf-icl { position: absolute; top: 3px; left: var(--x); width: var(--w); height: var(--h); background: linear-gradient(180deg, var(--wf-w24), var(--wf-w12)); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+      .wf-dp { position: absolute; top: calc(var(--h) + 1px); left: calc(var(--x) + var(--w) / 2 - 1.5px); width: 3px; height: 4px; border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%; background: var(--wf-blau); opacity: 0; animation: wf-drip var(--d) ease-in infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      @keyframes wf-drip { 0% { transform: translateY(0) scale(0.3); opacity: 0; } 30% { transform: translateY(0) scale(1); opacity: 0.5; } 100% { transform: translateY(78px) scale(1); opacity: 0.5; } }
+      .wf-lvl { position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 28%); background: linear-gradient(0deg, var(--wf-blau18), var(--wf-blau12)); border-top: 1px solid var(--wf-blau24); transform-origin: bottom; animation: wf-rise var(--d, 16s) ease-in-out infinite; }
+      .wf-lvl.schnee { background: linear-gradient(0deg, var(--wf-w12), rgba(255, 255, 255, 0)); border-top-color: var(--wf-w12); }
+      @keyframes wf-rise { 0% { transform: scaleY(0.3); } 85% { transform: scaleY(1); } 100% { transform: scaleY(0.3); } }
+      .wf-dune { position: absolute; left: -50%; bottom: 0; width: 200%; height: 26%; fill: var(--wf-w12); animation: wf-dune var(--d, 7s) linear infinite; }
+      @keyframes wf-dune { from { transform: translateX(0); } to { transform: translateX(25%); } }
+      .wf-cab { position: absolute; left: 0; top: 16%; width: 100%; height: 64%; overflow: visible; }
+      .wf-wire { fill: none; stroke: var(--wf-wolke50); stroke-width: 1.5; }
+      .wf-wire.leise { stroke: var(--wf-wolke24); }
+      .wf-mast { stroke: var(--nachtblau-muted, #6e7988); stroke-width: 2; }
+      .wf-heatglow { position: absolute; left: -10%; right: -30%; bottom: -45%; height: 95%; background: radial-gradient(ellipse 60% 70% at 55% 100%, var(--wf-koralle18), rgba(231, 147, 110, 0) 72%); animation: wf-pulse 3.2s ease-in-out infinite alternate; }
+      .wf-heatglow.rot { background: radial-gradient(ellipse 60% 70% at 55% 100%, var(--wf-rot18), rgba(240, 115, 106, 0) 72%); }
+      .wf-ember { position: absolute; bottom: 8%; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-koralle50); opacity: 0; animation: wf-ember var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wf-ember.rot { background: var(--wf-rot50); }
+      .wf-ember.gelb { background: var(--wf-gelb50); }
+      @keyframes wf-ember { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), -72px); opacity: 0; } }
+      .wf-uvsun { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; background: radial-gradient(circle, var(--wf-gelb50) 0%, var(--wf-gelb24) 55%, rgba(230, 193, 90, 0) 72%); animation: wf-pulse 4s ease-in-out infinite alternate; }
+      .wf-uvrays { position: absolute; right: -31px; top: 50%; width: 120px; height: 120px; margin-top: -60px; border-radius: 50%; background: repeating-conic-gradient(var(--wf-gelb18) 0deg 5deg, rgba(230, 193, 90, 0) 5deg 20deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 20%, #cdd6e0 28%, rgba(205, 214, 224, 0) 70%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 20%, #cdd6e0 28%, rgba(205, 214, 224, 0) 70%); animation: wf-spin 40s linear infinite; }
+      .wf-ring { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; border: 1.5px solid var(--wf-gelb50); animation: wf-ring 3.2s ease-out infinite; }
+      @keyframes wf-ring { from { transform: scale(0.8); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
+      @keyframes wf-spin { to { transform: rotate(360deg); } }
+      @keyframes wf-pulse { from { opacity: 0.55; } to { opacity: 1; } }
+      .wf-glow { position: absolute; right: -45%; bottom: -70%; width: 150%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-rot18), rgba(240, 115, 106, 0) 66%); animation: wf-pulse 3.5s ease-in-out infinite alternate; }
+      .wf-glow.l4 { background: radial-gradient(circle, var(--wf-rot24), rgba(240, 115, 106, 0) 66%); animation-duration: 2.4s; }
+      /* Icon-Kachel: Leuchten ab Stufe 3 (0 0 14px -3px, Farbe aus --wf-glow) */
+      .wf-alarm { animation: wf-kachel 3.5s ease-in-out infinite alternate; }
+      .wf-alarm.l4 { animation-duration: 2.4s; }
+      @keyframes wf-kachel { from { box-shadow: 0 0 14px -3px transparent; } to { box-shadow: 0 0 14px -3px var(--wf-glow); } }
+      /* Icon-Bewegungen */
+      .wf-ic * { transform-box: fill-box; }
+      .ic-spin { transform-origin: center; animation: wf-spin 24s linear infinite; }
+      .ic-down { transform-origin: bottom; animation: ic-down 4s ease-in-out infinite alternate; }
+      .ic-up { transform-origin: bottom; animation: ic-up 3s ease-in-out infinite alternate; }
+      @keyframes ic-down { from { transform: scaleY(1); } to { transform: scaleY(0.3); } }
+      @keyframes ic-up { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }
+      .ic-bolt { animation: ic-flick 8s linear infinite; animation-delay: -5s; }
+      @keyframes ic-flick { 0%, 88%, 100% { opacity: 1; } 89% { opacity: 0.3; } 90.5% { opacity: 1; } 92% { opacity: 0.4; } 95% { opacity: 1; } }
+      .ic-flow { stroke-dasharray: 16 4; animation: ic-flow 1.6s linear infinite; }
+      @keyframes ic-flow { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+      .ic-fall { animation: ic-fall 1.3s ease-in infinite; }
+      @keyframes ic-fall { 0% { transform: translateY(-2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(2px); opacity: 0; } }
+      .ic-slide { animation: ic-slide 3.2s ease-in-out infinite alternate; }
+      @keyframes ic-slide { from { transform: translateX(-1.5px); } to { transform: translateX(1.5px); } }
+      .ic-drip { animation: ic-drip 2.2s ease-in infinite; }
+      @keyframes ic-drip { 0% { transform: translateY(0) scale(0.4); opacity: 0; } 25% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(6px); opacity: 0; } }
+      .ic-glint { animation: ic-glint 5.5s ease-in-out infinite; }
+      @keyframes ic-glint { 0%, 70%, 100% { opacity: 0; } 80% { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .wf *, .wf *::before, .wf *::after, .wf-ic *, .wf-alarm { animation-play-state: paused !important; transition: none !important; }
+      }

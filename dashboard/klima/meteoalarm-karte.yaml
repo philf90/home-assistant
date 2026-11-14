@@ -25,9 +25,18 @@
 #   Das Popup steht seit 19.10.2026 als Template nachtblau_dwd_popup in
 #   warnlage-templates.yaml, weil auch die Karte "Warnlage & Pollen" der
 #   Wetter-View es oeffnet.
+# - Seit 14.11.2026 animiert (Template nachtblau_warn_fx, ueber
+#   nachtblau_dwd_popup geerbt; Entwurf warnung-animiert.html): Szene je
+#   Ereignis rechts neben dem Text, nach dem Ereigniscode warning_1_type;
+#   das Icon bewegt sich mit. Ab Stufe 3 roter Schein und leuchtende
+#   Icon-Kachel, Stufe 4 mit gefuellter Kachel und Pille (DESIGN.md,
+#   "Animierte Hintergruende"). Text steht nie auf der Szene: Die Textspalte
+#   laesst ihr mindestens 64 px, lange Namen brechen zweizeilig um, und
+#   kombinierte Gewitter-Namen stehen gekuerzt da ("SCHWERES GEWITTER",
+#   darunter "mit ORKANBOEN, ..."); den vollen Namen zeigt das Popup.
 #
-# Voraussetzung: custom:button-card (HACS), browser_mod (HACS), Template
-# nachtblau_dwd_popup aus warnlage-templates.yaml. Sensoren der
+# Voraussetzung: custom:button-card (HACS), browser_mod (HACS), Templates
+# nachtblau_dwd_popup und nachtblau_warn_fx aus warnlage-templates.yaml. Sensoren der
 # DWD-Integration (dwd_weather_warnings) -> "aktuelle Warnstufe" + "Vorwarnstufe".
 type: conditional
 conditions:
@@ -62,12 +71,19 @@ card:
       body:
         - width: 100%
         - min-width: 0
+        # button-card setzt an Custom-Fields class="ellipsis" (nowrap, overflow
+        # hidden): Titel soll zweizeilig umbrechen, die Szene ueber negative
+        # Raender bis an den Kartenrand reichen (die Karte schneidet ab).
+        - white-space: normal
+        - overflow: visible
   custom_fields:
     body: |
       [[[
         // ---------- Nachtblau-Palette ----------
         const value = 'var(--nachtblau-text, #f2f5f8)';
         const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
+        const label = 'var(--nachtblau-label, #b4c0cf)';
+        const esc = (x) => String(x === null || x === undefined ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cardBot = 'var(--nachtblau-huelle-unten, #171d29)';
         // DWD-Farbe: dunkel wie bisher als Ton auf Toenung, hell nur als Flaeche
         // mit Navy- oder heller Schrift (DESIGN.md, "Sonderfarben im hellen Modus").
@@ -112,6 +128,8 @@ card:
         const w1 = (a.warning_1 && typeof a.warning_1 === 'object') ? a.warning_1 : {};
         const name = a.warning_1_name || w1.event || a.warning_1_headline || 'Wetterwarnung';
         const wlvl = parseInt(a.warning_1_level) || lvl;
+        // DWD-Ereigniscode (ii), waehlt Szene und Icon (FROST = 22)
+        const typ = (a.warning_1_type !== undefined && a.warning_1_type !== null) ? a.warning_1_type : w1.event_code;
 
         // Offizielle DWD-Farbe, sonst Fallback nach Stufe
         const lvlColor = { 1:'#f2c500', 2:'#fb9a12', 3:'#e6480e', 4:'#c0392b' };
@@ -144,45 +162,53 @@ card:
           range = `ab ${dayLabel(start)} ${fmtT(start)} Uhr`;
         }
 
-        // ---------- Icon nach Warnungstyp ----------
-        const iconFor = (n) => {
-          const s = (n || '').toLowerCase();
-          const S = (inner) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${modus(lesbar(color, 0.16, 3), aufFlaeche(color))};width:24px;height:24px;flex:none;">${inner}</svg>`;
-          // Gewitter zuerst: DWD-Namen wie "GEWITTER mit ORKANBÖEN" sollen den Blitz zeigen
-          if (/(gewitter|blitz)/.test(s))            return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path d="M12.5 13l-2.5 4h3l-2 4"/>');
-          if (/(wind|böen|boen|sturm|orkan)/.test(s)) return S('<path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5M3 12h15a3 3 0 1 1-3 3M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
-          if (/(stark ?regen|dauerregen|regen)/.test(s)) return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M8.5 18l-1 2.2M12 18l-1 2.2M15.5 18l-1 2.2"/>');
-          if (/(schnee|schneefall)/.test(s))         return S('<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/><path d="M9 18.5h.01M12 20h.01M15 18.5h.01"/>');
-          // Frost: Thermometer mit Schneeflocke (unter 0 °C) statt Sternchen; Gegenstueck
-          // zum Hitze-Thermometer und klar getrennt von Schnee (Wolke mit Flocken)
-          if (/frost/.test(s))                       return S('<path d="M8.4 14.8V5.6a1.7 1.7 0 0 0-3.4 0v9.2a3.2 3.2 0 1 0 3.4 0Z"/><circle cx="6.7" cy="17.5" r="1.2" fill="currentColor" stroke="none"/><path stroke-width="1.8" d="M16.5 3v12M21.7 6 11.3 12M21.7 12 11.3 6M16.5 12.7l-1.3 1.4M16.5 12.7l1.3 1.4M13.3 10.9l-1.9-.5M13.3 10.9l-.5 1.8M13.3 7.1l-.5-1.8M13.3 7.1l-1.9.5M16.5 5.3l1.3-1.4M16.5 5.3l-1.3-1.4M19.7 7.1l1.9.5M19.7 7.1l.5-1.8M19.7 10.9l.5 1.8M19.7 10.9l1.9-.5"/>');
-          // Glaette/Glatteis: Schneeflocke mit Seitenzweigen an allen sechs Armen
-          if (/(glätte|glaette|eis)/.test(s))        return S('<path d="M12 2.5 12 21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9 -0.78M7.06 14.85l-0.78 2.9M7.06 9.15l-0.78 -2.9M7.06 9.15l-2.9 0.78M12 6.3l2.12 -2.12M12 6.3l-2.12 -2.12M16.94 9.15l2.9 0.78M16.94 9.15l0.78 -2.9M16.94 14.85l0.78 2.9M16.94 14.85l2.9 -0.78"/>');
-          if (/(hitze|wärme|waerme)/.test(s))        return S('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><circle cx="12" cy="17.4" r="1.8" fill="currentColor" stroke="none"/>');
-          if (/(nebel)/.test(s))                     return S('<path d="M5 9h14M4 13h16M6 17h12"/>');
-          // Fallback: Warndreieck
-          return S('<path d="M12 3.5 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none"/>');
-        };
+        // ---------- Szene, Icon und Kachel (Template nachtblau_warn_fx) ----------
+        const wfx = variables.wfx;
+        const key = wfx.szene(typ, name);
+        const szene = wfx.fx(key, wlvl, typ, false, 'karte');
+        const alarm = wlvl >= 3;
+        // Stufe 4: Kachel und Pille deckend in der DWD-Farbe, Schrift nach Kontrast,
+        // Rand und Leuchten in Rot (gefuellte Rot-Kachel). Getoent waere die
+        // DWD-Farbe der Stufe 4 (dunkles Purpurrot laut CAP-Profil) nur 1,03:1 zur
+        // Huelle, Icon und Schrift fielen auf Hell.
+        const extrem = wlvl >= 4;
+        const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
+        const leuchtenRot = 'var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5))';
+        const kachel = extrem
+          ? `background:${color};border:1px solid ${randRot};--wf-glow:${leuchtenRot};`
+          : `background:${modus(tint(color, 16), color)};border:1px solid ${modus(tint(color, 24), color)};--wf-glow:${tint(color, 50)};`;
+        const iconFarbe = extrem ? aufFlaeche(color) : modus(lesbar(color, 0.16, 3), aufFlaeche(color));
 
         const iconTile = `
-          <div style="flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;box-sizing:border-box;background:${modus(tint(color, 16), color)};border:1px solid ${modus(tint(color, 24), color)};">
-            ${iconFor(name)}
+          <div class="${alarm ? 'wf-alarm' : ''}${extrem ? ' l4' : ''}" style="flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;box-sizing:border-box;${kachel}">
+            ${wfx.icon(key, iconFarbe, 24)}
           </div>`;
 
-        const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;color:${modus(lesbar(color, 0.12, 4.5), value)};background:${tint(color, 12)};border:1px solid ${tint(color, 24)};border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
+        // Kurzform: "SCHWERES GEWITTER" als Titel, "mit ORKANBÖEN, ..." darunter
+        const k = wfx.kurz(name);
+        const clamp2 = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;';
+
+        const pillFarben = extrem
+          ? `color:${aufFlaeche(color)};background:${color};border:1px solid ${randRot};`
+          : `color:${modus(lesbar(color, 0.12, 4.5), value)};background:${tint(color, 12)};border:1px solid ${tint(color, 24)};`;
+        const pill = `<span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;${pillFarben}border-radius:999px;padding:3px 8px;white-space:nowrap;">${lvlLabel}</span>`;
         const more = count > 1 ? `<span style="font-size:12px;color:${muted};white-space:nowrap;">+${count - 1} weitere</span>` : '';
 
         // ---------- Aufbau ----------
         return `
-          <div style="display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;overflow:hidden;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
+          <div style="display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
             ${iconTile}
-            <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;">
-              <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
-              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:3px 8px;min-width:0;">
+            <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:${szene ? '0 1 auto' : '1 1 auto'};">
+              <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;${clamp2}text-wrap:balance;overflow-wrap:break-word;">${wfx.trenn(esc(k.titel))}</div>
+              ${k.zusatz ? `<div style="font-size:12.5px;color:${label};line-height:1.25;${clamp2}">${esc(k.zusatz)}</div>` : ''}
+              <!-- Pille und Zeitraum untereinander: So endet die Textspalte am
+                   laengsten Text, und die Szene bekommt den Rest der Zeile -->
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;">
                 ${pill}
-                <span style="font-size:12.5px;color:${muted};line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${range}</span>
+                <span style="font-size:12.5px;color:${muted};line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${range}</span>
               </div>
               ${more ? `<div style="margin-top:1px;">${more}</div>` : ''}
             </div>
+            ${szene ? `<div class="wf-slot">${szene}</div>` : ''}
           </div>`;
       ]]]

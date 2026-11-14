@@ -1,0 +1,1198 @@
+<!--
+============================================================================
+DWD-Warnszenen – Entwurf, Varianten und Zuordnung der Ereigniscodes
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       klima
+Status:        entwurf
+Gehoert-zu:    warnlage-templates.yaml, meteoalarm-karte.yaml
+Platzhalter:   keine
+============================================================================
+Vorschau der animierten Warnszenen (Template nachtblau_warn_fx) in Handybreite,
+mit den verworfenen Varianten (Hitze, Stufe 4) und den Entscheidungen vom
+14.11.2026. Im Browser oeffnen; Schriften kommen von Google Fonts.
+-->
+<title>DWD-Warnszenen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Arbeitsblatt eines Entwurfs. Oben die Vorschau in Handybreite (Home und Popup nebeneinander),
+   darunter alle Szenen als Raster, dann Regeln, Stufen, Zuordnung und Umsetzung. Einheitlich dunkel,
+   weil die Karten im Nachtblau-Stil (dunkler Modus) beurteilt werden sollen. */
+:root {
+  color-scheme: dark;
+  /* Seite (Nachtblau-Palette, design/palette.yaml) */
+  --bg: #10151d;          /* Vertiefte Flaeche: Arbeitsgrund um die Handys */
+  --page: #171d29;        /* Seitengrund in HA */
+  --hull-top: #1b2231;
+  --hull-bot: #171d29;
+  --raised: #222b3c;
+  --text: #f2f5f8;
+  --title: #e7ecf3;
+  --label: #b4c0cf;
+  --soft: #8794a5;
+  --muted: #6e7988;
+  --line: rgba(255, 255, 255, 0.06);
+  --edge: rgba(255, 255, 255, 0.05);
+  --accent: #7fb3d5;
+  --green: #a6d49e;
+  --amber: #e6b566;
+  /* Typografie */
+  --f-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --f-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --f-ha: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-display); color: var(--title); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.08; font-weight: 700; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
+code { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--label); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+.lead { color: var(--label); font-size: 17px; }
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec > header { display: flex; flex-direction: column; gap: 8px; }
+.sec > header p { color: var(--label); }
+
+/* Kopf */
+.hero { display: flex; flex-direction: column; gap: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.fact { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.028); min-width: 0; }
+.fact b { font-family: var(--f-display); font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.fact span { font-size: 12.5px; color: var(--soft); }
+
+/* Bedienung */
+.controls { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, var(--hull-top), var(--hull-bot) 55%); }
+.ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ctl-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); min-width: 64px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 300px; }
+.chip, .seg button {
+  font: 500 13px/1 var(--f-body); color: var(--label); background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer;
+}
+.chip:hover, .seg button:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+.chip[aria-pressed="true"], .seg button[aria-pressed="true"] { background: rgba(127, 179, 213, 0.12); border-color: rgba(127, 179, 213, 0.5); color: var(--text); }
+.chip:focus-visible, .seg button:focus-visible, .toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg button:disabled { opacity: 0.35; cursor: not-allowed; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--label); cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle span.sw { width: 34px; height: 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); position: relative; flex: none; }
+.toggle span.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--soft); transition: transform 0.2s; }
+.toggle input:checked + span.sw { background: rgba(127, 179, 213, 0.5); }
+.toggle input:checked + span.sw::after { transform: translateX(14px); background: var(--text); }
+
+/* Buehne mit zwei Handys */
+.stage { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; justify-content: center; }
+.device { display: flex; flex-direction: column; gap: 10px; align-items: center; min-width: 0; max-width: 100%; }
+.device-cap { font-size: 12.5px; color: var(--soft); text-align: center; }
+.device-cap b { color: var(--label); font-weight: 600; }
+.phone-scroll { max-width: 100%; overflow-x: auto; border-radius: 30px; }
+.phone { width: var(--pw, 360px); background: var(--page); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 30px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8); }
+.phone .screen { padding: 14px 8px 18px; display: flex; flex-direction: column; gap: 8px; min-height: 360px; }
+.dlg-head { display: flex; align-items: center; gap: 22px; height: 68px; padding: 0 20px; color: var(--text); font: 600 22px/1 var(--f-ha); background: var(--hull-top); }
+.dlg-head svg { width: 22px; height: 22px; flex: none; }
+.dlg-body { padding: 8px 8px 18px; background: var(--hull-top); display: flex; flex-direction: column; gap: 10px; min-height: 420px; }
+.dlg-foot { font: 11.5px/1.45 var(--f-ha); color: var(--soft); padding: 2px 2px 0; }
+.sample-note { font-size: 12px; color: var(--soft); max-width: 360px; text-align: center; }
+
+/* ---------------- Mockup: Kartenhuelle wie meteoalarm-karte.yaml ---------------- */
+.ha { font-family: var(--f-ha); color: var(--text); text-align: left; }
+.hcard { position: relative; overflow: hidden; border-radius: 22px; border: 1px solid var(--edge); background: linear-gradient(180deg, var(--hull-top) 0%, var(--hull-bot) 55%); box-shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7); padding: 16px 18px; }
+.hcard .row { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; }
+.tile { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; }
+.tile svg { width: 24px; height: 24px; display: block; overflow: visible; }
+.tile.alarm { animation: tile-pulse 3.5s ease-in-out infinite alternate; }
+.tile.alarm.l4 { animation-duration: 2.4s; }
+@keyframes tile-pulse { from { box-shadow: 0 0 14px -3px transparent; } to { box-shadow: 0 0 14px -3px var(--glow); } }
+.tcol { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 1 auto; max-width: calc(100% - 60px - 64px); }
+.tname { font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; overflow-wrap: anywhere; hyphens: manual; }
+.tsub { font-size: 12.5px; color: var(--label); line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tmeta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.pill { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; line-height: 1; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.trange { font-size: 12.5px; color: var(--soft); line-height: 1.2; white-space: nowrap; }
+
+/* Banner (vereinfacht, Begruessung der Home-View) */
+.banner .row { gap: 16px; }
+.avatar { flex: none; width: 56px; height: 56px; border-radius: 16px; border: 2px solid var(--green); background: linear-gradient(180deg, #4a5a74, #33404f); display: grid; place-items: center; color: var(--label); font: 700 20px/1 var(--f-ha); }
+.bn-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.bn-txt .g { font-size: 13px; color: var(--soft); }
+.bn-txt .n { font-size: 20px; font-weight: 700; }
+.bn-wx { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.bn-wx .t { display: flex; align-items: center; gap: 8px; font-size: 26px; font-weight: 700; }
+.bn-wx .t svg { width: 24px; height: 24px; color: #e6c15a; }
+.bn-wx .d { font-size: 13px; color: var(--label); }
+.bn-rays { position: absolute; right: -24%; top: 50%; width: 62%; aspect-ratio: 1; border-radius: 50%; transform: translateY(-50%); background: repeating-conic-gradient(rgba(230, 193, 90, 0.12) 0deg 4deg, rgba(230, 193, 90, 0) 4deg 15deg); -webkit-mask: radial-gradient(circle, transparent 14%, #000 26%, transparent 66%); mask: radial-gradient(circle, transparent 14%, #000 26%, transparent 66%); animation: bn-rays 120s linear infinite; opacity: 0.45; }
+@keyframes bn-rays { from { transform: translateY(-50%) rotate(0deg); } to { transform: translateY(-50%) rotate(360deg); } }
+
+/* Popup-Block wie nachtblau_dwd_popup */
+.pblock { position: relative; overflow: hidden; background: linear-gradient(180deg, var(--raised) 0%, var(--hull-bot) 100%); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.pblock > * { position: relative; z-index: 1; }
+.pblock > .wf { position: absolute; z-index: 0; }
+.phead { display: flex; align-items: flex-start; gap: 12px; }
+.phead .tile { width: 40px; height: 40px; border-radius: 12px; }
+.phead .tile svg { width: 22px; height: 22px; }
+.phcol { min-width: 0; flex: 0 1 auto; max-width: calc(100% - 52px - 72px); }
+.pname { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; overflow-wrap: anywhere; hyphens: manual; }
+.phl { font-size: 12.5px; color: var(--label); line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; }
+.ppills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ppills .pill { font-size: 11px; padding: 4px 9px; }
+.ptime { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ptime b { font-size: 13px; font-weight: 600; }
+.ptime span { font-size: 12px; color: var(--soft); }
+.pdesc { font-size: 13.5px; line-height: 1.55; margin-top: 10px; overflow-wrap: anywhere; }
+.pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pchip { display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; font-size: 12px; line-height: 1.3; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 13px; padding: 4px 10px; }
+.pchip span:first-child { color: var(--label); white-space: nowrap; }
+.pchip span:last-child { font-weight: 600; overflow-wrap: anywhere; }
+.phint { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--soft); margin: 10px 0 2px; }
+.plist { margin: 2px 0 0; padding: 0 0 0 16px; list-style: none; }
+.plist li { position: relative; font-size: 13.5px; line-height: 1.5; margin: 3px 0; }
+.plist li::before { content: "•"; position: absolute; left: -14px; color: var(--soft); }
+
+/* Raster aller Szenen */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(344px, 100%), 1fr)); gap: 22px 20px; }
+.gitem { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.gitem .hcard { width: min(344px, 100%); }
+.gcap { display: flex; flex-direction: column; gap: 4px; padding: 0 4px; max-width: 344px; }
+.gcap h3 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.gcap h3 .mono { font-size: 11.5px; color: var(--soft); font-weight: 400; }
+.gcap p { font-size: 13.5px; color: var(--label); }
+.gcap .colors { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.sw-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--soft); }
+.sw-dot i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.24); flex: none; }
+.tag-new { font: 600 10.5px/1 var(--f-body); letter-spacing: 0.04em; text-transform: uppercase; color: var(--amber); border: 1px solid rgba(230, 181, 102, 0.5); border-radius: 999px; padding: 3px 6px; }
+
+/* Tabellen und Regeln */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.02); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); background: rgba(255, 255, 255, 0.02); white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--label); white-space: nowrap; }
+td .lv { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.rule { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: rgba(255, 255, 255, 0.028); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rule ul { margin: 0; padding-left: 18px; color: var(--label); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.rule.open { border-color: rgba(230, 181, 102, 0.24); background: rgba(230, 181, 102, 0.04); }
+.rule.open h3 { color: var(--amber); }
+ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; color: var(--label); max-width: 80ch; }
+ol.steps b { color: var(--text); font-weight: 600; }
+footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: var(--soft); display: flex; flex-direction: column; gap: 6px; }
+footer.src a { color: var(--accent); }
+
+/* =================== Szenen-Ebene (Entwurf fuer nachtblau_warn_fx) =================== */
+.wf { position: absolute; top: 0; bottom: 0; right: 0; left: var(--z, 62%); overflow: hidden; pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px); mask-image: linear-gradient(90deg, transparent 0, #000 26px); }
+.wf.pop { bottom: auto; height: var(--zh, 80px);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px), linear-gradient(0deg, transparent 0, #000 18px);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent 0, #000 26px), linear-gradient(0deg, transparent 0, #000 18px);
+  mask-composite: intersect; }
+.wf.vorab { opacity: 0.55; }
+/* Wolken */
+.wf-cl { position: absolute; left: var(--x); top: var(--y); width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: var(--cc, #cdd6e0); opacity: var(--o); animation: wf-sway var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+.wf-cl::before, .wf-cl::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+.wf-cl::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }
+.wf-cl::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }
+@keyframes wf-sway { from { transform: translateX(-7px); } to { transform: translateX(7px); } }
+/* Fallendes: Regen, Schnee, Hagel */
+.wf-fall { position: absolute; inset: -12% -18%; transform: rotate(var(--slant, -8deg)); }
+.wf-dr, .wf-fl { position: absolute; top: 0; height: 100%; left: var(--x); animation: wf-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+.wf-dr { width: 1.5px; opacity: var(--a); }
+.wf-dr::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), #7fb3d5); }
+.wf-fl { width: var(--s); }
+.wf-fl::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wf-bob var(--sw) ease-in-out infinite alternate; }
+.wf-fl.hail::after { border-radius: 1px; background: rgba(205, 214, 224, 0.5); animation: none; }
+@keyframes wf-bob { from { transform: translateX(-5px); } to { transform: translateX(5px); } }
+.wf-sp { position: absolute; bottom: var(--b, 7%); left: var(--x); width: 12px; height: 4px; margin-left: -6px; border: 1px solid var(--rc, rgba(127, 179, 213, 0.5)); border-radius: 50%; opacity: 0; animation: wf-splash var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-splash { 0% { transform: scale(0.2); opacity: 0.9; } 100% { transform: scale(1.5); opacity: 0; } }
+/* Waagerecht ziehendes: Windschlieren, Schneetreiben */
+.wf-dw { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wf-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }
+.wf-st { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(205, 214, 224, 0), var(--sc, #cdd6e0) 70%, rgba(205, 214, 224, 0)); opacity: var(--a); animation: wf-wave var(--wv) ease-in-out infinite alternate; }
+.wf-st.gust { height: 2px; }
+@keyframes wf-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }
+.wf-bf { position: absolute; right: 100%; top: 0; width: var(--s); height: var(--s); border-radius: 50%; background: rgba(255, 255, 255, 0.5); animation: wf-wave var(--wv) ease-in-out infinite alternate; }
+/* Gewitter */
+.wf-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 85% 75% at 60% 0%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wf-flash 8s linear infinite; animation-delay: -5s; }
+.wf-bolt { position: absolute; left: var(--bx, 52%); top: 22%; width: 18px; height: 46px; opacity: 0; animation: wf-flash 8s linear infinite; animation-delay: -5s; overflow: visible; }
+@keyframes wf-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }
+/* Nebel */
+.wf-fog { position: absolute; left: -40%; width: 180%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), rgba(205, 214, 224, 0.12) 50%, rgba(205, 214, 224, 0)); animation: wf-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-haze { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+/* Frost */
+.wf-cold { position: absolute; right: -40%; top: -55%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(127, 179, 213, 0.18), rgba(127, 179, 213, 0) 65%); }
+.wf-cr { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); overflow: visible; }
+.wf-cr path { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: wf-grow var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-grow { 0% { stroke-dashoffset: 1; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.wf-spk { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); background: rgba(255, 255, 255, 0.5); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: wf-tw var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-tw { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+.wf-rime { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(0deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)); }
+/* Glaette */
+.wf-ice { position: absolute; left: 0; right: 0; bottom: 0; height: 36%; background: linear-gradient(0deg, rgba(207, 227, 242, 0.18), rgba(207, 227, 242, 0)); }
+.wf-sheen { position: absolute; bottom: 0; height: 36%; left: 0; width: 42%; background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0)); animation: wf-sheen var(--d, 5.5s) ease-in-out infinite; }
+@keyframes wf-sheen { 0% { transform: skewX(-24deg) translateX(-170%); } 55%, 100% { transform: skewX(-24deg) translateX(280%); } }
+/* Tauwetter */
+.wf-icebar { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: rgba(255, 255, 255, 0.12); }
+.wf-icl { position: absolute; top: 3px; left: var(--x); width: var(--w); height: var(--h); background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(207, 227, 242, 0.12)); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.wf-dp { position: absolute; top: calc(var(--h) + 1px); left: calc(var(--x) + var(--w) / 2 - 1.5px); width: 3px; height: 4px; border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%; background: #7fb3d5; opacity: 0; animation: wf-drip var(--d) ease-in infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-drip { 0% { transform: translateY(0) scale(0.3); opacity: 0; } 30% { transform: translateY(0) scale(1); opacity: 0.5; } 100% { transform: translateY(78px) scale(1); opacity: 0.5; } }
+/* Wasser- und Schneestand */
+.wf-lvl { position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 28%); background: linear-gradient(0deg, rgba(127, 179, 213, 0.18), rgba(127, 179, 213, 0.12)); border-top: 1px solid rgba(127, 179, 213, 0.24); transform-origin: bottom; animation: wf-rise var(--d, 16s) ease-in-out infinite; }
+.wf-lvl.snow { background: linear-gradient(0deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)); border-top-color: rgba(255, 255, 255, 0.12); }
+@keyframes wf-rise { 0% { transform: scaleY(0.3); } 85% { transform: scaleY(1); } 100% { transform: scaleY(0.3); } }
+.wf-dune { position: absolute; left: -50%; bottom: 0; width: 200%; height: 26%; animation: wf-dune var(--d, 7s) linear infinite; }
+@keyframes wf-dune { from { transform: translateX(0); } to { transform: translateX(25%); } }
+/* Leiterseil */
+.wf-cab { position: absolute; left: 0; top: 16%; width: 100%; height: 64%; overflow: visible; }
+/* Hitze */
+.wf-sunglow { position: absolute; right: -45%; top: -60%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(230, 193, 90, 0.18), rgba(230, 193, 90, 0) 62%); animation: wf-pulse 6s ease-in-out infinite alternate; }
+.wf-haze { position: absolute; left: 0; right: 0; bottom: 0; height: 40%; background: linear-gradient(0deg, var(--hz), transparent); }
+.wf-heatbox { position: absolute; inset: 0; -webkit-mask-image: linear-gradient(0deg, #000 25%, transparent 92%); mask-image: linear-gradient(0deg, #000 25%, transparent 92%); }
+.wf-heat { position: absolute; left: var(--x); top: 0; width: 12px; height: 200%; animation: wf-rise2 var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); overflow: visible; }
+@keyframes wf-rise2 { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+/* Hitze-Alternativen: Farbe ueber --hc (Koralle oder Rot, je 0,5) und --hs (0,18) */
+.wf-city { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; width: 100%; }
+.wf-dome { position: absolute; left: 6%; right: -26%; bottom: 20%; height: 74%; border-radius: 50% 50% 0 0 / 100% 100% 0 0; border: 1.5px solid var(--hc); border-bottom: none; background: radial-gradient(ellipse 70% 90% at 50% 100%, var(--hs), transparent 72%); transform-origin: 50% 100%; animation: wf-breathe var(--d, 6s) ease-in-out infinite alternate; }
+@keyframes wf-breathe { from { transform: scale(0.95); opacity: 0.65; } to { transform: scale(1.03); opacity: 1; } }
+.wf-ember { position: absolute; bottom: var(--b, 8%); left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--ec); opacity: 0; animation: wf-ember var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-ember { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy, -72px)); opacity: 0; } }
+.wf-heatglow { position: absolute; left: -10%; right: -30%; bottom: -45%; height: 95%; background: radial-gradient(ellipse 60% 70% at 55% 100%, var(--hs), transparent 72%); animation: wf-pulse 3.2s ease-in-out infinite alternate; }
+.wf-horizon { position: absolute; left: 0; right: 0; top: 58%; height: 1px; background: rgba(110, 121, 136, 0.5); }
+.wf-road { position: absolute; left: 0; right: 0; top: 58%; bottom: 0; width: 100%; height: 42%; }
+.wf-mir { position: absolute; left: var(--x); width: var(--w); top: var(--y); height: 3px; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--hc), transparent); animation: wf-mir var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
+@keyframes wf-mir { from { transform: translateX(-6px) scaleY(0.5); opacity: 0.35; } to { transform: translateX(6px) scaleY(1.5); opacity: 1; } }
+.wf-hwave { position: absolute; left: -50%; width: 200%; top: var(--y); height: 16px; animation: wf-dune var(--d) linear infinite; overflow: visible; }
+/* UV */
+.wf-uvsun { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; background: radial-gradient(circle, rgba(230, 193, 90, 0.5) 0%, rgba(230, 193, 90, 0.24) 55%, rgba(230, 193, 90, 0) 72%); animation: wf-pulse 4s ease-in-out infinite alternate; }
+.wf-uvrays { position: absolute; right: -31px; top: 50%; width: 120px; height: 120px; margin-top: -60px; border-radius: 50%; background: repeating-conic-gradient(rgba(230, 193, 90, 0.18) 0deg 5deg, rgba(230, 193, 90, 0) 5deg 20deg); -webkit-mask: radial-gradient(circle, transparent 20%, #000 28%, transparent 70%); mask: radial-gradient(circle, transparent 20%, #000 28%, transparent 70%); animation: wf-spin 40s linear infinite; }
+.wf-ring { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; border: 1.5px solid rgba(230, 193, 90, 0.5); animation: wf-ring 3.2s ease-out infinite; animation-delay: var(--dl, 0s); }
+@keyframes wf-ring { from { transform: scale(0.8); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }
+@keyframes wf-spin { to { transform: rotate(360deg); } }
+@keyframes wf-pulse { from { opacity: 0.55; } to { opacity: 1; } }
+/* Stufenschein ab Stufe 3 */
+.wf-glow { position: absolute; right: -45%; bottom: -70%; width: 150%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(240, 115, 106, 0.18), rgba(240, 115, 106, 0) 66%); animation: wf-pulse 3.5s ease-in-out infinite alternate; }
+.wf-glow.l4 { background: radial-gradient(circle, rgba(240, 115, 106, 0.24), rgba(240, 115, 106, 0) 66%); animation-duration: 2.4s; }
+
+/* Icon-Animationen in der Kachel */
+.ic * { transform-box: fill-box; }
+.ic-spin { transform-origin: center; animation: wf-spin var(--icd, 24s) linear infinite; }
+.ic-down { transform-origin: bottom; animation: ic-down 4s ease-in-out infinite alternate; }
+.ic-up { transform-origin: bottom; animation: ic-up 3s ease-in-out infinite alternate; }
+@keyframes ic-down { from { transform: scaleY(1); } to { transform: scaleY(0.3); } }
+@keyframes ic-up { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }
+.ic-bolt { animation: ic-flick 8s linear infinite; animation-delay: -5s; }
+@keyframes ic-flick { 0%, 88%, 100% { opacity: 1; } 89% { opacity: 0.3; } 90.5% { opacity: 1; } 92% { opacity: 0.4; } 95% { opacity: 1; } }
+.ic-flow { stroke-dasharray: 16 4; animation: ic-flow var(--icd, 1.6s) linear infinite; }
+@keyframes ic-flow { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+.ic-fall { animation: ic-fall 1.3s ease-in infinite; }
+@keyframes ic-fall { 0% { transform: translateY(-2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(2px); opacity: 0; } }
+.ic-slide { animation: ic-slide 3.2s ease-in-out infinite alternate; }
+@keyframes ic-slide { from { transform: translateX(-1.5px); } to { transform: translateX(1.5px); } }
+.ic-drip { animation: ic-drip 2.2s ease-in infinite; }
+@keyframes ic-drip { 0% { transform: translateY(0) scale(0.4); opacity: 0; } 25% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(6px); opacity: 0; } }
+.ic-glint { animation: ic-glint 5.5s ease-in-out infinite; }
+@keyframes ic-glint { 0%, 70%, 100% { opacity: 0; } 80% { opacity: 1; } }
+
+/* Bewegung reduzieren: Standbild derselben Szene */
+.rm .wf *, .rm .wf *::before, .rm .wf *::after, .rm .ic *, .rm .tile, .rm .bn-rays { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .wf *, .wf *::before, .wf *::after, .ic *, .tile, .bn-rays { animation-play-state: paused !important; }
+}
+@media (max-width: 420px) {
+  .ctl-label { min-width: 100%; }
+}
+</style>
+
+<div class="wrap" id="app">
+  <header class="hero">
+    <div class="eyebrow">Entwurf · Klima · Warnlage</div>
+    <h1>Animierte DWD-Warnungen</h1>
+    <p class="lead">Jede Warnung bekommt eine eigene Szene, so wie die Personenkarte heute das Wetter zeigt: auf der Warnkarte der Home-View, im Popup „Wetterwarnungen“ und in jedem einzelnen Warnungsblock. Die Szene sitzt rechts neben dem Text, die Icon-Kachel bewegt sich mit.</p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section class="sec" id="vorschau">
+    <header>
+      <h2>Vorschau in Handybreite</h2>
+      <p>Szene und Stufe wählen. Links die Home-View mit Begrüßung und Warnkarte, rechts das Popup mit dem ausführlichen Block. Beide in Originalmaßen der Karten (Galaxy S25 360 px, iPhone 17 Pro 402 px).</p>
+    </header>
+    <div class="controls">
+      <div class="ctl-row"><span class="ctl-label">Szene</span><div class="chips" id="sceneChips" role="group" aria-label="Szene"></div></div>
+      <div class="ctl-row"><span class="ctl-label">Stufe</span><div class="seg" id="levelSeg" role="group" aria-label="Warnstufe"></div></div>
+      <div class="ctl-row" id="heatRow" hidden><span class="ctl-label">Hitze</span><div class="seg" id="heatSeg" role="group" aria-label="Hitze-Variante"></div></div>
+      <div class="ctl-row" id="l4Row" hidden><span class="ctl-label">Stufe 4</span><div class="seg" id="l4Seg" role="group" aria-label="Darstellung Stufe 4">
+        <button type="button" id="l4-fill" data-m4="fill" aria-pressed="true">Gefüllt (gewählt)</button>
+        <button type="button" id="l4-getoent" data-m4="getoent" aria-pressed="false">Bisher</button>
+        <button type="button" id="l4-purpur" data-m4="purpur" aria-pressed="false">Heller Purpur</button>
+      </div></div>
+      <div class="ctl-row">
+        <span class="ctl-label">Gerät</span>
+        <div class="seg" id="widthSeg" role="group" aria-label="Bildschirmbreite">
+          <button type="button" id="w360" data-w="360" aria-pressed="true">Galaxy S25 · 360</button>
+          <button type="button" id="w402" data-w="402" aria-pressed="false">iPhone 17 Pro · 402</button>
+        </div>
+        <label class="toggle" for="rmToggle"><input type="checkbox" id="rmToggle"><span class="sw"></span>Bewegung reduzieren</label>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="device">
+        <div class="device-cap"><b>Home-View</b> · Warnkarte unter der Begrüßung</div>
+        <div class="phone-scroll"><div class="phone" id="phoneHome"><div class="screen" id="homeScreen"></div></div></div>
+      </div>
+      <div class="device">
+        <div class="device-cap"><b>Popup „Wetterwarnungen“</b> · ausführlicher Block</div>
+        <div class="phone-scroll"><div class="phone" id="phonePop">
+          <div class="dlg-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>Wetterwarnungen</div>
+          <div class="dlg-body" id="popBody"></div>
+        </div></div>
+        <div class="sample-note" id="sampleNote"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="stufe4">
+    <header>
+      <h2>Stufe 4: extremer als Stufe 3</h2>
+      <p>Warum Stufe 4 bisher schwächer wirkt: Die DWD-Farbe für extremes Unwetter ist <code>#880e4f</code>, ein dunkles Purpurrot (OKLCH-Helligkeit 0,42, Stufe 3 liegt bei 0,61). Getönt mit 0,16 hebt sich die Kachel nur mit 1,03:1 von der Hülle ab, also praktisch gar nicht. Der Ton selbst erreicht auf seiner Tönung nur 1,64:1, deshalb setzt <code>lesbar</code> Icon und Schrift auf Hell. Übrig bleibt eine weiße Kachel ohne Farbe.</p>
+    </header>
+    <div class="gallery" id="l4Gallery"></div>
+  </section>
+
+  <section class="sec" id="hitze">
+    <header>
+      <h2>Hitze: Varianten</h2>
+      <p>Gewählt ist „Aufsteigende Wärme“. Die übrigen Varianten bleiben zum Vergleich stehen, jeweils oben starke Hitze (Stufe 1, Koralle) und unten extreme Hitze (Stufe 3, Rot).</p>
+    </header>
+    <div class="gallery" id="heatGallery"></div>
+  </section>
+
+  <section class="sec" id="szenen">
+    <header>
+      <h2>Alle Szenen</h2>
+      <p>Jede Karte zeigt die Warnkarte der Home-View in 360 px mit einem typischen Ereignis. Darunter, was sich bewegt und welche Palettenfarben die Szene nutzt. Neue Icons sind markiert; heute fallen diese Ereignisse auf das Warndreieck zurück.</p>
+    </header>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="sec" id="regeln">
+    <header>
+      <h2>Regeln, die die Szenen einhalten</h2>
+      <p>Abgeleitet aus <code>DESIGN.md</code>, Abschnitt „Animierte Hintergründe“, und der bestehenden Wetteranimation.</p>
+    </header>
+    <div class="rules">
+      <div class="rule">
+        <h3>Lesbarkeit</h3>
+        <ul>
+          <li>Text steht nie auf Animation. Die Szene beginnt erst rechts neben dem gemessenen Text, wie im Begrüßungs-Banner, und blendet über 26 px ein.</li>
+          <li>Die Textspalte endet spätestens 64 px vor dem Kartenrand (Popup 72 px). Lange Namen brechen zweizeilig um statt mit „…“.</li>
+          <li>Kombinierte Gewitter-Namen kürzt die Karte am „mit“: „SCHWERES GEWITTER“ als Titel, „mit ORKANBÖEN, …“ als Zeile darunter. Das Popup zeigt den vollen Namen.</li>
+          <li>Icon, Pille und DWD-Farbe bleiben wie heute (Funktion <code>lesbar</code>); die Icons bewegen sich nur, ihre Farbe ändert sich nicht.</li>
+        </ul>
+      </div>
+      <div class="rule">
+        <h3>Bewegung</h3>
+        <ul>
+          <li>Blitz als Doppelblitz alle 8 s, also höchstens 2 Blitze in 8 s (WCAG 2.3.1 erlaubt bis 3 pro Sekunde). Das Icon flackert synchron.</li>
+          <li>„Bewegung reduzieren“ am Gerät zeigt ein Standbild derselben Szene. Zum Ausprobieren gibt es oben den Schalter.</li>
+          <li>Gleicher Zustand ergibt denselben HTML-Text (feste Pseudo-Zufallswerte), damit ein Sensor-Update die Animation nicht neu startet.</li>
+        </ul>
+      </div>
+      <div class="rule">
+        <h3>Farben</h3>
+        <ul>
+          <li>Keine neue Palettenfarbe nötig: Wolken und Wind Wolkengrau, dunkle Wolken Muted, Regen und Frost Blau, Schnee, Eis und Blitz Weiß mit Deckkraft, Sonne und UV Sonnengelb, Hitze Koralle und Rot.</li>
+          <li>Deckkraft nur in den Stufen 0,12 / 0,18 / 0,24 / 0,5.</li>
+          <li>Stufenschein ab Stufe 3 in Rot, wie „Unwetter in Rot“ der Wetteranimation. Die DWD-Farbe selbst (Stufe 4 laut CAP-Profil <code>#880e4f</code>) wäre auf dem Nachtblau-Grund als Schein kaum zu sehen.</li>
+        </ul>
+      </div>
+      <div class="rule">
+        <h3>Datenquelle</h3>
+        <ul>
+          <li>Die Szene wählt das Attribut <code>warning_N_type</code>. Es ist der DWD-Ereigniscode (ii) aus dem CAP-Profil; in der Instanz geprüft: FROST liefert <code>22</code>.</li>
+          <li>Für Gewitter entscheidet der Code auch über Regen, Hagel und Böen in der Szene (Gruppen THUNDERSTORM, RAIN, HAIL, WIND, Kap. 3.3).</li>
+          <li>Fehlt der Code, greift dieselbe Namenserkennung wie heute beim Icon.</li>
+        </ul>
+      </div>
+      <div class="rule">
+        <h3>Entschieden</h3>
+        <ul>
+          <li>Stufenschein ab Stufe 3 in Rot.</li>
+          <li>Neue Icons für Tauwetter und Leiterseilschwingungen, UV-Icon auch in der Karte.</li>
+          <li>Stufe 4: Kachel und Pille gefüllt in der DWD-Farbe, Schrift Hell, Rand und Leuchten Rot 0,5.</li>
+          <li>Hitze: „Aufsteigende Wärme“.</li>
+        </ul>
+      </div>
+      <div class="rule open">
+        <h3>Zu entscheiden</h3>
+        <ul>
+          <li>DWD-Farben in <code>design/palette.yaml</code> (#f2c500, #fb9a12, #e6480e, #c0392b) weichen vom CAP-Profil ab (#ffeb3b, #fb8c00, #e53935, #880e4f), das die Integration tatsächlich liefert.</li>
+          <li>Tornado: Der DWD markiert ihn nur als optionale Gruppe (ii 41, 45, 49, 96). Die Integration liefert die Gruppen nicht, deshalb ist keine eigene Szene vorgesehen.</li>
+          <li>Leiterseilschwingungen: Im Warnkriterien-Katalog steht keine Stufe, die Vorschau zeigt nur Stufe 1.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="stufen">
+    <header>
+      <h2>Was die Stufe ändert</h2>
+      <p>Die Szene bleibt dieselbe, die Stufe (<code>warning_N_level</code>) skaliert Dichte und Tempo. Ab Stufe 3 kommt der rote Schein dazu und die Icon-Kachel leuchtet (Stufe „Leuchten“, 0 0 14px -3px): bei Stufe 3 in der DWD-Farbe, bei Stufe 4 in Rot, weil Kachel und Pille dort gefüllt sind.</p>
+    </header>
+    <div class="tbl-wrap"><table id="levelTable"></table></div>
+  </section>
+
+  <section class="sec" id="zuordnung">
+    <header>
+      <h2>Zuordnung Ereigniscode → Szene</h2>
+      <p>Alle Warnereignisse aus dem CAP-DWD-Profil v2.1.13, Kapitel 3.1, für Land- und Küstenwarnungen sowie die medizin-meteorologischen Warnungen. Hochsee-Warnungen (ii 14–16) betreffen keine Landkreise und sind nicht aufgeführt.</p>
+    </header>
+    <div class="tbl-wrap"><table id="mapTable"></table></div>
+  </section>
+
+  <section class="sec" id="umsetzung">
+    <header>
+      <h2>Umsetzung im Repo</h2>
+      <p>Umgesetzt am 14.11.2026 mit den Entscheidungen oben. Pille und Zeitraum stehen in der Karte untereinander, damit die Textspalte am längsten Text endet und die Szene den Rest der Zeile bekommt.</p>
+    </header>
+    <ol class="steps">
+      <li><b>Template <code>nachtblau_warn_fx</code></b> in <code>dashboard/klima/warnlage-templates.yaml</code>: Szenen-Bibliothek in <code>variables</code>, einmal pro Seite in <code>window.__nachtblauWarnFx</code> mit Versionsnummer, Keyframes in <code>extra_styles</code>. Aufbau wie <code>nachtblau_wetter_fx</code>.</li>
+      <li><b>Warnkarte</b> <code>meteoalarm-karte.yaml</code>: Szene als letztes Flex-Kind der Zeile, beginnt so ohne Messung genau am Ende der Textspalte und reicht über negative Ränder bis an den Kartenrand. Titel auf zwei Zeilen statt „…“, Kurzform bei „mit“.</li>
+      <li><b>Popup</b> <code>nachtblau_dwd_popup</code>: Szene je Warnungsblock im Kopf des Blocks, Höhe bis zur Trennlinie. Die Icons aus <code>iconFor</code> bekommen die Animationsklassen, in Karte und Popup aus einer gemeinsamen Quelle.</li>
+      <li><b>Karte „Warnlage &amp; Pollen“</b> in <code>wetter-view.yaml</code>: nutzt das Popup schon, bekommt so die Szenen im Popup automatisch.</li>
+      <li><b>Doku und Prüfung</b>: Abschnitt in <code>DESIGN.md</code> („Animierte Hintergründe“), Entwurf als <code>dashboard/klima/entwuerfe/warnung-animiert.html</code>, Kopfblöcke pflegen, dann <code>ci/check_palette.py</code>, <code>ci/check_mobil.py</code>, <code>ci/check_kopf.py</code> und <code>ci/gen_index.py</code>; Ansicht bei 360 × 697 und 402 × 874.</li>
+    </ol>
+  </section>
+
+  <footer class="src">
+    <div>Quellen: <a href="https://www.dwd.de/DE/leistungen/opendata/help/warnungen/cap_dwd_profile_de_pdf_2_1_13.pdf?__blob=publicationFile&amp;v=3" target="_blank" rel="noopener">CAP-DWD-Profil v2.1.13</a> (Ereigniscodes Kap. 3.1, Parameter 3.2, Gruppen 3.3, Farben 3.5) · <a href="https://www.dwd.de/DE/wetter/warnungen_aktuell/kriterien/warnkriterien.html" target="_blank" rel="noopener">DWD-Warnkriterien</a> (Stufe je Ereignis) · Attributformat aus dem eigenen Warnsensor (<code>dwd_weather_warnings</code>, 14.11.2026).</div>
+    <div>Beschreibungen, Parameter und Zeiten außer bei FROST sind Beispieltexte im Stil der DWD-Meldungen. Der FROST-Text stammt aus der laufenden Warnung. Namen, Region und Zeiten sind anonymisiert.</div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  // ---------- Hilfen ----------
+  const R = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+  const f2 = (n) => n.toFixed(2);
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rgbOf = (h) => { const m = /^#([0-9a-f]{6})$/i.exec(String(h || '').trim()); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null; };
+  const lum = (c) => { const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2]; };
+  const kr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const HELL = '#f2f5f8';
+  // wie meteoalarm-karte.yaml / nachtblau_dwd_popup: DWD-Ton nur, wenn er auf seiner Toenung das Ziel haelt
+  const lesbar = (c, anteil, ziel, grund) => {
+    const r = rgbOf(c); if (!r) return c;
+    const ok = grund.every((g) => kr(r, rgbOf(g).map((v, i) => v * (1 - anteil) + r[i] * anteil)) >= ziel);
+    return ok ? c : HELL;
+  };
+  const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+  const GRUND_KARTE = ['#1b2231', '#171d29'];
+  const GRUND_POPUP = ['#222b3c', '#171d29'];
+
+  // DWD-Farben, wie die Integration sie liefert (CAP-Profil 3.5; Stufe 1 in der Instanz als #ffeb3b beobachtet)
+  const CAP_FARBE = { 0: '#ff8080', 1: '#ffeb3b', 2: '#fb8c00', 3: '#e53935', 4: '#880e4f' };
+  const SONDER_FARBE = { 246: '#fe68fe', 247: '#cc99ff', 248: '#9e46f8' };
+  const KARTE_LABEL = { 0: 'Vorabinformation', 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung' };
+  const POPUP_LABEL = { 0: 'Vorabinformation', 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extremes Unwetter' };
+
+  // Stufe -> Dichte (k) und Tempo (t)
+  const LV = { 0: { k: 0.8, t: 0.7 }, 1: { k: 1, t: 1 }, 2: { k: 1.35, t: 1.15 }, 3: { k: 1.75, t: 1.3 }, 4: { k: 2.2, t: 1.5 } };
+
+  // ---------- Bausteine ----------
+  const cloud = (x, y, w, o, d, p, dark) => `<div class="wf-cl" style="--x:${x}%;--y:${y}%;--w:${w}px;--o:${o};--d:${d}s;--p:${p};${dark ? '--cc:#6e7988;' : ''}"></div>`;
+  const clouds = (dark, n) => [[8, 4, 62, 0.24, 9, 0.1], [46, 18, 50, 0.24, 11, 0.6], [24, 30, 44, 0.18, 10, 0.35]].slice(0, n || 2)
+    .map(([x, y, w, o, d, p]) => cloud(x, y, w, dark ? o : o * 0.5, d, p, dark)).join('');
+  const drops = (n, base, len, t) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const x = ((i + R(i, 1) * 0.8) / n * 100).toFixed(1);
+      const d = (base * (0.85 + 0.3 * R(i, 2)) / t).toFixed(2);
+      h += `<i class="wf-dr" style="--x:${x}%;--d:${d}s;--p:${f2(R(i, 3))};--len:${len}px;--a:${i % 3 === 0 ? 0.5 : 0.24}"></i>`;
+    }
+    return h;
+  };
+  const flakes = (n, base, size, t, hail) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const x = ((i + R(i, 21) * 0.8) / n * 100).toFixed(1);
+      const d = (base * (0.8 + 0.4 * R(i, 22)) / t).toFixed(2);
+      h += `<i class="wf-fl${hail ? ' hail' : ''}" style="--x:${x}%;--d:${d}s;--p:${f2(R(i, 23))};--s:${size}px;--sw:${(2 + R(i, 24) * 2).toFixed(1)}s"></i>`;
+    }
+    return h;
+  };
+  const fall = (inner, slant) => `<div class="wf-fall" style="--slant:${slant == null ? -8 : slant}deg">${inner}</div>`;
+  const splashes = (n, t, color, b) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      h += `<i class="wf-sp" style="--x:${(12 + (i + R(i, 31) * 0.7) / n * 80).toFixed(1)}%;--d:${(1.1 / t * (0.8 + 0.4 * R(i, 32))).toFixed(2)}s;--p:${f2(R(i, 33))};${color ? '--rc:' + color + ';' : ''}${b ? '--b:' + b + ';' : ''}"></i>`;
+    }
+    return h;
+  };
+  const streaks = (n, base, len, t, gust, color) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const y = (14 + (i + R(i, 4) * 0.9) / n * 72).toFixed(1);
+      const d = (base * (0.8 + 0.4 * R(i, 5)) / t).toFixed(2);
+      const w = Math.round(len * (0.7 + 0.6 * R(i, 7)));
+      h += `<div class="wf-dw" style="--y:${y}%;--w:${w}px;--d:${d}s;--p:${f2(R(i, 6))}"><i class="wf-st${gust ? ' gust' : ''}" style="--a:${i % 2 === 0 ? 0.5 : 0.24};--wv:${(1.4 + R(i, 8) * 1.6).toFixed(2)}s;${color ? '--sc:' + color + ';' : ''}"></i></div>`;
+    }
+    return h;
+  };
+  const blowing = (n, base, t) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const y = (8 + (i + R(i, 41) * 0.9) / n * 80).toFixed(1);
+      const d = (base * (0.75 + 0.5 * R(i, 42)) / t).toFixed(2);
+      const s = R(i, 43) > 0.6 ? 3.5 : 2.5;
+      h += `<div class="wf-dw" style="--y:${y}%;--w:${s}px;--d:${d}s;--p:${f2(R(i, 44))}"><i class="wf-bf" style="--s:${s}px;--wv:${(0.8 + R(i, 45)).toFixed(2)}s"></i></div>`;
+    }
+    return h;
+  };
+  const flash = (bx) => `<div class="wf-flash"></div><svg class="wf-bolt" style="--bx:${bx || 52}%" viewBox="0 0 18 46" fill="none"><path d="M11 0 4 20h7L5 46" stroke="rgba(255,255,255,0.5)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  const fog = (t) => [[6, 30, 22, 0.1], [32, 34, 28, 0.5], [60, 30, 20, 0.8], [80, 26, 26, 0.3]]
+    .map(([y, hh, d, p]) => `<div class="wf-fog" style="--y:${y}%;--h:${hh}%;--d:${(d / t).toFixed(1)}s;--p:${p}"></div>`).join('');
+  // Eiskristall: sechs Arme mit Seitenzweigen (wie das Glaette-Icon), waechst per stroke-dash
+  const CRYSTAL = 'M12 2.5V21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
+  const crystal = (x, y, s, d, p) => `<svg class="wf-cr" style="--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}" viewBox="0 0 24 24">${CRYSTAL.split('M').filter(Boolean).map((seg) => `<path pathLength="1" d="M${seg}"/>`).join('')}</svg>`;
+  const sparks = (n, top, span, t) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      h += `<i class="wf-spk" style="--x:${(30 + R(i, 51) * 64).toFixed(1)}%;--y:${(top + R(i, 52) * span).toFixed(1)}%;--s:${R(i, 53) > 0.6 ? 7 : 5}px;--d:${(1.8 + R(i, 54) * 2.2) / t}s;--p:${f2(R(i, 55))}"></i>`;
+    }
+    return h;
+  };
+  const icicles = (n, t) => {
+    let h = '<div class="wf-icebar"></div>';
+    for (let i = 0; i < n; i++) {
+      const x = (32 + (i + R(i, 61) * 0.6) / n * 62).toFixed(1), w = 5 + Math.round(R(i, 62) * 3), hh = 12 + Math.round(R(i, 63) * 14);
+      h += `<i class="wf-icl" style="--x:${x}%;--w:${w}px;--h:${hh}px"></i><i class="wf-dp" style="--x:${x}%;--w:${w}px;--h:${hh}px;--d:${(2.6 / t * (0.8 + 0.4 * R(i, 64))).toFixed(2)}s;--p:${f2(R(i, 65))}"></i>`;
+    }
+    return h;
+  };
+  const heatLines = (n, color, t) => {
+    let h = '<div class="wf-heatbox">';
+    for (let i = 0; i < n; i++) {
+      let d = 'M6 0';
+      for (let k = 0; k < 16; k++) d += ` q${k % 2 ? -4 : 4} 3.125 0 6.25`;
+      h += `<svg class="wf-heat" style="--x:${(28 + (i + R(i, 71) * 0.6) / n * 66).toFixed(1)}%;--d:${(3.4 / t * (0.85 + 0.3 * R(i, 72))).toFixed(2)}s;--p:${f2(R(i, 73))}" viewBox="0 0 12 100" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${color}" stroke-opacity="0.5" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`;
+    }
+    return h + '</div>';
+  };
+  const cable = (t) => {
+    const dur = (1.8 / t).toFixed(2);
+    const wire = (y0, sag, op, phase) => `<path d="M0 ${y0} Q50 ${y0 + sag} 100 ${y0}" fill="none" stroke="#cdd6e0" stroke-opacity="${op}" stroke-width="1.5" vector-effect="non-scaling-stroke"><animate attributeName="d" dur="${dur}s" begin="-${phase}s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" keyTimes="0;0.5;1" values="M0 ${y0} Q50 ${y0 + sag} 100 ${y0};M0 ${y0} Q50 ${y0 - sag * 0.7} 100 ${y0};M0 ${y0} Q50 ${y0 + sag} 100 ${y0}"/></path>`;
+    return `<svg class="wf-cab" viewBox="0 0 100 60" preserveAspectRatio="none">${wire(14, 22, 0.5, 0)}${wire(34, 18, 0.24, (0.4 / t).toFixed(2))}</svg>`
+      + `<svg class="wf-cab" viewBox="0 0 100 60" preserveAspectRatio="none" style="pointer-events:none"><path d="M99 0V60" stroke="#6e7988" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  };
+
+  // ---------- Hitze: Varianten ----------
+  const HEAT = {
+    glocke: { label: 'Hitzeglocke', what: 'Eine Kuppel liegt über den Dächern und atmet langsam, darunter steigen einzelne Wärmepunkte auf. Bild für das Hochdruckgebiet, das die Hitze festhält.' },
+    glut: { label: 'Aufsteigende Wärme (gewählt)', what: 'Vom Boden glüht es warm, Wärmepunkte steigen schwankend auf und verglühen. Keine Sonne, damit sie sich klar von UV unterscheidet.' },
+    spiegelung: { label: 'Luftspiegelung', what: 'Horizont mit Straße, darüber flimmern Spiegelungen wie über heißem Asphalt. Ruhig und gegenständlich.' },
+    welle: { label: 'Hitzewelle', what: 'Drei Wellenlinien ziehen langsam nach rechts, unten ein warmer Schein. Grafisch, angelehnt an Wetterkarten.' },
+    flimmern: { label: 'Hitzeflimmern (bisher)', what: 'Senkrechte Flimmerlinien steigen auf, oben Sonnenschein. Die erste Fassung zum Vergleich.' }
+  };
+  const HEAT_ORDER = ['glut', 'glocke', 'spiegelung', 'welle', 'flimmern'];
+  const embers = (n, t, colors, rise) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      h += `<i class="wf-ember" style="--x:${(14 + (i + R(i, 81) * 0.8) / n * 80).toFixed(1)}%;--s:${R(i, 82) > 0.6 ? 3 : 2}px;--d:${(3.2 / t * (0.75 + 0.5 * R(i, 83))).toFixed(2)}s;--p:${f2(R(i, 84))};--dx:${Math.round((R(i, 85) - 0.5) * 16)}px;--dy:${rise || -72}px;--ec:${colors[i % colors.length]}"></i>`;
+    }
+    return h;
+  };
+  function heatScene(v, l, t, k) {
+    const red = l >= 3;
+    const hc = red ? 'rgba(240,115,106,0.5)' : 'rgba(231,147,110,0.5)';
+    const hs = red ? 'rgba(240,115,106,0.18)' : 'rgba(231,147,110,0.18)';
+    const vars = `--hc:${hc};--hs:${hs};`;
+    switch (v) {
+      case 'glocke':
+        return `<div style="position:absolute;inset:0;${vars}"><div class="wf-dome" style="--d:${(6 / t).toFixed(1)}s"></div>`
+          + embers(Math.round(4 * k), t * 0.8, [hc], -46)
+          + '<svg class="wf-city" viewBox="0 0 120 24" preserveAspectRatio="none"><path d="M0 24V14h10V9h8v5h6V6h10v8h5V11h9v13h4V8l6-4 6 4v16h5V12h9v4h7V7h10v17Z" fill="rgba(110,121,136,0.5)"/></svg></div>';
+      case 'glut':
+        return `<div style="position:absolute;inset:0;${vars}"><div class="wf-heatglow"></div>` + embers(Math.round(8 * k), t, [hc, 'rgba(230,193,90,0.5)']) + '</div>';
+      case 'spiegelung': {
+        let h = `<div style="position:absolute;inset:0;${vars}"><div class="wf-sunglow"></div><div class="wf-horizon"></div>`
+          + '<svg class="wf-road" viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M44 0h12l30 40H14Z" fill="rgba(110,121,136,0.12)"/><path d="M50 4v6M50 16v8M50 30v10" stroke="rgba(255,255,255,0.24)" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>';
+        const M = [[20, 40, 50, 0.1], [40, 50, 56, 0.6], [12, 34, 63, 0.35], [52, 30, 69, 0.8]];
+        M.slice(0, red ? 4 : 3).forEach(([x, w, y, p], i) => { h += `<i class="wf-mir" style="--x:${x}%;--w:${w}%;--y:${y}%;--d:${(1.6 / t + i * 0.3).toFixed(2)}s;--p:${p}"></i>`; });
+        return h + '</div>';
+      }
+      case 'welle': {
+        let wv = 'M0 8';
+        for (let i = 0; i < 16; i++) wv += ` q12.5 ${i % 2 ? 7 : -7} 25 0`;
+        const line = (y, op, d) => `<svg class="wf-hwave" style="--y:${y}%;--d:${(d / t).toFixed(1)}s" viewBox="0 0 400 16" preserveAspectRatio="none"><path d="${wv}" fill="none" stroke="${red ? '#f0736a' : '#e7936e'}" stroke-opacity="${op}" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`;
+        return `<div style="position:absolute;inset:0;${vars}"><div class="wf-heatglow" style="animation-duration:4.5s"></div>${line(20, 0.24, 9)}${line(42, 0.5, 7)}${line(64, 0.24, 8)}</div>`;
+      }
+      default: {
+        const c = red ? '#f0736a' : '#e7936e';
+        return '<div class="wf-sunglow"></div>' + `<div class="wf-haze" style="--hz:${red ? 'rgba(240,115,106,0.12)' : 'rgba(231,147,110,0.12)'}"></div>` + heatLines(Math.round(4 * k), c, t);
+      }
+    }
+  }
+
+  // ---------- Stufe 4: Darstellungsvarianten ----------
+  // fill  = Kachel und Pille deckend in der DWD-Farbe, Schrift/Icon Hell, Rand und Leuchten Rot 0,5 (Empfehlung)
+  // getoent = bisher: Toenung 0,16/0,12, lesbar() faellt auf Hell zurueck
+  // purpur = heller Ton im DWD-Farbton als neue Palettenfarbe (nur zum Vergleich)
+  const L4 = { mode: 'fill' };
+  const PURPUR = '#e57aa9';
+
+  // ---------- Ereigniscodes (CAP-DWD-Profil 2.1.13, Kap. 3.1 und 3.3) ----------
+  const GRP_WIND = [33, 36, 38, 40, 41, 44, 45, 48, 49, 96];
+  const GRP_RAIN = [34, 36, 38, 42, 44, 45, 46, 48, 49, 95, 96];
+  const GRP_HAIL = [38, 46, 48, 49, 95, 96];
+  const EVENTS = [
+    [22, 'FROST', 'frost'], [82, 'STRENGER FROST', 'frost'],
+    [31, 'GEWITTER', 'gewitter'], [33, 'STARKES GEWITTER', 'gewitter'], [34, 'STARKES GEWITTER', 'gewitter'], [36, 'STARKES GEWITTER', 'gewitter'], [38, 'STARKES GEWITTER', 'gewitter'],
+    [40, 'SCHWERES GEWITTER mit ORKANBÖEN', 'gewitter'], [41, 'SCHWERES GEWITTER mit EXTREMEN ORKANBÖEN', 'gewitter'], [42, 'SCHWERES GEWITTER mit HEFTIGEM STARKREGEN', 'gewitter'],
+    [44, 'SCHWERES GEWITTER mit ORKANBÖEN und HEFTIGEM STARKREGEN', 'gewitter'], [45, 'SCHWERES GEWITTER mit EXTREMEN ORKANBÖEN und HEFTIGEM STARKREGEN', 'gewitter'],
+    [46, 'SCHWERES GEWITTER mit HEFTIGEM STARKREGEN und HAGEL', 'gewitter'], [48, 'SCHWERES GEWITTER mit ORKANBÖEN, HEFTIGEM STARKREGEN und HAGEL', 'gewitter'],
+    [49, 'SCHWERES GEWITTER mit EXTREMEN ORKANBÖEN, HEFTIGEM STARKREGEN und HAGEL', 'gewitter'],
+    [90, 'GEWITTER', 'gewitter'], [91, 'STARKES GEWITTER', 'gewitter'], [92, 'SCHWERES GEWITTER', 'gewitter'], [93, 'EXTREMES GEWITTER', 'gewitter'],
+    [95, 'SCHWERES GEWITTER mit EXTREM HEFTIGEM STARKREGEN und HAGEL', 'gewitter'], [96, 'EXTREMES GEWITTER mit ORKANBÖEN, EXTREM HEFTIGEM STARKREGEN und HAGEL', 'gewitter'],
+    [11, 'BÖEN (Küste)', 'wind'], [12, 'WIND (Küste)', 'wind'], [13, 'STURM (Küste)', 'wind'],
+    [51, 'WINDBÖEN', 'wind'], [52, 'STURMBÖEN', 'wind'], [53, 'SCHWERE STURMBÖEN', 'wind'], [54, 'ORKANARTIGE BÖEN', 'wind'], [55, 'ORKANBÖEN', 'wind'], [56, 'EXTREME ORKANBÖEN', 'wind'], [57, 'STARKWIND', 'wind'], [58, 'STURM', 'wind'],
+    [59, 'NEBEL', 'nebel'],
+    [61, 'STARKREGEN', 'starkregen'], [62, 'HEFTIGER STARKREGEN', 'starkregen'], [66, 'EXTREM HEFTIGER STARKREGEN', 'starkregen'],
+    [63, 'DAUERREGEN', 'dauerregen'], [64, 'ERGIEBIGER DAUERREGEN', 'dauerregen'], [65, 'EXTREM ERGIEBIGER DAUERREGEN', 'dauerregen'],
+    [70, 'LEICHTER SCHNEEFALL', 'schnee'], [71, 'SCHNEEFALL', 'schnee'], [72, 'STARKER SCHNEEFALL', 'schnee'], [73, 'EXTREM STARKER SCHNEEFALL', 'schnee'],
+    [74, 'SCHNEEVERWEHUNG', 'verwehung'], [75, 'STARKE SCHNEEVERWEHUNG', 'verwehung'], [76, 'EXTREM STARKE SCHNEEVERWEHUNG', 'verwehung'],
+    [79, 'LEITERSEILSCHWINGUNGEN', 'leiter'],
+    [84, 'GERINGE GLÄTTE', 'glaette'], [87, 'GLÄTTE', 'glaette'], [85, 'GLATTEIS', 'glatteis'], [86, 'EXTREMES GLATTEIS', 'glatteis'],
+    [88, 'TAUWETTER', 'tauwetter'], [89, 'STARKES TAUWETTER', 'tauwetter'],
+    [246, 'UV-INDEX', 'uv'], [247, 'STARKE HITZE', 'hitze'], [248, 'EXTREME HITZE', 'hitze'],
+    [98, 'TEST-WARNUNG', 'none'], [99, 'TEST-UNWETTERWARNUNG', 'none']
+  ];
+  const CODE = {}; EVENTS.forEach(([ii, name, s]) => { CODE[ii] = s; });
+  const addonsFor = (ii) => ({ wind: GRP_WIND.includes(ii), rain: GRP_RAIN.includes(ii), hail: GRP_HAIL.includes(ii) });
+  // Rueckfall ohne Code: Namenserkennung in derselben Reihenfolge wie iconFor heute
+  const sceneByName = (n) => {
+    const s = (n || '').toLowerCase();
+    if (/(gewitter|blitz)/.test(s)) return 'gewitter';
+    if (/verwehung/.test(s)) return 'verwehung';
+    if (/(wind|böen|boen|sturm|orkan)/.test(s)) return 'wind';
+    if (/dauerregen/.test(s)) return 'dauerregen';
+    if (/(stark ?regen|regen)/.test(s)) return 'starkregen';
+    if (/schnee/.test(s)) return 'schnee';
+    if (/frost/.test(s)) return 'frost';
+    if (/glatteis/.test(s)) return 'glatteis';
+    if (/(glätte|glaette)/.test(s)) return 'glaette';
+    if (/tauwetter/.test(s)) return 'tauwetter';
+    if (/leiterseil/.test(s)) return 'leiter';
+    if (/(hitze|wärme|waerme)/.test(s)) return 'hitze';
+    if (/(uv|sonne)/.test(s)) return 'uv';
+    if (/nebel/.test(s)) return 'nebel';
+    return 'none';
+  };
+
+  // ---------- Szenen ----------
+  const SCENES = {
+    gewitter: {
+      label: 'Gewitter', codes: '31–49, 90–96', def: 3,
+      levels: { 1: [31, 'GEWITTER'], 2: [33, 'STARKES GEWITTER'], 3: [48, 'SCHWERES GEWITTER mit ORKANBÖEN, HEFTIGEM STARKREGEN und HAGEL'], 4: [96, 'EXTREMES GEWITTER mit ORKANBÖEN, EXTREM HEFTIGEM STARKREGEN und HAGEL'] },
+      vorab: [40, 'VORABINFORMATION SCHWERES GEWITTER'],
+      what: 'Dunkle Wolken ziehen langsam, Doppelblitz alle 8 s mit Blitzlinie. Regen, Hagel und Böen kommen nur dazu, wenn der Code sie enthält.',
+      colors: [['#6e7988', 'Muted'], ['#ffffff80', 'Weiß 0,5'], ['#7fb3d5', 'Blau'], ['#cdd6e0', 'Wolkengrau']],
+      sample: (l) => ({
+        desc: l >= 3 ? 'Von Südwesten ziehen schwere Gewitter auf. Dabei gibt es Orkanböen, heftigen Starkregen und Hagel.' : 'Von Südwesten ziehen Gewitter auf. Dabei gibt es Sturmböen und örtlich Starkregen.',
+        params: l >= 3 ? { 'Böen': 'ca. 120 km/h', 'Niederschlag': 'ca. 40 l/m² in 1 Std.', 'Hagel': 'ca. 3 cm' } : { 'Böen': 'ca. 70 km/h', 'Gewitteraufzugrichtung': 'Südwest' },
+        tips: ['Blitzschlag', 'umstürzende Bäume', 'herabstürzende Äste'], time: ['Heute 16:00–21:00', 'Heute 16:00–21:00 Uhr', 'Dauer 5 Std. · läuft – endet in 3 Std.']
+      }),
+      build: (l, t, k, ad) => {
+        let h = clouds(true, l >= 3 ? 3 : 2);
+        if (ad.rain) h += fall(drops(Math.round(10 * k), 0.7, 14, t), -10);
+        if (ad.hail) h += fall(flakes(Math.round(6 * k), 1.4, 3, t, true), -10);
+        if (ad.wind) h += streaks(Math.round(2 * k), 2.6, 60, t, l >= 3);
+        return h + flash(54);
+      }
+    },
+    wind: {
+      label: 'Wind und Sturm', codes: '11–13, 51–58', def: 2,
+      levels: { 1: [51, 'WINDBÖEN'], 2: [52, 'STURMBÖEN'], 3: [55, 'ORKANBÖEN'], 4: [56, 'EXTREME ORKANBÖEN'] },
+      vorab: [55, 'VORABINFORMATION ORKANBÖEN'],
+      what: 'Windschlieren ziehen nach rechts, leicht gewellt. Mehr und schnellere Schlieren je Stufe, ab Stufe 3 kräftiger.',
+      colors: [['#cdd6e0', 'Wolkengrau']],
+      sample: (l) => ({
+        desc: `Es treten ${['', 'Windböen', 'Sturmböen', 'Orkanböen', 'extreme Orkanböen'][l]} aus südwestlicher Richtung auf.`,
+        params: { 'Böen': ['', 'ca. 55 km/h', 'ca. 80 km/h', 'ca. 120 km/h', '>140 km/h'][l], 'Windrichtung': 'Südwest' },
+        tips: ['herabstürzende Äste', 'umherfliegende Gegenstände'], time: ['Heute 12:00 – Morgen 06:00', 'Heute 12:00 Uhr – Morgen 06:00 Uhr', 'Dauer 18 Std. · läuft – endet in 14 Std.']
+      }),
+      build: (l, t, k) => streaks(Math.round(4 * k), 2.6, 70, t, l >= 3)
+    },
+    starkregen: {
+      label: 'Starkregen', codes: '61, 62, 66', def: 3,
+      levels: { 2: [61, 'STARKREGEN'], 3: [62, 'HEFTIGER STARKREGEN'], 4: [66, 'EXTREM HEFTIGER STARKREGEN'] },
+      vorab: [65, 'VORABINFORMATION HEFTIGER / ERGIEBIGER REGEN'],
+      what: 'Dichter, steiler, schneller Regen mit Spritzern am Boden. Zeigt die Heftigkeit im Moment.',
+      colors: [['#6e7988', 'Muted'], ['#7fb3d5', 'Blau']],
+      sample: (l) => ({
+        desc: `Es tritt ${['', '', 'Starkregen', 'heftiger Starkregen', 'extrem heftiger Starkregen'][l]} auf.`,
+        params: { 'Niederschlag': ['', '', 'ca. 20 l/m² in 1 Std.', 'ca. 35 l/m² in 1 Std.', '>40 l/m² in 1 Std.'][l] },
+        tips: ['Überflutung von Kellern und Straßen', 'Aquaplaning'], time: ['Heute 15:00–19:00', 'Heute 15:00–19:00 Uhr', 'Dauer 4 Std. · läuft – endet in 2 Std.']
+      }),
+      build: (l, t, k) => clouds(true, 2) + fall(drops(Math.round(14 * k), 0.5, 16, t), -12) + splashes(Math.round(3 * k), t)
+    },
+    dauerregen: {
+      label: 'Dauerregen', codes: '63–65', def: 2,
+      levels: { 2: [63, 'DAUERREGEN'], 3: [64, 'ERGIEBIGER DAUERREGEN'], 4: [65, 'EXTREM ERGIEBIGER DAUERREGEN'] },
+      vorab: [65, 'VORABINFORMATION HEFTIGER / ERGIEBIGER REGEN'],
+      what: 'Gleichmäßiger, feiner Regen und ein Wasserstand am Boden, der langsam steigt. Zeigt die Menge über die Zeit, nicht die Wucht.',
+      colors: [['#6e7988', 'Muted'], ['#7fb3d5', 'Blau']],
+      sample: (l) => ({
+        desc: `Es tritt ${['', '', 'Dauerregen', 'ergiebiger Dauerregen', 'extrem ergiebiger Dauerregen'][l]} auf.`,
+        params: { 'Niederschlag': ['', '', 'ca. 40 l/m²', 'ca. 70 l/m²', '>90 l/m²'][l], 'Staulagen': 'ca. 80 l/m²' },
+        tips: ['Anstieg von Bächen und Flüssen', 'Überflutung von Straßen'], time: ['Heute 06:00 – Morgen 18:00', 'Heute 06:00 Uhr – Morgen 18:00 Uhr', 'Dauer 36 Std. · läuft – endet in 34 Std.']
+      }),
+      build: (l, t, k) => clouds(true, 1) + fall(drops(Math.round(10 * k), 1.0, 10, t), -4) + `<div class="wf-lvl" style="--h:${20 + l * 4}%;--d:${(18 / t).toFixed(1)}s"></div>`
+    },
+    schnee: {
+      label: 'Schneefall', codes: '70–73', def: 2,
+      levels: { 1: [70, 'LEICHTER SCHNEEFALL'], 2: [71, 'SCHNEEFALL'], 3: [72, 'STARKER SCHNEEFALL'], 4: [73, 'EXTREM STARKER SCHNEEFALL'] },
+      vorab: [75, 'VORABINFORMATION STARKER SCHNEEFALL / SCHNEEVERWEHUNG'],
+      what: 'Flocken fallen schaukelnd, die Schneedecke am Boden wächst langsam. Ab Stufe 3 größere Flocken.',
+      colors: [['#ffffff80', 'Weiß 0,5'], ['#ffffff1f', 'Weiß 0,12']],
+      sample: (l) => ({
+        desc: `Es tritt ${['', 'leichter Schneefall', 'Schneefall', 'starker Schneefall', 'extrem starker Schneefall'][l]} auf.`,
+        params: { 'Schneefall': ['', 'ca. 2 cm', 'ca. 8 cm', 'ca. 20 cm', '>30 cm'][l] },
+        tips: ['Behinderungen im Straßenverkehr', 'Schneebruch'], time: ['Heute 03:00–15:00', 'Heute 03:00–15:00 Uhr', 'Dauer 12 Std. · läuft – endet in 6 Std.']
+      }),
+      build: (l, t, k) => fall(flakes(Math.round(9 * k), 5, l >= 3 ? 3.5 : 3, t), -4) + `<div class="wf-lvl snow" style="--h:${16 + l * 3}%;--d:${(22 / t).toFixed(1)}s"></div>`
+    },
+    verwehung: {
+      label: 'Schneeverwehung', codes: '74–76', def: 2,
+      levels: { 2: [74, 'SCHNEEVERWEHUNG'], 3: [75, 'STARKE SCHNEEVERWEHUNG'], 4: [76, 'EXTREM STARKE SCHNEEVERWEHUNG'] },
+      vorab: [75, 'VORABINFORMATION STARKER SCHNEEFALL / SCHNEEVERWEHUNG'],
+      what: 'Schnee fliegt fast waagerecht, dazwischen Windschlieren in Weiß, am Boden wandert eine Schneewehe.',
+      colors: [['#ffffff80', 'Weiß 0,5'], ['#ffffff1f', 'Weiß 0,12']],
+      sample: (l) => ({
+        desc: 'Bei Neuschnee und starkem Wind kommt es zu Schneeverwehungen.',
+        params: {},
+        tips: ['Schneeverwehungen auf Straßen', 'eingeschränkte Sicht'], time: ['Heute 18:00 – Morgen 08:00', 'Heute 18:00 Uhr – Morgen 08:00 Uhr', 'Dauer 14 Std. · beginnt in 2 Std.']
+      }),
+      build: (l, t, k) => blowing(Math.round(10 * k), 1.9, t) + streaks(Math.round(2 * k), 1.8, 50, t, false, 'rgba(255,255,255,0.5)')
+        + `<svg class="wf-dune" style="--d:${(8 / t).toFixed(1)}s" viewBox="0 0 400 30" preserveAspectRatio="none"><path d="M0 30V18Q25 6 50 18T100 18T150 18T200 18T250 18T300 18T350 18T400 18V30Z" fill="rgba(255,255,255,0.12)"/></svg>`
+    },
+    glaette: {
+      label: 'Glätte', codes: '84, 87', def: 1,
+      levels: { 1: [87, 'GLÄTTE'], 2: [87, 'GLÄTTE'] },
+      vorab: null,
+      what: 'Eisige Fläche am Boden, über die alle 5,5 s ein Glanz streicht, dazu funkelnde Punkte. Ruhig, weil die Gefahr am Boden liegt.',
+      colors: [['#cfe3f2', 'Eis 0,18'], ['#ffffff80', 'Weiß 0,24–0,5']],
+      sample: () => ({
+        desc: 'Es tritt Glätte durch überfrierende Nässe oder geringfügigen Schneefall auf.',
+        params: {},
+        tips: ['Glätte auf Straßen und Gehwegen'], time: ['Heute 21:00 – Morgen 10:00', 'Heute 21:00 Uhr – Morgen 10:00 Uhr', 'Dauer 13 Std. · beginnt in 5 Std.']
+      }),
+      build: (l, t, k) => '<div class="wf-ice"></div>' + `<div class="wf-sheen" style="--d:${(5.5 / t).toFixed(1)}s"></div>` + sparks(Math.round(3 * k), 66, 26, t)
+    },
+    glatteis: {
+      label: 'Glatteis', codes: '85, 86', def: 3,
+      levels: { 3: [85, 'GLATTEIS'], 4: [86, 'EXTREMES GLATTEIS'] },
+      vorab: [85, 'VORABINFORMATION GLATTEIS'],
+      what: 'Gefrierender Regen: Tropfen fallen und frieren am Boden als weiße Ringe fest, darüber der Glanz der Eisfläche.',
+      colors: [['#7fb3d5', 'Blau'], ['#cfe3f2', 'Eis 0,18'], ['#ffffff80', 'Weiß 0,24–0,5']],
+      sample: () => ({
+        desc: 'Es tritt Glatteis durch gefrierenden Regen auf.',
+        params: { 'Ursache': 'durch gefrierenden Regen' },
+        tips: ['erhebliche Glätte auf Straßen und Gehwegen', 'Ausfall von Verkehrsmitteln'], time: ['Heute 04:00–11:00', 'Heute 04:00–11:00 Uhr', 'Dauer 7 Std. · läuft – endet in 2 Std.']
+      }),
+      build: (l, t, k) => '<div class="wf-ice"></div>' + fall(drops(Math.round(7 * k), 1.0, 9, t), -5)
+        + splashes(Math.round(3 * k), t * 0.7, 'rgba(255,255,255,0.5)', '12%') + `<div class="wf-sheen" style="--d:${(5.5 / t).toFixed(1)}s"></div>`
+    },
+    frost: {
+      label: 'Frost', codes: '22, 82', def: 1,
+      levels: { 1: [22, 'FROST'], 2: [82, 'STRENGER FROST'] },
+      vorab: null,
+      what: 'Eiskristalle wachsen in 5 s, bleiben stehen und tauen weg; dazu Funkeln und kalter Schein in Blau. Strenger Frost mit mehr Kristallen und Raureif am Rand.',
+      colors: [['#7fb3d5', 'Blau 0,18'], ['#ffffff80', 'Weiß 0,5']],
+      sample: (l) => (l === 1 ? {
+        desc: 'Es tritt leichter Frost bis -3 °C auf.', params: { 'Lufttemperatur': '>-3 °C' },
+        tips: ['mögliche Frostschäden'], acts: ['ggf. Frostschutzmaßnahmen ergreifen'], time: ['Gestern 20:00 – Heute 09:00', 'Gestern 20:00 Uhr – Heute 09:00 Uhr', 'Dauer 13 Std. · läuft – endet in 28 Min.'], echt: true
+      } : {
+        desc: 'Es tritt strenger Frost zwischen -10 °C und -15 °C auf.', params: { 'Lufttemperatur': 'ca. -12 °C', 'Ort': 'vor allem in Tal- und Muldenlagen' },
+        tips: ['Frostschäden an Leitungen und Pflanzen'], acts: ['Frostschutzmaßnahmen ergreifen'], time: ['Heute 20:00 – Morgen 10:00', 'Heute 20:00 Uhr – Morgen 10:00 Uhr', 'Dauer 14 Std. · beginnt in 4 Std.']
+      }),
+      build: (l, t) => {
+        let h = '<div class="wf-cold"></div>';
+        const C = [[40, 6, 30, 0.0], [70, 40, 22, 0.45], [52, 52, 18, 0.7], [80, 2, 16, 0.25]];
+        C.slice(0, l >= 2 ? 4 : 2).forEach(([x, y, s, p], i) => { h += crystal(x, y, s, (10 / t + i).toFixed(1), p); });
+        h += sparks(l >= 2 ? 5 : 3, 10, 70, t);
+        if (l >= 2) h += '<div class="wf-rime"></div>';
+        return h;
+      }
+    },
+    tauwetter: {
+      label: 'Tauwetter', codes: '88, 89', def: 2, newIcon: true,
+      levels: { 2: [88, 'TAUWETTER'], 3: [89, 'STARKES TAUWETTER'] },
+      vorab: [89, 'VORABINFORMATION STARKES TAUWETTER'],
+      what: 'Eiszapfen oben tropfen, unten breiten sich Ringe aus und das Wasser steigt. Schnee schmilzt, Wasser fließt ab.',
+      colors: [['#ffffff3d', 'Weiß 0,24'], ['#7fb3d5', 'Blau']],
+      sample: (l) => ({
+        desc: 'Durch Regen und Schneeschmelze kommt es zu Tauwetter.',
+        params: { 'Niederschlagsdargebot': l >= 3 ? 'ca. 60 l/m²' : 'ca. 35 l/m²' },
+        tips: ['Anstieg von Bächen und Flüssen', 'Überflutung von Kellern'], time: ['Heute 09:00 – Morgen 09:00', 'Heute 09:00 Uhr – Morgen 09:00 Uhr', 'Dauer 24 Std. · läuft – endet in 22 Std.']
+      }),
+      build: (l, t, k) => icicles(Math.round(3 * k), t) + splashes(Math.round(2 * k), t * 0.6) + `<div class="wf-lvl" style="--h:${14 + l * 3}%;--d:${(20 / t).toFixed(1)}s"></div>`
+    },
+    nebel: {
+      label: 'Nebel', codes: '59', def: 1,
+      levels: { 1: [59, 'NEBEL'] },
+      vorab: null,
+      what: 'Vier Nebelbänke schieben sich langsam gegeneinander. Die ruhigste Szene.',
+      colors: [['#cdd6e0', 'Wolkengrau 0,12']],
+      sample: () => ({
+        desc: 'Es tritt Nebel mit Sichtweiten unter 150 m auf.', params: { 'Sicht': '<150 m', 'Lagen': 'Flüsse und Täler' },
+        tips: ['eingeschränkte Sicht im Straßenverkehr'], time: ['Heute 05:00–10:00', 'Heute 05:00–10:00 Uhr', 'Dauer 5 Std. · läuft – endet in 1 Std.']
+      }),
+      build: (l, t) => fog(t)
+    },
+    hitze: {
+      label: 'Hitze', codes: '247, 248', def: 1,
+      levels: { 1: [247, 'STARKE HITZE'], 3: [248, 'EXTREME HITZE'] },
+      vorab: null,
+      what: 'Vom Boden glüht es warm, Wärmepunkte steigen schwankend auf und verglühen. Starke Hitze in Koralle, extreme Hitze in Rot. Keine Sonne, damit Hitze nicht wie UV aussieht.',
+      colors: [['#e7936e', 'Koralle 0,18–0,5'], ['#f0736a', 'Rot 0,18–0,5'], ['#e6c15a', 'Sonnengelb 0,5']],
+      sample: (l) => ({
+        desc: l >= 3 ? 'Es tritt eine extreme Wärmebelastung auf.' : 'Es tritt eine starke Wärmebelastung auf.',
+        params: {}, tips: ['Hitzebelastung für den Körper'], acts: ['viel trinken', 'Mittagshitze meiden'], time: ['Heute 11:00–19:00', 'Heute 11:00–19:00 Uhr', 'Dauer 8 Std. · läuft – endet in 5 Std.']
+      }),
+      build: (l, t, k, ad, variant) => heatScene(variant || 'glut', l, t, k)
+    },
+    uv: {
+      label: 'UV-Strahlung', codes: '246', def: 1, newIcon: 'Karte',
+      levels: { 1: [246, 'UV-INDEX'] },
+      vorab: null,
+      what: 'Sonne mit langsam drehenden Strahlen, alle 3,2 s läuft ein Ring nach außen.',
+      colors: [['#e6c15a', 'Sonnengelb 0,18–0,5']],
+      sample: () => ({
+        desc: 'Es wird eine hohe UV-Intensität erwartet.', params: { 'UV-Index': '8' },
+        tips: ['Sonnenbrandgefahr'], acts: ['Sonnenschutz verwenden'], time: ['Heute 11:00–16:00', 'Heute 11:00–16:00 Uhr', 'Dauer 5 Std. · läuft – endet in 3 Std.']
+      }),
+      build: () => '<div class="wf-uvrays"></div><div class="wf-uvsun"></div><div class="wf-ring"></div><div class="wf-ring" style="--dl:-1.6s"></div>'
+    },
+    leiter: {
+      label: 'Leiterseilschwingungen', codes: '79', def: 1, newIcon: true,
+      levels: { 1: [79, 'LEITERSEILSCHWINGUNGEN'] },
+      vorab: null,
+      what: 'Zwei Freileitungsseile schwingen auf und ab, am rechten Rand der Mast. Zeigt das Galoppieren vereister Seile.',
+      colors: [['#cdd6e0', 'Wolkengrau 0,24–0,5'], ['#6e7988', 'Muted']],
+      sample: () => ({
+        desc: 'Durch Eisansatz und Wind kommt es zu Leiterseilschwingungen an Freileitungen.', params: {},
+        tips: ['Störungen im Stromnetz'], time: ['Heute 02:00–09:00', 'Heute 02:00–09:00 Uhr', 'Dauer 7 Std. · läuft – endet in 1 Std.']
+      }),
+      build: (l, t) => cable(t)
+    },
+    none: {
+      label: 'Unbekannt', codes: 'alle übrigen, z. B. 98', def: 1,
+      levels: { 1: [98, 'TEST-WARNUNG'] },
+      vorab: null,
+      what: 'Keine Szene, Warndreieck ohne Bewegung. Gilt für Codes ohne Zuordnung und Testmeldungen.',
+      colors: [],
+      sample: () => ({ desc: 'Dies ist eine Testwarnung.', params: {}, tips: [], time: ['Heute 10:00–11:00', 'Heute 10:00–11:00 Uhr', 'Dauer 1 Std. · läuft – endet in 20 Min.'] }),
+      build: () => ''
+    }
+  };
+  const ORDER = ['gewitter', 'wind', 'starkregen', 'dauerregen', 'schnee', 'verwehung', 'glaette', 'glatteis', 'frost', 'tauwetter', 'nebel', 'hitze', 'uv', 'leiter', 'none'];
+
+  // Szene-HTML fuer eine Warnung. ctx: 'card' | 'pop'
+  function sceneHTML(key, level, ii, advance, ctx, variant) {
+    const sc = SCENES[key];
+    if (!sc || key === 'none') return '';
+    const lv = LV[advance ? 0 : level] || LV[1];
+    const inner = sc.build(level, lv.t, lv.k, addonsFor(ii), variant);
+    const glow = (!advance && level >= 3) ? `<div class="wf-glow${level >= 4 ? ' l4' : ''}"></div>` : '';
+    return `<div class="wf${ctx === 'pop' ? ' pop' : ''}${advance ? ' vorab' : ''}" aria-hidden="true">${glow}${inner}</div>`;
+  }
+
+  // ---------- Icons (Pfade aus iconFor, plus Animationsklassen) ----------
+  function iconSVG(key, color) {
+    const S = (inner) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${color}" aria-hidden="true">${inner}</svg>`;
+    const CLOUD = '<path d="M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z"/>';
+    switch (key) {
+      case 'gewitter': return S('<path d="M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15"/><path class="ic-bolt" d="M12.5 13l-2.5 4h3l-2 4"/>');
+      case 'wind': return S('<path class="ic-flow" d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5"/><path class="ic-flow" style="animation-delay:-0.5s" d="M3 12h15a3 3 0 1 1-3 3"/><path class="ic-flow" style="animation-delay:-1s" d="M3 16h8a2.5 2.5 0 1 1-2.5 2.5"/>');
+      case 'starkregen': case 'dauerregen': {
+        const sp = key === 'starkregen' ? '1s' : '1.6s';
+        return S(CLOUD + `<path class="ic-fall" style="animation-duration:${sp}" d="M8.5 18l-1 2.2"/><path class="ic-fall" style="animation-duration:${sp};animation-delay:-0.4s" d="M12 18l-1 2.2"/><path class="ic-fall" style="animation-duration:${sp};animation-delay:-0.8s" d="M15.5 18l-1 2.2"/>`);
+      }
+      case 'schnee': case 'verwehung': {
+        const st = key === 'verwehung' ? 'animation-name:ic-slide;animation-duration:1.2s;' : 'animation-duration:2.4s;';
+        return S(CLOUD + `<path class="ic-fall" style="${st}" d="M9 18.5h.01"/><path class="ic-fall" style="${st}animation-delay:-0.8s" d="M12 20h.01"/><path class="ic-fall" style="${st}animation-delay:-1.6s" d="M15 18.5h.01"/>`);
+      }
+      case 'frost': return S('<path d="M8.4 14.8V5.6a1.7 1.7 0 0 0-3.4 0v9.2a3.2 3.2 0 1 0 3.4 0Z"/><path class="ic-down" stroke-width="1.6" d="M6.7 16.4V9.2"/><circle cx="6.7" cy="17.5" r="1.2" fill="currentColor" stroke="none"/><g class="ic-spin" style="--icd:20s"><path stroke-width="1.8" d="M16.5 3v12M21.7 6 11.3 12M21.7 12 11.3 6M16.5 12.7l-1.3 1.4M16.5 12.7l1.3 1.4M13.3 10.9l-1.9-.5M13.3 10.9l-.5 1.8M13.3 7.1l-.5-1.8M13.3 7.1l-1.9.5M16.5 5.3l1.3-1.4M16.5 5.3l-1.3-1.4M19.7 7.1l1.9.5M19.7 7.1l.5-1.8M19.7 10.9l.5 1.8M19.7 10.9l1.9-.5"/></g>');
+      case 'glaette': case 'glatteis': return S(`<g class="ic-spin" style="--icd:${key === 'glatteis' ? 16 : 30}s"><path d="${CRYSTAL}"/></g><circle class="ic-glint" cx="18.5" cy="5" r="1.1" fill="currentColor" stroke="none"/>`);
+      case 'hitze': return S('<path d="M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z"/><path class="ic-up" stroke-width="1.8" d="M12 15.6V7.6"/><circle cx="12" cy="17.4" r="1.8" fill="currentColor" stroke="none"/>');
+      case 'nebel': return S('<path class="ic-slide" d="M5 9h14"/><path class="ic-slide" style="animation-delay:-1.6s" d="M4 13h16"/><path class="ic-slide" style="animation-delay:-0.8s" d="M6 17h12"/>');
+      case 'uv': return S('<circle cx="12" cy="12" r="4"/><g class="ic-spin" style="--icd:18s"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>');
+      // neu: Eiszapfen mit Tropfen
+      case 'tauwetter': return S('<path d="M3.5 4h17"/><path d="M6 4l1.4 5.5L8.8 4M10.6 4l1.5 8 1.5-8M15.4 4l1.3 5 1.3-5"/><circle class="ic-drip" cx="12.1" cy="15.4" r="1.25" fill="currentColor" stroke="none"/><path d="M8 20.5h8"/>');
+      // neu: zwei Masten, schwingendes Seil
+      case 'leiter': return S('<path d="M4 4v16M20 4v16M2.5 6h3M18.5 6h3"/><path d="M4 7Q12 15 20 7"><animate attributeName="d" dur="1.8s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" values="M4 7Q12 15 20 7;M4 7Q12 1.5 20 7;M4 7Q12 15 20 7"/></path>');
+      default: return S('<path d="M12 3.5 22 20H2Z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none"/>');
+    }
+  }
+
+  // ---------- Warnung aus Szene + Stufe ----------
+  // Kachel, Icon und Pille je Stufe; Stufe 4 je nach Variante
+  function look(w, grund) {
+    const mode = (!w.advance && w.level >= 4) ? (w.l4 || L4.mode) : 'getoent';
+    if (mode === 'fill') {
+      return { edge: w.color, icon: HELL,
+        tile: `background:${w.color};border:1px solid rgba(240,115,106,0.5);--glow:rgba(240,115,106,0.5)`,
+        pill: `color:${HELL};background:${w.color};border:1px solid rgba(240,115,106,0.5)` };
+    }
+    const c = mode === 'purpur' ? PURPUR : w.color;
+    return { edge: c, icon: lesbar(c, 0.16, 3, grund),
+      tile: `background:${tint(c, 16)};border:1px solid ${tint(c, 24)};--glow:${tint(c, 50)}`,
+      pill: `color:${lesbar(c, 0.12, 4.5, grund)};background:${tint(c, 12)};border:1px solid ${tint(c, 24)}` };
+  }
+
+  function warning(key, level, extra) {
+    const sc = SCENES[key];
+    const advance = level === 0;
+    const [ii, name] = advance ? sc.vorab : sc.levels[level];
+    const color = SONDER_FARBE[ii] || CAP_FARBE[level];
+    const s = sc.sample(advance ? Math.max(...Object.keys(sc.levels).map(Number)) : level);
+    const headline = (!advance && level <= 2 && key !== 'none') ? 'Amtliche WARNUNG vor ' + name : '';
+    return { key, level, advance, ii, name, color, headline, ...s, ...(extra || {}) };
+  }
+  const SHY = (n) => esc(n).replace('LEITERSEILSCHWINGUNGEN', 'LEITERSEIL&shy;SCHWINGUNGEN').replace('SCHNEEVERWEHUNG', 'SCHNEE&shy;VERWEHUNG').replace('VORABINFORMATION ', 'VORAB&shy;INFORMATION ');
+
+  // Warnkarte der Home-View (meteoalarm-karte.yaml)
+  function cardHTML(w) {
+    const lk = look(w, GRUND_KARTE);
+    const cut = w.name.indexOf(' mit ');
+    const short = cut > 0 ? w.name.slice(0, cut) : w.name;
+    const rest = cut > 0 ? w.name.slice(cut + 1) : '';
+    const alarm = !w.advance && w.level >= 3;
+    return `<div class="hcard ha" data-card>
+      ${sceneHTML(w.key, w.level, w.ii, w.advance, 'card', w.heat)}
+      <div class="row">
+        <div class="tile${alarm ? ' alarm' : ''}${w.level >= 4 ? ' l4' : ''}" style="${lk.tile}">${iconSVG(w.key, lk.icon)}</div>
+        <div class="tcol" data-col>
+          <div class="tname" data-m>${SHY(short)}</div>
+          ${rest ? `<div class="tsub" data-m>${esc(rest)}</div>` : ''}
+          <div class="tmeta">
+            <span class="pill" data-m style="${lk.pill}">${KARTE_LABEL[w.level]}</span>
+            <span class="trange" data-m>${esc(w.time[0])}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Block im Popup (nachtblau_dwd_popup)
+  function popupHTML(w) {
+    const lk = look(w, GRUND_POPUP);
+    const pill = (txt, c, txtc) => `<span class="pill" data-m style="color:${txtc};background:${tint(c, 12)};border:1px solid ${tint(c, 24)}">${esc(txt)}</span>`;
+    const live = !/beginnt/.test(w.time[2]);
+    const alarm = !w.advance && w.level >= 3;
+    const params = Object.keys(w.params || {});
+    return `<div class="pblock ha" data-block style="border-left:3px solid ${lk.edge}">
+      ${sceneHTML(w.key, w.level, w.ii, w.advance, 'pop', w.heat)}
+      <div class="phead" data-head>
+        <div class="tile${alarm ? ' alarm' : ''}${w.level >= 4 ? ' l4' : ''}" style="${lk.tile}">${iconSVG(w.key, lk.icon)}</div>
+        <div class="phcol" data-col>
+          <div class="pname" data-m>${SHY(w.name)}</div>
+          ${w.headline ? `<div class="phl" data-m>${esc(w.headline)}</div>` : ''}
+          <div class="ppills"><span class="pill" data-m style="${lk.pill}">${esc(POPUP_LABEL[w.level])}</span>${live ? pill('aktiv', '#4ade80', '#4ade80') : ''}</div>
+        </div>
+      </div>
+      <div class="ptime"><b>${esc(w.time[1])}</b><span>${esc(w.time[2])}</span></div>
+      <div class="pdesc">${esc(w.desc)}</div>
+      ${params.length ? `<div class="pchips">${params.map((k) => `<span class="pchip"><span>${esc(k)}</span><span>${esc(w.params[k])}</span></span>`).join('')}</div>` : ''}
+      ${w.tips && w.tips.length ? `<div class="phint">Hinweis auf</div><ul class="plist">${w.tips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${w.acts && w.acts.length ? `<div class="phint">Handlungsempfehlungen</div><ul class="plist">${w.acts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }
+
+  // Startpunkt der Szene: rechts neben dem breitesten Text, mindestens 64 px (Popup 72 px) Szene
+  function placeZones(root) {
+    root.querySelectorAll('[data-card], [data-block]').forEach((box) => {
+      const fx = box.querySelector(':scope > .wf');
+      if (!fx) return;
+      const b = box.getBoundingClientRect();
+      let right = 0;
+      box.querySelectorAll('[data-col] [data-m]').forEach((el) => {
+        const r = document.createRange(); r.selectNodeContents(el);
+        const rect = r.getBoundingClientRect();
+        if (rect.width) right = Math.max(right, rect.right - b.left);
+      });
+      const isPop = box.hasAttribute('data-block');
+      const minZone = isPop ? 72 : 64;
+      const z = Math.min(Math.max(right + 12, b.width * 0.42), b.width - minZone);
+      fx.style.setProperty('--z', Math.round(z) + 'px');
+      if (isPop) {
+        const head = box.querySelector('[data-head]').getBoundingClientRect();
+        fx.style.setProperty('--zh', Math.round(head.bottom - b.top + 10) + 'px');
+      }
+    });
+  }
+
+  // ---------- Vorschau ----------
+  const state = { scene: 'frost', level: 1, w: 360, heat: 'glut', l4: 'fill' };
+  const $ = (id) => document.getElementById(id);
+  const banner = `<div class="hcard ha banner"><div class="bn-rays" aria-hidden="true"></div><div class="row">
+      <div class="avatar" aria-hidden="true">B</div>
+      <div class="bn-txt"><span class="g">Guten Morgen</span><span class="n">Bewohner</span><span class="g">Willkommen zu Hause</span></div>
+      <div class="bn-wx"><span class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>-2°</span><span class="d">Sa · 14. November</span></div>
+    </div></div>`;
+
+  function levelsOf(key) {
+    const sc = SCENES[key];
+    const ls = Object.keys(sc.levels).map(Number);
+    return sc.vorab ? [0].concat(ls) : ls;
+  }
+  function renderControls() {
+    $('sceneChips').innerHTML = ORDER.map((k) => `<button type="button" class="chip" id="sc-${k}" data-s="${k}" aria-pressed="${k === state.scene}">${SCENES[k].label}</button>`).join('');
+    const av = levelsOf(state.scene);
+    $('levelSeg').innerHTML = [0, 1, 2, 3, 4].map((l) => `<button type="button" id="lv-${l}" data-l="${l}" aria-pressed="${l === state.level}" ${av.includes(l) ? '' : 'disabled'}>${l === 0 ? 'Vorab' : 'Stufe ' + l}</button>`).join('');
+    $('heatSeg').innerHTML = HEAT_ORDER.map((v) => `<button type="button" id="ht-${v}" data-h="${v}" aria-pressed="${v === state.heat}">${HEAT[v].label}</button>`).join('');
+    $('heatRow').hidden = state.scene !== 'hitze';
+    $('l4Row').hidden = state.level !== 4;
+    document.querySelectorAll('#l4Seg button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.m4 === state.l4)));
+  }
+  function renderPreview() {
+    const w = warning(state.scene, state.level, { heat: state.heat, l4: state.l4 });
+    document.querySelectorAll('.phone').forEach((p) => p.style.setProperty('--pw', state.w + 'px'));
+    $('homeScreen').innerHTML = banner + cardHTML(w);
+    $('popBody').innerHTML = popupHTML(w) + `<div class="dlg-foot">Warnregion · Stand 08:17 Uhr · Quelle: DWD</div>`;
+    $('sampleNote').textContent = w.echt
+      ? 'Text, Parameter und Zeitraum aus der laufenden FROST-Warnung (ii 22).'
+      : `Ereignis ii ${w.ii} „${w.name}“ mit Beispieltext. Farbe ${w.color} wie vom DWD geliefert.`;
+    requestAnimationFrame(() => placeZones($('stage')));
+  }
+  $('sceneChips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-s]'); if (!b) return;
+    state.scene = b.dataset.s;
+    const av = levelsOf(state.scene);
+    if (!av.includes(state.level)) state.level = SCENES[state.scene].def;
+    renderControls(); renderPreview();
+  });
+  $('levelSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-l]'); if (!b || b.disabled) return;
+    state.level = Number(b.dataset.l); renderControls(); renderPreview();
+  });
+  $('heatSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-h]'); if (!b) return;
+    state.heat = b.dataset.h; renderControls(); renderPreview();
+  });
+  $('l4Seg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-m4]'); if (!b) return;
+    state.l4 = b.dataset.m4; renderControls(); renderPreview();
+  });
+  $('widthSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-w]'); if (!b) return;
+    state.w = Number(b.dataset.w);
+    document.querySelectorAll('#widthSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    renderPreview();
+  });
+  $('rmToggle').addEventListener('change', (e) => {
+    document.documentElement.classList.toggle('rm', e.target.checked);
+    document.querySelectorAll('svg').forEach((s) => { if (s.pauseAnimations) { e.target.checked ? s.pauseAnimations() : s.unpauseAnimations(); } });
+  });
+
+  // ---------- Raster ----------
+  const GAL = [['gewitter', 1], ['gewitter', 3], ['wind', 2], ['starkregen', 3], ['dauerregen', 2], ['schnee', 2], ['verwehung', 3], ['glaette', 1], ['glatteis', 3], ['frost', 1], ['tauwetter', 2], ['nebel', 1], ['hitze', 1], ['uv', 1], ['leiter', 1], ['none', 1]];
+  function renderGallery() {
+    $('gallery').innerHTML = GAL.map(([k, l]) => {
+      const sc = SCENES[k], w = warning(k, l);
+      const tag = sc.newIcon ? `<span class="tag-new">${sc.newIcon === 'Karte' ? 'Icon neu in der Karte' : 'Icon neu'}</span>` : '';
+      return `<div class="gitem">${cardHTML(w)}
+        <div class="gcap"><h3>${sc.label}${k === 'gewitter' ? (l >= 3 ? ', schwer' : ', einfach') : ''} <span class="mono">ii ${sc.codes}</span>${tag}</h3>
+          <p>${k === 'gewitter' && l < 3 ? 'Ohne Zusätze im Code: nur Wolken und Blitz. ' : ''}${sc.what}</p>
+          <div class="colors">${sc.colors.map(([c, n]) => `<span class="sw-dot"><i style="background:${c}"></i>${n}</span>`).join('')}</div>
+        </div></div>`;
+    }).join('');
+    requestAnimationFrame(() => placeZones($('gallery')));
+  }
+
+  // ---------- Stufe 4 und Hitze im Vergleich ----------
+  function renderExtra() {
+    const mixc = (c, g, a) => g.map((v, i) => v * (1 - a) + c[i] * a);
+    const minG = (fn) => Math.min(...GRUND_KARTE.map((g) => fn(rgbOf(g))));
+    const fmt = (x) => x.toFixed(2).replace('.', ',');
+    const D = rgbOf('#880e4f'), ROT = rgbOf('#f0736a'), P = rgbOf(PURPUR), H = rgbOf(HELL), S3 = rgbOf('#e53935');
+    const m = {
+      s3Icon: minG((g) => kr(S3, mixc(S3, g, 0.16))), s3Tile: minG((g) => kr(mixc(S3, g, 0.16), g)),
+      tile: minG((g) => kr(mixc(D, g, 0.16), g)), tone: minG((g) => kr(D, mixc(D, g, 0.16))),
+      fillTxt: kr(H, D), fillTile: minG((g) => kr(D, g)), rand: minG((g) => kr(mixc(ROT, g, 0.5), g)),
+      pTxt: minG((g) => kr(P, mixc(P, g, 0.12))), pTile: minG((g) => kr(mixc(P, g, 0.16), g))
+    };
+    const items = [
+      ['gewitter', 3, {}, 'Stufe 3 zum Vergleich', `Icon im DWD-Rot auf seiner Tönung ${fmt(m.s3Icon)}:1, die Kachel hebt sich mit ${fmt(m.s3Tile)}:1 von der Hülle ab.`],
+      ['gewitter', 4, { l4: 'getoent' }, 'Stufe 4 bisher', `Kachel zur Hülle ${fmt(m.tile)}:1, der DWD-Ton nur ${fmt(m.tone)}:1, deshalb Icon und Schrift in Hell. Wirkt neutraler als Stufe 3.`],
+      ['gewitter', 4, { l4: 'fill' }, 'Stufe 4 gefüllt · gewählt', `Kachel und Pille deckend in der DWD-Farbe, Schrift und Icon Hell mit ${fmt(m.fillTxt)}:1. Die Fläche allein hebt sich nur mit ${fmt(m.fillTile)}:1 ab, die Kante trägt der Rand in Rot 0,5 (${fmt(m.rand)}:1 zur Hülle), dazu leuchtet die Kachel rot. Gleiches Muster wie kritische Werte im Repo (gefüllt statt getönt), offizielle Farbe bleibt, keine neue Palettenfarbe.`],
+      ['gewitter', 4, { l4: 'purpur' }, 'Stufe 4 heller Purpur', `Heller Ton im DWD-Farbton (${PURPUR}, Farbton 354° statt 356°): Pillenschrift ${fmt(m.pTxt)}:1, Kachel ${fmt(m.pTile)}:1. Abstand zu Stufe 3 ΔE₀₀ 25,5, aber nur 9,2 zu Rosé (Personen) und 8,8 zu Dragonfruit (Owlet). Bräuchte einen neuen Paletteneintrag mit eigener Rolle.`]
+    ];
+    $('l4Gallery').innerHTML = items.map(([k, l, ex, title, txt]) => `<div class="gitem">${cardHTML(warning(k, l, ex))}
+      <div class="gcap"><h3>${title}</h3><p>${txt}</p></div></div>`).join('');
+
+    $('heatGallery').innerHTML = HEAT_ORDER.map((v) => `<div class="gitem">
+      ${cardHTML(warning('hitze', 1, { heat: v }))}${cardHTML(warning('hitze', 3, { heat: v }))}
+      <div class="gcap"><h3>${HEAT[v].label}</h3><p>${HEAT[v].what}</p></div></div>`).join('');
+    requestAnimationFrame(() => { placeZones($('l4Gallery')); placeZones($('heatGallery')); });
+  }
+
+  // ---------- Tabellen ----------
+  function renderTables() {
+    const rows = [0, 1, 2, 3, 4].map((l) => {
+      const c = CAP_FARBE[l];
+      const glow = l >= 4 ? 'Rot 0,24, Puls 2,4 s' : l === 3 ? 'Rot 0,18, Puls 3,5 s' : '–';
+      return `<tr><td><span class="lv" style="background:${c}"></span>${l === 0 ? 'Vorabinformation' : 'Stufe ' + l + ' · ' + KARTE_LABEL[l]}</td>
+        <td class="num">× ${LV[l].k.toFixed(2).replace('.', ',')}</td><td class="num">× ${LV[l].t.toFixed(2).replace('.', ',')}</td>
+        <td>${glow}</td><td>${l >= 3 ? 'ja' : 'nein'}</td><td>${l === 0 ? 'Szene mit 55 % Deckkraft' : l === 4 ? 'Kachel und Pille gefüllt in DWD-Farbe, Schrift Hell, Rand Rot 0,5' : '–'}</td></tr>`;
+    }).join('');
+    $('levelTable').innerHTML = `<thead><tr><th>Stufe</th><th>Dichte</th><th>Tempo</th><th>Schein</th><th>Kachel leuchtet</th><th>Sonst</th></tr></thead><tbody>${rows}</tbody>`;
+
+    const ex = (ii) => { const a = addonsFor(ii); return [a.rain && 'Regen', a.hail && 'Hagel', a.wind && 'Böen'].filter(Boolean).join(', '); };
+    const mrows = EVENTS.map(([ii, name, s]) => `<tr><td class="num">${ii}</td><td>${esc(name)}</td><td>${SCENES[s].label}</td><td>${s === 'gewitter' ? (ex(ii) || '–') : '–'}</td></tr>`).join('');
+    $('mapTable').innerHTML = `<thead><tr><th>ii</th><th>Ereignis (DWD)</th><th>Szene</th><th>Zusätze</th></tr></thead><tbody>${mrows}</tbody>`;
+
+    const scenes = ORDER.filter((k) => k !== 'none').length;
+    const mapped = EVENTS.filter((e) => e[2] !== 'none').length;
+    const newIcons = ORDER.filter((k) => SCENES[k].newIcon).length;
+    $('facts').innerHTML = [
+      [scenes, 'Szenen, dazu Rückfall ohne Bewegung'],
+      [mapped, 'DWD-Ereigniscodes zugeordnet'],
+      ['0', 'neue Palettenfarben'],
+      [newIcons, 'neue Icons vorgeschlagen']
+    ].map(([n, t]) => `<div class="fact"><b>${n}</b><span>${t}</span></div>`).join('');
+  }
+
+  renderControls();
+  renderPreview();
+  renderGallery();
+  renderExtra();
+  renderTables();
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { placeZones(document); }, 120); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => placeZones(document));
+  // sceneByName bleibt fuer den Rueckfall ohne Code; hier nur zur Pruefung in der Konsole
+  window.__warnSzene = { sceneByName, CODE };
+})();
+</script>
