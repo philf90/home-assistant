@@ -795,6 +795,17 @@ einem eigenen Feld `zeit`; das Feld `body` mit Icon, Text und Szene bleibt
 dabei unverändert, button-card ersetzt es nicht und die Szene läuft weiter.
 Neu gezeichnet wird `body` nur, wenn sich die Warnungen ändern oder um
 Mitternacht „Heute“ zu „Gestern“ wird. Die Warnkarte steht nur noch auf Home.
+Die Warnkarte auf Home (`meteoalarm-karte.yaml`) sortiert seit 14.11.2026
+genauso: aktuelle Warnungen nach Stufe, dann Beginn, danach die
+Vorabinformationen (Entwurf `warn-weitere.html`). Die oberste Warnung trägt
+Szene, Pille und Zeitraum wie bisher; jede weitere steht darunter als Zeile
+mit Icon-Kachel 30 px in ihrer Farbe (Tönung 0,16, Rand 0,24, Stufe 4
+gefüllt), Name, Pille und Zeitraum, höchstens drei, danach „+N weitere“.
+Vorabinformationen nehmen die CAP-Vorabfarbe, die Pille „Vorabinformation“
+und, oben, die abgeschwächte Szene ohne Alarmleuchten. Bis dahin zeigte die
+Karte `warning_1` in der Reihenfolge des DWD-Servers und den Rest als
+„+N weitere“; eine Unwetterwarnung konnte so hinter einer Stufe-1-Warnung
+verschwinden.
 Die Pollenkachel daneben folgt demselben Muster (Entwurf
 `pollen-kachel.html`, Bibliothek `nachtblau_pollen_fx`): höchste Stufe von
 heute als Pille, alle belasteten Arten, Szenen im Wechsel und statt der

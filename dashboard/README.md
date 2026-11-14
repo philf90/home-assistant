@@ -51,6 +51,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`wetter-view.yaml`](klima/wetter-view.yaml) | view | Wetter – komplette Ansicht | button-card, card-mod, decluttering-card | `sensor.warnregion_*` | aktiv |
 | [`home-pollen.html`](klima/entwuerfe/home-pollen.html) | entwurf | Pollen auf Home – Pollenflug auf der Home-View, bisher und zwei Varianten | – | – | Entwurf zu `pollenflug-karte-v2.yaml`, `warnlage-templates.yaml` |
 | [`pollen-kachel.html`](klima/entwuerfe/pollen-kachel.html) | entwurf | Pollen-Kachel – Pollenflug im Muster der Warnlage | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml` |
+| [`warn-weitere.html`](klima/entwuerfe/warn-weitere.html) | entwurf | Weitere Warnungen – Warnkarte auf Home mit sortierter Liste | – | `sensor.warnregion_*` | Entwurf zu `meteoalarm-karte.yaml`, `warnlage-templates.yaml` |
 | [`warnlage-kachel.html`](klima/entwuerfe/warnlage-kachel.html) | entwurf | Warnlage-Kachel – konsolidierte DWD-Warnungen mit Szenen im Wechsel | – | – | Entwurf zu `wetter-view.yaml`, `warnlage-templates.yaml` |
 | [`warnung-animiert.html`](klima/entwuerfe/warnung-animiert.html) | entwurf | DWD-Warnszenen – Entwurf, Varianten und Zuordnung der Ereigniscodes | – | – | Entwurf zu `warnlage-templates.yaml`, `meteoalarm-karte.yaml` |
 | [`wetter-animiert.html`](klima/entwuerfe/wetter-animiert.html) | entwurf | Wetter-Animationen – Entwurf und Kontrastrechnung | – | – | Entwurf zu `wetter-templates.yaml` |
