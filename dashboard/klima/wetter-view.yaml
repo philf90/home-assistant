@@ -138,8 +138,11 @@ sections:
             square: false
             card_mod:
               style: |
-                /* Schmale Bildschirme: Warnung und Pollen untereinander, damit die Texte ganz passen */
-                @media (max-width: 380px) {
+                /* Handys: Warnung und Pollen untereinander, damit die Texte ganz passen.
+                   Bis 14.11.2026 nur unter 380 px, also nur Galaxy S25 (360 px); das
+                   iPhone 17 Pro (402 px) bekam zwei Kacheln mit rund 88 px Textbreite,
+                   und "Warnung Stufe 1" endete auf "...". Jetzt beide Handys. */
+                @media (max-width: 440px) {
                   :host { --grid-card-column-count: 1 !important; }
                 }
             cards:
@@ -168,6 +171,8 @@ sections:
                     body:
                       - width: 100%
                       - min-width: 0
+                      # button-card setzt class="ellipsis" (nowrap): Umbruch erlauben
+                      - white-space: normal
                 custom_fields:
                   body: |
                     [[[
@@ -180,22 +185,25 @@ sections:
                       const s = states['sensor.warnregion_aktuelle_warnstufe'];
                       const v = states['sensor.warnregion_vorwarnstufe'];
                       const w = s ? parseInt(s.state) : NaN, vw = v ? parseInt(v.state) : NaN;
-                      const name1 = (x) => x && x.attributes ? (x.attributes.warning_1_name || (x.attributes.warning_1 || {}).event || '') : '';
+                      // Kurzform wie in der Warnkarte: "SCHWERES GEWITTER mit ORKANBOEN, ..." -> "SCHWERES GEWITTER";
+                      // den vollen Namen zeigt das Popup (die Kachel ist auf dem Handy nur 306-348 px breit)
+                      const kurz = (t) => { const i = String(t).indexOf(' mit '); return i > 0 ? String(t).slice(0, i) : String(t); };
+                      const name1 = (x) => x && x.attributes ? kurz(x.attributes.warning_1_name || (x.attributes.warning_1 || {}).event || '') : '';
                       const anzahl = s && s.attributes ? (parseInt(s.attributes.warning_count) || 0) : 0;
                       // DWD schreibt Schluesselwoerter gross ("SCHWERES GEWITTER mit ORKANBOEN") -> "Schweres Gewitter mit Orkanboen"
                       const cap = (t) => String(t || '').split(' ').map((x) => (x.length > 1 && x === x.toUpperCase() && /[A-ZÄÖÜ]/.test(x)) ? x.charAt(0) + x.slice(1).toLowerCase() : x).join(' ');
                       let k;
                       if (isNaN(w)) k = [iWarn, 'Keine Daten', 'DWD-Warnung', muted];
                       else if (w > 0) k = [iWarn, `Warnung Stufe ${w}`, (cap(name1(s)) || 'DWD-Warnung') + (anzahl > 1 ? ` · +${anzahl - 1} weitere` : ''), w >= 3 ? red : amber];
-                      else if (vw > 0) k = [iWarn, `Vorabinfo Stufe ${vw}`, cap(name1(v)) || 'DWD-Vorabinformation', amber];
-                      else k = [iSchild, 'Keine Warnung', 'DWD-Wetterwarnung', green];
+                      else if (vw > 0) k = [iWarn, `Vorabinfo Stufe ${vw}`, cap(name1(v)) || 'DWD-Vorab&shy;information', amber];
+                      else k = [iSchild, 'Keine Warnung', 'DWD-Wetter&shy;warnung', green];
                       const [icon, wert, text, c] = k;
                       return `
                         <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
                           <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${icon(c)}</div>
                           <div style="min-width:0;text-align:left;">
-                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
-                            <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${wert}</div>
+                            <div style="font-size:12px;color:${muted};margin-top:2px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${text}</div>
                           </div>
                         </div>`;
                     ]]]
@@ -261,8 +269,8 @@ sections:
                         <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
                           <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};">${icon(c)}</div>
                           <div style="min-width:0;text-align:left;">
-                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${wert}</div>
-                            <div style="font-size:12px;color:${muted};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${text}</div>
+                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${wert}</div>
+                            <div style="font-size:12px;color:${muted};margin-top:2px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${text}</div>
                           </div>
                         </div>`;
                     ]]]

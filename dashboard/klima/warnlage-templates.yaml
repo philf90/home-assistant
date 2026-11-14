@@ -674,7 +674,7 @@ button_card_templates:
     variables:
       wfx: |
         [[[
-          const VERSION = 1, alt = window.__nachtblauWarnFx;
+          const VERSION = 2, alt = window.__nachtblauWarnFx;
           if (alt && alt.version === VERSION) return alt;
 
           const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -789,10 +789,16 @@ button_card_templates:
           const blitz = '<div class="wf-flash"></div><svg class="wf-bolt" viewBox="0 0 18 46" fill="none"><path d="M11 0 4 20h7L5 46" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
           const nebel = (t) => [[6, 30, 22, 0.1], [32, 34, 28, 0.5], [60, 30, 20, 0.8], [80, 26, 26, 0.3]]
             .map(([y, hh, d, p]) => `<div class="wf-fog" style="--y:${y}%;--h:${hh}%;--d:${(d / t).toFixed(1)}s;--p:${p}"></div>`).join('');
-          // Eiskristall: sechs Arme mit Seitenzweigen, waechst per stroke-dash
+          // Eiskristall: Die sechs Arme wachsen von der Mitte nach aussen, die
+          // Seitenzweige erst danach; jedes Teil ist unsichtbar, bis es waechst.
+          // (Bis VERSION 1 lief jeder Arm von Spitze zu Spitze und die Zweige
+          // gleichzeitig; im Wachsen sah der Kristall aus wie ein Ladekreisel.)
+          const ARME = 'M12 12V2.5M12 12V21.5M12 12 20.23 7.25M12 12 3.77 16.75M12 12 20.23 16.75M12 12 3.77 7.25';
+          const ZWEIGE = 'M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
+          const teile = (pfad, cls) => pfad.split('M').filter(Boolean).map((seg) => `<path class="${cls}" pathLength="1" d="M${seg}"/>`).join('');
           const KRISTALL = 'M12 2.5V21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';
           const kristall = (x, y, s, d, p) => `<svg class="wf-cr" style="--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}" viewBox="0 0 24 24">`
-            + KRISTALL.split('M').filter(Boolean).map((seg) => `<path pathLength="1" d="M${seg}"/>`).join('') + '</svg>';
+            + teile(ARME, 'arm') + teile(ZWEIGE, 'zweig') + '</svg>';
           const funkeln = (n, oben, hoehe, t) => {
             let h = '';
             for (let i = 0; i < n; i++) {
@@ -984,8 +990,12 @@ button_card_templates:
       @keyframes wf-haze { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
       .wf-cold { position: absolute; right: -40%; top: -55%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-blau18), rgba(127, 179, 213, 0) 65%); }
       .wf-cr { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); overflow: visible; }
-      .wf-cr path { fill: none; stroke: var(--wf-w50); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: wf-grow var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
-      @keyframes wf-grow { 0% { stroke-dashoffset: 1; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+      .wf-cr path { fill: none; stroke: var(--wf-w50); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; animation: wf-grow-arm var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }
+      .wf-cr path.zweig { animation-name: wf-grow-zweig; }
+      /* Arme 0-28 %, Zweige 28-42 %, stehen bis 82 %, tauen bis 100 % weg. Unsichtbar,
+         solange nichts gezeichnet ist: runde Enden zeigten sonst einzelne Punkte. */
+      @keyframes wf-grow-arm { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { stroke-dashoffset: 0.96; opacity: 1; } 28% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+      @keyframes wf-grow-zweig { 0%, 28% { stroke-dashoffset: 1; opacity: 0; } 29% { stroke-dashoffset: 0.93; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
       .wf-spk { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); background: var(--wf-w50); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: wf-tw var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }
       @keyframes wf-tw { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
       .wf-rime { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(0deg, var(--wf-w12), rgba(255, 255, 255, 0)); }
