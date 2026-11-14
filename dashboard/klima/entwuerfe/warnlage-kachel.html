@@ -1,0 +1,383 @@
+<!--
+============================================================================
+Warnlage-Kachel – konsolidierte DWD-Warnungen mit Szenen im Wechsel
+----------------------------------------------------------------------------
+Art:           entwurf
+Bereich:       klima
+Status:        entwurf
+Gehoert-zu:    wetter-view.yaml, warnlage-templates.yaml
+Platzhalter:   keine
+============================================================================
+Vorschau der Warnungskachel in "Warnlage & Pollen" (Wetter-View): bisher und
+neu, sechs Faelle, drei Varianten fuer mehrere Szenen; Entscheidungen vom
+14.11.2026. Die Szenen-Bibliothek ist als Stand VERSION 2 eingebettet.
+Im Browser oeffnen; Schriften kommen von Google Fonts.
+-->
+<title>Warnlage-Kachel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Entwurfsblatt. Oben bisher und neu nebeneinander in Handybreite, darunter alle Fälle
+   in der gewählten Variante, dann Regeln und offene Entscheidungen. Einheitlich dunkel wie das Dashboard. */
+:root {
+  color-scheme: dark;
+  --bg: #10151d; --page: #171d29; --hull-top: #1b2231; --hull-bot: #171d29; --raised: #222b3c;
+  --text: #f2f5f8; --title: #e7ecf3; --label: #b4c0cf; --soft: #8794a5; --muted: #6e7988;
+  --line: rgba(255, 255, 255, 0.06); --edge: rgba(255, 255, 255, 0.05);
+  --accent: #7fb3d5; --green: #a6d49e; --amber: #e6b566; --red: #f0736a;
+  --f-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --f-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --f-ha: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--text); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 52px; }
+h1, h2, h3 { font-family: var(--f-display); color: var(--title); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.08; }
+h2 { font-size: 24px; }
+h3 { font-size: 16px; }
+p { margin: 0; max-width: 70ch; }
+code { font-family: var(--f-mono); font-size: 0.86em; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; color: var(--label); }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+.lead { color: var(--label); font-size: 17px; }
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec > header { display: flex; flex-direction: column; gap: 8px; }
+.sec > header p { color: var(--label); }
+.controls { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, var(--hull-top), var(--hull-bot) 55%); }
+.ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ctl-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); min-width: 72px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 280px; }
+.seg button { font: 500 13px/1 var(--f-body); color: var(--label); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+.seg button:hover { background: var(--raised); color: var(--text); }
+.seg button[aria-pressed="true"] { background: rgba(127, 179, 213, 0.12); border-color: rgba(127, 179, 213, 0.5); color: var(--text); }
+.seg button:focus-visible, .toggle input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--label); cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle .sw { width: 34px; height: 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); position: relative; flex: none; }
+.toggle .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--soft); transition: transform 0.2s; }
+.toggle input:checked + .sw { background: rgba(127, 179, 213, 0.5); }
+.toggle input:checked + .sw::after { transform: translateX(14px); background: var(--text); }
+.stage { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start; }
+.device { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; min-width: 0; }
+.device-cap { font-size: 12.5px; color: var(--soft); text-align: center; }
+.device-cap b { color: var(--label); font-weight: 600; }
+.phone-scroll { max-width: 100%; overflow-x: auto; border-radius: 30px; }
+.phone { width: var(--pw, 360px); background: var(--page); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 30px; padding: 14px 8px 18px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8); }
+.note { font-size: 12.5px; color: var(--soft); max-width: 400px; text-align: center; }
+
+/* ---------- Mockup Warnlage & Pollen (wetter-view.yaml) ---------- */
+.ha { font-family: var(--f-ha); color: var(--text); text-align: left; }
+.hull { border-radius: 22px; border: 1px solid var(--edge); background: linear-gradient(180deg, var(--hull-top) 0%, var(--hull-bot) 55%); box-shadow: 0 18px 44px -22px rgba(0, 0, 0, 0.7); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.hhead { display: flex; align-items: center; gap: 14px; padding: 2px 2px 8px; }
+.hicon { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex: none; }
+.hicon svg { width: 23px; height: 23px; display: block; }
+.hname { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.hlabel { font-size: 12.5px; color: var(--soft); margin-top: 2px; }
+.tiles { display: flex; flex-direction: column; gap: 8px; }
+.tile { position: relative; overflow: hidden; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.trow { display: flex; align-items: center; gap: 12px; position: relative; }
+.ticon { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+.ticon > svg { width: 22px; height: 22px; display: block; }
+.tcol { min-width: 0; flex: 0 1 auto; display: flex; flex-direction: column; gap: 4px; }
+.tcol.voll { flex: 1 1 auto; }
+.ttitle { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+.tsub { font-size: 12px; color: var(--soft); line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tpills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pill { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; line-height: 1; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.pill.neutral { color: var(--label); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.names { font-size: 12.5px; line-height: 1.35; color: var(--soft); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.names .n { color: var(--soft); }
+.names.cyc .n { animation-duration: var(--P); animation-iteration-count: infinite; animation-timing-function: linear; }
+/* Szene in der Kachel: Raender der Kachel (12px 14px) statt der Karte */
+.tile .wf-slot { margin: -12px -14px -4px 0; flex: 1 0 64px; min-width: 64px; align-self: stretch; }
+.wl-layer { position: absolute; inset: 0; }
+.wl-cyc .wl-layer { opacity: 0; animation-duration: var(--P); animation-iteration-count: infinite; animation-timing-function: linear; }
+.wl-dots { position: absolute; right: 12px; bottom: 6px; display: flex; gap: 4px; z-index: 2; }
+.wl-dots i { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, 0.24); animation-duration: var(--P); animation-iteration-count: infinite; animation-timing-function: linear; }
+.wl-split .wl-layer { -webkit-mask-image: linear-gradient(90deg, transparent, #cdd6e0 10px, #cdd6e0 calc(100% - 10px), transparent); mask-image: linear-gradient(90deg, transparent, #cdd6e0 10px, #cdd6e0 calc(100% - 10px), transparent); }
+/* Zeitleiste der naechsten 24 Stunden */
+.tl { display: flex; flex-direction: column; gap: 3px; }
+.tl-lanes { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.tl-lane { position: relative; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.06); }
+.tl-seg { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.tl-now { position: absolute; top: -2px; bottom: -2px; left: 0; width: 2px; border-radius: 1px; background: var(--label); }
+.tl-ticks { position: relative; height: 14px; font-size: 11px; color: var(--label); }
+.tl-ticks span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.tl-ticks span:first-child { transform: none; }
+.tl-ticks span:last-child { transform: translateX(-100%); }
+
+/* Raster der Faelle */
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 22px 20px; }
+.gitem { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gitem .hull { width: min(386px, 100%); }
+.gcap { max-width: 386px; padding: 0 4px; display: flex; flex-direction: column; gap: 4px; }
+.gcap p { font-size: 13.5px; color: var(--label); }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.rule { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: rgba(255, 255, 255, 0.028); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rule ul { margin: 0; padding-left: 18px; color: var(--label); font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.rule.open { border-color: rgba(230, 181, 102, 0.24); background: rgba(230, 181, 102, 0.04); }
+.rule.open h3 { color: var(--amber); }
+.variants { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.variant { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, 0.02); }
+.variant .tag { font: 600 10.5px/1 var(--f-body); letter-spacing: 0.04em; text-transform: uppercase; color: var(--green); border: 1px solid rgba(166, 212, 158, 0.5); border-radius: 999px; padding: 3px 6px; align-self: flex-start; }
+.variant p { font-size: 14px; color: var(--label); }
+footer.src { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: var(--soft); }
+@media (prefers-reduced-motion: reduce) { .wl-layer, .wl-dots i, .names .n { animation-play-state: paused !important; } }
+.rm .wl-layer, .rm .wl-dots i, .rm .names .n, .rm .wf *, .rm .wf *::before, .rm .wf *::after, .rm .wf-ic *, .rm .wf-alarm { animation-play-state: paused !important; }
+</style>
+<style id="wfxcss"></style>
+<style id="cyccss"></style>
+
+<div class="wrap">
+  <header class="sec">
+    <div class="eyebrow">Entwurf · Klima · Wetter-View</div>
+    <h1>Warnlage konsolidiert</h1>
+    <p class="lead">Die Warnungskachel in „Warnlage &amp; Pollen“ fasst künftig alle Warnungen beider DWD-Sensoren zusammen, aktuelle Warnungen und Vorabinformationen. Sie zeigt die höchste Stufe, alle Ereignisse, eine Zeitleiste der nächsten 24 Stunden und eine kombinierte Szene aus den Animationen der Warnkarte.</p>
+  </header>
+
+  <section class="sec" id="vorschau">
+    <header>
+      <h2>Bisher und neu</h2>
+      <p>Fall und Variante wählen. Links die Kachel, wie sie heute in der Wetter-View steht, rechts der Vorschlag. Die Szenen kommen unverändert aus der Bibliothek <code>nachtblau_warn_fx</code> der Instanz.</p>
+    </header>
+    <div class="controls">
+      <div class="ctl-row"><span class="ctl-label">Fall</span><div class="seg" id="caseSeg" role="group" aria-label="Fall"></div></div>
+      <div class="ctl-row"><span class="ctl-label">Szene</span><div class="seg" id="varSeg" role="group" aria-label="Variante der Szene"></div></div>
+      <div class="ctl-row">
+        <span class="ctl-label">Gerät</span>
+        <div class="seg" id="wSeg" role="group" aria-label="Breite">
+          <button type="button" id="w360" data-w="360" aria-pressed="true">Galaxy S25 · 360</button>
+          <button type="button" id="w402" data-w="402" aria-pressed="false">iPhone 17 Pro · 402</button>
+        </div>
+        <label class="toggle" for="rm"><input type="checkbox" id="rm"><span class="sw"></span>Bewegung reduzieren</label>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="device"><div class="device-cap"><b>Bisher</b> · eine Warnung, flach</div><div class="phone-scroll"><div class="phone" id="pAlt"></div></div></div>
+      <div class="device"><div class="device-cap"><b>Neu</b> · alle Warnungen, Szene und Zeitleiste</div><div class="phone-scroll"><div class="phone" id="pNeu"></div></div><div class="note" id="caseNote"></div></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <header>
+      <h2>Drei Wege, mehrere Szenen zu kombinieren</h2>
+      <p>Bei einer Warnung zeigt die Kachel einfach deren Szene. Erst ab zwei Warnungen unterscheiden sich die Varianten.</p>
+    </header>
+    <div class="variants">
+      <div class="variant"><span class="tag">Empfehlung</span><h3>Im Wechsel</h3><p>Jede Szene steht 5 Sekunden, dann blendet die nächste über. Punkte unten rechts zeigen, wie viele es sind, und im Text leuchtet das gerade gezeigte Ereignis auf. Jede Szene bleibt so gut lesbar wie in der Warnkarte, auch bei vier Warnungen.</p></div>
+      <div class="variant"><h3>Überlagert</h3><p>Alle Szenen liegen übereinander. Bei zwei ruhigen Szenen wie Frost und Glätte wirkt das stimmig, bei Gewitter, Regen und Wind wird es unruhig, und keine Szene ist mehr klar erkennbar.</p></div>
+      <div class="variant"><h3>Nebeneinander</h3><p>Die Fläche wird in Streifen geteilt, je Warnung einer. Alles ist gleichzeitig zu sehen, aber jeder Streifen ist nur 25 bis 40 px breit, und die Szenen werden sehr klein.</p></div>
+    </div>
+  </section>
+
+  <section class="sec" id="faelle">
+    <header>
+      <h2>Alle Fälle</h2>
+      <p>Neue Kachel in der gewählten Variante bei 402 px. Fall 1 ist die Frostwarnung von heute, die anderen sind Beispiele, die genauso aus den DWD-Sensoren kommen würden.</p>
+    </header>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="sec">
+    <header><h2>Was die Kachel zusammenfasst</h2></header>
+    <div class="rules">
+      <div class="rule"><h3>Inhalt</h3><ul>
+        <li><b>Titel:</b> bei einer Warnung deren Name in Kurzform („Frost“, „Schweres Gewitter“), sonst „2 Warnungen“. Ob es eine Vorabinformation ist, sagt die Pille.</li>
+        <li><b>Pille</b> mit der höchsten Stufe in DWD-Farbe, dazu „+1 Vorabinfo“ neutral, wenn eine vorliegt.</li>
+        <li><b>Ereignisse:</b> alle Namen, höchste Stufe zuerst, dann frühester Beginn. Bei einer Warnung steht stattdessen der Zeitraum da.</li>
+        <li><b>Zeitleiste:</b> je Warnung eine Spur über die nächsten 24 Stunden, Vorabinformationen schraffiert wie beim DWD.</li>
+      </ul></div>
+      <div class="rule"><h3>Darstellung</h3><ul>
+        <li>Szenen, Icons und Farben aus <code>nachtblau_warn_fx</code>, also genau wie in Warnkarte und Popup. Keine neue Palettenfarbe.</li>
+        <li>Icon-Kachel und Pille in der DWD-Farbe der höchsten Warnung, Stufe 4 gefüllt. Der Grund der Kachel bleibt wie bisher Amber, ab Stufe 3 Rot.</li>
+        <li>Text steht nie auf der Szene. Die Szene beginnt am Ende der Textspalte und hat mindestens 64 px.</li>
+        <li>„Bewegung reduzieren“ zeigt die Szene der höchsten Warnung als Standbild, ohne Wechsel.</li>
+      </ul></div>
+      <div class="rule"><h3>Entschieden (14.11.2026)</h3><ul>
+        <li>Variante: im Wechsel.</li>
+        <li>Zeitleiste bleibt.</li>
+        <li>Die Warnkarte entfällt in der Wetter-View, weil sie die erste Warnung wiederholt hätte. Auf Home bleibt sie.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer class="src">Ereigniscodes, Stufen und Farben laut CAP-DWD-Profil 2.1.13 (Kap. 3.1, 3.5); Vorabinformation „schraffiert rot“ wie in der DWD-Internetdarstellung. Zeit in der Vorschau fest auf Sa 14.11., 13:00 Uhr. Namen und Region anonymisiert.</footer>
+</div>
+
+<script id="wfxsrc" type="application/json">{"wfx": "\n  const VERSION = 2, alt = window.__nachtblauWarnFx;\n  if (alt && alt.version === VERSION) return alt;\n\n  const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);\n  // Feste Pseudo-Zufallswerte: gleicher Zustand -> gleicher HTML-Text\n  const R = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };\n  const f2 = (n) => n.toFixed(2);\n\n  // ---------- Ereigniscodes -> Szene (CAP-DWD-Profil 2.1.13) ----------\n  const SZENE = {};\n  const setz = (s, codes) => codes.forEach((c) => { SZENE[c] = s; });\n  setz('gewitter', [31, 33, 34, 36, 38, 40, 41, 42, 44, 45, 46, 48, 49, 90, 91, 92, 93, 95, 96]);\n  setz('wind', [11, 12, 13, 51, 52, 53, 54, 55, 56, 57, 58]);\n  setz('nebel', [59]);\n  setz('starkregen', [61, 62, 66]);\n  setz('dauerregen', [63, 64, 65]);\n  setz('schnee', [70, 71, 72, 73]);\n  setz('verwehung', [74, 75, 76]);\n  setz('leiter', [79]);\n  setz('frost', [22, 82]);\n  setz('glaette', [84, 87]);\n  setz('glatteis', [85, 86]);\n  setz('tauwetter', [88, 89]);\n  setz('uv', [246]);\n  setz('hitze', [247, 248]);\n  const GRP_WIND = [33, 36, 38, 40, 41, 44, 45, 48, 49, 96];\n  const GRP_RAIN = [34, 36, 38, 42, 44, 45, 46, 48, 49, 95, 96];\n  const GRP_HAIL = [38, 46, 48, 49, 95, 96];\n\n  // Rueckfall ohne Code: Namenserkennung, Gewitter zuerst\n  const nachName = (n) => {\n    const s = String(n || '').toLowerCase();\n    if (/(gewitter|blitz)/.test(s)) return 'gewitter';\n    if (/verwehung/.test(s)) return 'verwehung';\n    if (/(wind|böen|boen|sturm|orkan)/.test(s)) return 'wind';\n    if (/dauerregen|ergiebig/.test(s)) return 'dauerregen';\n    if (/regen/.test(s)) return 'starkregen';\n    if (/schnee/.test(s)) return 'schnee';\n    if (/frost/.test(s)) return 'frost';\n    if (/glatteis/.test(s)) return 'glatteis';\n    if (/(glätte|glaette)/.test(s)) return 'glaette';\n    if (/tauwetter/.test(s)) return 'tauwetter';\n    if (/leiterseil/.test(s)) return 'leiter';\n    if (/(hitze|wärme|waerme)/.test(s)) return 'hitze';\n    if (/(uv|sonne)/.test(s)) return 'uv';\n    if (/nebel/.test(s)) return 'nebel';\n    return 'keine';\n  };\n  const szene = (ii, name) => SZENE[parseInt(ii)] || nachName(name);\n\n  // \"SCHWERES GEWITTER mit ORKANBÖEN, ...\" -> Titel und Zusatzzeile\n  const kurz = (name) => {\n    const n = String(name || ''), i = n.indexOf(' mit ');\n    return i > 0 ? { titel: n.slice(0, i), zusatz: n.slice(i + 1) } : { titel: n, zusatz: '' };\n  };\n  const trenn = (html) => String(html || '')\n    .replace('LEITERSEILSCHWINGUNGEN', 'LEITERSEIL&shy;SCHWINGUNGEN')\n    .replace('SCHNEEVERWEHUNG', 'SCHNEE&shy;VERWEHUNG')\n    .replace('VORABINFORMATION', 'VORAB&shy;INFORMATION');\n\n  // Stufe -> Dichte k und Tempo t (Vorabinformation: 0)\n  const LV = { 0: { k: 0.8, t: 0.7 }, 1: { k: 1, t: 1 }, 2: { k: 1.35, t: 1.15 }, 3: { k: 1.75, t: 1.3 }, 4: { k: 2.2, t: 1.5 } };\n\n  // ---------- Bausteine ----------\n  const wolken = (dunkel, n) => [[8, 4, 62, 0.24, 9, 0.1], [46, 18, 50, 0.24, 11, 0.6], [24, 30, 44, 0.18, 10, 0.35]].slice(0, n)\n    .map(([x, y, w, o, d, p]) => `<div class=\"wf-cl${dunkel ? ' dunkel' : ''}\" style=\"--x:${x}%;--y:${y}%;--w:${w}px;--o:${dunkel ? o : o / 2};--d:${d}s;--p:${p}\"><\/div>`).join('');\n  const tropfen = (n, basis, len, t) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const x = ((i + R(i, 1) * 0.8) / n * 100).toFixed(1);\n      const d = (basis * (0.85 + 0.3 * R(i, 2)) / t).toFixed(2);\n      h += `<i class=\"wf-dr\" style=\"--x:${x}%;--d:${d}s;--p:${f2(R(i, 3))};--len:${len}px;--a:${i % 3 === 0 ? 0.5 : 0.24}\"><\/i>`;\n    }\n    return h;\n  };\n  const flocken = (n, basis, gr, t, hagel) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const x = ((i + R(i, 21) * 0.8) / n * 100).toFixed(1);\n      const d = (basis * (0.8 + 0.4 * R(i, 22)) / t).toFixed(2);\n      h += `<i class=\"wf-fl${hagel ? ' hagel' : ''}\" style=\"--x:${x}%;--d:${d}s;--p:${f2(R(i, 23))};--s:${gr}px;--sw:${(2 + R(i, 24) * 2).toFixed(1)}s\"><\/i>`;\n    }\n    return h;\n  };\n  const fall = (inner, neig) => `<div class=\"wf-fall\" style=\"--neig:${neig}deg\">${inner}<\/div>`;\n  const ringe = (n, t, weiss, unten) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      h += `<i class=\"wf-sp${weiss ? ' weiss' : ''}\" style=\"--x:${(12 + (i + R(i, 31) * 0.7) / n * 80).toFixed(1)}%;--d:${(1.1 / t * (0.8 + 0.4 * R(i, 32))).toFixed(2)}s;--p:${f2(R(i, 33))};${unten ? '--b:' + unten + ';' : ''}\"><\/i>`;\n    }\n    return h;\n  };\n  const schlieren = (n, basis, len, t, boe, weiss) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const y = (14 + (i + R(i, 4) * 0.9) / n * 72).toFixed(1);\n      const d = (basis * (0.8 + 0.4 * R(i, 5)) / t).toFixed(2);\n      const w = Math.round(len * (0.7 + 0.6 * R(i, 7)));\n      h += `<div class=\"wf-dw\" style=\"--y:${y}%;--w:${w}px;--d:${d}s;--p:${f2(R(i, 6))}\"><i class=\"wf-st${boe ? ' boe' : ''}${weiss ? ' weiss' : ''}\" style=\"--a:${i % 2 === 0 ? 0.5 : 0.24};--wv:${(1.4 + R(i, 8) * 1.6).toFixed(2)}s\"><\/i><\/div>`;\n    }\n    return h;\n  };\n  const treiben = (n, basis, t) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      const y = (8 + (i + R(i, 41) * 0.9) / n * 80).toFixed(1);\n      const d = (basis * (0.75 + 0.5 * R(i, 42)) / t).toFixed(2);\n      const s = R(i, 43) > 0.6 ? 3.5 : 2.5;\n      h += `<div class=\"wf-dw\" style=\"--y:${y}%;--w:${s}px;--d:${d}s;--p:${f2(R(i, 44))}\"><i class=\"wf-bf\" style=\"--s:${s}px;--wv:${(0.8 + R(i, 45)).toFixed(2)}s\"><\/i><\/div>`;\n    }\n    return h;\n  };\n  const blitz = '<div class=\"wf-flash\"><\/div><svg class=\"wf-bolt\" viewBox=\"0 0 18 46\" fill=\"none\"><path d=\"M11 0 4 20h7L5 46\" stroke-width=\"1.6\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/><\/svg>';\n  const nebel = (t) => [[6, 30, 22, 0.1], [32, 34, 28, 0.5], [60, 30, 20, 0.8], [80, 26, 26, 0.3]]\n    .map(([y, hh, d, p]) => `<div class=\"wf-fog\" style=\"--y:${y}%;--h:${hh}%;--d:${(d / t).toFixed(1)}s;--p:${p}\"><\/div>`).join('');\n  // Eiskristall: Die sechs Arme wachsen von der Mitte nach aussen, die\n  // Seitenzweige erst danach; jedes Teil ist unsichtbar, bis es waechst.\n  // (Bis VERSION 1 lief jeder Arm von Spitze zu Spitze und die Zweige\n  // gleichzeitig; im Wachsen sah der Kristall aus wie ein Ladekreisel.)\n  const ARME = 'M12 12V2.5M12 12V21.5M12 12 20.23 7.25M12 12 3.77 16.75M12 12 20.23 16.75M12 12 3.77 7.25';\n  const ZWEIGE = 'M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';\n  const teile = (pfad, cls) => pfad.split('M').filter(Boolean).map((seg) => `<path class=\"${cls}\" pathLength=\"1\" d=\"M${seg}\"/>`).join('');\n  const KRISTALL = 'M12 2.5V21.5M20.23 7.25 3.77 16.75M20.23 16.75 3.77 7.25M12 17.7l-2.12 2.12M12 17.7l2.12 2.12M7.06 14.85l-2.9-.78M7.06 14.85l-.78 2.9M7.06 9.15l-.78-2.9M7.06 9.15l-2.9.78M12 6.3l2.12-2.12M12 6.3l-2.12-2.12M16.94 9.15l2.9.78M16.94 9.15l.78-2.9M16.94 14.85l.78 2.9M16.94 14.85l2.9-.78';\n  const kristall = (x, y, s, d, p) => `<svg class=\"wf-cr\" style=\"--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--p:${p}\" viewBox=\"0 0 24 24\">`\n    + teile(ARME, 'arm') + teile(ZWEIGE, 'zweig') + '<\/svg>';\n  const funkeln = (n, oben, hoehe, t) => {\n    let h = '';\n    for (let i = 0; i < n; i++) {\n      h += `<i class=\"wf-spk\" style=\"--x:${(30 + R(i, 51) * 64).toFixed(1)}%;--y:${(oben + R(i, 52) * hoehe).toFixed(1)}%;--s:${R(i, 53) > 0.6 ? 7 : 5}px;--d:${((1.8 + R(i, 54) * 2.2) / t).toFixed(2)}s;--p:${f2(R(i, 55))}\"><\/i>`;\n    }\n    return h;\n  };\n  const zapfen = (n, t) => {\n    let h = '<div class=\"wf-icebar\"><\/div>';\n    for (let i = 0; i < n; i++) {\n      const x = (32 + (i + R(i, 61) * 0.6) / n * 62).toFixed(1), w = 5 + Math.round(R(i, 62) * 3), hh = 12 + Math.round(R(i, 63) * 14);\n      h += `<i class=\"wf-icl\" style=\"--x:${x}%;--w:${w}px;--h:${hh}px\"><\/i><i class=\"wf-dp\" style=\"--x:${x}%;--w:${w}px;--h:${hh}px;--d:${(2.6 / t * (0.8 + 0.4 * R(i, 64))).toFixed(2)}s;--p:${f2(R(i, 65))}\"><\/i>`;\n    }\n    return h;\n  };\n  const pegel = (cls, h, d) => `<div class=\"wf-lvl${cls}\" style=\"--h:${h}%;--d:${d.toFixed(1)}s\"><\/div>`;\n  // Hitze: aufsteigende Waerme (Entscheidung 14.11.2026, warnung-animiert.html)\n  const waerme = (n, t, rot) => {\n    let h = `<div class=\"wf-heatglow${rot ? ' rot' : ''}\"><\/div>`;\n    for (let i = 0; i < n; i++) {\n      const farbe = i % 2 ? 'gelb' : (rot ? 'rot' : 'koralle');\n      h += `<i class=\"wf-ember ${farbe}\" style=\"--x:${(14 + (i + R(i, 81) * 0.8) / n * 80).toFixed(1)}%;--s:${R(i, 82) > 0.6 ? 3 : 2}px;--d:${(3.2 / t * (0.75 + 0.5 * R(i, 83))).toFixed(2)}s;--p:${f2(R(i, 84))};--dx:${Math.round((R(i, 85) - 0.5) * 16)}px\"><\/i>`;\n    }\n    return h;\n  };\n  const seil = (t) => {\n    const dur = (1.8 / t).toFixed(2);\n    const draht = (y0, sag, cls, phase) => {\n      const a = `M0 ${y0} Q50 ${y0 + sag} 100 ${y0}`, b = `M0 ${y0} Q50 ${y0 - sag * 0.7} 100 ${y0}`;\n      const anim = ruhig ? '' : `<animate attributeName=\"d\" dur=\"${dur}s\" begin=\"-${phase}s\" repeatCount=\"indefinite\" calcMode=\"spline\" keyTimes=\"0;0.5;1\" keySplines=\"0.45 0 0.55 1;0.45 0 0.55 1\" values=\"${a};${b};${a}\"/>`;\n      return `<path class=\"${cls}\" d=\"${a}\" vector-effect=\"non-scaling-stroke\">${anim}<\/path>`;\n    };\n    return `<svg class=\"wf-cab\" viewBox=\"0 0 100 60\" preserveAspectRatio=\"none\">${draht(14, 22, 'wf-wire', 0)}${draht(34, 18, 'wf-wire leise', (0.4 / t).toFixed(2))}<path class=\"wf-mast\" d=\"M99 0V60\" vector-effect=\"non-scaling-stroke\"/><\/svg>`;\n  };\n\n  // ---------- Szenen ----------\n  const SZENEN = {\n    gewitter: (l, t, k, ii) => {\n      const c = parseInt(ii);\n      let h = wolken(true, l >= 3 ? 3 : 2);\n      if (GRP_RAIN.includes(c)) h += fall(tropfen(Math.round(10 * k), 0.7, 14, t), -10);\n      if (GRP_HAIL.includes(c)) h += fall(flocken(Math.round(6 * k), 1.4, 3, t, true), -10);\n      if (GRP_WIND.includes(c)) h += schlieren(Math.round(2 * k), 2.6, 60, t, l >= 3, false);\n      return h + blitz;\n    },\n    wind: (l, t, k) => schlieren(Math.round(4 * k), 2.6, 70, t, l >= 3, false),\n    starkregen: (l, t, k) => wolken(true, 2) + fall(tropfen(Math.round(14 * k), 0.5, 16, t), -12) + ringe(Math.round(3 * k), t, false),\n    dauerregen: (l, t, k) => wolken(true, 1) + fall(tropfen(Math.round(10 * k), 1.0, 10, t), -4) + pegel('', 20 + l * 4, 18 / t),\n    schnee: (l, t, k) => fall(flocken(Math.round(9 * k), 5, l >= 3 ? 3.5 : 3, t, false), -4) + pegel(' schnee', 16 + l * 3, 22 / t),\n    verwehung: (l, t, k) => treiben(Math.round(10 * k), 1.9, t) + schlieren(Math.round(2 * k), 1.8, 50, t, false, true)\n      + `<svg class=\"wf-dune\" style=\"--d:${(8 / t).toFixed(1)}s\" viewBox=\"0 0 400 30\" preserveAspectRatio=\"none\"><path d=\"M0 30V18Q25 6 50 18T100 18T150 18T200 18T250 18T300 18T350 18T400 18V30Z\"/><\/svg>`,\n    glaette: (l, t, k) => '<div class=\"wf-ice\"><\/div>' + `<div class=\"wf-sheen\" style=\"--d:${(5.5 / t).toFixed(1)}s\"><\/div>` + funkeln(Math.round(3 * k), 66, 26, t),\n    glatteis: (l, t, k) => '<div class=\"wf-ice\"><\/div>' + fall(tropfen(Math.round(7 * k), 1.0, 9, t), -5)\n      + ringe(Math.round(3 * k), t * 0.7, true, '12%') + `<div class=\"wf-sheen\" style=\"--d:${(5.5 / t).toFixed(1)}s\"><\/div>`,\n    frost: (l, t) => {\n      let h = '<div class=\"wf-cold\"><\/div>';\n      [[40, 6, 30, 0.0], [70, 40, 22, 0.45], [52, 52, 18, 0.7], [80, 2, 16, 0.25]].slice(0, l >= 2 ? 4 : 2)\n        .forEach(([x, y, s, p], i) => { h += kristall(x, y, s, (10 / t + i).toFixed(1), p); });\n      h += funkeln(l >= 2 ? 5 : 3, 10, 70, t);\n      return h + (l >= 2 ? '<div class=\"wf-rime\"><\/div>' : '');\n    },\n    tauwetter: (l, t, k) => zapfen(Math.round(3 * k), t) + ringe(Math.round(2 * k), t * 0.6, false) + pegel('', 14 + l * 3, 20 / t),\n    nebel: (l, t) => nebel(t),\n    hitze: (l, t, k) => waerme(Math.round(8 * k), t, l >= 3),\n    uv: () => '<div class=\"wf-uvrays\"><\/div><div class=\"wf-uvsun\"><\/div><div class=\"wf-ring\"><\/div><div class=\"wf-ring\" style=\"animation-delay:-1.6s\"><\/div>',\n    leiter: (l, t) => seil(t)\n  };\n\n  const fx = (key, stufe, ii, vorab, ort) => {\n    const bau = SZENEN[key];\n    if (!bau) return '';\n    const l = Math.max(1, Math.min(4, parseInt(stufe) || 1));\n    const lv = LV[vorab ? 0 : l];\n    const schein = (!vorab && l >= 3) ? `<div class=\"wf-glow${l >= 4 ? ' l4' : ''}\"><\/div>` : '';\n    return `<div class=\"wf${ort === 'popup' ? ' pop' : ''}${vorab ? ' vorab' : ''}\" aria-hidden=\"true\">${schein}${bau(l, lv.t, lv.k, ii)}<\/div>`;\n  };\n\n  // ---------- Icons (Pfade wie bisher in iconFor, plus Bewegung) ----------\n  const icon = (key, farbe, px) => {\n    const S = (inner) => `<svg class=\"wf-ic\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"color:${farbe};width:${px}px;height:${px}px;flex:none;display:block;overflow:visible;\" aria-hidden=\"true\">${inner}<\/svg>`;\n    const WOLKE = '<path d=\"M7 15h10a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.6 6.4 3.8 3.8 0 0 0 7 15Z\"/>';\n    const fallend = (d, dl, extra) => `<path class=\"ic-fall\" style=\"animation-duration:${d};animation-delay:${dl};${extra || ''}\"`;\n    switch (key) {\n      case 'gewitter': return S('<path d=\"M7 15h9a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 6.6 6.4 3.8 3.8 0 0 0 6.6 15\"/><path class=\"ic-bolt\" d=\"M12.5 13l-2.5 4h3l-2 4\"/>');\n      case 'wind': return S('<path class=\"ic-flow\" d=\"M3 8h10a2.5 2.5 0 1 0-2.5-2.5\"/><path class=\"ic-flow\" style=\"animation-delay:-0.5s\" d=\"M3 12h15a3 3 0 1 1-3 3\"/><path class=\"ic-flow\" style=\"animation-delay:-1s\" d=\"M3 16h8a2.5 2.5 0 1 1-2.5 2.5\"/>');\n      case 'starkregen': case 'dauerregen': {\n        const d = key === 'starkregen' ? '1s' : '1.6s';\n        return S(WOLKE + fallend(d, '0s') + ' d=\"M8.5 18l-1 2.2\"/>' + fallend(d, '-0.4s') + ' d=\"M12 18l-1 2.2\"/>' + fallend(d, '-0.8s') + ' d=\"M15.5 18l-1 2.2\"/>');\n      }\n      case 'schnee': case 'verwehung': {\n        const x = key === 'verwehung' ? 'animation-name:ic-slide;' : '';\n        const d = key === 'verwehung' ? '1.2s' : '2.4s';\n        return S(WOLKE + fallend(d, '0s', x) + ' d=\"M9 18.5h.01\"/>' + fallend(d, '-0.8s', x) + ' d=\"M12 20h.01\"/>' + fallend(d, '-1.6s', x) + ' d=\"M15 18.5h.01\"/>');\n      }\n      // Frost: Thermometer mit Schneeflocke; die Saeule sinkt, die Flocke dreht sich\n      case 'frost': return S('<path d=\"M8.4 14.8V5.6a1.7 1.7 0 0 0-3.4 0v9.2a3.2 3.2 0 1 0 3.4 0Z\"/><path class=\"ic-down\" stroke-width=\"1.6\" d=\"M6.7 16.4V9.2\"/><circle cx=\"6.7\" cy=\"17.5\" r=\"1.2\" fill=\"currentColor\" stroke=\"none\"/><g class=\"ic-spin\" style=\"animation-duration:20s\"><path stroke-width=\"1.8\" d=\"M16.5 3v12M21.7 6 11.3 12M21.7 12 11.3 6M16.5 12.7l-1.3 1.4M16.5 12.7l1.3 1.4M13.3 10.9l-1.9-.5M13.3 10.9l-.5 1.8M13.3 7.1l-.5-1.8M13.3 7.1l-1.9.5M16.5 5.3l1.3-1.4M16.5 5.3l-1.3-1.4M19.7 7.1l1.9.5M19.7 7.1l.5-1.8M19.7 10.9l.5 1.8M19.7 10.9l1.9-.5\"/><\/g>');\n      case 'glaette': case 'glatteis': return S(`<g class=\"ic-spin\" style=\"animation-duration:${key === 'glatteis' ? 16 : 30}s\"><path d=\"${KRISTALL}\"/><\/g><circle class=\"ic-glint\" cx=\"18.5\" cy=\"5\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/>`);\n      case 'hitze': return S('<path d=\"M12 3.6a2.3 2.3 0 0 1 2.3 2.3v8.1a4 4 0 1 1-4.6 0V5.9A2.3 2.3 0 0 1 12 3.6Z\"/><path class=\"ic-up\" stroke-width=\"1.8\" d=\"M12 15.6V7.6\"/><circle cx=\"12\" cy=\"17.4\" r=\"1.8\" fill=\"currentColor\" stroke=\"none\"/>');\n      case 'nebel': return S('<path class=\"ic-slide\" d=\"M5 9h14\"/><path class=\"ic-slide\" style=\"animation-delay:-1.6s\" d=\"M4 13h16\"/><path class=\"ic-slide\" style=\"animation-delay:-0.8s\" d=\"M6 17h12\"/>');\n      case 'uv': return S('<circle cx=\"12\" cy=\"12\" r=\"4\"/><g class=\"ic-spin\" style=\"animation-duration:18s\"><path d=\"M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4\"/><\/g>');\n      // neu: Eiszapfen mit Tropfen\n      case 'tauwetter': return S('<path d=\"M3.5 4h17\"/><path d=\"M6 4l1.4 5.5L8.8 4M10.6 4l1.5 8 1.5-8M15.4 4l1.3 5 1.3-5\"/><circle class=\"ic-drip\" cx=\"12.1\" cy=\"15.4\" r=\"1.25\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M8 20.5h8\"/>');\n      // neu: zwei Masten, schwingendes Seil\n      case 'leiter': {\n        const a = 'M4 7Q12 15 20 7', b = 'M4 7Q12 1.5 20 7';\n        const anim = ruhig ? '' : `<animate attributeName=\"d\" dur=\"1.8s\" repeatCount=\"indefinite\" calcMode=\"spline\" keyTimes=\"0;0.5;1\" keySplines=\"0.45 0 0.55 1;0.45 0 0.55 1\" values=\"${a};${b};${a}\"/>`;\n        return S(`<path d=\"M4 4v16M20 4v16M2.5 6h3M18.5 6h3\"/><path d=\"${a}\">${anim}<\/path>`);\n      }\n      // Rueckfall: Warndreieck ohne Bewegung\n      default: return S('<path d=\"M12 3.5 22 20H2Z\"/><path d=\"M12 10v4\"/><circle cx=\"12\" cy=\"17.2\" r=\"0.6\" fill=\"currentColor\" stroke=\"none\"/>');\n    }\n  };\n\n  const lib = { version: VERSION, szene, kurz, trenn, fx, icon };\n  window.__nachtblauWarnFx = lib;\n  return lib;\n", "css": ".wf-slot { position: relative; flex: 1 0 64px; align-self: stretch; margin: -16px -18px -16px 0; min-width: 64px; }\n.wf-slot.pop { flex-basis: 72px; min-width: 72px; margin: -14px -16px -12px 0; }\n.wf {\n  position: absolute; inset: 0; overflow: hidden; pointer-events: none;\n  -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px); mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px);\n  /* Farbrollen dunkel / hell (Faktoren aus DESIGN.md, \"Wetteranimation im hellen Modus\") */\n  --wf-d: var(--nachtblau-dunkel-anteil, 100%);\n  --wf-wolke: color-mix(in srgb, #cdd6e0 var(--wf-d), var(--nachtblau-wolkengrau, #cdd6e0));\n  --wf-wolke12: color-mix(in srgb, rgba(205, 214, 224, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 21.5%, transparent));\n  --wf-wolke24: color-mix(in srgb, rgba(205, 214, 224, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 43%, transparent));\n  --wf-wolke50: color-mix(in srgb, rgba(205, 214, 224, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-wolkengrau, #cdd6e0) 81%, transparent));\n  --wf-blau: color-mix(in srgb, #7fb3d5 var(--wf-d), var(--nachtblau-blau, #7fb3d5));\n  --wf-blau12: color-mix(in srgb, rgba(127, 179, 213, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent));\n  --wf-blau18: color-mix(in srgb, rgba(127, 179, 213, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent));\n  --wf-blau24: color-mix(in srgb, rgba(127, 179, 213, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 32%, transparent));\n  --wf-blau50: color-mix(in srgb, rgba(127, 179, 213, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 67%, transparent));\n  --wf-w12: color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 23%, transparent));\n  --wf-w24: color-mix(in srgb, rgba(255, 255, 255, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 45%, transparent));\n  --wf-w50: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 94%, transparent));\n  --wf-eis18: color-mix(in srgb, rgba(207, 227, 242, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 34%, transparent));\n  --wf-blitz: color-mix(in srgb, rgba(255, 255, 255, 0.18) var(--wf-d), rgba(230, 193, 90, 0.72));\n  --wf-blitzlinie: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--wf-d), rgba(230, 193, 90, 0.72));\n  --wf-rot18: color-mix(in srgb, rgba(240, 115, 106, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 18%, transparent));\n  --wf-rot24: color-mix(in srgb, rgba(240, 115, 106, 0.24) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent));\n  --wf-rot50: color-mix(in srgb, rgba(240, 115, 106, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-rot, #f0736a) 50%, transparent));\n  --wf-koralle18: color-mix(in srgb, rgba(231, 147, 110, 0.18) var(--wf-d), color-mix(in srgb, var(--nachtblau-koralle, #e7936e) 18%, transparent));\n  --wf-koralle50: color-mix(in srgb, rgba(231, 147, 110, 0.5) var(--wf-d), color-mix(in srgb, var(--nachtblau-koralle, #e7936e) 50%, transparent));\n  --wf-gelb18: color-mix(in srgb, rgba(230, 193, 90, 0.18) var(--wf-d), rgba(230, 193, 90, 0.45));\n  --wf-gelb24: color-mix(in srgb, rgba(230, 193, 90, 0.24) var(--wf-d), rgba(230, 193, 90, 0.6));\n  --wf-gelb50: color-mix(in srgb, rgba(230, 193, 90, 0.5) var(--wf-d), rgba(230, 193, 90, 0.9));\n  --wf-k-wolke: calc(180% - 0.8 * var(--wf-d));\n  --wf-k-regen: calc(133% - 0.33 * var(--wf-d));\n}\n.wf.pop {\n  -webkit-mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px), linear-gradient(0deg, rgba(205, 214, 224, 0) 0, #cdd6e0 18px);\n  -webkit-mask-composite: source-in;\n  mask-image: linear-gradient(90deg, rgba(205, 214, 224, 0) 0, #cdd6e0 26px), linear-gradient(0deg, rgba(205, 214, 224, 0) 0, #cdd6e0 18px);\n  mask-composite: intersect;\n}\n.wf.vorab { opacity: 0.55; }\n.wf * { will-change: transform; }\n.wf-cl { position: absolute; left: var(--x); top: var(--y); width: var(--w); height: calc(var(--w) * 0.3); border-radius: 999px; background: var(--wf-wolke); opacity: calc(var(--o) * var(--wf-k-wolke)); animation: wf-sway var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }\n.wf-cl.dunkel { background: var(--nachtblau-muted, #6e7988); opacity: var(--o); }\n.wf-cl::before, .wf-cl::after { content: \"\"; position: absolute; border-radius: 50%; background: inherit; }\n.wf-cl::before { width: 46%; height: 150%; left: 14%; bottom: 30%; }\n.wf-cl::after { width: 34%; height: 112%; left: 50%; bottom: 34%; }\n@keyframes wf-sway { from { transform: translateX(-7px); } to { transform: translateX(7px); } }\n.wf-fall { position: absolute; inset: -12% -18%; transform: rotate(var(--neig, -8deg)); }\n.wf-dr, .wf-fl { position: absolute; top: 0; height: 100%; left: var(--x); animation: wf-fall var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n@keyframes wf-fall { from { transform: translateY(-100%); } to { transform: translateY(0); } }\n.wf-dr { width: 1.5px; opacity: calc(var(--a) * var(--wf-k-regen)); }\n.wf-dr::after { content: \"\"; position: absolute; left: 0; bottom: 0; width: 100%; height: var(--len); border-radius: 1px; background: linear-gradient(180deg, rgba(127, 179, 213, 0), var(--wf-blau)); }\n.wf-fl { width: var(--s); }\n.wf-fl::after { content: \"\"; position: absolute; left: 0; bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-w50); animation: wf-bob var(--sw) ease-in-out infinite alternate; }\n.wf-fl.hagel::after { border-radius: 1px; background: var(--wf-wolke50); animation: none; }\n@keyframes wf-bob { from { transform: translateX(-5px); } to { transform: translateX(5px); } }\n.wf-sp { position: absolute; bottom: var(--b, 7%); left: var(--x); width: 12px; height: 4px; margin-left: -6px; border: 1px solid var(--wf-blau50); border-radius: 50%; opacity: 0; animation: wf-splash var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n.wf-sp.weiss { border-color: var(--wf-w50); }\n@keyframes wf-splash { 0% { transform: scale(0.2); opacity: 0.9; } 100% { transform: scale(1.5); opacity: 0; } }\n.wf-dw { position: absolute; left: 0; right: 0; top: var(--y); height: 0; animation: wf-drift var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n@keyframes wf-drift { from { transform: translateX(0); } to { transform: translateX(calc(100% + var(--w))); } }\n.wf-st { position: absolute; right: 100%; top: 0; width: var(--w); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, rgba(205, 214, 224, 0), var(--wf-wolke) 70%, rgba(205, 214, 224, 0)); opacity: calc(var(--a) * (170% - 0.7 * var(--wf-d))); animation: wf-wave var(--wv) ease-in-out infinite alternate; }\n.wf-st.weiss { background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--wf-w50) 70%, rgba(255, 255, 255, 0)); opacity: var(--a); }\n.wf-st.boe { height: 2px; }\n@keyframes wf-wave { from { transform: translateY(-3px); } to { transform: translateY(3px); } }\n.wf-bf { position: absolute; right: 100%; top: 0; width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-w50); animation: wf-wave var(--wv) ease-in-out infinite alternate; }\n.wf-flash { position: absolute; inset: 0; background: radial-gradient(ellipse 85% 75% at 60% 0%, var(--wf-blitz), rgba(255, 255, 255, 0) 70%); opacity: 0; animation: wf-flash 8s linear infinite; animation-delay: -5s; }\n.wf-bolt { position: absolute; left: 54%; top: 22%; width: 18px; height: 46px; opacity: 0; overflow: visible; stroke: var(--wf-blitzlinie); animation: wf-flash 8s linear infinite; animation-delay: -5s; }\n@keyframes wf-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90.5% { opacity: 0.25; } 92% { opacity: 0.85; } 95% { opacity: 0; } }\n.wf-fog { position: absolute; left: -40%; width: 180%; top: var(--y); height: var(--h); background: linear-gradient(180deg, rgba(205, 214, 224, 0), var(--wf-wolke12) 50%, rgba(205, 214, 224, 0)); animation: wf-haze var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }\n@keyframes wf-haze { from { transform: translateX(-12%); } to { transform: translateX(12%); } }\n.wf-cold { position: absolute; right: -40%; top: -55%; width: 130%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-blau18), rgba(127, 179, 213, 0) 65%); }\n.wf-cr { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); overflow: visible; }\n.wf-cr path { fill: none; stroke: var(--wf-w50); stroke-width: 1.3; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; animation: wf-grow-arm var(--d) linear infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n.wf-cr path.zweig { animation-name: wf-grow-zweig; }\n/* Arme 0-28 %, Zweige 28-42 %, stehen bis 82 %, tauen bis 100 % weg. Unsichtbar,\n   solange nichts gezeichnet ist: runde Enden zeigten sonst einzelne Punkte. */\n@keyframes wf-grow-arm { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { stroke-dashoffset: 0.96; opacity: 1; } 28% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }\n@keyframes wf-grow-zweig { 0%, 28% { stroke-dashoffset: 1; opacity: 0; } 29% { stroke-dashoffset: 0.93; opacity: 1; } 42% { stroke-dashoffset: 0; opacity: 1; } 82% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }\n.wf-spk { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); background: var(--wf-w50); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: wf-tw var(--d) ease-in-out infinite alternate; animation-delay: calc(var(--d) * var(--p) * -1); }\n@keyframes wf-tw { from { transform: scale(0.35); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }\n.wf-rime { position: absolute; left: 0; right: 0; bottom: 0; height: 24%; background: linear-gradient(0deg, var(--wf-w12), rgba(255, 255, 255, 0)); }\n.wf-ice { position: absolute; left: 0; right: 0; bottom: 0; height: 36%; background: linear-gradient(0deg, var(--wf-eis18), rgba(207, 227, 242, 0)); }\n.wf-sheen { position: absolute; bottom: 0; height: 36%; left: 0; width: 42%; background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--wf-w24), rgba(255, 255, 255, 0)); animation: wf-sheen var(--d, 5.5s) ease-in-out infinite; }\n@keyframes wf-sheen { 0% { transform: skewX(-24deg) translateX(-170%); } 55%, 100% { transform: skewX(-24deg) translateX(280%); } }\n.wf-icebar { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--wf-w12); }\n.wf-icl { position: absolute; top: 3px; left: var(--x); width: var(--w); height: var(--h); background: linear-gradient(180deg, var(--wf-w24), var(--wf-w12)); clip-path: polygon(0 0, 100% 0, 50% 100%); }\n.wf-dp { position: absolute; top: calc(var(--h) + 1px); left: calc(var(--x) + var(--w) / 2 - 1.5px); width: 3px; height: 4px; border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%; background: var(--wf-blau); opacity: 0; animation: wf-drip var(--d) ease-in infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n@keyframes wf-drip { 0% { transform: translateY(0) scale(0.3); opacity: 0; } 30% { transform: translateY(0) scale(1); opacity: 0.5; } 100% { transform: translateY(78px) scale(1); opacity: 0.5; } }\n.wf-lvl { position: absolute; left: 0; right: 0; bottom: 0; height: var(--h, 28%); background: linear-gradient(0deg, var(--wf-blau18), var(--wf-blau12)); border-top: 1px solid var(--wf-blau24); transform-origin: bottom; animation: wf-rise var(--d, 16s) ease-in-out infinite; }\n.wf-lvl.schnee { background: linear-gradient(0deg, var(--wf-w12), rgba(255, 255, 255, 0)); border-top-color: var(--wf-w12); }\n@keyframes wf-rise { 0% { transform: scaleY(0.3); } 85% { transform: scaleY(1); } 100% { transform: scaleY(0.3); } }\n.wf-dune { position: absolute; left: -50%; bottom: 0; width: 200%; height: 26%; fill: var(--wf-w12); animation: wf-dune var(--d, 7s) linear infinite; }\n@keyframes wf-dune { from { transform: translateX(0); } to { transform: translateX(25%); } }\n.wf-cab { position: absolute; left: 0; top: 16%; width: 100%; height: 64%; overflow: visible; }\n.wf-wire { fill: none; stroke: var(--wf-wolke50); stroke-width: 1.5; }\n.wf-wire.leise { stroke: var(--wf-wolke24); }\n.wf-mast { stroke: var(--nachtblau-muted, #6e7988); stroke-width: 2; }\n.wf-heatglow { position: absolute; left: -10%; right: -30%; bottom: -45%; height: 95%; background: radial-gradient(ellipse 60% 70% at 55% 100%, var(--wf-koralle18), rgba(231, 147, 110, 0) 72%); animation: wf-pulse 3.2s ease-in-out infinite alternate; }\n.wf-heatglow.rot { background: radial-gradient(ellipse 60% 70% at 55% 100%, var(--wf-rot18), rgba(240, 115, 106, 0) 72%); }\n.wf-ember { position: absolute; bottom: 8%; left: var(--x); width: var(--s); height: var(--s); border-radius: 50%; background: var(--wf-koralle50); opacity: 0; animation: wf-ember var(--d) ease-out infinite; animation-delay: calc(var(--d) * var(--p) * -1); }\n.wf-ember.rot { background: var(--wf-rot50); }\n.wf-ember.gelb { background: var(--wf-gelb50); }\n@keyframes wf-ember { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--dx), -72px); opacity: 0; } }\n.wf-uvsun { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; background: radial-gradient(circle, var(--wf-gelb50) 0%, var(--wf-gelb24) 55%, rgba(230, 193, 90, 0) 72%); animation: wf-pulse 4s ease-in-out infinite alternate; }\n.wf-uvrays { position: absolute; right: -31px; top: 50%; width: 120px; height: 120px; margin-top: -60px; border-radius: 50%; background: repeating-conic-gradient(var(--wf-gelb18) 0deg 5deg, rgba(230, 193, 90, 0) 5deg 20deg); -webkit-mask: radial-gradient(circle, rgba(205, 214, 224, 0) 20%, #cdd6e0 28%, rgba(205, 214, 224, 0) 70%); mask: radial-gradient(circle, rgba(205, 214, 224, 0) 20%, #cdd6e0 28%, rgba(205, 214, 224, 0) 70%); animation: wf-spin 40s linear infinite; }\n.wf-ring { position: absolute; right: 14px; top: 50%; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%; border: 1.5px solid var(--wf-gelb50); animation: wf-ring 3.2s ease-out infinite; }\n@keyframes wf-ring { from { transform: scale(0.8); opacity: 1; } to { transform: scale(2.6); opacity: 0; } }\n@keyframes wf-spin { to { transform: rotate(360deg); } }\n@keyframes wf-pulse { from { opacity: 0.55; } to { opacity: 1; } }\n.wf-glow { position: absolute; right: -45%; bottom: -70%; width: 150%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, var(--wf-rot18), rgba(240, 115, 106, 0) 66%); animation: wf-pulse 3.5s ease-in-out infinite alternate; }\n.wf-glow.l4 { background: radial-gradient(circle, var(--wf-rot24), rgba(240, 115, 106, 0) 66%); animation-duration: 2.4s; }\n/* Icon-Kachel: Leuchten ab Stufe 3 (0 0 14px -3px, Farbe aus --wf-glow) */\n.wf-alarm { animation: wf-kachel 3.5s ease-in-out infinite alternate; }\n.wf-alarm.l4 { animation-duration: 2.4s; }\n@keyframes wf-kachel { from { box-shadow: 0 0 14px -3px transparent; } to { box-shadow: 0 0 14px -3px var(--wf-glow); } }\n/* Icon-Bewegungen */\n.wf-ic * { transform-box: fill-box; }\n.ic-spin { transform-origin: center; animation: wf-spin 24s linear infinite; }\n.ic-down { transform-origin: bottom; animation: ic-down 4s ease-in-out infinite alternate; }\n.ic-up { transform-origin: bottom; animation: ic-up 3s ease-in-out infinite alternate; }\n@keyframes ic-down { from { transform: scaleY(1); } to { transform: scaleY(0.3); } }\n@keyframes ic-up { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }\n.ic-bolt { animation: ic-flick 8s linear infinite; animation-delay: -5s; }\n@keyframes ic-flick { 0%, 88%, 100% { opacity: 1; } 89% { opacity: 0.3; } 90.5% { opacity: 1; } 92% { opacity: 0.4; } 95% { opacity: 1; } }\n.ic-flow { stroke-dasharray: 16 4; animation: ic-flow 1.6s linear infinite; }\n@keyframes ic-flow { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }\n.ic-fall { animation: ic-fall 1.3s ease-in infinite; }\n@keyframes ic-fall { 0% { transform: translateY(-2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(2px); opacity: 0; } }\n.ic-slide { animation: ic-slide 3.2s ease-in-out infinite alternate; }\n@keyframes ic-slide { from { transform: translateX(-1.5px); } to { transform: translateX(1.5px); } }\n.ic-drip { animation: ic-drip 2.2s ease-in infinite; }\n@keyframes ic-drip { 0% { transform: translateY(0) scale(0.4); opacity: 0; } 25% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(6px); opacity: 0; } }\n.ic-glint { animation: ic-glint 5.5s ease-in-out infinite; }\n@keyframes ic-glint { 0%, 70%, 100% { opacity: 0; } 80% { opacity: 1; } }\n@media (prefers-reduced-motion: reduce) {\n  .wf *, .wf *::before, .wf *::after, .wf-ic *, .wf-alarm { animation-play-state: paused !important; transition: none !important; }\n}\n"}</script>
+<script>
+(function () {
+  'use strict';
+  const LIB = JSON.parse(document.getElementById('wfxsrc').textContent);
+  document.getElementById('wfxcss').textContent = LIB.css;
+  const wfx = new Function('entity', 'states', 'variables', 'user', 'hass', LIB.wfx)(null, {}, {}, {}, {});
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Farben und Kontrast (wie Warnkarte) ----------
+  const CAP = { 0: '#ff8080', 1: '#ffeb3b', 2: '#fb8c00', 3: '#e53935', 4: '#880e4f' };
+  const LABEL = { 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung' };
+  const HELL = '#f2f5f8', NAVY = '#171d29';
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const lum = (c) => { const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2]; };
+  const kr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const GRUND = ['#1b2231', '#171d29'];
+  const lesbar = (c, anteil, ziel) => GRUND.every((g) => kr(rgb(c), rgb(g).map((v, i) => v * (1 - anteil) + rgb(c)[i] * anteil)) >= ziel) ? c : HELL;
+  const aufFlaeche = (c) => (kr(rgb(c), rgb(NAVY)) >= kr(rgb(c), rgb(HELL)) ? NAVY : HELL);
+  const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+  const RAND_ROT = 'rgba(240, 115, 106, 0.5)';
+  const cap = (t) => String(t || '').split(' ').map((x) => (x.length > 1 && x === x.toUpperCase() && /[A-ZÄÖÜ]/.test(x)) ? x.charAt(0) + x.slice(1).toLowerCase() : x).join(' ');
+  const kurz = (t) => { const i = String(t).indexOf(' mit '); return i > 0 ? String(t).slice(0, i) : String(t); };
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  // ---------- Faelle (Zeit relativ zu Sa 13:00; h = Stunden ab jetzt) ----------
+  const W = (ii, name, level, von, bis, vorab) => ({ ii, name, level, von, bis, vorab: !!vorab });
+  const FAELLE = [
+    { key: 'frost', label: 'Frost (heute)', note: 'Die echte Warnung von heute: eine Warnung, deshalb nur die Frost-Szene und der Zeitraum im Text.', list: [W(22, 'FROST', 1, 7, 15)] },
+    { key: 'winter', label: 'Frost und Glätte', note: 'Typische Winternacht: zwei Warnungen der Stufe 1.', list: [W(22, 'FROST', 1, 7, 15), W(87, 'GLÄTTE', 1, 9, 20)] },
+    { key: 'sommer', label: 'Sommergewitter', note: 'Drei Warnungen, die höchste Stufe 3. Der Grund der Kachel wird rot.', list: [W(48, 'SCHWERES GEWITTER mit ORKANBÖEN, HEFTIGEM STARKREGEN und HAGEL', 3, 3, 8), W(61, 'STARKREGEN', 2, 2, 9), W(51, 'WINDBÖEN', 1, -1, 10)] },
+    { key: 'extrem', label: 'Stufe 4 und Vorabinfo', note: 'Extremes Gewitter mit gefüllter Kachel und Pille, dazu eine Vorabinformation für morgen (schraffierte Spur).', list: [W(96, 'EXTREMES GEWITTER mit ORKANBÖEN, EXTREM HEFTIGEM STARKREGEN und HAGEL', 4, 4, 7), W(55, 'VORABINFORMATION ORKANBÖEN', 3, 18, 24, true)] },
+    { key: 'vorab', label: 'Nur Vorabinformation', note: 'Keine aktuelle Warnung, aber eine Vorabinformation: Szene mit 55 % Deckkraft wie im Popup.', list: [W(40, 'VORABINFORMATION SCHWERES GEWITTER', 3, 25, 31, true)] },
+    { key: 'keine', label: 'Keine Warnung', note: 'Keine Warnung: ruhige Kachel ohne Szene, wie bisher.', list: [] }
+  ];
+  const VARIANTEN = [['wechsel', 'Im Wechsel (Empfehlung)'], ['ueber', 'Überlagert'], ['neben', 'Nebeneinander']];
+  const state = { fall: 'winter', variante: 'wechsel', w: 360 };   // Entscheidung: im Wechsel
+  const T = 5, FADE = 0.6;   // Sekunden je Szene, Ueberblendung
+
+  // Keyframes fuer n Szenen im Wechsel: sichtbar 0 .. T, Ueberblendung FADE
+  function cycCss() {
+    let css = '';
+    for (let n = 2; n <= 4; n++) {
+      const P = n * T, f = (FADE / P * 100).toFixed(2), e = (T / P * 100).toFixed(2), e2 = ((T + FADE) / P * 100).toFixed(2);
+      css += `@keyframes wl-show-${n} { 0% { opacity: 0; } ${f}% { opacity: 1; } ${e}% { opacity: 1; } ${e2}% { opacity: 0; } 100% { opacity: 0; } }\n`;
+      css += `@keyframes wl-dot-${n} { 0% { background: rgba(255,255,255,0.24); } ${f}% { background: rgba(255,255,255,0.5); } ${e}% { background: rgba(255,255,255,0.5); } ${e2}% { background: rgba(255,255,255,0.24); } 100% { background: rgba(255,255,255,0.24); } }\n`;
+      css += `@keyframes wl-name-${n} { 0% { color: #8794a5; } ${f}% { color: #f2f5f8; } ${e}% { color: #f2f5f8; } ${e2}% { color: #8794a5; } 100% { color: #8794a5; } }\n`;
+    }
+    $('cyccss').textContent = css;
+  }
+  const delay = (i, n) => `${-(((n - i) % n) * T + FADE)}s`;
+
+  // ---------- Neue Kachel ----------
+  function neueKachel(fall, variante) {
+    const aktiv = fall.list.filter((w) => !w.vorab).sort((a, b) => b.level - a.level || a.von - b.von);
+    const vorab = fall.list.filter((w) => w.vorab);
+    const zeige = aktiv.length ? aktiv : vorab;   // Szenen: aktuelle Warnungen, sonst Vorabinformationen
+    if (!zeige.length) {
+      return `<div class="tile" style="background:${tint('#a6d49e', 12)};border:1px solid ${tint('#a6d49e', 24)}"><div class="trow">
+        <div class="ticon" style="background:${tint('#a6d49e', 16)};border:1px solid ${tint('#a6d49e', 24)}"><svg viewBox="0 0 24 24" fill="none" stroke="#a6d49e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <div class="tcol voll"><div class="ttitle">Keine Warnung</div><div class="tsub">DWD-Wetter&shy;warnung</div></div></div></div>`;
+    }
+    const top = zeige[0];
+    const nurVorab = !aktiv.length;
+    const farbe = nurVorab ? CAP[0] : CAP[top.level];
+    const status = !nurVorab && top.level >= 3 ? '#f0736a' : '#e6b566';
+    const extrem = !nurVorab && top.level >= 4;
+    const key = (w) => wfx.szene(w.ii, w.name);
+    const kachel = extrem ? `background:${farbe};border:1px solid ${RAND_ROT};--wf-glow:${RAND_ROT}` : `background:${tint(farbe, 16)};border:1px solid ${tint(farbe, 24)};--wf-glow:${tint(farbe, 50)}`;
+    const iconFarbe = extrem ? aufFlaeche(farbe) : lesbar(farbe, 0.16, 3);
+    const alarm = !nurVorab && top.level >= 3;
+    const pill = extrem
+      ? `<span class="pill" style="color:${aufFlaeche(farbe)};background:${farbe};border:1px solid ${RAND_ROT}">${LABEL[top.level]}</span>`
+      : `<span class="pill" style="color:${lesbar(farbe, 0.12, 4.5)};background:${tint(farbe, 12)};border:1px solid ${tint(farbe, 24)}">${nurVorab ? 'Vorabinformation' : LABEL[top.level]}</span>`;
+    const vorabPill = (!nurVorab && vorab.length) ? `<span class="pill neutral">+${vorab.length} Vorabinfo</span>` : '';
+    const name = (w) => cap(kurz(w.name.replace('VORABINFORMATION ', '')));
+    const titel = zeige.length === 1 ? name(top) : `${zeige.length} ${nurVorab ? 'Vorabinformationen' : 'Warnungen'}`;
+    const n = zeige.length;
+    const cyc = variante === 'wechsel' && n > 1;
+    const P = `${n * T}s`;
+    const namen = zeige.length === 1
+      ? `<div class="tsub">${zeitText(top)}</div>`
+      : `<div class="names${cyc ? ' cyc' : ''}" style="--P:${P}">${zeige.map((w, i) => `<span class="n" style="${cyc ? `animation-name:wl-name-${n};animation-delay:${delay(i, n)}` : ''}">${esc(name(w))}</span>`).join(' · ')}</div>`;
+    // Szene(n)
+    let szene = '';
+    if (n === 1 || variante === 'wechsel') {
+      szene = zeige.map((w, i) => `<div class="wl-layer" style="${cyc ? `animation-name:wl-show-${n};animation-delay:${delay(i, n)}` : ''}">${wfx.fx(key(w), w.level, w.ii, w.vorab, 'popup')}</div>`).join('');
+      if (cyc) szene += `<div class="wl-dots">${zeige.map((w, i) => `<i style="animation-name:wl-dot-${n};animation-delay:${delay(i, n)}"></i>`).join('')}</div>`;
+    } else if (variante === 'ueber') {
+      szene = zeige.map((w) => `<div class="wl-layer">${wfx.fx(key(w), w.level, w.ii, w.vorab, 'popup')}</div>`).join('');
+    } else {
+      szene = zeige.map((w, i) => `<div class="wl-layer" style="left:${(i / n * 100).toFixed(2)}%;right:auto;width:${(100 / n).toFixed(2)}%">${wfx.fx(key(w), w.level, w.ii, w.vorab, 'popup')}</div>`).join('');
+    }
+    const cls = cyc ? 'wl-cyc' : variante === 'neben' && n > 1 ? 'wl-split' : '';
+    return `<div class="tile" style="background:${tint(status, 12)};border:1px solid ${tint(status, 24)}">
+      <div class="trow">
+        <div class="ticon${alarm ? ' wf-alarm' : ''}${extrem ? ' l4' : ''}" style="${kachel}">${wfx.icon(key(top), iconFarbe, 22)}</div>
+        <div class="tcol"><div class="ttitle">${esc(titel)}</div><div class="tpills">${pill}${vorabPill}</div>${namen}</div>
+        <div class="wf-slot ${cls}" style="--P:${P}">${szene}</div>
+      </div>
+      ${zeitleiste(fall.list)}
+    </div>`;
+  }
+  const UHR = (h) => { const d = new Date(2026, 10, 14, 13 + h); return d.getHours(); };
+  const TAG = (h) => { const d = new Date(2026, 10, 14, 13 + h); return d.getDate() === 14 ? 'Heute' : d.getDate() === 15 ? 'Morgen' : 'Mo'; };
+  const hh = (h) => String(UHR(h)).padStart(2, '0') + ':00';
+  const zeitText = (w) => w.von <= 0 ? `seit ${hh(w.von)} – ${TAG(w.bis)} ${hh(w.bis)}`
+    : TAG(w.von) === TAG(w.bis) ? `${TAG(w.von)} ${hh(w.von)}–${hh(w.bis)}` : `${TAG(w.von)} ${hh(w.von)} – ${TAG(w.bis)} ${hh(w.bis)}`;
+  function zeitleiste(list) {
+    if (!list.length) return '';
+    const sorted = list.slice().sort((a, b) => (a.vorab - b.vorab) || b.level - a.level || a.von - b.von);
+    const lanes = sorted.map((w) => {
+      const a = Math.max(0, w.von), b = Math.min(24, w.bis);
+      const c = w.vorab ? CAP[0] : CAP[w.level];
+      const seg = b > a ? `<i class="tl-seg" style="left:${(a / 24 * 100).toFixed(2)}%;width:${((b - a) / 24 * 100).toFixed(2)}%;${w.vorab
+        ? `background:repeating-linear-gradient(135deg, ${c} 0 3px, rgba(255,128,128,0.18) 3px 6px)`
+        : `background:${c};${w.level >= 4 ? `box-shadow:0 0 0 1px ${RAND_ROT}` : ''}`}"></i>` : '';
+      return `<div class="tl-lane">${seg}</div>`;
+    }).join('');
+    // Uhrzeiten: jetzt, dann alle 6 Stunden zur vollen Stunde ab 18 Uhr
+    const ticks = [[0, 'jetzt'], [5, '18'], [11, '0'], [17, '6'], [23, '12 Uhr']];
+    return `<div class="tl" aria-label="Zeitleiste der nächsten 24 Stunden"><div class="tl-lanes">${lanes}<span class="tl-now"></span></div>
+      <div class="tl-ticks">${ticks.map(([h, t]) => `<span style="left:${(h / 24 * 100).toFixed(2)}%">${t}</span>`).join('')}</div></div>`;
+  }
+
+  // ---------- Bisherige Kachel (wetter-view.yaml, Stand main) ----------
+  function alteKachel(fall) {
+    const aktiv = fall.list.filter((w) => !w.vorab).sort((a, b) => b.level - a.level);
+    const vorab = fall.list.filter((w) => w.vorab);
+    let wert, text, c, warn = true;
+    if (aktiv.length) { wert = `Warnung Stufe ${aktiv[0].level}`; text = cap(kurz(aktiv[0].name)) + (aktiv.length > 1 ? ` · +${aktiv.length - 1} weitere` : ''); c = aktiv[0].level >= 3 ? '#f0736a' : '#e6b566'; }
+    else if (vorab.length) { wert = `Vorabinfo Stufe ${vorab[0].level}`; text = cap(kurz(vorab[0].name)); c = '#e6b566'; }
+    else { wert = 'Keine Warnung'; text = 'DWD-Wetter&shy;warnung'; c = '#a6d49e'; warn = false; }
+    const icon = warn ? '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>' : '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>';
+    return `<div class="tile" style="background:${tint(c, 12)};border:1px solid ${tint(c, 24)}"><div class="trow">
+      <div class="ticon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};color:${c}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></div>
+      <div class="tcol voll"><div class="ttitle">${wert}</div><div class="tsub">${esc(text).replace('&amp;shy;', '&shy;')}</div></div></div></div>`;
+  }
+  function pollen() {
+    return `<div class="tile" style="background:${tint('#a6d49e', 12)};border:1px solid ${tint('#a6d49e', 24)}"><div class="trow">
+      <div class="ticon" style="background:${tint('#a6d49e', 16)};border:1px solid ${tint('#a6d49e', 24)}"><svg viewBox="0 0 24 24" fill="none" stroke="#a6d49e" stroke-width="1.7"><circle cx="12" cy="14" r="2.1"/><circle cx="12" cy="9.4" r="2.1"/><circle cx="15.9" cy="11.7" r="2.1"/><circle cx="14.6" cy="16.3" r="2.1"/><circle cx="9.4" cy="16.3" r="2.1"/><circle cx="8.1" cy="11.7" r="2.1"/></svg></div>
+      <div class="tcol voll"><div class="ttitle">Keine Belastung</div><div class="tsub">Pollenflug · 8 Arten</div></div></div></div>`;
+  }
+  function huelle(fall, kachel) {
+    const aktiv = fall.list.filter((w) => !w.vorab), lv = aktiv.length ? Math.max(...aktiv.map((w) => w.level)) : 0;
+    const c = lv >= 3 ? '#f0736a' : fall.list.length ? '#e6b566' : '#a6d49e';
+    const icon = fall.list.length ? '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>' : '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>';
+    return `<div class="hull ha"><div class="hhead"><div class="hicon" style="background:${tint(c, 16)};border:1px solid ${tint(c, 24)};color:${c}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></div>
+      <div><div class="hname">Warnlage &amp; Pollen</div><div class="hlabel">Tippen für Details</div></div></div>
+      <div class="tiles">${kachel}${pollen()}</div></div>`;
+  }
+
+  // ---------- Bedienung ----------
+  function controls() {
+    $('caseSeg').innerHTML = FAELLE.map((f) => `<button type="button" id="f-${f.key}" data-f="${f.key}" aria-pressed="${f.key === state.fall}">${f.label}</button>`).join('');
+    $('varSeg').innerHTML = VARIANTEN.map(([k, l]) => `<button type="button" id="v-${k}" data-v="${k}" aria-pressed="${k === state.variante}">${l}</button>`).join('');
+  }
+  function render() {
+    const f = FAELLE.find((x) => x.key === state.fall);
+    document.querySelectorAll('.phone').forEach((p) => p.style.setProperty('--pw', state.w + 'px'));
+    $('pAlt').innerHTML = huelle(f, alteKachel(f));
+    $('pNeu').innerHTML = huelle(f, neueKachel(f, state.variante));
+    $('caseNote').textContent = f.note;
+    $('gallery').innerHTML = FAELLE.map((x) => `<div class="gitem">${huelle(x, neueKachel(x, state.variante))}<div class="gcap"><h3>${x.label}</h3><p>${x.note}</p></div></div>`).join('');
+  }
+  $('caseSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (!b) return; state.fall = b.dataset.f; controls(); render(); });
+  $('varSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (!b) return; state.variante = b.dataset.v; controls(); render(); });
+  $('wSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-w]'); if (!b) return; state.w = Number(b.dataset.w); document.querySelectorAll('#wSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); render(); });
+  $('rm').addEventListener('change', (e) => { document.documentElement.classList.toggle('rm', e.target.checked); document.querySelectorAll('svg').forEach((s) => { if (s.pauseAnimations) { e.target.checked ? s.pauseAnimations() : s.unpauseAnimations(); } }); });
+  cycCss(); controls(); render();
+})();
+</script>
