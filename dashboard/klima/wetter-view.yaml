@@ -29,8 +29,8 @@
 # (nachtblau_dwd_popup, nachtblau_pollen_popup aus warnlage-templates.yaml),
 # langes Druecken die more-info. Die Warnungskachel fasst seit 14.11.2026
 # aktuelle Warnungen und Vorabinformationen zusammen: hoechste Stufe, alle
-# Ereignisse, Zeitleiste der naechsten 24 Stunden und die Szenen der
-# Warnkarte im Wechsel. Die Warnkarte (meteoalarm-karte.yaml) steht deshalb
+# Ereignisse, Zeitleiste der naechsten 24 Stunden (ab jetzt, jede Minute
+# neu) und die Szenen der Warnkarte im Wechsel. Die Warnkarte (meteoalarm-karte.yaml) steht deshalb
 # nur noch auf Home; hier wiederholte sie die erste Warnung. Die Detailkarte
 # Pollenflug darunter blendet sich weiter selbst aus, solange keine
 # Belastung vorliegt. Farben: Pollen wie
@@ -44,13 +44,14 @@
 # Einbindung (YAML-Dashboard):
 #   views:
 #     - !include dashboard/klima/wetter-view.yaml
-#   Die Includes unten sind relativ zu dieser Datei: wetter-karte-v2.yaml,
-#   meteoalarm-karte.yaml und pollenflug-karte.yaml im selben Ordner ablegen.
+#   Die Includes unten sind relativ zu dieser Datei: wetter-karte-v2.yaml
+#   und pollenflug-karte.yaml im selben Ordner ablegen.
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
 #                + browser_mod (alle via HACS), Integrationen
-#                DWD-Wetterwarnungen (dwd_weather_warnings) und DWD
-#                Pollenflug (HACS, Region 101), Templates aus
+#                DWD-Wetterwarnungen (dwd_weather_warnings), DWD
+#                Pollenflug (HACS, Region 101) und Uhrzeit & Datum
+#                (sensor.date_time, fuer die Zeitleiste), Templates aus
 #                navigation-templates.yaml, wetter-templates.yaml und
 #                warnlage-templates.yaml.
 title: Wetter
@@ -156,57 +157,30 @@ sections:
               # das gezeigte Ereignis leuchtet im Text auf). Das Template kommt ueber
               # nachtblau_dwd_popup. Ersetzt die Warnkarte, die bis dahin darunter
               # stand und nur die erste Warnung zeigte.
+              #
+              # Zwei Felder: body (Icon, Text, Szene) und zeit (Zeitleiste).
+              # sensor.date_time (Integration "Uhrzeit & Datum") laesst die Kachel
+              # jede Minute neu zeichnen; dabei aendert sich nur der Text von zeit,
+              # body bleibt gleich und die Szene laeuft ungestoert weiter (button-card
+              # ersetzt nur Felder, deren Inhalt sich aendert). Hintergrund und Rand
+              # stehen deshalb an der Karte selbst, nicht im HTML eines Feldes.
               - type: custom:button-card
                 template: nachtblau_dwd_popup
                 entity: sensor.warnregion_aktuelle_warnstufe
                 triggers_update:
                   - sensor.warnregion_aktuelle_warnstufe
                   - sensor.warnregion_vorwarnstufe
+                  - sensor.date_time
                 show_name: false
                 show_state: false
                 show_icon: false
                 show_label: false
-                styles: &kachel
-                  card:
-                    - padding: 0
-                    - background: none
-                    - border: none
-                    - box-shadow: none
-                    - overflow: visible
-                  grid:
-                    - grid-template-areas: '"body"'
-                    - grid-template-columns: minmax(0, 1fr)
-                  custom_fields:
-                    body:
-                      - width: 100%
-                      - min-width: 0
-                      # button-card setzt class="ellipsis" (nowrap): Umbruch erlauben
-                      - white-space: normal
-                custom_fields:
-                  body: |
+                variables:
+                  # Alle Warnungen beider Sensoren, fuer body, zeit und die Kartenfarbe
+                  wl: |
                     [[[
-                      // ---------- Nachtblau-Palette ----------
-                      const green = 'var(--nachtblau-gruen, #a6d49e)', amber = 'var(--nachtblau-amber, #e6b566)', red = 'var(--nachtblau-rot, #f0736a)';
-                      const value = 'var(--nachtblau-text, #f2f5f8)', muted = 'var(--nachtblau-text-sekundaer, #8794a5)', label = 'var(--nachtblau-label, #b4c0cf)';
-                      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
-                      const modus = (dunkel, hell) => `color-mix(in srgb, ${dunkel} var(--nachtblau-dunkel-anteil, 100%), ${hell})`;
-                      const esc = (x) => String(x === null || x === undefined ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                      // DWD-Farbe wie in meteoalarm-karte.yaml: Ton nur, wenn er auf seiner Toenung lesbar ist
-                      const NAVY = '#171d29', HELL = '#f2f5f8';
-                      const rgbOf = (h) => { const m = /^#([0-9a-f]{6})$/i.exec(String(h || '').trim()); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null; };
-                      const lum = (c) => { const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2]; };
-                      const kr = (x, y) => { const l1 = lum(x), l2 = lum(y); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
-                      const aufFlaeche = (c) => { const r = rgbOf(c); return !r ? NAVY : (kr(r, rgbOf(NAVY)) >= kr(r, rgbOf(HELL)) ? NAVY : HELL); };
-                      const GRUND = ['#1b2231', '#171d29']; // dunkler Grund der Kartenhuelle, nur fuer diese Rechnung
-                      const lesbar = (c, anteil, ziel) => { const r = rgbOf(c); if (!r) return c; return GRUND.every((g) => kr(r, rgbOf(g).map((v, i) => v * (1 - anteil) + r[i] * anteil)) >= ziel) ? c : HELL; };
-                      const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
-                      const leuchtenRot = 'var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5))';
                       const CAP = { 0: '#ff8080', 1: '#ffeb3b', 2: '#fb8c00', 3: '#e53935', 4: '#880e4f' }; // Rueckfall, CAP-Profil 3.5
                       const SONDER = { 246: '#fe68fe', 247: '#cc99ff', 248: '#9e46f8' };
-                      const LABEL = { 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung' };
-                      const wfx = variables.wfx;
-
-                      // ---------- Alle Warnungen beider Sensoren ----------
                       const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
                       const lesen = (id, vorab) => {
                         const s = states[id], a = s && s.attributes ? s.attributes : {}, n = parseInt(a.warning_count) || 0, out = [];
@@ -226,23 +200,75 @@ sections:
                       const aktiv = lesen('sensor.warnregion_aktuelle_warnstufe', false).sort(ordnen);
                       const vorab = lesen('sensor.warnregion_vorwarnstufe', true).sort(ordnen);
                       const zeige = aktiv.length ? aktiv : vorab; // Szenen: aktuelle Warnungen, sonst Vorabinformationen
+                      const daten = !!sAkt && !isNaN(parseInt(sAkt.state));
+                      const status = !daten ? 'var(--nachtblau-text-sekundaer, #8794a5)'
+                        : !zeige.length ? 'var(--nachtblau-gruen, #a6d49e)'
+                        : (aktiv.length && aktiv[0].level >= 3) ? 'var(--nachtblau-rot, #f0736a)' : 'var(--nachtblau-amber, #e6b566)';
+                      return { aktiv, vorab, zeige, daten, status };
+                    ]]]
+                styles:
+                  card:
+                    - padding: 12px 14px
+                    - border-radius: 16px
+                    - background: '[[[ return `color-mix(in srgb, ${variables.wl.status} 12%, transparent)`; ]]]'
+                    - border: '[[[ return `1px solid color-mix(in srgb, ${variables.wl.status} 24%, transparent)`; ]]]'
+                    - box-shadow: none
+                    - overflow: hidden
+                    - cursor: pointer
+                  grid:
+                    - grid-template-areas: '"body" "zeit"'
+                    - grid-template-columns: minmax(0, 1fr)
+                    - row-gap: '[[[ return variables.wl.zeige.length ? "10px" : "0px"; ]]]'
+                  custom_fields:
+                    body:
+                      - width: 100%
+                      - min-width: 0
+                      # button-card setzt class="ellipsis" (nowrap, overflow hidden):
+                      # Umbruch erlauben, Szene darf bis an den Kartenrand
+                      - white-space: normal
+                      - overflow: visible
+                    zeit:
+                      - width: 100%
+                      - min-width: 0
+                      - white-space: normal
+                      - overflow: visible
+                custom_fields:
+                  body: |
+                    [[[
+                      // ---------- Nachtblau-Palette ----------
+                      const value = 'var(--nachtblau-text, #f2f5f8)', muted = 'var(--nachtblau-text-sekundaer, #8794a5)', label = 'var(--nachtblau-label, #b4c0cf)';
+                      const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
+                      const modus = (dunkel, hell) => `color-mix(in srgb, ${dunkel} var(--nachtblau-dunkel-anteil, 100%), ${hell})`;
+                      const esc = (x) => String(x === null || x === undefined ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                      // DWD-Farbe wie in meteoalarm-karte.yaml: Ton nur, wenn er auf seiner Toenung lesbar ist
+                      const NAVY = '#171d29', HELL = '#f2f5f8';
+                      const rgbOf = (h) => { const m = /^#([0-9a-f]{6})$/i.exec(String(h || '').trim()); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null; };
+                      const lum = (c) => { const k = c.map((v) => v / 255).map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))); return 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2]; };
+                      const kr = (x, y) => { const l1 = lum(x), l2 = lum(y); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+                      const aufFlaeche = (c) => { const r = rgbOf(c); return !r ? NAVY : (kr(r, rgbOf(NAVY)) >= kr(r, rgbOf(HELL)) ? NAVY : HELL); };
+                      const GRUND = ['#1b2231', '#171d29']; // dunkler Grund der Kartenhuelle, nur fuer diese Rechnung
+                      const lesbar = (c, anteil, ziel) => { const r = rgbOf(c); if (!r) return c; return GRUND.every((g) => kr(r, rgbOf(g).map((v, i) => v * (1 - anteil) + r[i] * anteil)) >= ziel) ? c : HELL; };
+                      const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
+                      const leuchtenRot = 'var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5))';
+                      const LABEL = { 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung' };
+                      const wfx = variables.wfx;
+                      const { aktiv, vorab, zeige, daten, status } = variables.wl;
 
                       // ---------- Keine Daten / keine Warnung: ruhige Kachel wie bisher ----------
-                      const ruhig = (titel, text, c, schild) => `
-                        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:${tint(c, 12)};border:1px solid ${tint(c, 24)};min-width:0;cursor:pointer;">
-                          <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(c, 16)};border:1px solid ${tint(c, 24)};"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${c};width:22px;height:22px;display:block;">${schild ? '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>' : '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>'}</svg></div>
-                          <div style="min-width:0;text-align:left;">
+                      const ruhig = (titel, text, schild) => `
+                        <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;">
+                          <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:${tint(status, 16)};border:1px solid ${tint(status, 24)};"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:${status};width:22px;height:22px;display:block;">${schild ? '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6Z"/><path d="m9 12 2 2 4-4"/>' : '<path d="M12 4 2.8 19.5h18.4Z"/><path d="M12 10v4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor" stroke="none"/>'}</svg></div>
+                          <div style="min-width:0;">
                             <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;color:${value};line-height:1.25;">${titel}</div>
                             <div style="font-size:12px;color:${muted};margin-top:2px;line-height:1.35;">${text}</div>
                           </div>
                         </div>`;
-                      if (!sAkt || isNaN(parseInt(sAkt.state))) return ruhig('Keine Daten', 'DWD-Warnung', muted, false);
-                      if (!zeige.length) return ruhig('Keine Warnung', 'DWD-Wetter&shy;warnung', green, true);
+                      if (!daten) return ruhig('Keine Daten', 'DWD-Warnung', false);
+                      if (!zeige.length) return ruhig('Keine Warnung', 'DWD-Wetter&shy;warnung', true);
 
                       // ---------- Kopfzeile: hoechste Warnung ----------
                       const top = zeige[0], nurVorab = !aktiv.length, n = zeige.length;
                       const farbe = top.color;
-                      const status = (!nurVorab && top.level >= 3) ? red : amber;
                       const extrem = !nurVorab && top.level >= 4, alarm = !nurVorab && top.level >= 3;
                       const key = (w) => wfx.szene(w.ii, w.name);
                       const kachel = extrem
@@ -260,6 +286,7 @@ sections:
                       const titel = n === 1 ? name(top) : `${n} ${nurVorab ? 'Vorabinformationen' : 'Warnungen'}`;
 
                       // ---------- Zeitraum (eine Warnung) oder Ereignisse (mehrere) ----------
+                      // Haengt nur am Tag (Heute/Morgen): body aendert sich so hoechstens um Mitternacht
                       const fmtT = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                       const tag = (d) => {
                         const t0 = new Date(); t0.setHours(0, 0, 0, 0);
@@ -269,13 +296,34 @@ sections:
                       };
                       // Tag und Uhrzeit mit geschuetztem Leerzeichen: Umbruch nur am Gedankenstrich
                       const zeitraum = (w) => (w.start && w.end)
-                        ? (w.start.toDateString() === w.end.toDateString() ? `${tag(w.start)}\u00a0${fmtT(w.start)}–${fmtT(w.end)}` : `${tag(w.start)}\u00a0${fmtT(w.start)} – ${tag(w.end)}\u00a0${fmtT(w.end)}`)
-                        : (w.start ? `ab ${tag(w.start)}\u00a0${fmtT(w.start)}` : '');
+                        ? (w.start.toDateString() === w.end.toDateString() ? `${tag(w.start)} ${fmtT(w.start)}–${fmtT(w.end)}` : `${tag(w.start)} ${fmtT(w.start)} – ${tag(w.end)} ${fmtT(w.end)}`)
+                        : (w.start ? `ab ${tag(w.start)} ${fmtT(w.start)}` : '');
                       const zeile2 = n === 1
                         ? `<div style="font-size:12px;color:${muted};line-height:1.35;">${esc(zeitraum(top))}</div>`
                         : `<div style="font-size:12.5px;color:${muted};line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${zeige.map((w, i) => `<span class="wl-name" style="${wfx.wechselStil('name', i, n)}">${esc(name(w))}</span>`).join(' · ')}</div>`;
 
-                      // ---------- Zeitleiste: naechste 24 Stunden, je Warnung eine Spur ----------
+                      // ---------- Szene(n): im Wechsel, rechts neben dem Text ----------
+                      const szene = wfx.wechsel(zeige.map((w) => ({ key: key(w), stufe: w.level, ii: w.ii, vorab: w.vorab })));
+
+                      return `
+                        <div style="display:flex;align-items:center;gap:12px;position:relative;text-align:left;color:${value};">
+                          <div class="${alarm ? 'wf-alarm' : ''}${extrem ? ' l4' : ''}" style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;${kachel}">${wfx.icon(key(top), iconFarbe, 22)}</div>
+                          <div style="min-width:0;flex:0 1 auto;display:flex;flex-direction:column;gap:4px;">
+                            <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${esc(titel)}</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:5px;">${pill}${vorabPill}</div>
+                            ${zeile2}
+                          </div>
+                          ${szene ? `<div class="wf-slot" style="margin:-12px -14px -4px 0;">${szene}</div>` : ''}
+                        </div>`;
+                    ]]]
+                  zeit: |
+                    [[[
+                      // ---------- Zeitleiste: naechste 24 Stunden ab jetzt, je Warnung eine Spur ----------
+                      // Neu gerechnet bei jedem Neuzeichnen, also mindestens jede Minute (sensor.date_time)
+                      const { aktiv, vorab, zeige } = variables.wl;
+                      if (!zeige.length) return '';
+                      const label = 'var(--nachtblau-label, #b4c0cf)';
+                      const randRot = 'var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5))';
                       const jetzt = Date.now(), SPANNE = 24 * 3600000;
                       const lage = (d, rueckfall) => d ? Math.max(0, Math.min(1, (d.getTime() - jetzt) / SPANNE)) : rueckfall;
                       const kante = 'box-shadow:inset 0 0 0 1px color-mix(in srgb, transparent var(--nachtblau-dunkel-anteil, 100%), rgba(23, 29, 41, 0.24));'; // hell: Kante, damit Gelb auf heller Kachel steht
@@ -296,26 +344,9 @@ sections:
                         const rechts = x > 0.9;
                         ticks += `<span style="position:absolute;top:0;left:${(x * 100).toFixed(2)}%;transform:translateX(${rechts ? '-100%' : '-50%'});white-space:nowrap;">${t.getHours()}${rechts ? ' Uhr' : ''}</span>`;
                       }
-                      const zeitleiste = `<div style="display:flex;flex-direction:column;gap:3px;">
+                      return `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;">
                           <div style="position:relative;display:flex;flex-direction:column;gap:2px;">${spuren}<span style="position:absolute;top:-2px;bottom:-2px;left:0;width:2px;border-radius:1px;background:${label};"></span></div>
                           <div style="position:relative;height:14px;font-size:11px;color:${label};">${ticks}</div>
-                        </div>`;
-
-                      // ---------- Szene(n): im Wechsel, rechts neben dem Text ----------
-                      const szene = wfx.wechsel(zeige.map((w) => ({ key: key(w), stufe: w.level, ii: w.ii, vorab: w.vorab })));
-
-                      return `
-                        <div style="position:relative;overflow:hidden;display:flex;flex-direction:column;gap:10px;padding:12px 14px;border-radius:16px;background:${tint(status, 12)};border:1px solid ${tint(status, 24)};min-width:0;cursor:pointer;text-align:left;color:${value};">
-                          <div style="display:flex;align-items:center;gap:12px;position:relative;">
-                            <div class="${alarm ? 'wf-alarm' : ''}${extrem ? ' l4' : ''}" style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;${kachel}">${wfx.icon(key(top), iconFarbe, 22)}</div>
-                            <div style="min-width:0;flex:0 1 auto;display:flex;flex-direction:column;gap:4px;">
-                              <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${esc(titel)}</div>
-                              <div style="display:flex;flex-wrap:wrap;gap:5px;">${pill}${vorabPill}</div>
-                              ${zeile2}
-                            </div>
-                            ${szene ? `<div class="wf-slot" style="margin:-12px -14px -4px 0;">${szene}</div>` : ''}
-                          </div>
-                          ${zeitleiste}
                         </div>`;
                     ]]]
               # ---- Pollen: hoechste Belastung heute, Stufen wie pollenflug-karte.yaml ----
@@ -345,7 +376,22 @@ sections:
                     - {name: Esche, entity: sensor.pollenflug_esche_101}
                     - {name: Hasel, entity: sensor.pollenflug_hasel_101}
                     - {name: Roggen, entity: sensor.pollenflug_roggen_101}
-                styles: *kachel
+                styles:
+                  card:
+                    - padding: 0
+                    - background: none
+                    - border: none
+                    - box-shadow: none
+                    - overflow: visible
+                  grid:
+                    - grid-template-areas: '"body"'
+                    - grid-template-columns: minmax(0, 1fr)
+                  custom_fields:
+                    body:
+                      - width: 100%
+                      - min-width: 0
+                      # button-card setzt class="ellipsis" (nowrap): Umbruch erlauben
+                      - white-space: normal
                 custom_fields:
                   body: |
                     [[[

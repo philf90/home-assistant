@@ -776,7 +776,12 @@ Vorabinformationen schraffiert wie beim DWD) und die Szenen im Wechsel
 Ereignis leuchtet im Text in `nachtblau-text` auf, die übrigen stehen in
 `nachtblau-text-sekundaer`). Gelbe Spuren bekommen im hellen Modus eine
 Kante in Navy 0,24, weil Gelb auf der hellen Kachel kaum absetzt. Die
-Warnkarte steht deshalb nur noch auf Home. Für alle Animationen gilt zusätzlich:
+Zeitleiste beginnt immer bei „jetzt“: `sensor.date_time` (Integration
+„Uhrzeit & Datum“) zeichnet die Kachel jede Minute neu. Sie steht deshalb in
+einem eigenen Feld `zeit`; das Feld `body` mit Icon, Text und Szene bleibt
+dabei unverändert, button-card ersetzt es nicht und die Szene läuft weiter.
+Neu gezeichnet wird `body` nur, wenn sich die Warnungen ändern oder um
+Mitternacht „Heute“ zu „Gestern“ wird. Die Warnkarte steht nur noch auf Home. Für alle Animationen gilt zusätzlich:
 
 - Nur Palettenfarben mit den Deckkraft-Stufen oben; Wolken, Nebel und Wind in
   Wolkengrau (Wind in der Wind-Karte in Türkis), Regen in Blau, Sonne in
