@@ -391,9 +391,11 @@ button_card_templates:
                     (!st.live && urg) ? pill(urg, label, false) : ''
                   ].filter(Boolean).join('');
 
-                  // Headline nur zeigen, wenn sie mehr aussagt als der Kurzname
+                  // Headline nur zeigen, wenn sie mehr aussagt als der Kurzname.
+                  // Name und Headline in Normalschreibung wie Karte und Kachel
+                  // (wfx.schreib, seit 14.11.2026; vorher gross wie vom DWD)
                   const headlineExtra = (w.headline && w.headline.toUpperCase() !== w.name.toUpperCase())
-                    ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;overflow-wrap:anywhere;">${esc(w.headline)}</div>` : '';
+                    ? `<div style="font-size:12.5px;color:${soft};line-height:1.35;margin-top:2px;overflow-wrap:anywhere;">${esc(wfx.schreib(w.headline))}</div>` : '';
 
                   return `
                     <div style="position:relative;overflow:hidden;background:${panel};border:1px solid ${line};border-left:3px solid ${color};border-radius:16px;padding:14px 16px;${widthCap}">
@@ -402,7 +404,7 @@ button_card_templates:
                           ${wfx.icon(key, iconFarbe, 22)}
                         </div>
                         <div style="min-width:0;flex:${szene ? '0 1 auto' : '1 1 auto'};">
-                          <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:break-word;">${wfx.trenn(esc(w.name))}</div>
+                          <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;color:${value};overflow-wrap:break-word;">${wfx.trenn(esc(wfx.schreib(w.name)))}</div>
                           ${headlineExtra}
                           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${pills}</div>
                         </div>
@@ -855,7 +857,9 @@ button_card_templates:
   #     schreib(text, anfang)    -> DWD-Namen in Normalschreibung (ab VERSION 4):
   #                                 "SCHWERES GEWITTER" -> "Schweres Gewitter",
   #                                 "mit HEFTIGEM STARKREGEN" -> "mit heftigem
-  #                                 Starkregen", "UV-INDEX" -> "UV-Index"
+  #                                 Starkregen", "UV-INDEX" -> "UV-Index"; ab
+  #                                 VERSION 5 auch Ueberschriften ("Amtliche
+  #                                 WARNUNG vor STARKEM SCHNEEFALL")
   #     wechsel(szenen)          -> mehrere Szenen im Wechsel, je 5 s (ab VERSION 3,
   #                                 Warnlage-Kachel der Wetter-View)
   #     wechselStil(art, i, n)   -> dieselbe Taktung fuer Punkte und Text
@@ -883,7 +887,7 @@ button_card_templates:
     variables:
       wfx: |
         [[[
-          const VERSION = 4, alt = window.__nachtblauWarnFx;
+          const VERSION = 5, alt = window.__nachtblauWarnFx;
           if (alt && alt.version === VERSION) return alt;
 
           const ruhig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -945,15 +949,16 @@ button_card_templates:
 
           // DWD schreibt die Ereignisnamen gross ("SCHWERES GEWITTER mit
           // HEFTIGEM STARKREGEN"). Normalschreibung: Substantive gross, die
-          // Adjektive klein, am Anfang (anfang = true) gross. KLEIN sind alle
-          // Adjektive und Adverbien aus den Ereignislisten des CAP-DWD-Profils
-          // 2.1.13, Kap. 3.1.1 bis 3.1.5; unbekannte Woerter gelten als
-          // Substantiv. Bindestrich-Teile einzeln (UV bleibt Abkuerzung),
-          // Woerter mit Kleinbuchstaben ("mit", Hochsee "schwerer Sturm")
-          // bleiben, nur am Anfang wird der erste Buchstabe gross.
-          const KLEIN = new Set(['starkes', 'starker', 'starke', 'schweres', 'schwere',
-            'extrem', 'extreme', 'extremes', 'extremen', 'heftiger', 'heftigem',
-            'ergiebiger', 'orkanartige', 'leichter', 'strenger', 'geringe']);
+          // Adjektive klein, am Anfang (anfang = true) gross. Die Adjektive
+          // sind die Staemme aus den Ereignislisten des CAP-DWD-Profils 2.1.13,
+          // Kap. 3.1.1 bis 3.1.5, mit allen Endungen: Die Ueberschriften
+          // beugen sie ("Amtliche UNWETTERWARNUNG vor STARKEM SCHNEEFALL",
+          // Kap. 2.2.2.13 und Beispiel im Anhang). Unbekannte Woerter gelten
+          // als Substantiv. Bindestrich-Teile einzeln (UV bleibt Abkuerzung),
+          // Woerter mit Kleinbuchstaben ("mit", "vor", Hochsee "schwerer
+          // Sturm") bleiben, nur am Anfang wird der erste Buchstabe gross.
+          const STAMM = ['stark', 'schwer', 'extrem', 'heftig', 'ergiebig', 'orkanartig', 'leicht', 'streng', 'gering'];
+          const KLEIN = new Set([].concat(...STAMM.map((s) => ['', 'e', 'em', 'en', 'er', 'es'].map((e) => s + e))));
           const ABK = new Set(['UV']);
           const gross1 = (t) => t.charAt(0).toUpperCase() + t.slice(1);
           const schreibWort = (x, anfang) => {
