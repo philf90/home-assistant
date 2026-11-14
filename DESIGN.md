@@ -805,7 +805,9 @@ Vorabinformationen nehmen die CAP-Vorabfarbe, die Pille „Vorabinformation“
 und, oben, die abgeschwächte Szene ohne Alarmleuchten. Bis dahin zeigte die
 Karte `warning_1` in der Reihenfolge des DWD-Servers und den Rest als
 „+N weitere“; eine Unwetterwarnung konnte so hinter einer Stufe-1-Warnung
-verschwinden.
+verschwinden. Mit Liste endet die Szene über der Trennlinie und blendet nach
+unten aus (18 px, dieselbe Maske wie im Popup und in der Warnlage-Kachel),
+statt dort hart abzubrechen.
 Warnnamen stehen auf Home, in der Warnlage-Kachel und im Popup in
 Normalschreibung (`wfx.schreib`): „Schweres Gewitter“, darunter „mit
 Orkanböen, heftigem Starkregen und Hagel“, „UV-Index“. Der DWD liefert sie
