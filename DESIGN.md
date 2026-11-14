@@ -815,6 +815,12 @@ CAP-DWD-Profils 2.1.13 (Kap. 3.1), mit allen Endungen, weil die
 Schneefall“). Alle übrigen Wörter gelten als Substantiv. Bis 14.11.2026
 stand der Titel der Home-Karte groß („FROST“), während die Liste darunter
 schon „Windböen“ schrieb; das Popup zeigte Namen und Überschrift groß.
+Beide Kacheln lassen sich wischen (Template `nachtblau_wisch`, seit
+14.11.2026): nach links zur nächsten Szene, nach rechts zur vorigen; der
+Wechsel läuft von dort im selben Takt weiter. Ein Wischer verschiebt alle
+`wl-*`-Animationen der Kachel um dieselbe Zeit, Szene, Punkte, Name und Spur
+bleiben gleichauf. Tippen öffnet weiter das Popup, ein Wischer nicht. Bei
+„Bewegung reduzieren“ schaltet ein Wischer das Standbild um.
 Die Pollenkachel daneben folgt demselben Muster (Entwurf
 `pollen-kachel.html`, Bibliothek `nachtblau_pollen_fx`): höchste Stufe von
 heute als Pille, alle belasteten Arten, Szenen im Wechsel und statt der

@@ -38,12 +38,15 @@
 #                       (seit 14.11.2026, Entwurf pollen-kachel.html).
 #                       nachtblau_pollen_popup erbt es, der Popup-Inhalt
 #                       bindet es selbst ein. Beschreibung am Template unten.
+#   nachtblau_wisch         Wischen zwischen den Szenen im Wechsel (seit
+#                       14.11.2026), fuer die Warnkachel der Wetter-View und
+#                       nachtblau_pollen_kachel. Beschreibung am Template unten.
 #
 # Beide Popups haben dieselbe Oberflaeche (Nachtblau, Breite bis 720 px)
 # und Lesbarkeitsregeln; Erklaerung der Breiten-Fesseln im DWD-Block.
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
-#   3 Punkte -> "Raw-Konfigurationseditor" -> alle fuenf Eintraege unter
+#   3 Punkte -> "Raw-Konfigurationseditor" -> alle sechs Eintraege unter
 #   "button_card_templates:" auf oberster Ebene ergaenzen.
 #
 # Voraussetzung: custom:button-card und browser_mod (HACS), Integrationen
@@ -660,7 +663,10 @@ button_card_templates:
   # starten also nicht neu.
   # ==========================================================================
   nachtblau_pollen_kachel:
-    template: nachtblau_pollen_popup
+    # nachtblau_wisch: Wischen zwischen den Szenen (seit 14.11.2026)
+    template:
+      - nachtblau_pollen_popup
+      - nachtblau_wisch
     entity: sensor.pollenflug_graeser_101
     triggers_update:
       - sensor.pollenflug_graeser_101
@@ -717,6 +723,7 @@ button_card_templates:
     custom_fields:
       body: |
         [[[
+          variables.wisch(this); // Wischen zwischen den Szenen (nachtblau_wisch)
           const value = 'var(--nachtblau-text, #f2f5f8)', muted = 'var(--nachtblau-text-sekundaer, #8794a5)', label = 'var(--nachtblau-label, #b4c0cf)';
           const green = 'var(--nachtblau-gruen, #a6d49e)', amber = 'var(--nachtblau-amber, #e6b566)';
           const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, transparent)`;
@@ -1550,3 +1557,97 @@ button_card_templates:
       @media (prefers-reduced-motion: reduce) {
         .pf *, .pf-ic-dot, .wl-layer, .wl-dots i, .wl-name, .wl-lane { animation-play-state: paused !important; transition: none !important; }
       }
+
+  # ==========================================================================
+  # nachtblau_wisch -- Wischen zwischen den Szenen im Wechsel
+  # --------------------------------------------------------------------------
+  # Seit 14.11.2026. Warnkachel (wetter-view.yaml) und Pollenkachel
+  # (nachtblau_pollen_kachel) zeigen mehrere Szenen im Wechsel, je 5 s, rein
+  # ueber CSS-Animationen (wl-*, wechsel() und wechselStil() in
+  # nachtblau_warn_fx und nachtblau_pollen_fx). Waagerechtes Wischen springt
+  # zur naechsten (nach links) oder vorigen Szene (nach rechts); der Wechsel
+  # laeuft von dort im selben Takt weiter.
+  #
+  # Aufbau:
+  #   variables.wisch(karte)  Die Karte ruft es in einem JS-Template mit
+  #                  "variables.wisch(this);" auf (this ist laut button-card-
+  #                  Doku das button-card-Element). Haengt einmal je Karte
+  #                  Touch-Listener an deren Shadow-Root und gibt '' zurueck.
+  #                  Bibliothek in window.__nachtblauWisch, VERSION bei jeder
+  #                  Aenderung erhoehen (alte Listener werden dann ersetzt).
+  #   extra_styles   touch-action: pan-y, damit senkrechtes Scrollen bleibt
+  #                  und waagerechte Bewegungen bei den Listenern ankommen.
+  #
+  # Ein Wischer verschiebt alle wl-Animationen der Karte um dieselbe Zeit
+  # (Web Animations API, currentTime) auf den Beginn der Zielszene: Szene,
+  # Punkte, hervorgehobener Name und Spur bleiben gleichauf. Als Wischer
+  # zaehlt eine Bewegung ab 40 px, die mindestens 1,5-mal so weit waagerecht
+  # wie senkrecht geht. Das Antippen (Popup) loest dabei nicht aus:
+  # button-card verwirft ein Tippen, sobald sich der Finger bewegt hat
+  # (action-handler.ts v7.0.1, "Don't respond when moved or scrolled while
+  # touch"). Bei "Bewegung reduzieren" sind die Animationen angehalten, ein
+  # Wischer schaltet trotzdem um. Zeichnet button-card das Feld neu (andere
+  # Warnungen, Mitternacht), beginnt der Wechsel wieder bei der ersten Szene.
+  # Nur Touch: Am Desktop loest Ziehen mit der Maus einen Klick aus.
+  # ==========================================================================
+  nachtblau_wisch:
+    variables:
+      wisch: |
+        [[[
+          const VERSION = 1, alt = window.__nachtblauWisch;
+          if (alt && alt.version === VERSION) return alt.an;
+          const T = 5000, BLENDE = 600, MIN = 40; // Takt und Ueberblendung wie WECHSEL_T/_BLENDE
+
+          const springen = (root, schritt) => {
+            const card = root.getElementById('card');
+            if (!card || !card.getAnimations) return;
+            const anim = card.getAnimations({ subtree: true }).filter((a) => /^wl-/.test(a.animationName || ''));
+            if (!anim.length) return;
+            const ref = anim.find((a) => /^wl-show-/.test(a.animationName)) || anim[0];
+            const zyklus = ref.effect.getTiming().duration, n = Math.round(zyklus / T);
+            if (!(n > 1) || ref.currentTime === null) return;
+            // Alle wl-Animationen einer Karte entstehen im selben Feld, ihre
+            // currentTime ist gleich. Szene k aus der Zeitachse, Ziel kurz nach
+            // dem Einblenden der naechsten bzw. vorigen Szene.
+            const t = ((ref.currentTime % zyklus) + zyklus) % zyklus;
+            const k = Math.floor((t + BLENDE) / T) % n;
+            const ziel = (((k + schritt) % n + n) % n) * T + 50;
+            const delta = ((ziel - t) % zyklus + zyklus) % zyklus;
+            anim.forEach((a) => { if (a.currentTime !== null) a.currentTime = a.currentTime + delta; });
+          };
+
+          const an = (karte) => {
+            const root = karte && karte.shadowRoot;
+            if (!root) return '';
+            const da = karte.__nachtblauWisch;
+            if (da && da.version === VERSION) return '';
+            if (da) da.ab();
+            let x0 = null, y0 = 0;
+            const start = (e) => {
+              if (e.touches.length !== 1) { x0 = null; return; }
+              x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+            };
+            const ende = (e) => {
+              if (x0 === null || !e.changedTouches.length) return;
+              const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+              x0 = null;
+              if (Math.abs(dx) < MIN || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+              springen(root, dx < 0 ? 1 : -1);
+            };
+            const abbruch = () => { x0 = null; };
+            root.addEventListener('touchstart', start, { passive: true });
+            root.addEventListener('touchend', ende, { passive: true });
+            root.addEventListener('touchcancel', abbruch, { passive: true });
+            karte.__nachtblauWisch = { version: VERSION, ab: () => {
+              root.removeEventListener('touchstart', start);
+              root.removeEventListener('touchend', ende);
+              root.removeEventListener('touchcancel', abbruch);
+            } };
+            return '';
+          };
+
+          window.__nachtblauWisch = { version: VERSION, an };
+          return an;
+        ]]]
+    extra_styles: |
+      #card { touch-action: pan-y; }
