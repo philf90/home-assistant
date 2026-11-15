@@ -303,10 +303,13 @@ Passwort); die Karte braucht davon nichts.
 
 Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
 und die Docker-View (`docker-view.yaml`): die Integration
-[Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
-(HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
-[Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
-Docker-Host. Home Assistant spricht nur mit der Arcane-API; der
+[HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, eigenes
+Repository im Marketplace, ab Home Assistant 2026.2.3) und eine laufende
+[Arcane](https://github.com/getarcaneapp/arcane)-Instanz ab Version 3.0
+auf dem Docker-Host. HA-Arcane ist ein Fork von
+[Arcane-HA](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
+(HACS-Standardkatalog), das nur mit Arcane 2.x läuft: Arcane 3.0 hat die
+API-Pfade umbenannt. Domain, Entity-IDs und Ereignisse sind gleich. Home Assistant spricht nur mit der Arcane-API; der
 Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
 
 1. In Arcane unter *Settings → API keys* einen Schlüssel anlegen und der
@@ -316,11 +319,22 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    Steuern zusätzlich `containers:start`, `containers:stop`,
    `containers:restart`, `containers:redeploy` (Image-Updates
    installieren), `projects:deploy`, `projects:down`,
-   `projects:restart`. Für die Docker-View außerdem `system:upgrade`
+   `projects:restart`. Für die Update-Entitäten außerdem
+   `environments:read` (Arcane-Version weiterer Umgebungen). Für die
+   Docker-View außerdem `system:upgrade`
    (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
    aufräumen). Welche Rechte fehlen, zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
-2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
+2. Einstellungen → Marketplace → *Add from link* →
+   `https://github.com/philf90/HA-Arcane`, *Arcane* installieren, Home
+   Assistant neu starten (bis 2026.10: HACS → Benutzerdefinierte
+   Repositories). Ist Arcane-HA installiert, lässt der Marketplace den
+   Wechsel erst zu, wenn dessen Eintrag unter Geräte & Dienste gelöscht
+   ist. Die Integration legt die Entitäten danach neu an und benennt sie
+   nach dem heutigen Namen der Umgebung in Arcane; IDs wie
+   `sensor.local_docker_*` (siehe `docker-karte.yaml`, Abschnitt
+   Umgebung) unter Einstellungen → Entitäten zurückbenennen, dann
+   übernehmen sie auch die Langzeitstatistik.
 3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
    die Adresse, unter der Arcane direkt erreichbar ist (die Integration
    folgt keinen Weiterleitungen), und den Schlüssel.
