@@ -91,9 +91,13 @@
 # Karten-Karte nimmt fuer color einen Hex-Wert oder einen HA-Farbnamen, keine
 # eigene Theme-Variable; im hellen Modus bleibt die Linie im dunklen Blau. theme_mode: auto folgt dem
 # Hell/Dunkel des Themes (Vektorkacheln der Integration map_tiles, ab 2026.9).
-# Groesse: Popup hoechstens 480 px breit, Karte 4:5. Galaxy S25: 344 px Inhalt
-# -> 430 px Kartenhoehe, unter den 629 px Popuphoehe (DESIGN.md). iPhone
-# 17 Pro: 386 px -> 482 px.
+# Groesse: Popup hoechstens 480 px breit, Karte 2:3. Galaxy S25: 344 px Inhalt
+# -> 516 px Kartenhoehe, mit Kopf (gut 60 px) und 8 px Abstand unter den
+# 629 px Popuphoehe (DESIGN.md). iPhone 17 Pro: 386 px -> 579 px. 4:5 liess
+# auf dem iPhone die untere Haelfte des Popups leer.
+# Titel des Popups ist der Name der Person, darunter ein eigener Kopf: Icon-
+# Kachel und Punkt in der Statusfarbe wie das Badge der Karte, "Zuhause seit
+# 09:54" bzw. "Unterwegs seit 09:37" und unterwegs "Letzte Position vor 3 Min".
 # Die Spur braucht die Integration history (Standard); wie weit sie
 # zurueckreicht, begrenzt der Recorder (purge_keep_days).
 type: horizontal-stack
@@ -107,14 +111,19 @@ cards:
       activity_entity: sensor.iphone_activity
       places_prefix: sensor.places_bewohner
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
-    tap_action:
+    tap_action: &spur_popup
       action: call-service
       service: browser_mod.popup
+      # button-card wertet beim Tippen jedes [[[ ]]] in service_data aus
+      # (_objectEvalTemplate): Titel und Entitaet kommen so von der Karte, die
+      # Aktion gilt fuer beide Personen. [[[[ ]]]] (vier Klammern) verschont
+      # button-card beim Tippen und reicht es als [[[ ]]] an die Karte im
+      # Popup weiter: Der Kopf rechnet dort live (Minutentakt ueber sensor.time).
       service_data:
-        title: Letzte 12 Stunden
+        title: '[[[ return (entity && entity.attributes.friendly_name) || "Bewegung"; ]]]'
         # Oberflaeche wie im Tankstellen- und DWD-Popup (warnlage-templates.yaml,
         # Erklaerung dort), Breite auf 480 px gedeckelt (Kartenhoehe, siehe oben)
-        style: &spur_popup_style |
+        style: |
           --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
           --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
           --primary-background-color: var(--nachtblau-seite, #171d29);
@@ -125,14 +134,91 @@ cards:
           --popup-min-width: min(100vw, 480px);
           --popup-max-width: min(100vw, 480px);
         content:
-          type: map
-          entities:
-            - entity: person.bewohner
-              color: '#7fb3d5'
-          hours_to_show: 12
-          theme_mode: auto
-          auto_fit: true
-          aspect_ratio: '4:5'
+          type: vertical-stack
+          cards:
+            # Kopf: Icon-Kachel in der Statusfarbe der Karte (Gruen zuhause,
+            # Blau in einer Zone, Rot unterwegs), darunter Status mit Uhrzeit
+            # und unterwegs das Alter der letzten Position
+            - type: custom:button-card
+              entity: '[[[ return entity.entity_id; ]]]'
+              show_name: false
+              show_state: false
+              show_icon: false
+              show_label: false
+              tap_action:
+                action: none
+              hold_action:
+                action: none
+              styles:
+                card:
+                  - padding: 2px 4px 6px
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - cursor: default
+                grid:
+                  - grid-template-areas: '"kopf"'
+                custom_fields:
+                  kopf:
+                    - width: 100%
+                    - min-width: 0
+              custom_fields:
+                kopf: |
+                  [[[[
+                    const e = entity;
+                    states['sensor.time']; // Minutentakt fuer das Alter der Position
+                    const gruen = 'var(--nachtblau-gruen, #a6d49e)';
+                    const blau = 'var(--nachtblau-blau, #7fb3d5)';
+                    const rot = 'var(--nachtblau-rot, #f0736a)';
+                    const text = 'var(--nachtblau-text, #f2f5f8)';
+                    const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+                    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const raw = e ? e.state : 'unknown';
+                    const home = raw === 'home';
+                    const weg = raw === 'not_home';
+                    const unbekannt = !e || ['unknown', 'unavailable'].includes(raw);
+                    const zone = !home && !weg && !unbekannt;
+                    const farbe = home ? gruen : (zone ? blau : (weg ? rot : sek));
+                    const status = home ? 'Zuhause' : (weg ? 'Unterwegs' : (unbekannt ? 'Ort unbekannt' : esc(raw)));
+                    // Uhrzeit: heute "09:54", gestern "gestern 18:51", sonst "Mo 16:35"
+                    const uhr = (t) => {
+                      const d = new Date(t);
+                      const hm = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                      const heute = new Date(); heute.setHours(0, 0, 0, 0);
+                      if (d >= heute) return hm;
+                      if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
+                      return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
+                    };
+                    const seitT = e ? Date.parse(e.last_changed) : NaN;
+                    const seit = !unbekannt && !isNaN(seitT) ? ' seit ' + uhr(seitT) : '';
+                    const posT = e ? Date.parse(e.last_updated) : NaN;
+                    const min = isNaN(posT) ? null : Math.max(0, Math.floor((Date.now() - posT) / 60000));
+                    const alter = min === null ? '' : (min < 1 ? 'gerade eben' : (min < 60 ? `vor ${min} Min` : 'um ' + uhr(posT)));
+                    const zeile2 = weg && alter ? `Letzte Position ${alter}` : '';
+                    const zweiZeilen = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+                    return `
+                      <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                        <div style="width:42px;height:42px;flex:none;border-radius:13px;display:grid;place-items:center;color:${farbe};background:color-mix(in srgb, ${farbe} 16%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);">
+                          <ha-icon icon="mdi:map-marker-path" style="--mdc-icon-size:22px;--ha-icon-display:block;width:22px;height:22px;display:block;margin:0;"></ha-icon>
+                        </div>
+                        <div style="min-width:0;display:grid;gap:2px;">
+                          <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">Wege · letzte 12 Std</span>
+                          <span style="display:flex;align-items:center;gap:7px;min-width:0;font-size:15.5px;font-weight:700;line-height:1.2;color:${text};">
+                            <span style="width:7px;height:7px;flex:none;border-radius:50%;background:${farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${farbe} 18%, transparent);"></span>
+                            <span style="min-width:0;${zweiZeilen}">${status}${seit}</span>
+                          </span>
+                          ${zeile2 ? `<span style="font-size:12.5px;line-height:1.25;color:${sek};">${zeile2}</span>` : ''}
+                        </div>
+                      </div>`;
+                  ]]]]
+            - type: map
+              entities:
+                - entity: '[[[ return entity.entity_id; ]]]'
+                  color: '#7fb3d5'
+              hours_to_show: 12
+              theme_mode: auto
+              auto_fit: true
+              aspect_ratio: '2:3'
     hold_action:
       action: more-info
     show_name: false
@@ -380,21 +466,7 @@ cards:
       activity_entity: sensor.iphone_2_activity
       places_prefix: sensor.places_bewohner_2
       avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
-    tap_action:
-      action: call-service
-      service: browser_mod.popup
-      service_data:
-        title: Letzte 12 Stunden
-        style: *spur_popup_style
-        content:
-          type: map
-          entities:
-            - entity: person.bewohner_2
-              color: '#7fb3d5'
-          hours_to_show: 12
-          theme_mode: auto
-          auto_fit: true
-          aspect_ratio: '4:5'
+    tap_action: *spur_popup
     hold_action:
       action: more-info
     show_name: false
