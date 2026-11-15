@@ -99,7 +99,11 @@ cards:
           const gb = (v) => v < 1
             ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
             : v.toLocaleString('de-DE', { maximumFractionDigits: v < 10 ? 2 : 1 }) + ' GB';
-          const zeile = (t) => `<div style="font-size:12px;color:${SEK};line-height:1.3;">${t}</div>`;
+          const zeile = (t) => `<div style="font-size:12px;color:${SEK};line-height:1.3;text-wrap:balance;">${t}</div>`;
+          // Jeder Teil bleibt samt folgendem Trenner zusammen; umgebrochen wird
+          // nur nach einem "·". Sonst stand auf dem iPhone 17 Pro "(bleiben)"
+          // allein in Zeile 2 und auf dem S25 ein "·" am Zeilenanfang.
+          const stuecke = (t) => t.map((x, i) => `<span style="white-space:nowrap;">${x}${i < t.length - 1 ? ' ·' : ''}</span>`).join(' ');
           if (!entity || entity.state === 'unavailable') return zeile('Freigebbarer Speicher nicht verfügbar');
           const frei = zahl(entity.entity_id);
           const gesamt = zahl('sensor.local_docker_image_speicher');
@@ -107,7 +111,7 @@ cards:
           let stand = '';
           const p = states['button.docker_ungenutztes_entfernen'];
           const pz = p ? new Date(p.state).getTime() : NaN;
-          if (!isNaN(pz) && Date.now() - pz < 15 * 60e3 && new Date(entity.last_changed).getTime() < pz) stand = ' · Stand vor dem Aufräumen';
+          if (!isNaN(pz) && Date.now() - pz < 15 * 60e3 && new Date(entity.last_changed).getTime() < pz) stand = 'Stand vor dem Aufräumen';
           const anteil = gesamt ? Math.min(100, Math.max(0, frei / gesamt * 100)) : 0;
           const kopf = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:${SEK};">`
             + `<span>Freigebbar</span><span style="font-variant-numeric:tabular-nums;white-space:nowrap;"><b style="font-size:14px;color:${TEXT};">${gb(frei)}</b>`
@@ -119,7 +123,8 @@ cards:
           if (bc !== null) teile.push('Build-Cache ' + gb(bc));
           const vol = zahl('sensor.docker_freigebbarer_volume_speicher');
           if (vol !== null) teile.push('Volumes ' + gb(vol) + ' (bleiben)');
-          return kopf + spur + zeile(teile.join(' · ') + stand);
+          if (stand) teile.push(stand);
+          return kopf + spur + zeile(stuecke(teile));
         ]]]
     styles:
       card:
