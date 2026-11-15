@@ -81,7 +81,10 @@
 # wie bisher den Standard-Dialog (more-info). Titel ist der Name der Person,
 # darunter ein Kopf: Icon-Kachel und Punkt in der Statusfarbe wie das Badge der
 # Karte, "Zuhause seit 09:54" bzw. "Unterwegs seit 09:37", unterwegs "Letzte
-# Position vor 3 Min".
+# Position vor 3 Min". Das "seit" kommt aus der Historie (48 h, Bibliothek
+# window.__nachtblauKopf) und ueberspringt kurze Ausreisser nach derselben
+# Regel wie die Strecke (unter 2 min, unbekannt oder als Abwesenheit ohne 2
+# genaue Punkte). Bis die Historie da ist, steht der letzte Zustandswechsel.
 #
 # Ablauf (Bibliothek window.__nachtblauSpur in der Karte "Strecke" im Popup):
 #   1. Historie von person.* der letzten 48 h (history/history_during_period,
@@ -215,7 +218,62 @@ cards:
                       if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
                       return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
                     };
-                    const seitT = e ? Date.parse(e.last_changed) : NaN;
+                    // "seit": Beginn des aktuellen Zustands ohne kurze Ausreisser. Ein Abschnitt
+                    // mit anderem Zustand zaehlt nicht, wenn er kuerzer als 2 min ist, unbekannt
+                    // war oder als Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die
+                    // Strecke unten. Am 15.11.2026 zeigte der Kopf sonst "Zuhause seit 19:32"
+                    // nach einem 25-s-Sprung, statt 19:02. Historie: 48 h, einmal je Zustandswechsel.
+                    const VERSION = 1;
+                    if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== VERSION) {
+                      const kp = { version: VERSION, cache: {} };
+                      kp.beginn = (rows) => {
+                        let attr = null;
+                        const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
+                        if (!z.length) return null;
+                        const genau = (x) => x.a && typeof x.a.latitude === 'number' && (x.a.gps_accuracy ?? 999) <= 50;
+                        // Abschnitte gleichen Zustands
+                        const ab = [];
+                        z.forEach((x) => {
+                          const l = ab[ab.length - 1];
+                          if (l && l.s === x.s) { l.genau += genau(x) ? 1 : 0; return; }
+                          ab.push({ s: x.s, von: x.t, genau: genau(x) ? 1 : 0 });
+                        });
+                        ab.forEach((x, i) => { x.bis = i + 1 < ab.length ? ab[i + 1].von : Infinity; });
+                        const ausreisser = (x) => ['unknown', 'unavailable'].includes(x.s) || x.bis - x.von < 120
+                          || (x.s !== 'home' && x.genau < 2);
+                        let i = ab.length - 1;
+                        const jetzt = ab[i].s;
+                        // Rueckwaerts: Ausreisser zwischen zwei Abschnitten des aktuellen Zustands ueberspringen
+                        for (let k = i - 1; k >= 0; k--) {
+                          if (!ausreisser(ab[k])) break;
+                          if (k - 1 >= 0 && ab[k - 1].s === jetzt) { i = k - 1; k = i; continue; }
+                          if (k - 1 < 0) break;
+                        }
+                        return ab[i].von;
+                      };
+                      kp.lade = async (hass, eid) => {
+                        const ende = new Date(), start = new Date(ende.getTime() - 48 * 3600e3);
+                        const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
+                        return kp.beginn(h[eid] || []);
+                      };
+                      window.__nachtblauKopf = kp;
+                    }
+                    const kp = window.__nachtblauKopf;
+                    let seitT = e ? Date.parse(e.last_changed) : NaN;
+                    if (e) {
+                      const c = kp.cache[e.entity_id];
+                      if (!c || c.lc !== e.last_changed) {
+                        const karte = this, hh = this._hass || hass, eintrag = { lc: e.last_changed, t: null };
+                        kp.cache[e.entity_id] = eintrag;
+                        kp.lade(hh, e.entity_id).then((t) => {
+                          // Nur frueher als der letzte Wechsel uebernehmen; beginnt der Abschnitt am
+                          // Anfang der 48 h, gilt der letzte Wechsel
+                          if (t && t * 1000 < seitT - 1000) { eintrag.t = t * 1000; if (karte.requestUpdate) karte.requestUpdate(); }
+                        }).catch(() => {});
+                      } else if (c.t) {
+                        seitT = c.t;
+                      }
+                    }
                     const seit = !unbekannt && !isNaN(seitT) ? ' seit ' + uhr(seitT) : '';
                     const posT = e ? Date.parse(e.last_updated) : NaN;
                     const min = isNaN(posT) ? null : Math.max(0, Math.floor((Date.now() - posT) / 60000));
