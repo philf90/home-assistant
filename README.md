@@ -304,10 +304,14 @@ Passwort); die Karte braucht davon nichts.
 
 Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
 und die Docker-View (`docker-view.yaml`): die Integration
-[Arcane](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
-(HACS-Standardkatalog, ab Home Assistant 2025.2) und eine laufende
-[Arcane](https://github.com/getarcaneapp/arcane)-Instanz auf dem
-Docker-Host. Home Assistant spricht nur mit der Arcane-API; der
+[HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, für die
+Docker-View ab 0.7.0; eigenes Repository im Marketplace, ab Home Assistant
+2026.2.3) und eine laufende
+[Arcane](https://github.com/getarcaneapp/arcane)-Instanz ab Version 3.0
+auf dem Docker-Host. HA-Arcane ist ein Fork von
+[Arcane-HA](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
+(HACS-Standardkatalog), das nur mit Arcane 2.x läuft: Arcane 3.0 hat die
+API-Pfade umbenannt. Domain, Entity-IDs und Ereignisse sind gleich. Home Assistant spricht nur mit der Arcane-API; der
 Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
 
 1. In Arcane unter *Settings → API keys* einen Schlüssel anlegen und der
@@ -317,16 +321,30 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    Steuern zusätzlich `containers:start`, `containers:stop`,
    `containers:restart`, `containers:redeploy` (Image-Updates
    installieren), `projects:deploy`, `projects:down`,
-   `projects:restart`. Für die Docker-View außerdem `system:upgrade`
-   (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
-   aufräumen). Welche Rechte fehlen, zeigt die Integration unter
+   `projects:restart`. Für die Update-Entitäten außerdem
+   `environments:read` (Arcane-Version weiterer Umgebungen). Für die
+   Docker-View außerdem `system:upgrade`
+   (Arcane selbst aktualisieren), `system:prune` (Ungenutztes
+   aufräumen), `image-updates:read` (Versionshinweise im Update-Dialog)
+   und `image-updates:check` (Nach Updates suchen). Welche Rechte fehlen,
+   zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
-2. In HACS *Arcane* herunterladen, Home Assistant neu starten.
+2. Einstellungen → Marketplace → *Add from link* →
+   `https://github.com/philf90/HA-Arcane`, *Arcane* installieren, Home
+   Assistant neu starten (bis 2026.10: HACS → Benutzerdefinierte
+   Repositories). Ist Arcane-HA installiert, lässt der Marketplace den
+   Wechsel erst zu, wenn dessen Eintrag unter Geräte & Dienste gelöscht
+   ist. Die Integration legt die Entitäten danach neu an und benennt sie
+   nach dem heutigen Namen der Umgebung in Arcane; IDs wie
+   `sensor.local_docker_*` (siehe `docker-karte.yaml`, Abschnitt
+   Umgebung) unter Einstellungen → Entitäten zurückbenennen, dann
+   übernehmen sie auch die Langzeitstatistik.
 3. Einstellungen → Geräte & Dienste → Integration hinzufügen → *Arcane*:
    die Adresse, unter der Arcane direkt erreichbar ist (die Integration
    folgt keinen Weiterleitungen), und den Schlüssel.
 4. Nur für die Docker-View: unter *Konfigurieren → Abfrage* „CPU, RAM
-   und Festplatte des Hosts“ einschalten und unter *Steuerung* den Prune
+   und Festplatte des Hosts“ und „Freigebbarer Speicher“ einschalten und
+   unter *Steuerung* den Prune
    Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
    stellen; die Diagnose-Sensoren
    Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
@@ -372,7 +390,7 @@ daraus und aus den Kopfblöcken erzeugt.
 |---|---|---|---|
 | `person.bewohner` | Personen-Entity | Einstellungen → Personen | `fahrzeiten-karte.yaml`, `person-presence-karte.yaml`, `sicherheit-templates.yaml`, `wachmodus-konfig.yaml`, `doku/karten-basemap-carto.md` |
 | `sensor.iphone_*` | Sensoren der Companion App; `iphone` steht für den Gerätenamen | Einstellungen → Geräte & Dienste → Mobile App → Gerät | `gesundheit-meldungen-konfig.yaml`, `gesundheit-view.yaml`, `person-presence-karte.yaml` |
-| `sensor.places_bewohner`, `sensor.places_bewohner_2` | Eintrag der Integration Places (HACS, OpenStreetMap) je Person, ohne Endung; die Karte liest die Untersensoren `…_street`, `…_route_number`, `…_city`, `…_last_updated` und `…_direction_of_travel` | Einstellungen → Geräte & Dienste → Places → Eintrag → Entitäten | `person-presence-karte.yaml` |
+| `sensor.places_bewohner`, `sensor.places_bewohner_2` | Eintrag der Integration Places (HACS, OpenStreetMap) je Person, ohne Endung; die Karte liest die Untersensoren `…_street`, `…_route_number`, `…_city`, `…_last_updated`, `…_direction_of_travel`, `…_latitude` und `…_longitude` | Einstellungen → Geräte & Dienste → Places → Eintrag → Entitäten | `person-presence-karte.yaml` |
 | `notify.mobile_app_iphone` | Benachrichtigungen an dasselbe Gerät | Einstellungen → Werkzeuge → Aktionen, Suche `notify.mobile_app_` | `docker-konfig.yaml`, `flugradar-view.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-view.yaml`, `garten-karte.yaml`, `gesundheit-meldungen-konfig.yaml`, `gesundheit-view.yaml`, `hausgeraete.html`, `pakete-konfig.yaml`, `wachmodus-konfig.yaml` |
 | `<breite>`, `<laenge>` | Koordinaten von Zuhause | Einstellungen → Werkzeuge → Zustände, `zone.home` (Attribute `latitude`, `longitude`) | `flugradar-view.yaml` |
 | `sensor.pv_anlage_*` | Sensoren der PV-/Solarbank-Anlage (in Grafana ohne `sensor.`) | Einstellungen → Geräte & Dienste → Integration der Anlage | `energie-flow-karte.yaml`, `energie-monatsbilanz-karte.yaml`, `energie-prognose-karte.yaml`, `energie-solarbank-pv-karte.yaml`, `energie-templates.yaml`, `energie-verbraucher-karte.yaml`, `energiefluss.html`, `grafana/README.md`, `grafana/energie-dashboard.json`; in `archiv/`: `energie-autarkie-karte.yaml`, `energie-diagramme-karte.yaml`, `energie-flow-leiste-karte.yaml`, `energie-pv-karte.yaml` |

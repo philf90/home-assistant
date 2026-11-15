@@ -43,8 +43,12 @@
 #   der Testfahrt Landesstrassen wie "L 123"), kommt sie von dort, sonst von Places.
 #   Das Tempo steht nicht an person.*, sondern am Tracker in deren
 #   Attribut source (Einheit m/s).
-# Genommen wird die Quelle, die zur letzten Position der Person passt
-# (hoechstens 2 min aelter); passen beide, gewinnt die App. In Tests auf dem
+# Genommen wird die Quelle, deren eigene Position (App: Attribut location,
+# Places: Sensoren _latitude/_longitude) naeher an der Position der Person
+# liegt, hoechstens 2 km. Fehlt Places die Position, gilt die App bis 150 m
+# plus GPS-Ungenauigkeit; fehlen beide Positionen, gilt eine Quelle, wenn sie
+# hoechstens 2 min aelter ist als die Position, bei Gleichstand die App.
+# Passt keine, steht "Unterwegs" mit "zuletzt <Ort>". In Tests auf dem
 # Android-Handy kam der App-Sensor unterwegs nicht mit, Places schon; auf dem
 # iPhone umgekehrt zuverlaessig. Daher beide.
 # Faehrt die Person (Tempo ab 30 km/h oder Aktivitaet Automotive/in_vehicle,
@@ -67,8 +71,9 @@
 # ..._geocoded_location und Aktivitaet (iOS ..._activity, Android ..._detected_activity) der Companion
 # App, in Home Assistant und in der App eingeschaltet; Integration Places
 # (HACS) je Person mit eingeschalteten Untersensoren _street,
-# _route_number, _city, _last_updated und _direction_of_travel (Places legt
-# street, route_number und last_updated deaktiviert an). Ohne diese Sensoren
+# _route_number, _city, _last_updated, _direction_of_travel, _latitude und
+# _longitude (Places legt street, route_number, last_updated, latitude und
+# longitude deaktiviert an). Ohne diese Sensoren
 # zeigt die Karte wie bisher "Unterwegs".
 #
 # Bewegungsspur: Tippen oeffnet ein browser_mod-Popup mit der Strecke der
@@ -571,11 +576,47 @@ cards:
           const plOrt = pl('city');
           const geoOk = geoT !== null && !!(geoStr || geoOrt);
           const plOk = plT !== null && !!(plStr || plOrt);
-          // Quelle passend zur letzten Position; passen beide, gewinnt die App
+          // Welche Adresse passt zur Position der Person? Beide Quellen nennen die
+          // Position, fuer die sie ermittelt wurden: die App im Attribut location
+          // (iOS "Location"), Places in den Sensoren _latitude/_longitude. Es gilt
+          // die naehere, hoechstens 2 km entfernt (Places fragt nur alle 40-50 s
+          // ab, bei 120 km/h liegt es bis 1,6 km zurueck). Fehlt Places die
+          // Position, gilt die App bis 150 m plus GPS-Ungenauigkeit (max. 200 m);
+          // fehlt sie beiden, die Zeitregel. Zeit allein reicht nicht: Im Test war
+          // eine 109 s alte Adresse "frisch", das Auto aber fast 1 km weiter, und
+          // der Places-Sensor _last_updated schreibt seinen Wert eine Abfrage spaet.
+          const geoLoc = (() => {
+            if (!geo || !geo.attributes) return null;
+            const key = Object.keys(geo.attributes).find((x) => x.toLowerCase() === 'location');
+            const v = key ? geo.attributes[key] : null;
+            return Array.isArray(v) && v.length >= 2 && !isNaN(Number(v[0])) && !isNaN(Number(v[1])) ? [Number(v[0]), Number(v[1])] : null;
+          })();
+          const pLat = e && e.attributes && typeof e.attributes.latitude === 'number' ? e.attributes.latitude : null;
+          const pLon = e && e.attributes && typeof e.attributes.longitude === 'number' ? e.attributes.longitude : null;
+          const pAcc = e && e.attributes && typeof e.attributes.gps_accuracy === 'number' ? e.attributes.gps_accuracy : 0;
+          const abstandM = (lat1, lon1, lat2, lon2) => {
+            const r = Math.PI / 180;
+            const x = (lon2 - lon1) * r * Math.cos(((lat1 + lat2) / 2) * r);
+            const y = (lat2 - lat1) * r;
+            return Math.sqrt(x * x + y * y) * 6371000;
+          };
+          const plLatS = pl('latitude');
+          const plLonS = pl('longitude');
+          const plLoc = plLatS !== null && plLonS !== null && !isNaN(Number(plLatS)) && !isNaN(Number(plLonS)) ? [Number(plLatS), Number(plLonS)] : null;
+          const hatPos = pLat !== null && pLon !== null;
+          const dGeo = geoLoc && hatPos ? abstandM(geoLoc[0], geoLoc[1], pLat, pLon) : null;
+          const dPl = plLoc && hatPos ? abstandM(plLoc[0], plLoc[1], pLat, pLon) : null;
+          const MAX_M = 2000;
+          const geoPasst = dGeo !== null ? dGeo <= (dPl !== null ? MAX_M : 150 + Math.min(pAcc, 200)) : frisch(geoT);
+          const plPasst = dPl !== null ? dPl <= MAX_M : frisch(plT);
+          // Passen beide, gewinnt die naehere; ohne Positionen die App
           let quelle = null;
-          if (geoOk && frisch(geoT)) quelle = 'geo';
-          else if (plOk && frisch(plT)) quelle = 'places';
+          if (geoOk && geoPasst && plOk && plPasst) quelle = dGeo !== null && dPl !== null && dPl < dGeo ? 'places' : 'geo';
+          else if (geoOk && geoPasst) quelle = 'geo';
+          else if (plOk && plPasst) quelle = 'places';
           else if (geoOk || plOk) quelle = (geoOk && (!plOk || geoT >= plT)) ? 'geo' : 'places';
+          // Keine Quelle passt zur Position: Anzeige wie veraltet ("zuletzt ...")
+          const unpassend = !!quelle && !(quelle === 'geo' ? geoPasst : plPasst);
           const strasse = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
           const ort = quelle === 'geo' ? (geoOrt || plOrt) : (quelle === 'places' ? (plOrt || geoOrt) : null);
           // Strassennummer: bei App-Quelle aus deren Strasse (iOS liefert z. B. "L 123"),
@@ -583,8 +624,8 @@ cards:
           // Eine route_number von Places gilt auch neben der App (Autobahn).
           const refMuster = /^(A|B|L|K|St|S|E)\s?\d+[a-z]?$/i;
           const istRef = (v) => !!v && refMuster.test(v);
-          const plRefRoh = frisch(plT) ? (pl('route_number') || (istRef(plStr) ? plStr : null)) : null;
-          const refRoh = quelle === 'geo' ? (istRef(geoStr) ? geoStr : (frisch(plT) ? pl('route_number') : null)) : plRefRoh;
+          const plRefRoh = plPasst ? (pl('route_number') || (istRef(plStr) ? plStr : null)) : null;
+          const refRoh = quelle === 'geo' ? (istRef(geoStr) ? geoStr : (plPasst ? pl('route_number') : null)) : plRefRoh;
           const strRef = refRoh ? refRoh.split(';')[0].trim().replace(/^([A-Za-z]+)\s?(\d)/, '$1 $2') : null;
           // Alter der letzten Position
           const alterMin = posT !== null ? Math.max(0, Math.floor((Date.now() - posT) / 60000)) : null;
@@ -601,7 +642,7 @@ cards:
           const faehrt = alterMin !== null && alterMin < 10 && ((speed !== null && speed >= 8.3) || imAuto);
           const kmh = speed !== null && speed > 0 ? `${Math.round(speed * 3.6)} km/h` : null;
           const richtungMap = { 'towards home': 'Heimweg', 'away from home': 'entfernt sich' };
-          const richtung = frisch(plT) ? (richtungMap[String(pl('direction_of_travel') || '').toLowerCase()] || null) : null;
+          const richtung = plPasst ? (richtungMap[String(pl('direction_of_travel') || '').toLowerCase()] || null) : null;
           // Zeilen: Status (Strasse oder Schild + "bei Ort") und Unterzeile
           // Trennpunkt mit geschuetztem Leerzeichen davor: beim Umbruch beginnt keine Zeile mit "·"
           const TRENNER = '\u00a0· ';
@@ -610,9 +651,11 @@ cards:
           let schild = '';
           const unterwegs = !home && !inZone && raw === 'not_home' && !!quelle;
           if (unterwegs) {
-            if (veraltet) {
+            if (veraltet || unpassend) {
+              // Bei "unpassend" ist die Position aktuell, die Adresse nicht:
+              // kein Alter anzeigen, das waere das der Position.
               zeile1 = 'Unterwegs';
-              zeile2 = ['zuletzt ' + esc(strasse || ort), alterTxt].join(TRENNER);
+              zeile2 = veraltet ? ['zuletzt ' + esc(strasse || ort), alterTxt].join(TRENNER) : 'zuletzt ' + esc(strasse || ort);
             } else if (faehrt && strRef) {
               // Schild und Tempo sind kurz und passen in eine Zeile, Ort und Richtung bekommen die volle Breite
               schild = esc(strRef);
@@ -649,7 +692,7 @@ cards:
             ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;margin:0;color:${blau};"></ha-icon>`
             : icoAwayStatus.replace(`color:${muted}`, `color:${blau}`);
           const icoCarStatus = `<ha-icon icon="mdi:car" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;margin:0;color:${muted};"></ha-icon>`;
-          const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : (unterwegs && faehrt && !veraltet ? icoCarStatus : icoAwayStatus));
+          const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : (unterwegs && faehrt && !veraltet && !unpassend ? icoCarStatus : icoAwayStatus));
           // ha-icon braucht margin:0: button-card v7 setzt
           // ":not(ha-state-icon) ha-icon { margin: auto }", in der Flex-Zeile
           // rueckt das Icon sonst in die Mitte und der Text an den rechten Rand.
