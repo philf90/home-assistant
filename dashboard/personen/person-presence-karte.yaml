@@ -39,6 +39,10 @@
 #   - places_prefix: Integration Places (OpenStreetMap). Liefert zusaetzlich
 #     die Strassennummer (route_number, bei Landesstrassen teils in street)
 #     und die Richtung zu Hause.
+#   Strassennummer: Liefert die App eine Nummer als Strasse (iOS meldete auf
+#   der Testfahrt Landesstrassen wie "L 123"), kommt sie von dort, sonst von Places.
+#   Das Tempo steht nicht an person.*, sondern am Tracker in deren
+#   Attribut source (Einheit m/s).
 # Genommen wird die Quelle, die zur letzten Position der Person passt
 # (hoechstens 2 min aelter); passen beide, gewinnt die App. In Tests auf dem
 # Android-Handy kam der App-Sensor unterwegs nicht mit, Places schon; auf dem
@@ -174,16 +178,23 @@ cards:
           else if (geoOk || plOk) quelle = (geoOk && (!plOk || geoT >= plT)) ? 'geo' : 'places';
           const strasse = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
           const ort = quelle === 'geo' ? (geoOrt || plOrt) : (quelle === 'places' ? (plOrt || geoOrt) : null);
-          // Strassennummer nur aus Places (route_number, bei Landesstrassen in street)
+          // Strassennummer: bei App-Quelle aus deren Strasse (iOS liefert z. B. "L 123"),
+          // sonst aus Places (route_number, bei Landesstrassen in street).
+          // Eine route_number von Places gilt auch neben der App (Autobahn).
           const refMuster = /^(A|B|L|K|St|S|E)\s?\d+[a-z]?$/i;
-          const plRefRoh = pl('route_number') || (plStr && refMuster.test(plStr) ? plStr : null);
-          const strRef = plRefRoh && frisch(plT) ? plRefRoh.split(';')[0].trim().replace(/^([A-Za-z]+)\s?(\d)/, '$1 $2') : null;
+          const istRef = (v) => !!v && refMuster.test(v);
+          const plRefRoh = frisch(plT) ? (pl('route_number') || (istRef(plStr) ? plStr : null)) : null;
+          const refRoh = quelle === 'geo' ? (istRef(geoStr) ? geoStr : (frisch(plT) ? pl('route_number') : null)) : plRefRoh;
+          const strRef = refRoh ? refRoh.split(';')[0].trim().replace(/^([A-Za-z]+)\s?(\d)/, '$1 $2') : null;
           // Alter der letzten Position
           const alterMin = posT !== null ? Math.max(0, Math.floor((Date.now() - posT) / 60000)) : null;
           const alterTxt = alterMin === null ? '' : (alterMin < 1 ? 'gerade eben' : (alterMin < 60 ? `vor ${alterMin} Min` : `vor ${Math.floor(alterMin / 60)} Std`));
           const veraltet = alterMin !== null && alterMin >= 60;
           // Faehrt? Tempo (m/s) ab 30 km/h oder Aktivitaet Auto, Position juenger als 10 min
-          const speed = e && e.attributes && typeof e.attributes.speed === 'number' ? e.attributes.speed : null;
+          // person.* hat kein speed, der Tracker dahinter schon (Attribut source)
+          const trk = e && e.attributes && e.attributes.source ? states[e.attributes.source] : null;
+          const spRoh = [e, trk].map((o) => (o && o.attributes ? o.attributes.speed : null)).find((v) => typeof v === 'number');
+          const speed = typeof spRoh === 'number' && spRoh >= 0 ? spRoh : null;
           const akt = states[variables.activity_entity];
           const aktT = akt ? zeit(akt.last_updated) : null;
           const imAuto = !!akt && ['automotive', 'in_vehicle'].includes(String(akt.state).toLowerCase()) && aktT !== null && Date.now() - aktT < 900000;
@@ -192,6 +203,8 @@ cards:
           const richtungMap = { 'towards home': 'Heimweg', 'away from home': 'entfernt sich' };
           const richtung = frisch(plT) ? (richtungMap[String(pl('direction_of_travel') || '').toLowerCase()] || null) : null;
           // Zeilen: Status (Strasse oder Schild + "bei Ort") und Unterzeile
+          // Trennpunkt mit geschuetztem Leerzeichen davor: beim Umbruch beginnt keine Zeile mit "·"
+          const TRENNER = '\u00a0· ';
           let zeile1 = esc(statusLabel);
           let zeile2 = '';
           let schild = '';
@@ -199,18 +212,18 @@ cards:
           if (unterwegs) {
             if (veraltet) {
               zeile1 = 'Unterwegs';
-              zeile2 = ['zuletzt ' + esc(strasse || ort), alterTxt].join(' · ');
+              zeile2 = ['zuletzt ' + esc(strasse || ort), alterTxt].join(TRENNER);
             } else if (faehrt && strRef) {
               // Schild und Tempo sind kurz und passen in eine Zeile, Ort und Richtung bekommen die volle Breite
               schild = esc(strRef);
               zeile1 = kmh || '';
-              zeile2 = [ort ? 'bei ' + esc(ort) : null, richtung].filter(Boolean).join(' · ') || alterTxt;
+              zeile2 = [ort ? 'bei ' + esc(ort) : null, richtung].filter(Boolean).join(TRENNER) || alterTxt;
             } else {
               zeile1 = esc(strasse || ort);
               const teile = [];
               if (strasse && ort) teile.push(esc(ort));
               teile.push(faehrt ? kmh : alterTxt);
-              zeile2 = teile.filter(Boolean).join(' · ');
+              zeile2 = teile.filter(Boolean).join(TRENNER);
             }
           }
 
@@ -233,10 +246,13 @@ cards:
           const icoAwayStatus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${muted};width:13px;height:13px;flex:none;">
             <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
           const icoZoneStatus = zoneIcon
-            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:13px;width:13px;height:13px;display:flex;flex:none;color:${blau};"></ha-icon>`
+            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;margin:0;color:${blau};"></ha-icon>`
             : icoAwayStatus.replace(`color:${muted}`, `color:${blau}`);
-          const icoCarStatus = `<ha-icon icon="mdi:car" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;color:${muted};"></ha-icon>`;
+          const icoCarStatus = `<ha-icon icon="mdi:car" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;margin:0;color:${muted};"></ha-icon>`;
           const statusIcon = home ? icoHomeStatus : (inZone ? icoZoneStatus : (unterwegs && faehrt && !veraltet ? icoCarStatus : icoAwayStatus));
+          // ha-icon braucht margin:0: button-card v7 setzt
+          // ":not(ha-state-icon) ha-icon { margin: auto }", in der Flex-Zeile
+          // rueckt das Icon sonst in die Mitte und der Text an den rechten Rand.
           // Strassennummer als Schild, getoent in Blau (Info-Wert)
           const schildHtml = schild
             ? `<span style="flex:none;font-size:11.5px;font-weight:700;line-height:17px;padding:0 6px;border-radius:5px;white-space:nowrap;color:${blau};background:color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 16%, transparent);border:1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent);">${schild}</span>`
@@ -249,7 +265,7 @@ cards:
           const badgeAway = `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
             <path d="M4 11.5 11 5.7V19h-5v-8.4"/><path d="M13 12h8m0 0-3-3m3 3-3 3"/></svg>`;
           const badgeZone = zoneIcon
-            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:11px;width:11px;height:11px;display:flex;color:#12161f;"></ha-icon>`
+            ? `<ha-icon icon="${zoneIcon}" style="--mdc-icon-size:11px;--ha-icon-display:block;width:11px;height:11px;display:flex;margin:0;color:#12161f;"></ha-icon>`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="#12161f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;">
             <circle cx="12" cy="10" r="3"/><path d="M12 21c5-4.6 7-7.6 7-11a7 7 0 1 0-14 0c0 3.4 2 6.4 7 11Z"/></svg>`;
           // Fuellung: bleibt in beiden Modi pastell
