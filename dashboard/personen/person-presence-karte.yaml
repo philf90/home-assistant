@@ -77,8 +77,9 @@
 # zeigt die Karte wie bisher "Unterwegs".
 #
 # Bewegungsspur: Tippen oeffnet ein browser_mod-Popup mit der Strecke der
-# laufenden bzw. letzten Abwesenheit, auf Strassen eingerastet; Halten oeffnet
-# wie bisher den Standard-Dialog (more-info). Titel ist der Name der Person,
+# laufenden bzw. letzten Abwesenheit, auf Strassen eingerastet, und dem
+# Tagesprofil (zweiter Reiter, siehe unten); Halten oeffnet wie bisher den
+# Standard-Dialog (more-info). Titel ist der Name der Person,
 # darunter ein Kopf: Icon-Kachel und Punkt in der Statusfarbe wie das Badge der
 # Karte, "Zuhause seit 09:54" bzw. "Unterwegs seit 09:37", unterwegs "Letzte
 # Position vor 3 Min". Das "seit" kommt aus der Historie (48 h, Bibliothek
@@ -124,9 +125,35 @@
 # Hellgrau mit dunklem Rand. Die Kartenebenen nehmen keine Theme-Variablen; im
 # hellen Modus bleiben sie in den dunklen Werten. Die Karte selbst folgt dem
 # Hell/Dunkel des Themes (Vektorkacheln der Integration map_tiles, ab 2026.9).
-# Groesse: Popup hoechstens 480 px breit, Karte 2:3, hoechstens 100vh - 260 px.
-# Galaxy S25 (697 px hoch): 437 px Karte; mit Kopf und Legende unter den 629 px
-# Popuphoehe (DESIGN.md). iPhone 17 Pro: 386 px breit -> 579 px.
+# Reiter "Tagesprofil" (ueber der Karte, neben "Letzte Strecke"): alle Wege seit
+# Mitternacht, umschaltbar auf die letzten 24 Stunden. Grundlage sind dieselben
+# 48 h Historie und dieselben Regeln (Filter, Ausreisser, Einrasten).
+#   - Aufenthalt: mindestens 10 min innerhalb von 150 m, oder eine Meldeluecke
+#     ab 10 min mit hoechstens 300 m Ortswechsel (iOS meldet im Stand teils
+#     30 min nichts). Er trennt die Abwesenheit in Fahrten; jede Fahrt wird fuer
+#     sich eingerastet (Ergebnis zwischengespeichert, hoechstens 4 Abrufe
+#     gleichzeitig). Testfahrt 13.11.2026 (5 h, Android): 3 Aufenthalte
+#     erkannt, darunter 16 min Stand 535 m von Zuhause.
+#   - Schilder auf der Karte: Aufenthalt mit Zone (wenn die Person in einer
+#     stand) und "von-bis" in Violett, Beginn jeder Fahrt ab Zuhause als
+#     "ab HH:MM" in Blau; Schilder innerhalb von 150 m werden zusammengefasst.
+#     Marker aus der MapLibre-Instanz der Engine (_maplibre.Marker), ohne sie
+#     keine Schilder.
+#   - Antippen der Karte: der naechste Messpunkt im Umkreis von 14 px zeigt
+#     seine Uhrzeit (_maplibre.Popup), in beiden Reitern.
+#   - Tagesliste unter der Karte: Abfahrt bzw. Weiterfahrt mit km, Aufenthalt
+#     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
+#   Sichtbar ist der Reiter nur fuer die Person selbst: Attribut user_id der
+#   Person gleich dem angemeldeten Benutzer. Variable tag_fuer der
+#   Personenkarte: eigene (Standard) oder alle. Andere sehen nur die letzte
+#   Strecke, wie bisher. Das ist eine Anzeigeregel, kein Zugriffsschutz: Die
+#   Historie ist fuer jeden Benutzer der Instanz abrufbar.
+# Groesse: Popup hoechstens 480 px breit, Karte 2:3, hoechstens 100vh - 300 px
+# (Reiter "Letzte Strecke") bzw. 100vh - 420 px (Tagesprofil, darunter die
+# Liste mit hoechstens 104 px, drei Zeilen, scrollbar). Galaxy S25 (697 px
+# hoch): 397 bzw. 277 px Karte; mit Kopf, Reitern und Legende unter den 629 px
+# Popuphoehe (DESIGN.md). iPhone 17 Pro (386 px breit, 874 px hoch): 574 bzw.
+# 454 px.
 # Die Spur braucht die Integration history (Standard); wie weit sie
 # zurueckreicht, begrenzt der Recorder (purge_keep_days).
 type: horizontal-stack
@@ -140,6 +167,8 @@ cards:
       activity_entity: sensor.iphone_activity
       places_prefix: sensor.places_bewohner
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
+      # Reiter Tagesprofil im Popup: eigene = nur die Person selbst, alle = jeder
+      tag_fuer: eigene
     tap_action: &spur_popup
       action: call-service
       service: browser_mod.popup
@@ -300,6 +329,9 @@ cards:
             # Erklaerung im Kopfkommentar der Datei, Abschnitt "Bewegungsspur".
             - type: custom:button-card
               entity: '[[[ return entity.entity_id; ]]]'
+              # tag_fuer der Personenkarte, beim Tippen ausgewertet (siehe oben)
+              variables:
+                tag_fuer: '[[[ return variables.tag_fuer || "eigene"; ]]]'
               show_name: false
               show_state: false
               show_icon: false
@@ -325,13 +357,17 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 2;
+                    const VERSION = 3;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
                       const GENAU = 50;      // m: ungenauere Punkte (Netzortung) fallen weg
-                      const FENSTER = 48;    // h Historie
-                      const BLAU = '#7fb3d5', PUNKT = '#b4c0cf', GRUND = '#10151d';
+                      const FENSTER = 48;    // h Historie (deckt Letzte Strecke, Heute und 24 Std)
+                      const HALT_S = 600;    // s: Aufenthalt ab 10 Min ...
+                      const HALT_M = 150;    // m: ... im Umkreis von 150 m
+                      const BLAU = '#7fb3d5', VIOLETT = '#b399d4', GRUEN = '#a6d49e', PUNKT = '#b4c0cf';
+                      const GRUND = '#10151d', FLAECHE = '#222b3c', HELL = '#f2f5f8', GRAU = '#8794a5';
+                      const SCHRIFT = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
                       sp.esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                       // Polyline mit Genauigkeit 6 (Valhalla)
                       sp.dec = (s) => {
@@ -347,52 +383,101 @@ cards:
                         }
                         return out;
                       };
-                      // Laufende bzw. letzte Abwesenheit aus den Zeilen der Historie (person.*):
-                      // Zonen ausser Zuhause zaehlen als abwesend. Dazu je ein Punkt davor und danach.
-                      // Eine abgeschlossene Abwesenheit ohne mindestens 2 genaue Punkte unterwegs
-                      // wird uebersprungen: Am 15.11.2026 sprang person.* fuer 25 s auf not_home,
-                      // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
-                      // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
-                      sp.abwesenheit = (rows) => {
+                      const meter = (a, b) => {
+                        const r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
+                        const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+                        return 12742000 * Math.asin(Math.sqrt(h));
+                      };
+                      const weg = (s) => s !== 'home' && s !== 'unknown' && s !== 'unavailable';
+                      const genau = (x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU;
+                      // Zeilen der Historie (person.*) -> {s, a, t}; eine Zeile ohne Attribute erbt die der vorigen
+                      sp.zeilen = (rows) => {
                         let attr = null;
-                        const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
-                        const weg = (s) => s !== 'home' && s !== 'unknown' && s !== 'unavailable';
-                        const genau = (x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU;
-                        // Abwesenheiten als [Anfang, Ende], die juengste zuerst
-                        const spannen = [];
+                        return rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
+                      };
+                      // Genaue Punkte; mehrere Meldungen innerhalb einer Sekunde: die genaueste;
+                      // gleiche Position nur einmal
+                      sp.punkte = (z) => {
+                        const p = z.filter(genau)
+                          .map((x) => ({ lat: x.a.latitude, lon: x.a.longitude, acc: x.a.gps_accuracy ?? 999, t: x.t, s: x.s }))
+                          .sort((a, b) => a.t - b.t);
+                        const out = [];
+                        p.forEach((x) => {
+                          const l = out[out.length - 1];
+                          if (l && x.t - l.t < 1) { if (x.acc < l.acc) out[out.length - 1] = x; return; }
+                          if (l && l.lat === x.lat && l.lon === x.lon) return;
+                          out.push(x);
+                        });
+                        return out;
+                      };
+                      // Abwesenheiten als [Anfang, Ende] (Indizes der Zeilen), die juengste zuerst.
+                      // Zonen ausser Zuhause zaehlen als abwesend.
+                      const spannen = (z) => {
+                        const out = [];
                         for (let i = z.length - 1; i >= 0; i--) {
                           if (!weg(z[i].s)) continue;
                           let anf = i;
                           while (anf > 0 && weg(z[anf - 1].s)) anf--;
-                          spannen.push([anf, i]);
+                          out.push([anf, i]);
                           i = anf;
                         }
-                        const wahl = spannen.find(([anf, ende], k) => (k === 0 && ende === z.length - 1)
-                          || z.slice(anf, ende + 1).filter(genau).length >= 2);
-                        if (!wahl) return { pkt: [], laufend: false };
-                        const [anf, ende] = wahl;
-                        const p = z.slice(Math.max(0, anf - 1), Math.min(z.length, ende + 2))
-                          .filter(genau)
-                          .map((x) => ({ lat: x.a.latitude, lon: x.a.longitude, acc: x.a.gps_accuracy ?? 999, t: x.t }))
-                          .sort((a, b) => a.t - b.t);
-                        // Mehrere Meldungen innerhalb einer Sekunde: die genaueste; gleiche Position nur einmal
-                        const pkt = [];
-                        p.forEach((x) => {
-                          const l = pkt[pkt.length - 1];
-                          if (l && x.t - l.t < 1) { if (x.acc < l.acc) pkt[pkt.length - 1] = x; return; }
-                          if (l && l.lat === x.lat && l.lon === x.lon) return;
-                          pkt.push(x);
-                        });
-                        return { pkt, laufend: ende === z.length - 1 };
+                        return out;
                       };
-                      // Gruppen dichter Punkte; ein Abstand ueber LUECKE trennt
-                      sp.gruppen = (pkt) => {
-                        const g = [];
-                        pkt.forEach((x, i) => {
-                          if (i === 0 || x.t - pkt[i - 1].t > LUECKE) g.push([x]);
-                          else g[g.length - 1].push(x);
+                      // Eine abgeschlossene Abwesenheit ohne mindestens 2 genaue Punkte unterwegs
+                      // ist ein Ausreisser: Am 15.11.2026 sprang person.* fuer 25 s auf not_home,
+                      // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
+                      // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
+                      const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
+                      // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt, Ankunft)
+                      const spannPunkte = (z, [anf, ende]) => sp.punkte(z.slice(Math.max(0, anf - 1), Math.min(z.length, ende + 2)));
+                      // Letzte Strecke: laufende oder juengste echte Abwesenheit
+                      sp.abwesenheit = (z) => {
+                        const wahl = spannen(z).find((s, k) => (k === 0 && s[1] === z.length - 1) || echt(z, s));
+                        if (!wahl) return { pkt: [], laufend: false };
+                        return { pkt: spannPunkte(z, wahl), laufend: wahl[1] === z.length - 1 };
+                      };
+                      // Aufenthalte in einer Punktfolge: Punkte, die mindestens HALT_S innerhalb
+                      // HALT_M um den ersten bleiben, oder eine Meldeluecke von mindestens HALT_S
+                      // mit hoechstens 2 x HALT_M Ortswechsel (iOS meldet im Stand bis zu 30 min
+                      // nichts). Name: die Zone, in der die Person dabei stand, sonst leer.
+                      sp.halte = (pkt) => {
+                        const out = [];
+                        let i = 0;
+                        while (i < pkt.length) {
+                          let j = i;
+                          while (j + 1 < pkt.length && meter(pkt[i], pkt[j + 1]) <= HALT_M) j++;
+                          if (j > i && pkt[j].t - pkt[i].t >= HALT_S) { out.push([i, j]); i = j + 1; }
+                          else if (i + 1 < pkt.length && pkt[i + 1].t - pkt[i].t >= HALT_S && meter(pkt[i], pkt[i + 1]) <= 2 * HALT_M) { out.push([i, i + 1]); i += 2; }
+                          else i++;
+                        }
+                        return out.map(([i, j]) => {
+                          const teil = pkt.slice(i, j + 1);
+                          const zone = teil.map((x) => x.s).find((s) => s && weg(s) && s !== 'not_home');
+                          return { i, j, von: pkt[i].t, bis: pkt[j].t, lat: teil.reduce((s, x) => s + x.lat, 0) / teil.length, lon: teil.reduce((s, x) => s + x.lon, 0) / teil.length, name: zone || '' };
                         });
-                        return g;
+                      };
+                      // Tag: alle echten Abwesenheiten, die nach "start" enden, zerlegt in Fahrten
+                      // (zwischen Zuhause und Aufenthalten) und Aufenthalte. Punkte vor "start"
+                      // fallen weg.
+                      sp.tag = (z, start) => {
+                        const fahrten = [], halte = [];
+                        let laufend = false;
+                        spannen(z).reverse().forEach((s) => {
+                          const offen = s[1] === z.length - 1;
+                          if (z[s[1]].t < start && !offen) return;
+                          if (!offen && !echt(z, s)) return;
+                          laufend = laufend || offen;
+                          const pkt = spannPunkte(z, s).filter((x) => x.t >= start);
+                          if (pkt.length < 2) return;
+                          let von = 0;
+                          sp.halte(pkt).forEach((h) => {
+                            if (h.i > von) fahrten.push({ pkt: pkt.slice(von, h.i + 1), nachHalt: von > 0 });
+                            halte.push(h);
+                            von = h.j;
+                          });
+                          if (von < pkt.length - 1) fahrten.push({ pkt: pkt.slice(von), nachHalt: von > 0, heim: !offen });
+                        });
+                        return { fahrten, halte, laufend };
                       };
                       sp.valhalla = async (hass, pts) => {
                         const anfrage = {
@@ -410,45 +495,62 @@ cards:
                           km: teile.reduce((s, t) => s + t.summary.length, 0),
                         };
                       };
-                      const luft = (a, b) => {
-                        const r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
-                        const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
-                        return 12742 * Math.asin(Math.sqrt(h));
+                      // Hoechstens n Auftraege gleichzeitig (ein Tag kann viele Abschnitte haben)
+                      const gedrosselt = async (auftraege, n) => {
+                        const erg = new Array(auftraege.length);
+                        let next = 0;
+                        const arbeiter = async () => { while (next < auftraege.length) { const k = next++; erg[k] = await auftraege[k](); } };
+                        await Promise.all(Array.from({ length: Math.min(n, auftraege.length) }, arbeiter));
+                        return erg;
                       };
-                      // Dichte Gruppen einzeln einrasten (durchgezogen), jede Luecke einzeln als
-                      // kuerzester Weg zwischen ihren Endpunkten (gestrichelt). Ein Auftrag fuer die
-                      // ganze Fahrt erzwaenge Wenden auf der Strasse; Valhalla legte dann einen
-                      // Bogen um den Block (Testfahrt 15.11.2026).
+                      const schluessel = (pkt) => pkt.length + '|' + pkt[0].t + '|' + pkt[pkt.length - 1].t;
+                      // Dichte Gruppen einzeln einrasten (durchgezogen), jede Luecke ueber 2 min
+                      // einzeln als kuerzester Weg zwischen ihren Endpunkten (gestrichelt). Ein
+                      // Auftrag fuer die ganze Fahrt erzwaenge Wenden auf der Strasse; Valhalla legte
+                      // dann einen Bogen um den Block (Testfahrt 15.11.2026). Ergebnis je Punktfolge
+                      // zwischengespeichert, solange die Seite offen ist.
                       sp.rechne = async (hass, pkt) => {
-                        const gr = sp.gruppen(pkt);
+                        const k = schluessel(pkt);
+                        if (sp.cache[k]) return sp.cache[k];
+                        const gr = [];
+                        pkt.forEach((x, i) => { if (i === 0 || x.t - pkt[i - 1].t > LUECKE) gr.push([x]); else gr[gr.length - 1].push(x); });
                         const auftraege = [];
                         gr.forEach((g) => { if (g.length > 1) auftraege.push({ fest: true, pts: g }); });
                         for (let i = 0; i < gr.length - 1; i++) auftraege.push({ fest: false, pts: [gr[i][gr[i].length - 1], gr[i + 1][0]] });
-                        const erg = await Promise.all(auftraege.map((a) => sp.valhalla(hass, a.pts)
+                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts)
                           .then((r) => ({ fest: a.fest, linien: r.linien, km: r.km, ok: true }))
                           .catch(() => ({
                             fest: a.fest, ok: false,
                             linien: [a.pts.map((x) => [x.lat, x.lon])],
-                            km: a.pts.slice(1).reduce((s, x, i) => s + luft(a.pts[i], x), 0),
-                          }))));
+                            km: a.pts.slice(1).reduce((s, x, i) => s + meter(a.pts[i], x) / 1000, 0),
+                          }))), 4);
                         const teil = (fest) => erg.filter((e) => e.fest === fest);
-                        return {
+                        const s = {
                           fest: teil(true).flatMap((e) => e.linien),
                           geschaetzt: teil(false).flatMap((e) => e.linien),
-                          kmFest: teil(true).reduce((s, e) => s + e.km, 0),
-                          kmGeschaetzt: teil(false).reduce((s, e) => s + e.km, 0),
+                          kmFest: teil(true).reduce((x, e) => x + e.km, 0),
+                          kmGeschaetzt: teil(false).reduce((x, e) => x + e.km, 0),
                           fehler: erg.filter((e) => !e.ok).length,
                           auftraege: erg.length,
                         };
+                        // Fehlgeschlagene Auftraege nicht merken, die naechste Runde versucht es neu
+                        if (!s.fehler) sp.cache[k] = s;
+                        return s;
                       };
                       const fc = (linien) => ({ type: 'FeatureCollection', features: linien.map((l) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l.map((p) => [p[1], p[0]]) } })) });
-                      const pc = (pkt) => ({ type: 'FeatureCollection', features: pkt.map((x) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [x.lon, x.lat] } })) });
+                      const pc = (pkt) => ({ type: 'FeatureCollection', features: pkt.map((x) => ({ type: 'Feature', properties: { t: x.t }, geometry: { type: 'Point', coordinates: [x.lon, x.lat] } })) });
+                      const uhr = (t) => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                      const dauer = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m} Min` : `${Math.floor(m / 60)} Std ${String(m % 60).padStart(2, '0')} Min`; };
+                      const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
                       // Karte: das Element ha-map der eingebauten Karten-Karte. Es hat keine
                       // offizielle Schnittstelle fuer eigene Linien; die Spur kommt als eigene
-                      // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine.
-                      // Sie sammeln die Ebenen und setzen sie nach einem Stilwechsel (hell/dunkel)
-                      // wieder ein. Fehlen sie (Frontend-Update, Geraet ohne WebGL2), zeichnet
-                      // ha-map die Spur als eigene Pfade, mit Punkt an jedem Knick.
+                      // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine
+                      // (_addCustomSource, _addCustomLayer, _setCustomSourceData). Sie sammeln die
+                      // Ebenen und setzen sie nach einem Stilwechsel (hell/dunkel) wieder ein.
+                      // Schilder und das Zeit-Popup nutzen Marker und Popup aus derselben
+                      // MapLibre-Instanz (_maplibre). Fehlen sie (Frontend-Update, Geraet ohne
+                      // WebGL2), zeichnet ha-map die Spur als eigene Pfade, ohne Schilder; die
+                      // Tagesliste bleibt.
                       sp.karte = async (kasten, eid) => {
                         if (kasten.__spur) return kasten.__spur;
                         if (!customElements.get('ha-map')) {
@@ -465,82 +567,215 @@ cards:
                         kasten.appendChild(m);
                         let eng = null;
                         for (let i = 0; i < 60; i++) { eng = m._engine; if (eng && eng._map) break; await new Promise((ok) => setTimeout(ok, 200)); }
-                        kasten.__spur = { m, eng, ebenen: false, schluessel: '' };
+                        kasten.__spur = { m, eng, ebenen: false, schilder: [], stand: '', vektor: !!(eng && eng._map && eng._addCustomSource && eng._setCustomSourceData) };
                         return kasten.__spur;
                       };
-                      sp.zeichne = (st, s, pkt) => {
+                      sp.passe = (st, alle) => {
+                        if (!st.vektor || !alle.length) return;
+                        const la = alle.map((p) => p[0]), lo = alle.map((p) => p[1]);
+                        st.eng._map.fitBounds([[Math.min(...lo), Math.min(...la)], [Math.max(...lo), Math.max(...la)]], { padding: 40, maxZoom: 16, animate: false });
+                      };
+                      // Antippen: naechster Messpunkt im Umkreis von 14 px zeigt seine Uhrzeit
+                      const zeitPopup = (st) => {
+                        const { eng } = st;
+                        if (!eng._maplibre || !eng._maplibre.Popup) return;
+                        const popup = new eng._maplibre.Popup({ closeButton: false, offset: 8, className: 'spur-zeit' });
+                        eng._map.on('click', (ev) => {
+                          if (!eng._map.getLayer('ha-map-spur-punkte')) return;
+                          const { x, y } = ev.point;
+                          const f = eng._map.queryRenderedFeatures([[x - 14, y - 14], [x + 14, y + 14]], { layers: ['ha-map-spur-punkte'] });
+                          if (!f.length) { popup.remove(); return; }
+                          const nah = f.map((g) => { const p = eng._map.project(g.geometry.coordinates); return { g, d: (p.x - x) ** 2 + (p.y - y) ** 2 }; }).sort((a, b) => a.d - b.d)[0].g;
+                          popup.setLngLat(nah.geometry.coordinates)
+                            .setHTML(`<span style="font:600 12.5px ${SCHRIFT};color:${GRUND};font-variant-numeric:tabular-nums;">${uhr(nah.properties.t)}</span>`)
+                            .addTo(eng._map);
+                        });
+                      };
+                      // Schilder in der Naehe (HALT_M) zu einem zusammenfassen, Texte mit " · "
+                      const buendle = (liste) => {
+                        const out = [];
+                        liste.forEach((x) => {
+                          const da = out.find((o) => o.halt === x.halt && meter(o, x) <= HALT_M);
+                          if (da) da.text += ' · ' + x.text; else out.push({ ...x });
+                        });
+                        return out;
+                      };
+                      sp.zeichne = (st, fest, gesch, pkt, schilder) => {
                         const { m, eng } = st;
-                        const alle = s.fest.flat().concat(s.geschaetzt.flat(), pkt.map((x) => [x.lat, x.lon]));
-                        if (eng && eng._map && eng._addCustomSource && eng._setCustomSourceData) {
-                          const daten = { 'ha-map-spur-geschaetzt': fc(s.geschaetzt), 'ha-map-spur-fest': fc(s.fest), 'ha-map-spur-punkte': pc(pkt) };
+                        st.schilder.forEach((x) => x.remove());
+                        st.schilder = [];
+                        if (st.vektor) {
+                          const daten = { 'ha-map-spur-geschaetzt': fc(gesch), 'ha-map-spur-fest': fc(fest), 'ha-map-spur-punkte': pc(pkt) };
                           if (!st.ebenen) {
                             Object.entries(daten).forEach(([id, d]) => eng._addCustomSource(id, d));
                             eng._addCustomLayer({ id: 'ha-map-spur-geschaetzt', type: 'line', source: 'ha-map-spur-geschaetzt', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.4, 1.4] } });
                             eng._addCustomLayer({ id: 'ha-map-spur-fest', type: 'line', source: 'ha-map-spur-fest', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 4 } });
-                            eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 2.5, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
+                            eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 3, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
+                            zeitPopup(st);
                             st.ebenen = true;
                           } else {
                             Object.entries(daten).forEach(([id, d]) => eng._setCustomSourceData(id, d));
                           }
-                          if (alle.length) {
-                            const la = alle.map((p) => p[0]), lo = alle.map((p) => p[1]);
-                            eng._map.fitBounds([[Math.min(...lo), Math.min(...la)], [Math.max(...lo), Math.max(...la)]], { padding: 36, maxZoom: 16, animate: false });
+                          if (eng._maplibre && eng._maplibre.Marker) {
+                            buendle(schilder).forEach((x) => {
+                              const el = document.createElement('div');
+                              el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 11px ${SCHRIFT};font-variant-numeric:tabular-nums;`;
+                              el.innerHTML = x.halt
+                                ? `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;padding:3px 7px;border-radius:7px;background:${FLAECHE};border:1px solid rgba(179,153,212,0.45);color:${HELL};white-space:nowrap;">${sp.esc(x.text)}</span><span style="width:12px;height:12px;margin-top:3px;border-radius:50%;background:${GRUND};border:2.5px solid ${VIOLETT};box-sizing:border-box;"></span>`
+                                : `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;margin-top:6px;padding:2px 6px;border-radius:6px;background:${FLAECHE};border:1px solid rgba(127,179,213,0.45);color:${BLAU};white-space:nowrap;">${sp.esc(x.text)}</span>`;
+                              st.schilder.push(new eng._maplibre.Marker({ element: el, anchor: x.halt ? 'bottom' : 'top' }).setLngLat([x.lon, x.lat]).addTo(eng._map));
+                            });
                           }
-                          return 'vektor';
+                          return;
                         }
-                        m.paths = s.fest.concat(s.geschaetzt).map((l) => ({ points: l.map((p) => ({ point: p, timestamp: new Date() })), color: BLAU }));
+                        m.paths = fest.concat(gesch).map((l) => ({ points: l.map((p) => ({ point: p, timestamp: new Date() })), color: BLAU }));
                         m.autoFit = true;
-                        return 'rueckfall';
                       };
-                      const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
-                      sp.lauf = async (karte, hass, eid, kasten, info) => {
-                        const zeig = (t) => { info.innerHTML = t; };
+                      const strich = (gestrichelt) => `<svg viewBox="0 0 18 6" style="width:18px;height:6px;flex:none;"><line x1="1" y1="3" x2="17" y2="3" stroke="var(--nachtblau-blau, ${BLAU})" stroke-width="${gestrichelt ? 2.4 : 3.2}" stroke-linecap="${gestrichelt ? 'butt' : 'round'}"${gestrichelt ? ' stroke-dasharray="3.4 3"' : ''}/></svg>`;
+                      const legende = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;">
+                          <span style="display:inline-flex;align-items:center;gap:6px;">${strich(false)}gemessen</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;">${strich(true)}geschätzt, Lücke über 2 Min</span></div>`;
+                      const hinweis = (fehler, gesamt) => fehler ? `<div style="color:var(--nachtblau-amber, #e6b566);">Einrasten bei ${fehler} von ${gesamt} Abschnitten fehlgeschlagen, dort ungefilterte Linie.</div>` : '';
+                      // Reiter "Letzte Strecke"
+                      sp.letzte = async (hass, st, z, ui) => {
+                        const a = sp.abwesenheit(z);
+                        ui.liste.style.display = 'none';
+                        if (a.pkt.length < 2) {
+                          if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
+                          ui.info.innerHTML = a.laufend ? 'Seit der Abfahrt noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`;
+                          return a.laufend;
+                        }
+                        if (!st.stand.startsWith('letzte')) ui.info.innerHTML = 'Strecke wird eingerastet …';
+                        const s = await sp.rechne(hass, a.pkt);
+                        // Neu zeichnen und einpassen nur bei neuen Punkten, sonst bleibt der Ausschnitt
+                        const stand = 'letzte|' + schluessel(a.pkt);
+                        if (st.stand !== stand) {
+                          sp.zeichne(st, s.fest, s.geschaetzt, a.pkt, []);
+                          sp.passe(st, s.fest.flat().concat(s.geschaetzt.flat(), a.pkt.map((x) => [x.lat, x.lon])));
+                          st.stand = stand;
+                        }
+                        const teile = [kmTxt(s.kmFest + s.kmGeschaetzt)];
+                        if (s.kmGeschaetzt >= 0.05) teile.push(`davon ${kmTxt(s.kmGeschaetzt)} geschätzt`);
+                        teile.push(`${a.pkt.length} Punkte`);
+                        ui.info.innerHTML = `<div>${teile.join(' · ')}</div>${legende}${hinweis(s.fehler, s.auftraege)}`;
+                        return a.laufend;
+                      };
+                      // Reiter "Tagesprofil": alle Fahrten seit Mitternacht bzw. der letzten
+                      // 24 Stunden; Schilder an Aufenthalten (von-bis) und am Beginn jeder Fahrt
+                      // ab Zuhause; darunter die Tagesliste
+                      sp.tagesansicht = async (hass, st, z, ui) => {
+                        const mitternacht = new Date(); mitternacht.setHours(0, 0, 0, 0);
+                        const start = ui.zeitraum === '24' ? Date.now() / 1000 - 86400 : mitternacht.getTime() / 1000;
+                        const tg = sp.tag(z, start);
+                        const umschalter = [['heute', 'Heute'], ['24', '24 Std']].map(([k, t]) => `<button type="button" data-zeitraum="${k}" style="font:600 11.5px ${SCHRIFT};padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.08);cursor:pointer;background:${k === ui.zeitraum ? FLAECHE : 'transparent'};color:${k === ui.zeitraum ? HELL : GRAU};">${t}</button>`).join('');
+                        const kopf = (text) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="min-width:0;">${text}</span><span style="display:inline-flex;gap:4px;flex:none;">${umschalter}</span></div>`;
+                        if (!tg.fahrten.length) {
+                          if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
+                          ui.info.innerHTML = kopf(ui.zeitraum === '24' ? 'Keine Wege in den letzten 24 Stunden.' : 'Heute noch keine Wege.');
+                          ui.liste.style.display = 'none';
+                          return tg.laufend;
+                        }
+                        if (!st.stand.startsWith('tag')) ui.info.innerHTML = kopf('Wege werden eingerastet …');
+                        const erg = [];
+                        for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt));
+                        const fest = erg.flatMap((s) => s.fest), gesch = erg.flatMap((s) => s.geschaetzt);
+                        const pkt = tg.fahrten.flatMap((f) => f.pkt);
+                        const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
+                        if (st.stand !== stand) {
+                          const schilder = tg.halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
+                            .concat(tg.fahrten.filter((f) => !f.nachHalt).map((f) => ({ halt: false, lat: f.pkt[0].lat, lon: f.pkt[0].lon, text: `ab ${uhr(f.pkt[0].t)}` })));
+                          sp.zeichne(st, fest, gesch, pkt, schilder);
+                          sp.passe(st, fest.flat().concat(gesch.flat(), pkt.map((x) => [x.lat, x.lon])));
+                          st.stand = stand;
+                        }
+                        // Tagesliste nach Uhrzeit; Antippen eines Eintrags zeigt ihn auf der Karte
+                        const eintraege = [];
+                        tg.fahrten.forEach((f, k) => {
+                          const ende = f.pkt[f.pkt.length - 1];
+                          eintraege.push({ t: f.pkt[0].t, farbe: BLAU, text: f.nachHalt ? 'Weiterfahrt' : 'Abfahrt', wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                          if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
+                        });
+                        tg.halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
+                        eintraege.sort((a, b) => a.t - b.t);
+                        ui.eintraege = eintraege;
+                        ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 9px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
+                            <b style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--nachtblau-text, ${HELL});">${uhr(e.t)}</b><span style="width:9px;height:9px;border-radius:50%;background:${e.farbe};"></span>
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--nachtblau-text, ${HELL});">${sp.esc(e.text)}</span><span style="font-variant-numeric:tabular-nums;">${e.wert}</span></div>`).join('');
+                        ui.liste.style.display = 'flex';
+                        const km = erg.reduce((s, x) => s + x.kmFest + x.kmGeschaetzt, 0);
+                        const fehler = erg.reduce((s, x) => s + x.fehler, 0), gesamt = erg.reduce((s, x) => s + x.auftraege, 0);
+                        const n = tg.fahrten.length, h = tg.halte.length;
+                        const teile = [kmTxt(km), `${n} ${n === 1 ? 'Fahrt' : 'Fahrten'}`];
+                        if (h) teile.push(`${h} ${h === 1 ? 'Halt' : 'Halte'}`);
+                        ui.info.innerHTML = kopf(teile.join(' · ')) + legende + hinweis(fehler, gesamt);
+                        return tg.laufend;
+                      };
+                      sp.zeige = async (hass, st, ui) => {
+                        const tag = ui.modus === 'tag';
+                        ui.kasten.style.maxHeight = tag ? 'calc(100vh - 420px)' : 'calc(100vh - 300px)';
+                        ui.reiter.querySelectorAll('[data-modus]').forEach((b) => {
+                          const an = b.dataset.modus === ui.modus;
+                          b.style.background = an ? FLAECHE : 'transparent';
+                          b.style.color = an ? HELL : GRAU;
+                        });
+                        return tag ? sp.tagesansicht(hass, st, ui.z, ui) : sp.letzte(hass, st, ui.z, ui);
+                      };
+                      // Eine Runde: Historie laden, aktuellen Reiter zeichnen. Rueckgabe: unterwegs?
+                      sp.lauf = async (hass, eid, ui) => {
                         try {
                           const ende = new Date(), start = new Date(ende.getTime() - FENSTER * 3600e3);
                           const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
-                          const a = sp.abwesenheit(h[eid] || []);
-                          const st = await sp.karte(kasten, eid);
-                          if (a.pkt.length < 2) {
-                            st.m.autoFit = true;
-                            zeig(a.laufend ? 'Seit der Abfahrt noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`);
-                            return a;
-                          }
-                          const schluessel = a.pkt.length + '|' + a.pkt[0].t + '|' + a.pkt[a.pkt.length - 1].t;
-                          let s = sp.cache[eid];
-                          if (!s || s.schluessel !== schluessel) {
-                            if (!st.ebenen) zeig('Strecke wird eingerastet …');
-                            s = Object.assign(await sp.rechne(hass, a.pkt), { schluessel });
-                            sp.cache[eid] = s;
-                          }
-                          if (st.schluessel !== schluessel) { sp.zeichne(st, s, a.pkt); st.schluessel = schluessel; }
-                          const teile = [kmTxt(s.kmFest + s.kmGeschaetzt)];
-                          if (s.kmGeschaetzt >= 0.05) teile.push(`davon ${kmTxt(s.kmGeschaetzt)} geschätzt`);
-                          teile.push(`${a.pkt.length} Punkte`);
-                          const strich = (gestrichelt) => `<svg viewBox="0 0 18 6" style="width:18px;height:6px;flex:none;"><line x1="1" y1="3" x2="17" y2="3" stroke="var(--nachtblau-blau, ${BLAU})" stroke-width="${gestrichelt ? 2.4 : 3.2}" stroke-linecap="${gestrichelt ? 'butt' : 'round'}"${gestrichelt ? ' stroke-dasharray="3.4 3"' : ''}/></svg>`;
-                          const hinweis = s.fehler ? `<div style="color:var(--nachtblau-amber, #e6b566);">Einrasten bei ${s.fehler} von ${s.auftraege} Abschnitten fehlgeschlagen, dort ungefilterte Linie.</div>` : '';
-                          zeig(`<div>${teile.join(' · ')}</div>
-                            <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;">
-                              <span style="display:inline-flex;align-items:center;gap:6px;">${strich(false)}gemessen</span>
-                              <span style="display:inline-flex;align-items:center;gap:6px;">${strich(true)}geschätzt, Lücke über 2 Min</span>
-                            </div>${hinweis}`);
-                          return a;
+                          ui.z = sp.zeilen(h[eid] || []);
+                          const st = await sp.karte(ui.kasten, eid);
+                          return await sp.zeige(hass, st, ui);
                         } catch (e) {
-                          zeig(`<span style="color:var(--nachtblau-amber, #e6b566);">Strecke nicht verfügbar: ${sp.esc(e && e.message ? e.message : e)}</span>`);
-                          return null;
+                          ui.info.innerHTML = `<span style="color:var(--nachtblau-amber, #e6b566);">Strecke nicht verfügbar: ${sp.esc(e && e.message ? e.message : e)}</span>`;
+                          return false;
                         }
                       };
-                      // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist
-                      sp.start = (karte, eid, h0) => {
+                      // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist.
+                      // Den Reiter "Tagesprofil" sieht nur die Person selbst (user_id der Person =
+                      // angemeldeter Benutzer), mit tag_fuer: alle jeder.
+                      sp.start = (karte, eid, h0, tagFuer) => {
                         const r = karte.shadowRoot;
-                        const kasten = r && r.querySelector('[data-spur-karte]');
-                        const info = r && r.querySelector('[data-spur-info]');
-                        if (!kasten || !info) return;
+                        const q = (s) => r && r.querySelector(s);
+                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], eintraege: [] };
+                        if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter) return;
+                        const hass = () => karte._hass || h0;
+                        const person = hass().states[eid];
+                        const ich = hass().user;
+                        if (tagFuer === 'alle' || (person && ich && person.attributes.user_id === ich.id)) ui.reiter.style.display = 'flex';
+                        let belegt = false;
                         const runde = async () => {
-                          if (!kasten.isConnected) { clearInterval(karte.__spurTakt); return; }
-                          const a = await sp.lauf(karte, karte._hass || h0, eid, kasten, info);
-                          if (!(a && a.laufend)) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; }
+                          if (!ui.kasten.isConnected) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; return; }
+                          if (belegt) return;
+                          belegt = true;
+                          const laufend = await sp.lauf(hass(), eid, ui);
+                          belegt = false;
+                          if (!laufend) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; }
                           else if (!karte.__spurTakt) karte.__spurTakt = setInterval(runde, 60000);
                         };
+                        const wechsel = async () => {
+                          if (belegt || !ui.kasten.__spur || !ui.z.length) return;
+                          belegt = true;
+                          try { await sp.zeige(hass(), ui.kasten.__spur, ui); } finally { belegt = false; }
+                        };
+                        ui.reiter.addEventListener('click', (ev) => {
+                          const b = ev.target.closest('[data-modus]');
+                          if (b && b.dataset.modus !== ui.modus) { ui.modus = b.dataset.modus; wechsel(); }
+                        });
+                        ui.info.addEventListener('click', (ev) => {
+                          const b = ev.target.closest('[data-zeitraum]');
+                          if (b && b.dataset.zeitraum !== ui.zeitraum) { ui.zeitraum = b.dataset.zeitraum; wechsel(); }
+                        });
+                        ui.liste.addEventListener('click', (ev) => {
+                          const e = ev.target.closest('[data-eintrag]');
+                          const st = ui.kasten.__spur;
+                          if (!e || !st || !st.vektor) return;
+                          const box = ui.eintraege[+e.dataset.eintrag].box;
+                          if (box.length === 1) st.eng._map.jumpTo({ center: [box[0][1], box[0][0]], zoom: 16 });
+                          else sp.passe(st, box);
+                        });
                         runde();
                       };
                       window.__nachtblauSpur = sp;
@@ -548,13 +783,15 @@ cards:
                     const sp = window.__nachtblauSpur;
                     if (!this.__spurGestartet) {
                       this.__spurGestartet = true;
-                      const karte = this, eid = entity.entity_id;
-                      const h0 = hass;
-                      setTimeout(() => sp.start(karte, eid, h0), 50);
+                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene';
+                      setTimeout(() => sp.start(karte, eid, h0, tagFuer), 50);
                     }
+                    const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
                     return `<div style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                      <div data-spur-reiter style="display:none;gap:4px;padding:3px;border-radius:12px;background:#10151d;">${knopf('letzte', 'Letzte Strecke')}${knopf('tag', 'Tagesprofil')}</div>
                       <div data-spur-info style="min-height:16px;font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Strecke wird geladen …</div>
-                      <div data-spur-karte style="width:100%;aspect-ratio:2 / 3;max-height:calc(100vh - 260px);border-radius:14px;overflow:hidden;background:#10151d;"></div>
+                      <div data-spur-karte style="width:100%;aspect-ratio:2 / 3;max-height:calc(100vh - 300px);border-radius:14px;overflow:hidden;background:#10151d;"></div>
+                      <div data-spur-liste style="display:none;flex-direction:column;gap:5px;max-height:104px;overflow-y:auto;font-size:12.5px;color:var(--nachtblau-text-sekundaer, #8794a5);"></div>
                     </div>`;
                   ]]]]
     hold_action:
@@ -842,6 +1079,8 @@ cards:
       activity_entity: sensor.iphone_2_activity
       places_prefix: sensor.places_bewohner_2
       avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
+      # Reiter Tagesprofil im Popup: eigene = nur die Person selbst, alle = jeder
+      tag_fuer: eigene
     tap_action: *spur_popup
     hold_action:
       action: more-info
