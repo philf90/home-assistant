@@ -481,9 +481,17 @@ button_card_templates:
   # Arcane selbst). Antippen oeffnet den Update-Dialog von HA, "Installieren"
   # ruft update.install mit Rueckfrage auf. Ohne ausstehendes Update steht
   # "aktuell" mit der installierten Version da und der Knopf ist aus.
+  # Gesperrt (ab HA-Arcane 0.7.0): Haelt Arcane ein Update zurueck, etwa wegen
+  # eines Schwachstellen-Limits, bleibt die Entitaet on, setzt
+  # update_blocked: true und blocked_reason und bietet kein Installieren an.
+  # Die Zeile steht dann in Koralle mit Schloss und Grund, der Knopf ist aus.
+  # Versionshinweise zeigt der Update-Dialog von HA (Antippen der Zeile), ab
+  # HA-Arcane 0.7.0 auch fuer Container-Updates; die Karte selbst fragt sie
+  # nicht ab, sonst ginge bei jedem Zeichnen eine Anfrage an Arcane und GitHub.
   #   variables.titel  ersetzt den Namen (fuer Arcane selbst)
   #   variables.frage  Text der Rueckfrage (Standard: Container)
-  # Rechte: containers:redeploy (Container), system:upgrade (Arcane).
+  # Rechte: containers:redeploy (Container), system:upgrade (Arcane),
+  # image-updates:read (Versionshinweise im Dialog).
   nachtblau_docker_update:
     variables:
       titel: ''
@@ -502,16 +510,23 @@ button_card_templates:
         ]]]
       offen: '[[[ return !!entity && entity.state === "on"; ]]]'
       laeuft: '[[[ return !!entity && !!entity.attributes.in_progress; ]]]'
+      gesperrt: '[[[ return variables.offen && entity.attributes.update_blocked === true; ]]]'
+      installierbar: '[[[ return variables.offen && !variables.gesperrt; ]]]'
       akzent: |
         [[[
           if (!entity || entity.state === 'unavailable') return '';
+          if (variables.gesperrt) return 'var(--nachtblau-koralle, #e7936e)';
           return variables.offen || variables.laeuft ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-gruen, #a6d49e)';
         ]]]
     show_icon: true
     show_name: false
     show_state: false
     show_label: false
-    icon: '[[[ return variables.offen || variables.laeuft ? "mdi:package-up" : "mdi:package-variant-closed-check"; ]]]'
+    icon: |
+      [[[
+        if (variables.gesperrt) return 'mdi:lock-outline';
+        return variables.offen || variables.laeuft ? 'mdi:package-up' : 'mdi:package-variant-closed-check';
+      ]]]
     tap_action:
       action: more-info
     hold_action:
@@ -529,6 +544,10 @@ button_card_templates:
           const bild = a.title ? a.title + ' · ' : '';
           if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">${bild}wird installiert …</span>`;
           if (!variables.offen) return `<span style="font-size:12px;color:${sek};">${bild}aktuell · ${a.installed_version || '–'}</span>`;
+          if (variables.gesperrt) {
+            const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+            return `<span style="font-size:12px;color:var(--nachtblau-koralle, #e7936e);">gesperrt · ${esc(a.blocked_reason || 'von Arcane zurückgehalten')}</span>`;
+          }
           return `<span style="font-size:12px;color:${sek};">${bild}${a.installed_version || '?'} → ${a.latest_version || '?'}</span>`;
         ]]]
       install:
@@ -541,7 +560,7 @@ button_card_templates:
           show_state: false
           tap_action: |
             [[[
-              if (!variables.offen || variables.laeuft) return { action: 'none' };
+              if (!variables.installierbar || variables.laeuft) return { action: 'none' };
               const frage = variables.frage || (variables.anzeige + ' jetzt aktualisieren? Der Container wird mit dem neuen Image neu ausgerollt und ist dabei kurz nicht erreichbar.');
               return {
                 action: 'perform-action',
@@ -559,15 +578,15 @@ button_card_templates:
               - border-radius: 12px
               - box-shadow: none
               - background: |
-                  [[[ return variables.offen ? 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 12%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+                  [[[ return variables.installierbar ? 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 12%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
               - border: |
-                  [[[ return variables.offen ? '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
-              - opacity: '[[[ return variables.offen ? 1 : 0.4; ]]]'
+                  [[[ return variables.installierbar ? '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+              - opacity: '[[[ return variables.installierbar ? 1 : 0.4; ]]]'
             name:
               - font-size: 13px
               - font-weight: 700
               - white-space: nowrap
-              - color: '[[[ return variables.offen ? "var(--nachtblau-amber, #e6b566)" : "var(--nachtblau-label, #b4c0cf)"; ]]]'
+              - color: '[[[ return variables.installierbar ? "var(--nachtblau-amber, #e6b566)" : "var(--nachtblau-label, #b4c0cf)"; ]]]'
     styles:
       card:
         - border-radius: 14px

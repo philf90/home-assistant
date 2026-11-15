@@ -13,13 +13,21 @@
 # ============================================================================
 # Karte der Docker-View (docker-view.yaml).
 #
-#   Kopf       Anzahl ausstehender Updates; "Alle aktualisieren" startet
+#   Kopf       Anzahl ausstehender Updates, gesperrte getrennt ("1 Update
+#              ausstehend · 1 gesperrt"); "Alle aktualisieren" startet
 #              script.docker_alle_updates_installieren (docker-konfig.yaml)
-#              nach Rueckfrage. Ohne Update oder waehrend das Skript laeuft
+#              nach Rueckfrage und zaehlt wie das Skript nur installierbare
+#              Updates. Ohne solches Update oder waehrend das Skript laeuft
 #              ist der Knopf aus.
 #   Liste      je ausstehendem Image-Update eine Zeile (nachtblau_docker_update):
 #              Image, installierte und neue Version, "Installieren" mit
-#              Rueckfrage. Ohne Update: "Alle Container-Images aktuell".
+#              Rueckfrage; ein gesperrtes Update in Koralle mit Grund und
+#              ohne Knopf. Antippen oeffnet den Update-Dialog mit den
+#              Versionshinweisen. Ohne Update: "Alle Container-Images aktuell".
+#   Suchen     "Nach Updates suchen" (button.docker_nach_updates_suchen, ab
+#              HA-Arcane 0.7.0): laesst Arcane sofort alle Images pruefen;
+#              daneben der Zeitpunkt des letzten Anstosses aus HA.
+#              Recht: image-updates:check.
 #   Arcane     Arcane selbst; die Installation laedt das neue Arcane-Image und
 #              startet es neu. Recht: system:upgrade.
 #
@@ -28,9 +36,10 @@
 # "latest" (21.10.2026).
 #
 # Voraussetzung: custom:button-card + custom:auto-entities + card-mod (HACS),
-#                Integration Arcane (HACS) mit den Rechten containers:redeploy
-#                und system:upgrade, Skript aus docker-konfig.yaml, Templates
-#                aus docker-templates.yaml.
+#                Integration Arcane (HACS) ab 0.7.0 mit Update-Entitaeten und
+#                Steuerung, Rechte containers:redeploy, system:upgrade,
+#                image-updates:read und image-updates:check; Skript aus
+#                docker-konfig.yaml, Templates aus docker-templates.yaml.
 type: vertical-stack
 card_mod:
   style: |
@@ -54,7 +63,16 @@ cards:
         const g = states['sensor.local_docker_container'];
         if (isNaN(n)) return 'keine Daten';
         if (n === 0) return 'Alle ' + (g ? g.state + ' ' : '') + 'Container aktuell';
-        return n + (n === 1 ? ' Update ausstehend' : ' Updates ausstehend');
+        // Der Zaehler enthaelt gesperrte Updates; die stehen getrennt da.
+        let frei = 0, gesperrt = 0;
+        for (const id of Object.keys(states)) {
+          if (!/^update\.container_.+_image_update$/.test(id) || states[id].state !== 'on') continue;
+          if (states[id].attributes.update_blocked === true) gesperrt++; else frei++;
+        }
+        const teile = [];
+        if (frei || !gesperrt) teile.push(frei + (frei === 1 ? ' Update ausstehend' : ' Updates ausstehend'));
+        if (gesperrt) teile.push(gesperrt + ' gesperrt');
+        return teile.join(' · ');
       ]]]
     custom_fields:
       badge:
@@ -67,18 +85,21 @@ cards:
           show_name: true
           show_state: false
           variables:
+            # Nur installierbare Updates: on und nicht von Arcane gesperrt,
+            # dieselbe Auswahl wie im Skript.
             anzahl: |
               [[[
-                const s = states['sensor.local_docker_container_updates_verfugbar'];
-                const n = s ? parseInt(s.state, 10) : NaN;
-                return isNaN(n) ? 0 : n;
+                let n = 0;
+                for (const id of Object.keys(states)) {
+                  if (!/^update\.container_.+_image_update$/.test(id)) continue;
+                  if (states[id].state === 'on' && states[id].attributes.update_blocked !== true) n++;
+                }
+                return n;
               ]]]
             aktiv: |
               [[[
-                const s = states['sensor.local_docker_container_updates_verfugbar'];
-                const n = s ? parseInt(s.state, 10) : NaN;
                 const sk = states['script.docker_alle_updates_installieren'];
-                return n > 0 && !!sk && sk.state === 'off';
+                return variables.anzahl > 0 && !!sk && sk.state === 'off';
               ]]]
           tap_action: |
             [[[
@@ -194,6 +215,108 @@ cards:
             - line-height: 1.25
             - margin-top: 5px
             - text-align: left
+
+  # ---- Nach Updates suchen (ab HA-Arcane 0.7.0) ----
+  # Der Zustand des Buttons ist der Zeitpunkt des Drueckens, nicht das Ende
+  # der Pruefung (HA schreibt ihn vorher); Arcanes eigene, geplante
+  # Pruefungen aendern ihn nicht. Daher "zuletzt angestossen". Die Pruefung
+  # selbst dauert bis zu fuenf Minuten, einen Fortschritt meldet die
+  # Entitaet nicht. Keine Rueckfrage: Pruefen aendert nichts.
+  - type: custom:button-card
+    entity: button.docker_nach_updates_suchen
+    icon: mdi:refresh
+    show_icon: true
+    show_name: false
+    show_state: false
+    variables:
+      aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+    tap_action: |
+      [[[
+        if (!variables.aktiv) return { action: 'none' };
+        return { action: 'perform-action', perform_action: 'button.press', target: { entity_id: entity.entity_id } };
+      ]]]
+    hold_action:
+      action: none
+    custom_fields:
+      titel: >-
+        <span style="font-size:14px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Nach Updates suchen</span>
+      info: |
+        [[[
+          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          if (!variables.aktiv) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+          const d = new Date(entity.state);
+          const txt = isNaN(d.getTime()) ? 'noch nie angestoßen'
+            : 'zuletzt angestoßen ' + d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `<span style="font-size:12px;color:${sek};">${txt}</span>`;
+        ]]]
+      knopf: |
+        [[[
+          return `<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;opacity:${variables.aktiv ? 1 : 0.4};color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">Prüfen</span>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel knopf" "i info knopf"'
+        - grid-template-columns: 36px minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-label, #b4c0cf)'
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - text-align: left
+        # Gerechnet, nicht gemessen: Neben "Pruefen" (ca. 68 px) bleiben fuer
+        # den Text auf dem 360 px breiten Handy rund 158 px, auf dem iPhone 17
+        # Pro rund 200 px; "zuletzt angestossen 15.11., 18:44" braucht hoechstens
+        # zwei Zeilen.
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - font-size: 12px
+          - line-height: 1.25
+          - margin-top: 5px
+          - text-align: left
+        knopf:
+          - align-self: center
+          - overflow: visible
 
   - type: custom:button-card
     template: nachtblau_docker_titel

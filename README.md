@@ -303,8 +303,9 @@ Passwort); die Karte braucht davon nichts.
 
 Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
 und die Docker-View (`docker-view.yaml`): die Integration
-[HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, eigenes
-Repository im Marketplace, ab Home Assistant 2026.2.3) und eine laufende
+[HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, für die
+Docker-View ab 0.7.0; eigenes Repository im Marketplace, ab Home Assistant
+2026.2.3) und eine laufende
 [Arcane](https://github.com/getarcaneapp/arcane)-Instanz ab Version 3.0
 auf dem Docker-Host. HA-Arcane ist ein Fork von
 [Arcane-HA](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
@@ -322,8 +323,10 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    `projects:restart`. Für die Update-Entitäten außerdem
    `environments:read` (Arcane-Version weiterer Umgebungen). Für die
    Docker-View außerdem `system:upgrade`
-   (Arcane selbst aktualisieren) und `system:prune` (Ungenutztes
-   aufräumen). Welche Rechte fehlen, zeigt die Integration unter
+   (Arcane selbst aktualisieren), `system:prune` (Ungenutztes
+   aufräumen), `image-updates:read` (Versionshinweise im Update-Dialog)
+   und `image-updates:check` (Nach Updates suchen). Welche Rechte fehlen,
+   zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
 2. Einstellungen → Marketplace → *Add from link* →
    `https://github.com/philf90/HA-Arcane`, *Arcane* installieren, Home
@@ -339,7 +342,8 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    die Adresse, unter der Arcane direkt erreichbar ist (die Integration
    folgt keinen Weiterleitungen), und den Schlüssel.
 4. Nur für die Docker-View: unter *Konfigurieren → Abfrage* „CPU, RAM
-   und Festplatte des Hosts“ einschalten und unter *Steuerung* den Prune
+   und Festplatte des Hosts“ und „Freigebbarer Speicher“ einschalten und
+   unter *Steuerung* den Prune
    Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
    stellen; die Diagnose-Sensoren
    Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
