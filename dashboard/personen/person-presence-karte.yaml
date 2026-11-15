@@ -61,14 +61,41 @@
 # sensor.time laesst die Karte jede Minute neu zeichnen (Altersangabe).
 # Zonen (Zuhause, Arbeit) haben Vorrang vor der Adresse.
 #
-# Voraussetzung: custom:button-card (HACS), sensor.time (Integration "Time &
-# Date"). Optional fuer den Ort: Adress-Sensor ..._geocoded_location und
-# Aktivitaet (iOS ..._activity, Android ..._detected_activity) der Companion
+# Voraussetzung: custom:button-card und browser_mod (beide HACS), sensor.time
+# (Integration "Time & Date"). Optional fuer den Ort: Adress-Sensor
+# ..._geocoded_location und Aktivitaet (iOS ..._activity, Android ..._detected_activity) der Companion
 # App, in Home Assistant und in der App eingeschaltet; Integration Places
 # (HACS) je Person mit eingeschalteten Untersensoren _street,
 # _route_number, _city, _last_updated und _direction_of_travel (Places legt
 # street, route_number und last_updated deaktiviert an). Ohne diese Sensoren
 # zeigt die Karte wie bisher "Unterwegs".
+#
+# Bewegungsspur: Tippen oeffnet ein browser_mod-Popup mit der eingebauten
+# Karten-Karte (type: map) und der Spur der letzten 12 Stunden; Halten oeffnet
+# wie bisher den Standard-Dialog (more-info). Die Karte laedt mit
+# hours_to_show jede gespeicherte Position, auch reine Attributaenderungen bei
+# gleichem Zustand "not_home" (Frontend hui-map-card.ts: Historie mit
+# significant_changes_only=false), verbindet sie mit einer Linie und blendet
+# aeltere Punkte aus (Deckkraft 0,2 bis 1). Es ist dasselbe Prinzip wie der
+# Block "Standorte" der archivierten autos-karte-v2.yaml.
+# Entitaet ist person.* statt des Handy-Trackers: Die Positionen sind laut
+# Messung (Recorder, 05.-15.11.2026) dieselben, ohne doppelte Zeilen, und die
+# Person folgt von selbst, wenn sie den Tracker wechselt. Der Marker zeigt das
+# Profilbild.
+# Grenzen: Das Fenster rollt (jetzt minus 12 h), es gibt kein "seit Abfahrt".
+# Ungenaue Punkte werden nicht gefiltert: Android meldete im Stand Netzortungen
+# mit bis zu 100 m Ungenauigkeit, die Linie zackt dort. iOS meldete auf
+# laengeren Fahrten nur etwa alle 5 min eine Position, die Linie kuerzt dann
+# Kurven ab (gemessen bis 5,7 km zwischen zwei Punkten).
+# Linie in Blau (Rolle "Info-Wert", wie die Zone auf der Karte). Die
+# Karten-Karte nimmt fuer color einen Hex-Wert oder einen HA-Farbnamen, keine
+# eigene Theme-Variable; im hellen Modus bleibt die Linie im dunklen Blau. theme_mode: auto folgt dem
+# Hell/Dunkel des Themes (Vektorkacheln der Integration map_tiles, ab 2026.9).
+# Groesse: Popup hoechstens 480 px breit, Karte 4:5. Galaxy S25: 344 px Inhalt
+# -> 430 px Kartenhoehe, unter den 629 px Popuphoehe (DESIGN.md). iPhone
+# 17 Pro: 386 px -> 482 px.
+# Die Spur braucht die Integration history (Standard); wie weit sie
+# zurueckreicht, begrenzt der Recorder (purge_keep_days).
 type: horizontal-stack
 cards:
   - type: custom:button-card
@@ -81,6 +108,32 @@ cards:
       places_prefix: sensor.places_bewohner
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
     tap_action:
+      action: call-service
+      service: browser_mod.popup
+      service_data:
+        title: Letzte 12 Stunden
+        # Oberflaeche wie im Tankstellen- und DWD-Popup (warnlage-templates.yaml,
+        # Erklaerung dort), Breite auf 480 px gedeckelt (Kartenhoehe, siehe oben)
+        style: &spur_popup_style |
+          --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+          --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+          --primary-background-color: var(--nachtblau-seite, #171d29);
+          --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+          --primary-text-color: var(--nachtblau-text, #f2f5f8);
+          --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+          --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+          --popup-min-width: min(100vw, 480px);
+          --popup-max-width: min(100vw, 480px);
+        content:
+          type: map
+          entities:
+            - entity: person.bewohner
+              color: '#7fb3d5'
+          hours_to_show: 12
+          theme_mode: auto
+          auto_fit: true
+          aspect_ratio: '4:5'
+    hold_action:
       action: more-info
     show_name: false
     show_state: false
@@ -328,6 +381,21 @@ cards:
       places_prefix: sensor.places_bewohner_2
       avatar_fallback: linear-gradient(160deg,#6d5480,#4a3a5c)
     tap_action:
+      action: call-service
+      service: browser_mod.popup
+      service_data:
+        title: Letzte 12 Stunden
+        style: *spur_popup_style
+        content:
+          type: map
+          entities:
+            - entity: person.bewohner_2
+              color: '#7fb3d5'
+          hours_to_show: 12
+          theme_mode: auto
+          auto_fit: true
+          aspect_ratio: '4:5'
+    hold_action:
       action: more-info
     show_name: false
     show_state: false

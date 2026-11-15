@@ -79,7 +79,8 @@ Dazu:
 
 - **`browser_mod`** (HACS-Integration) für Popups und das More-Menü der
   Navigationsleiste: Navigation, Wetter, Warnlage und Pollen, Tanken und
-  Fahrzeiten, Pflanzen, Kameras, WoW, Hue-Licht-Panel
+  Fahrzeiten, Pflanzen, Kameras, WoW, Hue-Licht-Panel, Bewegungsspur der
+  Personenkarte
 - **WebRTC Camera** (HACS-Integration, bringt die Karte `webrtc-camera` mit)
   für die Kamera-View
 - **`unifi-netzplan-card.js`** für den UniFi-Netzplan; die Karte liegt im
@@ -118,7 +119,7 @@ Datei; die Übersicht nach Bereich:
 | `netzwerk/` | UniFi Network, [UniFi WAN](#unifi-wan) (optional), [UniFi UNAS](#unifi-unas-pro), [Arcane](#arcane-docker), Homematic(IP) Local for OpenCCU (HACS), Uptime Kuma |
 | `fahrzeuge/` | VW Group Connect (`vag_connect`), Tankerkönig, Waze Travel Time, Time & Date |
 | `garten/` | Home Assistant Plant (`Olen/homeassistant-plant`, HACS), Zigbee, Shelly |
-| `personen/` | Owlet Smart Sock (`LucasVollebergh/owlet`, HACS), Companion App |
+| `personen/` | Owlet Smart Sock (`LucasVollebergh/owlet`, HACS), Companion App, browser_mod (Bewegungsspur) |
 | `flugradar/` | Flightradar24 (HACS) |
 | `fussball/` | keine: Daten von OpenLigaDB direkt im Browser, ESPN über das Paket `fussball-espn-konfig.yaml`; Companion App für die Meldungen |
 | `sicherheit/` | Homematic(IP) Local, UniFi Protect, UniFi Access, UniFi Network, Backup, Telegram Bot, Companion App |
