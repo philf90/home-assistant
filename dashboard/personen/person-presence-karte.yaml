@@ -43,8 +43,11 @@
 #   der Testfahrt Landesstrassen wie "L 123"), kommt sie von dort, sonst von Places.
 #   Das Tempo steht nicht an person.*, sondern am Tracker in deren
 #   Attribut source (Einheit m/s).
-# Genommen wird die Quelle, die zur letzten Position der Person passt
-# (hoechstens 2 min aelter); passen beide, gewinnt die App. In Tests auf dem
+# Genommen wird die Quelle, die zur letzten Position der Person passt;
+# passen beide, gewinnt die App. Die App-Adresse passt, wenn ihre eigene
+# Position (Attribut location) hoechstens 150 m plus GPS-Ungenauigkeit von
+# der Person entfernt liegt, ohne das Attribut wenn sie hoechstens 2 min
+# aelter ist. Places passt, wenn es hoechstens 2 min aelter ist. In Tests auf dem
 # Android-Handy kam der App-Sensor unterwegs nicht mit, Places schon; auf dem
 # iPhone umgekehrt zuverlaessig. Daher beide.
 # Faehrt die Person (Tempo ab 30 km/h oder Aktivitaet Automotive/in_vehicle,
@@ -171,9 +174,32 @@ cards:
           const plOrt = pl('city');
           const geoOk = geoT !== null && !!(geoStr || geoOrt);
           const plOk = plT !== null && !!(plStr || plOrt);
+          // Passt die App-Adresse zur Position der Person? Sie bringt ihre eigene
+          // Position mit (Android "location", iOS "Location"). Liegt sie hoechstens
+          // 150 m plus GPS-Ungenauigkeit (max. 200 m) entfernt, gilt sie. Ohne das
+          // Attribut gilt die Zeitregel. Die Zeit allein reicht nicht: Im Test war
+          // eine 109 s alte Adresse noch "frisch", das Auto aber fast 1 km weiter.
+          const geoLoc = (() => {
+            if (!geo || !geo.attributes) return null;
+            const key = Object.keys(geo.attributes).find((x) => x.toLowerCase() === 'location');
+            const v = key ? geo.attributes[key] : null;
+            return Array.isArray(v) && v.length >= 2 && !isNaN(Number(v[0])) && !isNaN(Number(v[1])) ? [Number(v[0]), Number(v[1])] : null;
+          })();
+          const pLat = e && e.attributes && typeof e.attributes.latitude === 'number' ? e.attributes.latitude : null;
+          const pLon = e && e.attributes && typeof e.attributes.longitude === 'number' ? e.attributes.longitude : null;
+          const pAcc = e && e.attributes && typeof e.attributes.gps_accuracy === 'number' ? e.attributes.gps_accuracy : 0;
+          const abstandM = (lat1, lon1, lat2, lon2) => {
+            const r = Math.PI / 180;
+            const x = (lon2 - lon1) * r * Math.cos(((lat1 + lat2) / 2) * r);
+            const y = (lat2 - lat1) * r;
+            return Math.sqrt(x * x + y * y) * 6371000;
+          };
+          const geoPasst = geoLoc && pLat !== null && pLon !== null
+            ? abstandM(geoLoc[0], geoLoc[1], pLat, pLon) <= 150 + Math.min(pAcc, 200)
+            : frisch(geoT);
           // Quelle passend zur letzten Position; passen beide, gewinnt die App
           let quelle = null;
-          if (geoOk && frisch(geoT)) quelle = 'geo';
+          if (geoOk && geoPasst) quelle = 'geo';
           else if (plOk && frisch(plT)) quelle = 'places';
           else if (geoOk || plOk) quelle = (geoOk && (!plOk || geoT >= plT)) ? 'geo' : 'places';
           const strasse = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
