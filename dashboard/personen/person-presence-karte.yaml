@@ -140,7 +140,10 @@
 #     Marker aus der MapLibre-Instanz der Engine (_maplibre.Marker), ohne sie
 #     keine Schilder.
 #   - Antippen der Karte: der naechste Messpunkt im Umkreis von 14 px zeigt
-#     seine Uhrzeit (_maplibre.Popup), in beiden Reitern.
+#     seine Uhrzeit, in beiden Reitern. Eigenes Schild (_maplibre.Marker):
+#     Das Popup von MapLibre gestaltet ha-map grau, die Uhrzeit
+#     hatte darauf 2,15:1 Kontrast. Jetzt Flaeche #222b3c mit Text #f2f5f8
+#     (12,98:1) und blauem Rand, lesbar auf dunkler und heller Karte.
 #   - Tagesliste unter der Karte: Abfahrt bzw. Weiterfahrt mit km, Aufenthalt
 #     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
 #   Sichtbar ist der Reiter nur fuer die Person selbst: Attribut user_id der
@@ -148,12 +151,14 @@
 #   Personenkarte: eigene (Standard) oder alle. Andere sehen nur die letzte
 #   Strecke, wie bisher. Das ist eine Anzeigeregel, kein Zugriffsschutz: Die
 #   Historie ist fuer jeden Benutzer der Instanz abrufbar.
-# Groesse: Popup hoechstens 480 px breit, Karte 2:3, hoechstens 100vh - 300 px
-# (Reiter "Letzte Strecke") bzw. 100vh - 420 px (Tagesprofil, darunter die
-# Liste mit hoechstens 104 px, drei Zeilen, scrollbar). Galaxy S25 (697 px
-# hoch): 397 bzw. 277 px Karte; mit Kopf, Reitern und Legende unter den 629 px
-# Popuphoehe (DESIGN.md). iPhone 17 Pro (386 px breit, 874 px hoch): 574 bzw.
-# 454 px.
+# Groesse: Popup hoechstens 480 px breit, Karte quadratisch, hoechstens
+# 100vh - 260 px (Reiter "Letzte Strecke") bzw. 100vh - 390 px (Tagesprofil,
+# darunter die Liste mit hoechstens 104 px, drei Zeilen, scrollbar), jeweils
+# abzueglich Safe Area oben und unten (env()). Grundlage: Bildschirmfoto
+# iPhone 17 Pro vom 15.11.2026, Karte 2:3 war 551 px hoch, Beginn bei 288 px,
+# Ende bei 839 von 874 px; im Tagesprofil musste man scrollen. Jetzt
+# gemessen (Chromium, Touch): 360 px breit 344 x 344 bzw. 344 x 307 (bei
+# 697 px Hoehe), 402 px breit 386 x 386 in beiden Reitern.
 # Die Spur braucht die Integration history (Standard); wie weit sie
 # zurueckreicht, begrenzt der Recorder (purge_keep_days).
 type: horizontal-stack
@@ -357,7 +362,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 4;
+                    const VERSION = 5;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -367,6 +372,15 @@ cards:
                       const HALT_M = 150;    // m: ... im Umkreis von 150 m
                       const BLAU = '#7fb3d5', VIOLETT = '#b399d4', GRUEN = '#a6d49e', PUNKT = '#b4c0cf';
                       const GRUND = '#10151d', FLAECHE = '#222b3c', HELL = '#f2f5f8', GRAU = '#8794a5';
+                      // Kartenhoehe: quadratisch, hoechstens so hoch, dass das Popup ohne Scrollen
+                      // passt. Abzug = alles ausser der Karte (iPhone 17 Pro gemessen: 288 px bis
+                      // zur Karte inkl. 62 px Statusleiste, darunter ~24 px Rand) ohne Safe Area,
+                      // die env() je Geraet abzieht; im Tagesprofil zusaetzlich Liste (104 px),
+                      // Abstand und Umschalter.
+                      const SICHER = 'env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)';
+                      const HOCH_LETZTE = `calc(100vh - 260px - ${SICHER})`;
+                      const HOCH_TAG = `calc(100vh - 390px - ${SICHER})`;
+                      sp.hochLetzte = HOCH_LETZTE;
                       const SCHRIFT = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
                       sp.esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                       // Polyline mit Genauigkeit 6 (Valhalla)
@@ -547,8 +561,8 @@ cards:
                       // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine
                       // (_addCustomSource, _addCustomLayer, _setCustomSourceData). Sie sammeln die
                       // Ebenen und setzen sie nach einem Stilwechsel (hell/dunkel) wieder ein.
-                      // Schilder und das Zeit-Popup nutzen Marker und Popup aus derselben
-                      // MapLibre-Instanz (_maplibre). Fehlen sie (Frontend-Update, Geraet ohne
+                      // Schilder und Uhrzeit nutzen Marker aus derselben MapLibre-Instanz
+                      // (_maplibre.Marker). Fehlen sie (Frontend-Update, Geraet ohne
                       // WebGL2), zeichnet ha-map die Spur als eigene Pfade, ohne Schilder; die
                       // Tagesliste bleibt.
                       sp.karte = async (kasten, eid) => {
@@ -575,20 +589,35 @@ cards:
                         const la = alle.map((p) => p[0]), lo = alle.map((p) => p[1]);
                         st.eng._map.fitBounds([[Math.min(...lo), Math.min(...la)], [Math.max(...lo), Math.max(...la)]], { padding: 40, maxZoom: 16, animate: false });
                       };
-                      // Antippen: naechster Messpunkt im Umkreis von 14 px zeigt seine Uhrzeit
-                      const zeitPopup = (st) => {
+                      // Antippen: naechster Messpunkt im Umkreis von 14 px zeigt seine Uhrzeit.
+                      // Eigenes Schild als Marker statt MapLibre-Popup: Dessen Kasten gestaltet
+                      // ha-map grau; die Uhrzeit hatte darauf 2,15:1 Kontrast, der Kasten zur
+                      // dunklen Karte 1,58:1 (Bildschirmfoto iPhone, 15.11.2026). Hier: Flaeche
+                      // #222b3c, Text #f2f5f8 (12,98:1), Rand Blau. Auf dunkler Karte trennt der
+                      // blaue Rand (5,95:1 zur gemessenen Kartenflaeche), auf heller die Flaeche
+                      // (12,37:1 zu hellem Land).
+                      // Der Ring markiert den angetippten Punkt, Blau mit dunklem Aussenrand.
+                      const zeitSchild = (st) => {
                         const { eng } = st;
-                        if (!eng._maplibre || !eng._maplibre.Popup) return;
-                        const popup = new eng._maplibre.Popup({ closeButton: false, offset: 8, className: 'spur-zeit' });
+                        if (!eng._maplibre || !eng._maplibre.Marker) return;
+                        const el = document.createElement('div');
+                        el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 13px ${SCHRIFT};font-variant-numeric:tabular-nums;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));`;
+                        el.innerHTML = `<span data-zeit style="padding:4px 9px;border-radius:8px;background:${FLAECHE};border:1.5px solid ${BLAU};color:${HELL};line-height:1.2;white-space:nowrap;"></span>`
+                          + `<span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid ${BLAU};"></span>`
+                          + `<span style="width:16px;height:16px;margin-top:2px;border-radius:50%;border:2.5px solid ${BLAU};background:rgba(127,179,213,0.3);box-shadow:0 0 0 1.5px ${GRUND};box-sizing:border-box;"></span>`;
+                        // anchor bottom + 8 px: Mitte des Rings (16 px) liegt auf dem Punkt
+                        const schild = new eng._maplibre.Marker({ element: el, anchor: 'bottom', offset: [0, 8] });
+                        let an = false;
+                        st.zeitAus = () => { if (an) { schild.remove(); an = false; } };
                         eng._map.on('click', (ev) => {
                           if (!eng._map.getLayer('ha-map-spur-punkte')) return;
                           const { x, y } = ev.point;
                           const f = eng._map.queryRenderedFeatures([[x - 14, y - 14], [x + 14, y + 14]], { layers: ['ha-map-spur-punkte'] });
-                          if (!f.length) { popup.remove(); return; }
+                          if (!f.length) { st.zeitAus(); return; }
                           const nah = f.map((g) => { const p = eng._map.project(g.geometry.coordinates); return { g, d: (p.x - x) ** 2 + (p.y - y) ** 2 }; }).sort((a, b) => a.d - b.d)[0].g;
-                          popup.setLngLat(nah.geometry.coordinates)
-                            .setHTML(`<span style="font:600 12.5px ${SCHRIFT};color:${GRUND};font-variant-numeric:tabular-nums;">${uhr(nah.properties.t)}</span>`)
-                            .addTo(eng._map);
+                          el.querySelector('[data-zeit]').textContent = uhr(nah.properties.t);
+                          schild.setLngLat(nah.geometry.coordinates);
+                          if (!an) { schild.addTo(eng._map); an = true; }
                         });
                       };
                       // Schilder in der Naehe (HALT_M) zu einem zusammenfassen, Texte mit " · "
@@ -602,6 +631,7 @@ cards:
                       };
                       sp.zeichne = (st, fest, gesch, pkt, schilder) => {
                         const { m, eng } = st;
+                        if (st.zeitAus) st.zeitAus();
                         st.schilder.forEach((x) => x.remove());
                         st.schilder = [];
                         if (st.vektor) {
@@ -611,7 +641,7 @@ cards:
                             eng._addCustomLayer({ id: 'ha-map-spur-geschaetzt', type: 'line', source: 'ha-map-spur-geschaetzt', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.4, 1.4] } });
                             eng._addCustomLayer({ id: 'ha-map-spur-fest', type: 'line', source: 'ha-map-spur-fest', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 4 } });
                             eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 3, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
-                            zeitPopup(st);
+                            zeitSchild(st);
                             st.ebenen = true;
                           } else {
                             Object.entries(daten).forEach(([id, d]) => eng._setCustomSourceData(id, d));
@@ -712,7 +742,7 @@ cards:
                       };
                       sp.zeige = async (hass, st, ui) => {
                         const tag = ui.modus === 'tag';
-                        ui.kasten.style.maxHeight = tag ? 'calc(100vh - 420px)' : 'calc(100vh - 300px)';
+                        ui.kasten.style.maxHeight = tag ? HOCH_TAG : HOCH_LETZTE;
                         ui.reiter.querySelectorAll('[data-modus]').forEach((b) => {
                           const an = b.dataset.modus === ui.modus;
                           b.style.background = an ? FLAECHE : 'transparent';
@@ -797,7 +827,7 @@ cards:
                     return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
                       <div data-spur-reiter style="display:none;gap:4px;padding:3px;border-radius:12px;background:#10151d;">${knopf('letzte', 'Letzte Strecke')}${knopf('tag', 'Tagesprofil')}</div>
                       <div data-spur-info style="min-height:16px;font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Strecke wird geladen …</div>
-                      <div data-spur-karte style="width:100%;aspect-ratio:2 / 3;max-height:calc(100vh - 300px);border-radius:14px;overflow:hidden;background:#10151d;"></div>
+                      <div data-spur-karte style="width:100%;aspect-ratio:1 / 1;max-height:${sp.hochLetzte};border-radius:14px;overflow:hidden;background:#10151d;"></div>
                       <div data-spur-liste style="display:none;flex-direction:column;gap:5px;max-height:104px;overflow-y:auto;font-size:12.5px;color:var(--nachtblau-text-sekundaer, #8794a5);"></div>
                     </div>`;
                   ]]]]
