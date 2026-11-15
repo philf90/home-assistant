@@ -305,8 +305,8 @@ Passwort); die Karte braucht davon nichts.
 Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
 und die Docker-View (`docker-view.yaml`): die Integration
 [HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, für die
-Docker-View ab 0.7.0; eigenes Repository im Marketplace, ab Home Assistant
-2026.2.3) und eine laufende
+Docker-View ab 0.7.0, für die Rückmeldung beim Aufräumen ab 0.7.1; eigenes
+Repository im Marketplace, ab Home Assistant 2026.2.3) und eine laufende
 [Arcane](https://github.com/getarcaneapp/arcane)-Instanz ab Version 3.0
 auf dem Docker-Host. HA-Arcane ist ein Fork von
 [Arcane-HA](https://github.com/ProfessorQuantumUniverse/Arcane-HA)
@@ -326,8 +326,9 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    Docker-View außerdem `system:upgrade`
    (Arcane selbst aktualisieren), `system:prune` (Ungenutztes
    aufräumen), `image-updates:read` (Versionshinweise im Update-Dialog)
-   und `image-updates:check` (Nach Updates suchen). Welche Rechte fehlen,
-   zeigt die Integration unter
+   und `image-updates:check` (Nach Updates suchen). Für die beiden
+   Optionen aus Schritt 4 ab HA-Arcane 0.8.0 außerdem `events:list`.
+   Welche Rechte fehlen, zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
 2. Einstellungen → Marketplace → *Add from link* →
    `https://github.com/philf90/HA-Arcane`, *Arcane* installieren, Home
@@ -352,6 +353,16 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    „Aufräumen“ mit Rückmeldung kommen aus dem Paket `docker-konfig.yaml`;
    die Rückmeldung kommt nach Sekunden ab HA-Arcane 0.7.1, mit 0.7.0
    nach bis zu 15 Minuten.
+
+   Ab HA-Arcane 0.8.0, beide standardmäßig aus und für die Karten nicht
+   nötig: „Bei Änderungen sofort aktualisieren“ (*Abfrage*) lässt die
+   Karten Änderungen nach Sekunden statt nach dem Intervall zeigen;
+   „Arcane Ereignisprotokoll auf dem Bus“ (*Entitäten*) feuert jeden
+   neuen Eintrag aus Arcanes Protokoll als `arcane_event`, auch
+   Ereignisse direkt vom Docker-Daemon wie `container.oom`. Das Paket
+   nutzt `arcane_event` noch nicht. Das Abfrageintervall bleibt auch mit
+   sofortigem Aktualisieren bei 30 s: CPU, RAM und Festplatte des Hosts
+   kommen nur über die regelmäßige Abfrage.
 
 CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
 für den ganzen Host.
