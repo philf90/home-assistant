@@ -17,9 +17,12 @@
 #              Build-Cache und Volumes in GB. Sensoren
 #              sensor.docker_freigebbarer_* (HA-Arcane ab 0.7.0, Option
 #              "Freigebbarer Speicher" unter Konfigurieren -> Abfrage).
-#              HA-Arcane fragt sie hoechstens alle 15 Minuten ab; bis zum
-#              ersten Bericht steht "Bericht folgt", nach dem Aufraeumen bis
-#              zum naechsten "Stand vor dem Aufraeumen".
+#              HA-Arcane fragt sie hoechstens alle 15 Minuten ab, ab 0.7.1
+#              zusaetzlich sofort nach dem Aufraeumen; bis zum ersten Bericht
+#              steht "Bericht folgt", nach dem Aufraeumen bis zum naechsten
+#              "Stand vor dem Aufraeumen" (erkannt an report_started_at,
+#              mit 0.7.0 an der letzten Wertaenderung). Waehrend das
+#              Aufraeumen laeuft, zieht eine Spur in Amber ueber den Balken.
 #   Kennzahlen Images (davon ungenutzt), Volumes (davon ungenutzt),
 #              Netzwerke. Ungetoent: viele Images sind kein Problem. Die
 #              Zahl ungenutzter Netzwerke meldet HA-Arcane nicht.
@@ -32,7 +35,12 @@
 #              wie viel frei wird: freigebbarer Image-Speicher plus
 #              Build-Cache, mit "≈", weil nicht geprueft ist, ob Arcane genau
 #              diese Menge entfernt. Der Knopf ist ab 0,5 GB amber, ohne
-#              Bericht ab einem ungenutzten Image. Ungenutzte Volumes
+#              Bericht ab einem ungenutzten Image.
+#              Rueckmeldung (script.docker_aufraeumen, docker-konfig.yaml):
+#              Knopf "laeuft …", Icon-Kachel in Amber, Hinweis erst
+#              "raeumt auf …", dann "Werte werden aktualisiert …", danach
+#              "1,56 GB freigegeben · zuletzt …"; dazu ein Eintrag in der
+#              Karte Ereignisse. Ungenutzte Volumes
 #              bleiben; die nur in Arcane loeschen, nachdem geprueft ist,
 #              dass ihre Daten entbehrlich sind. Recht: system:prune.
 #
@@ -42,7 +50,9 @@
 #
 # Voraussetzung: custom:button-card + card-mod (HACS), Integration Arcane
 #                (HACS) ab 0.7.0 mit Prune Button, Option "Freigebbarer
-#                Speicher" und den Rechten system:prune und system:read;
+#                Speicher" und den Rechten system:prune und system:read
+#                (Rueckmeldung nach Sekunden ab 0.7.1); Skript und Helfer
+#                aus docker-konfig.yaml;
 #                Templates aus docker-templates.yaml.
 type: vertical-stack
 card_mod:
@@ -90,6 +100,14 @@ cards:
       action: more-info
     hold_action:
       action: none
+    # Laufspur: Amber in der Stufe "Leuchten" (0,5), 35 % der Balkenbreite,
+    # 1,6 s je Durchlauf; die Abschnitte darunter stehen solange auf 45 %,
+    # sonst ist die Spur auf dem blauen Teil kaum zu sehen (Nachbau). "Bewegung reduzieren" zeigt stattdessen den ganzen
+    # Balken in Amber, Stufe "Rand" (0,24).
+    extra_styles: |
+      .nb-lauf { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nachtblau-amber, #e6b566) 50%, transparent), transparent); animation: nb-lauf 1.6s linear infinite; }
+      @keyframes nb-lauf { from { transform: translateX(-100%); } to { transform: translateX(286%); } }
+      @media (prefers-reduced-motion: reduce) { .nb-lauf { animation: none; width: 100%; background: color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent); } }
     custom_fields:
       balken: |
         [[[
@@ -108,16 +126,28 @@ cards:
           const frei = zahl(entity.entity_id);
           const gesamt = zahl('sensor.local_docker_image_speicher');
           if (frei === null) return zeile('Freigebbarer Speicher: Bericht folgt, höchstens alle 15 Minuten');
+          // Bericht von vor dem letzten Druck: report_started_at (HA-Arcane ab
+          // 0.7.1) ist der Beginn des Berichts; mit 0.7.0 bleibt nur die letzte
+          // Wertaenderung. Nach 20 Minuten (Intervall 15) gilt er nicht mehr
+          // als veraltet, falls kein neuer kommt.
           let stand = '';
           const p = states['button.docker_ungenutztes_entfernen'];
           const pz = p ? new Date(p.state).getTime() : NaN;
-          if (!isNaN(pz) && Date.now() - pz < 15 * 60e3 && new Date(entity.last_changed).getTime() < pz) stand = 'Stand vor dem Aufräumen';
+          const rs = entity.attributes.report_started_at;
+          const rz = new Date(rs || entity.last_changed).getTime();
+          if (!isNaN(pz) && Date.now() - pz < 20 * 60e3 && rz < pz) stand = 'Stand vor dem Aufräumen';
+          const sk = states['script.docker_aufraeumen'];
+          const laeuft = !!sk && sk.state === 'on';
           const anteil = gesamt ? Math.min(100, Math.max(0, frei / gesamt * 100)) : 0;
           const kopf = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:${SEK};">`
             + `<span>Freigebbar</span><span style="font-variant-numeric:tabular-nums;white-space:nowrap;"><b style="font-size:14px;color:${TEXT};">${gb(frei)}</b>`
             + (gesamt ? ` von ${gb(gesamt)}` : '') + `</span></div>`;
-          const spur = `<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--nachtblau-aus, #3a4453);margin:7px 0 6px;">`
-            + `<span style="width:${100 - anteil}%;background:${BLAU};"></span><span style="width:${anteil}%;background:${AMBER};"></span></div>`;
+          // Waehrend script.docker_aufraeumen laeuft, zieht eine Spur ueber den
+          // Balken (extra_styles); ihre Phase haengt an der Uhrzeit, damit sie
+          // beim Neuzeichnen nicht von vorn beginnt.
+          const lauf = laeuft ? `<span class="nb-lauf" style="animation-delay:-${Date.now() % 1600}ms;"></span>` : '';
+          const spur = `<div style="position:relative;display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--nachtblau-aus, #3a4453);margin:7px 0 6px;">`
+            + `<span style="width:${100 - anteil}%;background:${BLAU};opacity:${laeuft ? 0.45 : 1};"></span><span style="width:${anteil}%;background:${AMBER};opacity:${laeuft ? 0.45 : 1};"></span>${lauf}</div>`;
           const teile = ['Images ' + gb(frei)];
           const bc = zahl('sensor.docker_freigebbarer_build_cache');
           if (bc !== null) teile.push('Build-Cache ' + gb(bc));
@@ -186,7 +216,11 @@ cards:
           warn: ''
         styles: *kachel_hoehe
 
-  # ---- Aufraeumen; Rueckfrage nennt, was entfernt wird ----
+  # ---- Aufraeumen ueber script.docker_aufraeumen (docker-konfig.yaml) ----
+  # Rueckfrage nennt, was entfernt wird. Das Skript wird direkt aufgerufen,
+  # nicht per script.turn_on: So meldet HA einen Fehler des Prune als Hinweis.
+  # Phase und Ergebnis kommen aus input_text.docker_aufraeumen_status, den
+  # jedes Geraet sieht; die Entitaet bleibt der Button (Zeitpunkt).
   - type: custom:button-card
     entity: button.docker_ungenutztes_entfernen
     icon: mdi:broom
@@ -201,6 +235,24 @@ cards:
           return isNaN(n) ? null : n;
         ]]]
       aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+      laeuft: '[[[ const s = states["script.docker_aufraeumen"]; return !!s && s.state === "on"; ]]]'
+      # Phase;Beginn;GB aus dem Skript, siehe docker-konfig.yaml
+      status: |
+        [[[
+          const s = states['input_text.docker_aufraeumen_status'];
+          const t = s ? String(s.state).split(';') : [];
+          const v = parseFloat(t[2]);
+          return { phase: t[0] || '', beginn: t[1] || '', gb: isNaN(v) ? null : v };
+        ]]]
+      # Bericht von vor dem letzten Druck, wie im Balken oben
+      veraltet: |
+        [[[
+          const e = states['sensor.docker_freigebbarer_image_speicher'];
+          if (!e || !entity) return false;
+          const pz = new Date(entity.state).getTime();
+          const rz = new Date(e.attributes.report_started_at || e.last_changed).getTime();
+          return !isNaN(pz) && Date.now() - pz < 20 * 60e3 && rz < pz;
+        ]]]
       # Was der Knopf freigibt: ungenutzte Images und Build-Cache (ab
       # HA-Arcane 0.7.0); null, solange kein Bericht da ist.
       gb: |
@@ -217,21 +269,22 @@ cards:
           return v < 1 ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
             : v.toLocaleString('de-DE', { maximumFractionDigits: v < 10 ? 2 : 1 }) + ' GB';
         ]]]
-      # Amber ab 0,5 GB; ohne Bericht wie bisher nach der Zahl ungenutzter Images
+      # Amber ab 0,5 GB; ohne Bericht wie bisher nach der Zahl ungenutzter Images.
+      # Nie, solange das Aufraeumen laeuft oder der Bericht von davor ist.
       lohnt: |
         [[[
+          if (variables.laeuft || variables.veraltet) return false;
           if (variables.gb !== null) return variables.gb >= 0.5;
           return variables.frei !== 0;
         ]]]
     tap_action: |
       [[[
-        if (!variables.aktiv) return { action: 'none' };
+        if (!variables.aktiv || variables.laeuft) return { action: 'none' };
         const img = variables.frei === null ? 'alle ungenutzten Images' : (variables.frei === 1 ? '1 ungenutztes Image' : variables.frei + ' ungenutzte Images');
-        const menge = variables.gb_text ? 'Frei werden etwa ' + variables.gb_text + '. ' : '';
+        const menge = variables.gb_text && !variables.veraltet ? 'Frei werden etwa ' + variables.gb_text + '. ' : '';
         return {
           action: 'perform-action',
-          perform_action: 'button.press',
-          target: { entity_id: entity.entity_id },
+          perform_action: 'script.docker_aufraeumen',
           confirmation: { text: 'Aufräumen? ' + menge + 'Entfernt werden ' + img + ', ungenutzte Netzwerke und der Build-Cache. Container und Volumes bleiben.' }
         };
       ]]]
@@ -244,16 +297,36 @@ cards:
         [[[
           const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
           if (!variables.aktiv) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+          if (variables.laeuft) {
+            const t = variables.status.phase === 'bericht' ? 'Werte werden aktualisiert …' : 'räumt auf …';
+            return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">${t}</span>`;
+          }
           let zuletzt = 'noch nie';
           const d = new Date(entity.state);
           if (!isNaN(d.getTime())) zuletzt = 'zuletzt ' + d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-          const was = variables.gb_text ? '≈ ' + variables.gb_text + ' freigebbar' : 'Images, Netzwerke, <span style="white-space:nowrap;">Build-Cache</span>';
-          return `<span style="font-size:12px;color:${sek};">${was} · ${zuletzt}</span>`;
+          const mb = (v) => v < 1 ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
+            : v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB';
+          // Ergebnis des Skripts, wenn es zum letzten Druck gehoert und jetzt
+          // nichts Nennenswertes mehr freizugeben ist
+          const st = variables.status;
+          const passt = st.phase === 'fertig' && st.gb !== null && Math.abs(new Date(st.beginn).getTime() - d.getTime()) < 60e3;
+          // Kurze Angaben bleiben samt "·" zusammen, "zuletzt …" ebenso; nur der
+          // Ersatztext ohne Bericht darf in sich umbrechen. Gemessen im Nachbau
+          // mit Roboto: auf beiden Handys hoechstens zwei Zeilen, z. B.
+          // "1,56 GB freigegeben ·" / "zuletzt 15.11., 20:01".
+          const ganz = (t) => `<span style="white-space:nowrap;">${t} ·</span>`;
+          let was;
+          if (variables.veraltet) was = ganz('Bericht folgt');
+          else if (passt && (variables.gb === null || variables.gb < 0.5)) was = ganz(st.gb < 0.001 ? 'nichts freizugeben' : mb(st.gb) + ' freigegeben');
+          else if (variables.gb_text) was = ganz('≈ ' + variables.gb_text + ' freigebbar');
+          else was = 'Images, Netzwerke, <span style="white-space:nowrap;">Build-Cache ·</span>';
+          return `<span style="font-size:12px;color:${sek};">${was} <span style="white-space:nowrap;">${zuletzt}</span></span>`;
         ]]]
       knopf: |
         [[[
           const c = 'var(--nachtblau-amber, #e6b566)';
           const an = variables.aktiv && variables.lohnt;
+          if (variables.laeuft) return `<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">läuft …</span>`;
           const stil = an
             ? `color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`
             : 'color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
@@ -280,14 +353,17 @@ cards:
         - border-radius: 11px
         - margin: 0
         - align-self: center
-        - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
-        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        # Waehrend des Aufraeumens getoent in Amber (Icon-Kachel 0,16, Rand 0,24)
+        - background: |
+            [[[ return variables.laeuft ? 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 16%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.laeuft ? '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
       icon:
         - width: 19px
         - height: 19px
         - margin: 0
         - --ha-icon-display: block
-        - color: 'var(--nachtblau-label, #b4c0cf)'
+        - color: '[[[ return variables.laeuft ? "var(--nachtblau-amber, #e6b566)" : "var(--nachtblau-label, #b4c0cf)"; ]]]'
       custom_fields:
         titel:
           - justify-self: start
