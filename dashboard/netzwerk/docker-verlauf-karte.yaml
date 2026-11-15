@@ -13,7 +13,11 @@
 #
 #   Container       laufende (Gruen) und ungesunde (Rot) Container,
 #                   Mittelwert je 5 min aus der Langzeitstatistik
-#   Image-Speicher  belegter Platz der Images in GB, Mittelwert je Stunde
+#   Image-Speicher  belegter Platz der Images (Blau) und davon freigebbar
+#                   (Amber, sensor.docker_freigebbarer_image_speicher ab
+#                   HA-Arcane 0.7.0) in GB, Mittelwert je Stunde. Die
+#                   Statistik der freigebbaren Menge beginnt mit dem
+#                   Einschalten der Option (hier am 15.11.2026).
 #
 # Die Sensoren der Arcane-Integration haben state_class measurement; HA legt
 # dafuer selbst Statistiken an. Sie beginnen mit dem Einrichten der
@@ -29,7 +33,8 @@
 # die color-Werte in series gelten deshalb nur als Vorgabe.
 #
 # Voraussetzung: custom:button-card + custom:apexcharts-card + card-mod
-#                (HACS), Integration Arcane (HACS), Templates aus
+#                (HACS), Integration Arcane (HACS) ab 0.7.0 mit Option
+#                "Freigebbarer Speicher", Templates aus
 #                docker-templates.yaml.
 type: vertical-stack
 card_mod:
@@ -159,7 +164,7 @@ cards:
         borderColor: rgba(255,255,255,0.06)
         strokeDashArray: 3
       legend:
-        show: false
+        show: true
         fontSize: 11px
         labels:
           colors: '#8794a5'
@@ -192,6 +197,7 @@ cards:
         /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
            Serien nach Index, Legende nach rel = Index + 1 */
         .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --nw-c: var(--nachtblau-blau, #7fb3d5); }
+        .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --nw-c: var(--nachtblau-amber, #e6b566); }
         .apexcharts-line { stroke: var(--nw-c); }
         .apexcharts-marker { fill: var(--nw-c); }
         .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
@@ -207,6 +213,7 @@ cards:
         .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
         /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
         .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
+        .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-amber, #e6b566) !important; }
     yaxis:
       - decimals: 1
         apex_config:
@@ -216,6 +223,14 @@ cards:
       - entity: sensor.local_docker_image_speicher
         name: Images
         color: '#7fb3d5'
+        unit: GB
+        statistics:
+          type: mean
+          period: hour
+      # ab HA-Arcane 0.7.0, Option "Freigebbarer Speicher"
+      - entity: sensor.docker_freigebbarer_image_speicher
+        name: freigebbar
+        color: '#e6b566'
         unit: GB
         statistics:
           type: mean

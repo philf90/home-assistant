@@ -32,6 +32,8 @@
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
 #       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
 #       (sein Neustart trennt die Verbindung kurz).
+#       Updates, die Arcane zurueckhaelt (update_blocked, ab HA-Arcane
+#       0.7.0), laesst es aus; HA wuerde sie ohnehin ablehnen.
 #
 # Namen in Meldungen ohne Compose-Anhaengsel wie in der Karte
 # ("sonarr-sonarr-1" -> "sonarr").
@@ -153,6 +155,7 @@ script:
     description: >-
       Docker-View, Karte Image-Updates: installiert die ausstehenden
       Image-Updates nacheinander, den Arcane-Container zuletzt.
+      Gesperrte Updates (update_blocked) laesst es aus.
     icon: mdi:package-up
     mode: single
     sequence:
@@ -160,7 +163,8 @@ script:
           liste: >-
             {%- set alle = integration_entities('arcane')
                 | select('match', 'update\.container_')
-                | select('is_state', 'on') | list -%}
+                | select('is_state', 'on')
+                | reject('is_state_attr', 'update_blocked', true) | list -%}
             {{ (alle | reject('eq', 'update.container_arcane_image_update') | list)
                + (alle | select('eq', 'update.container_arcane_image_update') | list) }}
       - repeat:
