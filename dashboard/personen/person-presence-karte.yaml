@@ -86,8 +86,10 @@
 # Ablauf (Bibliothek window.__nachtblauSpur in der Karte "Strecke" im Popup):
 #   1. Historie von person.* der letzten 48 h (history/history_during_period,
 #      mit Attributen, auch reine Positionsaenderungen). Zeitfenster ist die
-#      laufende Abwesenheit, sonst die letzte; Zonen ausser Zuhause zaehlen als
-#      abwesend. person.* hat dieselben Positionen wie der Handy-Tracker (Messung
+#      laufende Abwesenheit, sonst die letzte mit mindestens 2 genauen Punkten;
+#      Zonen ausser Zuhause zaehlen als abwesend. Die Bedingung ueberspringt
+#      Ausreisser: Am 15.11.2026 stand person.* 25 s auf not_home, mit einer
+#      Position 2 km entfernt und 100 m Ungenauigkeit. person.* hat dieselben Positionen wie der Handy-Tracker (Messung
 #      im Recorder, 05.-15.11.2026), ohne doppelte Zeilen, und folgt einem
 #      Trackerwechsel von selbst.
 #   2. Filter: Punkte ueber 50 m Ungenauigkeit fallen weg (Android meldete im
@@ -265,7 +267,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 1;
+                    const VERSION = 2;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -289,18 +291,30 @@ cards:
                       };
                       // Laufende bzw. letzte Abwesenheit aus den Zeilen der Historie (person.*):
                       // Zonen ausser Zuhause zaehlen als abwesend. Dazu je ein Punkt davor und danach.
+                      // Eine abgeschlossene Abwesenheit ohne mindestens 2 genaue Punkte unterwegs
+                      // wird uebersprungen: Am 15.11.2026 sprang person.* fuer 25 s auf not_home,
+                      // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
+                      // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
                       sp.abwesenheit = (rows) => {
                         let attr = null;
                         const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
                         const weg = (s) => s !== 'home' && s !== 'unknown' && s !== 'unavailable';
-                        let ende = -1;
-                        for (let i = z.length - 1; i >= 0; i--) { if (weg(z[i].s)) { ende = i; break; } }
-                        if (ende < 0) return { pkt: [], laufend: false };
-                        let anf = ende;
-                        while (anf > 0 && weg(z[anf - 1].s)) anf--;
-                        const fenster = z.slice(Math.max(0, anf - 1), Math.min(z.length, ende + 2));
-                        const p = fenster
-                          .filter((x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU)
+                        const genau = (x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU;
+                        // Abwesenheiten als [Anfang, Ende], die juengste zuerst
+                        const spannen = [];
+                        for (let i = z.length - 1; i >= 0; i--) {
+                          if (!weg(z[i].s)) continue;
+                          let anf = i;
+                          while (anf > 0 && weg(z[anf - 1].s)) anf--;
+                          spannen.push([anf, i]);
+                          i = anf;
+                        }
+                        const wahl = spannen.find(([anf, ende], k) => (k === 0 && ende === z.length - 1)
+                          || z.slice(anf, ende + 1).filter(genau).length >= 2);
+                        if (!wahl) return { pkt: [], laufend: false };
+                        const [anf, ende] = wahl;
+                        const p = z.slice(Math.max(0, anf - 1), Math.min(z.length, ende + 2))
+                          .filter(genau)
                           .map((x) => ({ lat: x.a.latitude, lon: x.a.longitude, acc: x.a.gps_accuracy ?? 999, t: x.t }))
                           .sort((a, b) => a.t - b.t);
                         // Mehrere Meldungen innerhalb einer Sekunde: die genaueste; gleiche Position nur einmal
@@ -430,7 +444,7 @@ cards:
                           const st = await sp.karte(kasten, eid);
                           if (a.pkt.length < 2) {
                             st.m.autoFit = true;
-                            zeig(`Keine Strecke in den letzten ${FENSTER} Stunden.`);
+                            zeig(a.laufend ? 'Seit der Abfahrt noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`);
                             return a;
                           }
                           const schluessel = a.pkt.length + '|' + a.pkt[0].t + '|' + a.pkt[a.pkt.length - 1].t;
