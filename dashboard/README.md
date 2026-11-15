@@ -152,6 +152,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`bewegungsspur-konfig.yaml`](personen/bewegungsspur-konfig.yaml) | konfig | Bewegungsspur – Valhalla-Abruf fuer das Einrasten auf Strassen | – | – | aktiv |
 | [`gesundheit-meldungen-konfig.yaml`](personen/gesundheit-meldungen-konfig.yaml) | konfig | Gesundheit – Morgen-Briefing, Frueherkennung, Bewegung, Wochenbericht, Schalter | – | `sensor.iphone_*`, `notify.mobile_app_iphone` | aktiv |
 | [`gesundheit-view.yaml`](personen/gesundheit-view.yaml) | view | Gesundheit – komplette Ansicht | apexcharts-card, button-card, card-mod, decluttering-card, ha-training-card | `sensor.iphone_*`, `notify.mobile_app_iphone`, `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`owlet-smart-sock-karte.yaml`](personen/owlet-smart-sock-karte.yaml) | karte | Owlet Smart Sock – Referenz des Nachtblau-Stils | button-card, card-mod | `*_seriennr` | aktiv |

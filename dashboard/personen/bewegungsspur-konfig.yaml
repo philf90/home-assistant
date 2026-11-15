@@ -1,0 +1,59 @@
+# ============================================================================
+# Bewegungsspur – Valhalla-Abruf fuer das Einrasten auf Strassen
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       personen
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+# Platzhalter:   keine
+# ============================================================================
+# Die Bewegungsspur im Popup der Personenkarte (person-presence-karte.yaml)
+# verbindet die gespeicherten GPS-Punkte bisher gerade. Damit die Linie auf
+# Strassen liegt, rastet ein Valhalla-Server (Map-Matching, trace_route) die
+# Punkte ein. Den Server ruft Home Assistant auf, nicht der Browser: Das Handy
+# erreicht den Server unterwegs nicht, und eine HTTPS-Seite darf keinen
+# HTTP-Server abfragen (Mixed Content). Dieses Paket stellt nur den Abruf
+# bereit.
+#
+#   rest_command.valhalla_trace
+#     anfrage: fertige Valhalla-Anfrage als JSON-Text, z. B.
+#              {"shape":[{"lat":..,"lon":..,"time":..},...],
+#               "costing":"auto","shape_match":"map_snap"}
+#     Antwort per response_variable: status, content (JSON), headers
+#     content.trip.legs[].shape ist die eingerastete Linie (Polyline,
+#     Genauigkeit 6); weitere Teilstuecke bei Luecken in content.alternates.
+#
+# rest_command rendert payload mit parse_result=False: Der JSON-Text geht
+# unveraendert hinaus. Eine Antwort mit Content-Type application/json kommt
+# als Objekt in content an (Quellcode homeassistant/components/rest_command).
+#
+# Voraussetzung
+#   - Valhalla-Server, z. B. Docker-Image ghcr.io/valhalla/valhalla-scripted,
+#     mit Kartendaten der Region (Geofabrik). In dessen valhalla.json:
+#       meili.default.breakage_distance: 10000   (Standard 2000; iOS meldet
+#                                                 unterwegs nur etwa alle
+#                                                 5 min, Spruenge bis 5,7 km)
+#       meili.customizable: "breakage_distance" ergaenzen
+#       mjolnir.max_cache_size: 268435456         (Zwischenspeicher 256 MB)
+#   - in secrets.yaml:
+#       valhalla_trace_url: http://<IP-des-Servers>:8002/trace_route
+#   - in configuration.yaml:
+#       homeassistant:
+#         packages:
+#           bewegungsspur: !include bewegungsspur-konfig.yaml
+#   Danach die Aktion rest_command.reload ausfuehren; erscheint
+#   rest_command.valhalla_trace nicht, Home Assistant neu starten.
+#
+# timeout: 20 s. Gemessen mit Kartendaten fuer Deutschland: 59-172 ms je
+# Fahrt (bis 219 Punkte); der Puffer deckt lange Fahrten und den ersten
+# Abruf nach einem Neustart des Servers ab.
+
+rest_command:
+  valhalla_trace:
+    url: !secret valhalla_trace_url
+    method: post
+    content_type: "application/json"
+    headers:
+      Accept: application/json
+    payload: "{{ anfrage }}"
+    timeout: 20
