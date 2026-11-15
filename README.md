@@ -79,7 +79,8 @@ Dazu:
 
 - **`browser_mod`** (HACS-Integration) für Popups und das More-Menü der
   Navigationsleiste: Navigation, Wetter, Warnlage und Pollen, Tanken und
-  Fahrzeiten, Pflanzen, Kameras, WoW, Hue-Licht-Panel
+  Fahrzeiten, Pflanzen, Kameras, WoW, Hue-Licht-Panel, Bewegungsspur der
+  Personenkarte
 - **WebRTC Camera** (HACS-Integration, bringt die Karte `webrtc-camera` mit)
   für die Kamera-View
 - **`unifi-netzplan-card.js`** für den UniFi-Netzplan; die Karte liegt im
@@ -118,7 +119,7 @@ Datei; die Übersicht nach Bereich:
 | `netzwerk/` | UniFi Network, [UniFi WAN](#unifi-wan) (optional), [UniFi UNAS](#unifi-unas-pro), [Arcane](#arcane-docker), Homematic(IP) Local for OpenCCU (HACS), Uptime Kuma |
 | `fahrzeuge/` | VW Group Connect (`vag_connect`), Tankerkönig, Waze Travel Time, Time & Date |
 | `garten/` | Home Assistant Plant (`Olen/homeassistant-plant`, HACS), Zigbee, Shelly |
-| `personen/` | Owlet Smart Sock (`LucasVollebergh/owlet`, HACS), Companion App |
+| `personen/` | Owlet Smart Sock (`LucasVollebergh/owlet`, HACS), Companion App, browser_mod (Bewegungsspur), Valhalla-Server für das Einrasten der Spur (`bewegungsspur-konfig.yaml`) |
 | `flugradar/` | Flightradar24 (HACS) |
 | `fussball/` | keine: Daten von OpenLigaDB direkt im Browser, ESPN über das Paket `fussball-espn-konfig.yaml`; Companion App für die Meldungen |
 | `sicherheit/` | Homematic(IP) Local, UniFi Protect, UniFi Access, UniFi Network, Backup, Telegram Bot, Companion App |
@@ -503,7 +504,7 @@ erzeugt `ci/gen_index.py` aus den Kopfblöcken der Dateien.
 | [`netzwerk/`](dashboard/netzwerk/) | `docker-container-karte.yaml`, `docker-ereignisse-karte.yaml`, `docker-host-karte.yaml`, `docker-karte.yaml`, `docker-konfig.yaml`, `docker-projekte-karte.yaml`, `docker-speicher-karte.yaml`, `docker-templates.yaml`, `docker-uebersicht-karte.yaml`, `docker-updates-karte.yaml`, `docker-verlauf-karte.yaml`, `docker-view.yaml`, `homematic-view.yaml`, `netzwerk-view.yaml`, `system-karte.yaml`, `unifi-kabel-clients-konfig.yaml`, `unifi-leitungen-karte.yaml`, `unifi-netzplan-card.js`, `unifi-netzplan-karte.yaml`, `unifi-netzwerk-status-karte.yaml`, `unifi-udm-system-karte-v2.yaml`, `unifi-unas-pro-karte.yaml`, `unifi-verlauf-karte.yaml`, `wlan-karte-v2.yaml` | `homematic-karte.yaml`, `unifi-udm-system-karte.yaml`, `wlan-karte.yaml` | – |
 | [`fahrzeuge/`](dashboard/fahrzeuge/) | `autos-karte-v4.yaml`, `autos-passat-konfig.yaml`, `autos-templates.yaml`, `fahrzeiten-karte.yaml`, `fahrzeiten-templates.yaml`, `tanken-karte.yaml`, `tanken-templates.yaml` | `autos-karte-v2.yaml`, `autos-karte-v3.yaml`, `autos-karte.yaml` | `autos-animation.html`, `autos-karten-v2.html` |
 | [`garten/`](dashboard/garten/) | `garten-karte.yaml`, `pflanzen-templates.yaml`, `pflanzen-view.yaml` | `pflanzen-flower-karte.yaml`, `pflanzen-status-karte.yaml` | – |
-| [`personen/`](dashboard/personen/) | `gesundheit-meldungen-konfig.yaml`, `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
+| [`personen/`](dashboard/personen/) | `bewegungsspur-konfig.yaml`, `gesundheit-meldungen-konfig.yaml`, `gesundheit-view.yaml`, `owlet-smart-sock-karte.yaml`, `person-presence-karte.yaml` | – | – |
 | [`flugradar/`](dashboard/flugradar/) | `flugradar-templates.yaml`, `flugradar-view.yaml` | – | – |
 | [`fussball/`](dashboard/fussball/) | `fussball-espn-konfig.yaml`, `fussball-meldungen-konfig.yaml`, `fussball-templates.yaml`, `fussball-view.yaml` | – | – |
 | [`sicherheit/`](dashboard/sicherheit/) | `sicherheit-templates.yaml`, `sicherheit-view.yaml`, `wachmodus-konfig.yaml` | – | – |
