@@ -347,8 +347,10 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    Button auf „Alle ungenutzten Images, Netzwerke und Build Cache“
    stellen; die Diagnose-Sensoren
    Docker-Version, Arcane Version und Host Arbeitsspeicher gesamt
-   aktivieren. Ereignisse, Absturzmeldung und „Alle aktualisieren“
-   kommen aus dem Paket `docker-konfig.yaml`.
+   aktivieren. Ereignisse, Absturzmeldung, „Alle aktualisieren“ und
+   „Aufräumen“ mit Rückmeldung kommen aus dem Paket `docker-konfig.yaml`;
+   die Rückmeldung kommt nach Sekunden ab HA-Arcane 0.7.1, mit 0.7.0
+   nach bis zu 15 Minuten.
 
 CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
 für den ganzen Host.
