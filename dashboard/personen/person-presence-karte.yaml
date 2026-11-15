@@ -357,7 +357,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 3;
+                    const VERSION = 4;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -740,7 +740,14 @@ cards:
                         const r = karte.shadowRoot;
                         const q = (s) => r && r.querySelector(s);
                         const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], eintraege: [] };
-                        if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter) return;
+                        const wurzel = q('[data-spur]');
+                        if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter || !wurzel) return;
+                        // button-card (7.0.1, src/action-handler.ts) ruft auf seiner ha-card bei
+                        // touchend preventDefault. Der Browser erzeugt dann fuer den Finger keinen
+                        // click: Reiter, Umschalter, Liste und das Antippen der Karte reagierten auf
+                        // iPhone und Android nicht, mit der Maus schon. touchend endet deshalb hier;
+                        // die Karte (MapLibre) hat es vorher schon bekommen.
+                        wurzel.addEventListener('touchend', (ev) => ev.stopPropagation());
                         const hass = () => karte._hass || h0;
                         const person = hass().states[eid];
                         const ich = hass().user;
@@ -787,7 +794,7 @@ cards:
                       setTimeout(() => sp.start(karte, eid, h0, tagFuer), 50);
                     }
                     const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
-                    return `<div style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                    return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
                       <div data-spur-reiter style="display:none;gap:4px;padding:3px;border-radius:12px;background:#10151d;">${knopf('letzte', 'Letzte Strecke')}${knopf('tag', 'Tagesprofil')}</div>
                       <div data-spur-info style="min-height:16px;font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Strecke wird geladen …</div>
                       <div data-spur-karte style="width:100%;aspect-ratio:2 / 3;max-height:calc(100vh - 300px);border-radius:14px;overflow:hidden;background:#10151d;"></div>
