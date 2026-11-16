@@ -41,6 +41,9 @@
 #   der Start mit zone.home.
 # Sichtbar: Feld sichtbar "daheim" / "unterwegs" (Person home oder nicht),
 # Feld personen beschraenkt Start oder Ziel auf diese Personen.
+# Icon im Start-Chip: Haus (zone.home), Stecknadel (Standort), sonst Feld
+# icon des Starts (mdi:...), sonst Attribut icon der Zone wie in der
+# Personenkarte, sonst Aktentasche.
 # Ziele: ausgeblendet, wenn die Zone der Start ist oder die Person in der Zone
 # ist (Attribut in_zones; zone.home auch bei Zustand home). Ein Ort ist so
 # nie Start und Ziel zugleich.
@@ -172,7 +175,7 @@ button_card_templates:
       inhalt: |
         [[[
           // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-          const VERSION = 7;
+          const VERSION = 8;
           if (!window.__nachtblauFz || window.__nachtblauFz.version !== VERSION) {
             if (window.__nachtblauFz && window.__nachtblauFz.takt) clearInterval(window.__nachtblauFz.takt);
             const fz = { version: VERSION, cache: {}, ctx: {}, karten: new Set(), wahlen: {}, adressen: {}, freiKey: {} };
@@ -438,13 +441,22 @@ button_card_templates:
                   ? 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7m0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5'
                   : s.zone === 'zone.home' ? 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'
                   : 'M10 2h4a2 2 0 0 1 2 2v2h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4V4a2 2 0 0 1 2-2m4 4V4h-4v2z';
+                // Andere Zonen: Feld icon des Starts, sonst Icon der Zone,
+                // sonst die Aktentasche (pfad). ha-icon braucht margin:0,
+                // button-card v7 setzt sonst margin:auto.
+                const mdi = (s.standort || s.zone === 'zone.home') ? null
+                  : (s.icon || (states[s.zone] && states[s.zone].attributes.icon) || null);
+                const farbe = an ? BLAU : 'var(--nachtblau-muted, #6e7988)';
+                const ico = mdi && /^[a-z0-9-]+:[a-z0-9-]+$/.test(mdi)
+                  ? `<ha-icon icon="${mdi}" style="--mdc-icon-size:15px;--ha-icon-display:block;width:15px;height:15px;display:flex;flex:none;margin:0;color:${farbe};"></ha-icon>`
+                  : `<svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;color:${farbe};"><path d="${pfad}"/></svg>`;
                 const aktion = (an || gesperrt) ? '' : fz.tippAttr(`window.__nachtblauFz.waehle('${l.pid}','${s.id}')`);
                 return `<button type="button" ${aktion} style="display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:500;
                     white-space:nowrap;border-radius:999px;padding:6px 12px;cursor:${aktion ? 'pointer' : 'default'};opacity:${gesperrt ? 0.45 : 1};
                     color:${an ? 'var(--nachtblau-titel, #e7ecf3)' : 'var(--nachtblau-label, #b4c0cf)'};
                     background:${an ? `color-mix(in srgb, ${BLAU} 12%, transparent)` : 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'};
                     border:1px solid ${an ? `color-mix(in srgb, ${BLAU} 24%, transparent)` : 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'};">
-                    <svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;color:${an ? BLAU : 'var(--nachtblau-muted, #6e7988)'};"><path d="${pfad}"/></svg>${esc(s.name)}</button>`;
+                    ${ico}${esc(s.name)}</button>`;
               }).join('');
               const zeilen = l.koord ? l.ziele.map((z) => {
                 const ziel = fz.koord(states[z.zone], 5);
