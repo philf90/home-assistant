@@ -27,6 +27,7 @@
 #   nachtblau_docker_messwert  Messwert mit Balken (Host-CPU, -RAM, -Disk)
 #   nachtblau_docker_host      Zeile je Host der Karte Hosts (docker-hosts-karte.yaml)
 #   nachtblau_docker_host_info Kopf des Host-Pop-ups mit Systemdaten und Versionen
+#   nachtblau_docker_ports     Pop-up "Ports" eines Hosts: belegte Host-Ports als Chips
 #   nachtblau_docker_host_jobs Hintergrund-Jobs eines Hosts im Pop-up
 #   nachtblau_docker_speicher_frei  Freigebbarer Speicher eines Hosts mit Balken
 #   nachtblau_docker_aufraeumen  "Ungenutztes aufraeumen" eines Hosts (Skript)
@@ -73,13 +74,17 @@
 #     traegt er den Host in der ID (sensor.container_docker_02_portainer_
 #     ports), der Schalter nicht (switch.container_portainer). Ports kommen
 #     dazu, solange der Port-Teil samt "+N" hoechstens 11 Zeichen hat, mit
-#     Zusatz ("gesund", "startet") hoechstens 7; passt nicht einmal das,
-#     steht nur der erste Port da. Gemessen im Nachbau mit Roboto: Die
-#     Infozeile ist 122 px (360 px breites Handy) bzw. 164 px (iPhone 17 Pro)
-#     breit; so bleibt sie auch bei "laeuft seit weniger als 1 Sek. ·
-#     startet · 9100 +1" oder "laeuft seit 11 Jahren · 8000 +2" bei
-#     hoechstens zwei Zeilen. Ohne die Option fehlt der Sensor, und die Zeile
-#     bleibt wie vorher.
+#     Zusatz ("gesund", "startet") hoechstens 7, und wenn der Status dabei
+#     laenger als 24 Zeichen ist ("laeuft seit weniger als 1 Sek."),
+#     hoechstens 5; passt nicht einmal das, steht nur der erste Port da.
+#     Gemessen im Nachbau mit Roboto (als data-URL eingebettet und als
+#     geladen geprueft): Die Infozeile ist 122 px (360 px breites Handy) bzw.
+#     164 px (iPhone 17 Pro) breit; alle 189 Kombinationen aus neun
+#     Dauern, ohne/mit "gesund"/"startet" und sieben Port-Listen bleiben auf
+#     beiden Breiten bei hoechstens zwei Zeilen. Ohne die 5er-Grenze braeche
+#     "laeuft seit weniger als 1 Sek. · gesund · 9100 +1" auf dem 360 px
+#     breiten Handy in drei Zeilen um. Ohne die Option fehlt der Sensor,
+#     und die Zeile bleibt wie vorher.
 #   - Pillen "ungesund" (Rot) und "Update" (Amber), Tönung 0,12 / Rand 0,24.
 #     "Update" ist eine eigene eingebettete button-card: Antippen oeffnet den
 #     Update-Dialog von HA (installierte und neue Version, "Installieren",
@@ -314,7 +319,7 @@ button_card_templates:
           // Ports nur bei laufendem Container; Budget fuer den Port-Teil siehe oben
           const p = variables.zustand === 'running' ? variables.ports : [];
           if (p.length) {
-            const budget = teile.length > 1 ? 7 : 11;
+            const budget = teile.length > 1 ? (teile[0].length > 24 ? 5 : 7) : 11;
             let n = p.length;
             const txt = (k) => p.slice(0, k).join(', ') + (k < p.length ? ' +' + (p.length - k) : '');
             while (n > 1 && txt(n).length > budget) n--;
@@ -825,8 +830,11 @@ button_card_templates:
   # kuenftiger Name auch gekuerzt nicht, endet er mit "…".
   # Container eines entfernten Hosts (HA-Arcane ab 0.11.0, Option
   # "Environment im Geraetenamen"): Host abtrennen, Namen kuerzen, Host wieder
-  # voranstellen, "docker-02 dockge-dockge-1" -> "docker-02 dockge"
-  # (gemessen: "docker-02 arcane-agent" 120 px).
+  # voranstellen, "docker-02 dockge-dockge-1" -> "docker-02 dockge".
+  # Nachgemessen mit geladenem Roboto (die erste Messung lief unbemerkt mit
+  # einer Ersatzschrift): "docker-02 arcane-agent" ist fett 130 px, normal
+  # 126 px breit. Auf dem 360 px breiten Handy (126 px) endet er deshalb
+  # fett, also mit Auto-Update an, mit "…"; auf dem iPhone (147 px) passt er.
   nachtblau_docker_autoupdate_chip:
     variables:
       anzeige: |
@@ -1464,6 +1472,14 @@ button_card_templates:
   # lokalen Host Docker- und Arcane-Version. Ein Update von Arcane bzw. dem
   # Agenten steht in Amber ("· Update auf v3.1.0"); installiert wird es in der
   # Karte Image-Updates, Abschnitt Arcane.
+  # Darunter, wie eine Zeile der Systemdaten, "Ports  26 belegt  ›" aus dem
+  # Sensor "Belegte Host-Ports" desselben Geraets (HA-Arcane ab 0.12.0,
+  # Option "Veroeffentlichte Ports", translation_key host_ports). Die Zeile ist
+  # eine eingebettete button-card: Antippen oeffnet das Pop-up "Ports" des
+  # Hosts (#docker-ports-<Objekt-ID von "Online">, nachtblau_docker_ports).
+  # 4 px Polster oben und unten vergroessern die Tippflaeche; oben ergibt das
+  # denselben Abstand wie zwischen den Zeilen darueber. Ohne die Option fehlt
+  # die Zeile.
   nachtblau_docker_host_info:
     variables:
       sib: |
@@ -1540,6 +1556,60 @@ button_card_templates:
           }).join('');
           return `<div style="display:grid;grid-template-columns:76px minmax(0, 1fr);gap:4px 10px;font-size:12.5px;line-height:1.35;text-align:left;">${kv}</div>`;
         ]]]
+      ports:
+        card:
+          type: custom:button-card
+          show_icon: false
+          show_name: false
+          show_state: false
+          show_label: false
+          tap_action: |
+            [[[
+              const s = variables.sib.host_ports;
+              if (!s || !entity || ['unavailable', 'unknown'].includes(s.state)) return { action: 'none' };
+              return { action: 'navigate', navigation_path: '#docker-ports-' + entity.entity_id.split('.')[1] };
+            ]]]
+          hold_action:
+            action: none
+          custom_fields:
+            l: >-
+              <span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Ports</span>
+            v: |
+              [[[
+                const s = variables.sib.host_ports;
+                const n = s ? parseInt(s.state, 10) : NaN;
+                const txt = isNaN(n) ? 'nicht verfügbar' : (n === 0 ? 'keine belegt' : n + ' belegt');
+                return `<span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text, #f2f5f8);">${txt}</span>`;
+              ]]]
+            pf: |
+              [[[
+                const s = variables.sib.host_ports;
+                if (!s || ['unavailable', 'unknown'].includes(s.state)) return '';
+                return `<span style="font-size:16px;line-height:1;color:var(--nachtblau-text-sekundaer, #8794a5);">›</span>`;
+              ]]]
+          styles:
+            card:
+              - padding: 4px 0
+              - border: none
+              - border-radius: 6px
+              - box-shadow: none
+              - background: none
+              - width: 100%
+              - box-sizing: border-box
+            grid:
+              - grid-template-areas: '"l v pf"'
+              - grid-template-columns: 76px minmax(0, 1fr) auto
+              - column-gap: 10px
+              - align-items: center
+            custom_fields:
+              l:
+                - justify-self: start
+              v:
+                - justify-self: start
+                - min-width: 0
+                - text-align: left
+              pf:
+                - justify-self: end
     styles:
       card:
         - padding: 0 2px
@@ -1551,17 +1621,166 @@ button_card_templates:
         - box-sizing: border-box
         - cursor: default
       grid:
-        - grid-template-areas: '"kopf" "daten"'
+        - grid-template-areas: |
+            [[[ return variables.sib.host_ports ? '"kopf" "daten" "ports"' : '"kopf" "daten"'; ]]]
         - grid-template-columns: minmax(0, 1fr)
-        - row-gap: 10px
+        - row-gap: 0
       custom_fields:
         kopf:
           - justify-self: stretch
           - min-width: 0
+          - margin-bottom: 10px
         daten:
           - justify-self: stretch
           - min-width: 0
           - white-space: normal
+        ports:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.sib.host_ports ? "block" : "none"; ]]]'
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_ports: Inhalt des Pop-ups "Ports" eines Hosts
+  # (#docker-ports-<Objekt-ID von "Online">, erzeugt in docker-hosts-karte.yaml;
+  # geoeffnet ueber die Zeile "Ports" im Host-Pop-up). Entity ist der Sensor
+  # "Belegte Host-Ports" der Umgebung (HA-Arcane ab 0.12.0, Option
+  # "Veroeffentlichte Ports", translation_key host_ports); gelesen wird nur
+  # sein Attribut ports (host_port, protocol, host_ip, container,
+  # container_port). Ob ein Port an eine Adresse gebunden ist, zeigt die Karte
+  # bewusst nicht.
+  #   Kopf    "Ports · docker-01" links (16 px), rechts "26 belegt · alle TCP"
+  #           bzw. "· 2 UDP"
+  #   Chips   zwei Spalten, nach Port sortiert, je Chip der Host-Port (fett,
+  #           UDP mit "/udp") und der Container. Chips 28 px hoch, 3 px
+  #           zwischen den Reihen, 6 px zwischen den Spalten, wie im Pop-up
+  #           "Automatische Updates"; ohne Aktion.
+  # Name wie in den Container-Zeilen ohne Compose-Anhaengsel
+  # ("sonarr-sonarr-1" -> "sonarr"). Ist er dann laenger als 17 Zeichen und
+  # beginnt mit dem Namen seines Compose-Projekts (Geraet "Container <name>"
+  # bzw. "Container <host> <name>", eingehaengt unter "Project <name>"), steht
+  # nur der Rest da: "gethomepage-homepage" -> "homepage",
+  # "uptimekuma-mariadb-uptime-kuma" -> "uptime-kuma". Gemessen im Nachbau
+  # mit Roboto (als data-URL eingebettet und als geladen geprueft): Neben
+  # einem bis zu vierstelligen Port bleiben fuer den Namen 106,5 px (360 px
+  # breites Handy) bzw. 127,5 px (iPhone 17 Pro). Der breiteste Name mit
+  # hoechstens 17 Zeichen in der Instanz, "nginxproxymanager", braucht
+  # 105,3 px; "gethomepage-homepage" (20 Zeichen) braeuchte 133,8 px. Ein
+  # kuenftiger Name, der trotzdem nicht passt, endet mit "…". Die Port-Spalte
+  # ist mindestens 4ch breit (Ziffern in tabular-nums), damit die Namen bis zu
+  # vierstelligen Ports buendig stehen. Hoehe des Pop-ups: docker-01 mit 26
+  # Ports (13 Reihen) 429 px, docker-02 mit 4 Ports 88 px; Platz 539 px
+  # (siehe Pop-up "Automatische Updates"). Ab dem 33. Port (17 Reihen)
+  # scrollt das Blatt auf dem 360 px breiten Handy.
+  nachtblau_docker_ports:
+    variables:
+      host: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return d ? (d.name_by_user || d.name || '') : '';
+        ]]]
+      liste: |
+        [[[
+          const a = entity && Array.isArray(entity.attributes.ports) ? entity.attributes.ports : [];
+          return a.filter((p) => p && p.host_port != null)
+            .slice().sort((x, y) => (Number(x.host_port) - Number(y.host_port)) || String(x.protocol).localeCompare(String(y.protocol)));
+        ]]]
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          return `<span style="font-size:16px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Ports${variables.host ? ' · ' + esc(variables.host) : ''}</span>`;
+        ]]]
+      summe: |
+        [[[
+          const l = variables.liste;
+          let txt;
+          if (!entity || ['unavailable', 'unknown'].includes(entity.state)) txt = 'nicht verfügbar';
+          else if (!l.length) txt = 'keine belegt';
+          else {
+            const udp = l.filter((p) => String(p.protocol).toLowerCase() === 'udp').length;
+            txt = l.length + ' belegt · ' + (udp ? udp + ' UDP' : 'alle TCP');
+          }
+          return `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${txt}</span>`;
+        ]]]
+      chips: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const l = variables.liste;
+          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          if (!entity || ['unavailable', 'unknown'].includes(entity.state)) return '';
+          if (!l.length) return `<span style="font-size:12px;color:${sek};">Kein Container veröffentlicht einen Port.</span>`;
+          // Geraete der Container nach Namen, fuer das Compose-Projekt
+          const D = hass.devices || {}, geraete = {};
+          for (const d of Object.values(D)) if (d.model === 'Container') geraete[d.name] = d;
+          const kurz = (c) => {
+            let n = String(c || '?').replace(/-\d+$/, '');
+            const t = n.split('-');
+            if (t.length % 2 === 0) {
+              const h = t.length / 2;
+              if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+            }
+            if (n.length > 17) {
+              const d = geraete['Container ' + variables.host + ' ' + c] || geraete['Container ' + c];
+              const v = d && d.via_device_id ? D[d.via_device_id] : null;
+              const p = v ? String(v.name || '').replace(/^(Project|Projekt) /, '') : '';
+              if (p && n.startsWith(p + '-') && n.length > p.length + 1) n = n.slice(p.length + 1);
+            }
+            return n;
+          };
+          const chip = (p) => {
+            const udp = String(p.protocol).toLowerCase() === 'udp' ? `<span style="font-weight:400;color:${sek};">/udp</span>` : '';
+            return `<div style="box-sizing:border-box;height:28px;padding:0 8px;border-radius:10px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:grid;grid-template-columns:minmax(4ch, auto) minmax(0, 1fr);column-gap:7px;align-items:center;font-size:12px;font-weight:700;line-height:1.2;">`
+              + `<span style="font-variant-numeric:tabular-nums;color:var(--nachtblau-text, #f2f5f8);white-space:nowrap;">${esc(p.host_port)}${udp}</span>`
+              + `<span style="min-width:0;font-weight:400;color:var(--nachtblau-label, #b4c0cf);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;">${esc(kurz(p.container))}</span></div>`;
+          };
+          return `<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:3px 6px;">${l.map(chip).join('')}</div>`;
+        ]]]
+    styles:
+      # Breiten-Fesseln wie im Pop-up "Automatische Updates". Ohne Polster an
+      # der Karte, damit die Chips die volle Breite des Pop-ups haben (wie
+      # dort die grid-Karte); Titel und Zahl ruecken 2 px ein wie dort.
+      card:
+        - padding: 0
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+        - cursor: default
+      grid:
+        - grid-template-areas: '"titel summe" "chips chips"'
+        - grid-template-columns: minmax(0, 1fr) auto
+        - column-gap: 10px
+        - row-gap: 10px
+        - align-items: baseline
+      custom_fields:
+        titel:
+          - justify-self: start
+          - min-width: 0
+          - padding-left: 2px
+          - text-align: left
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+        summe:
+          - justify-self: end
+          - padding-right: 2px
+          - white-space: nowrap
+        chips:
+          - justify-self: stretch
+          - min-width: 0
+          - text-align: left
 
   # ---------------------------------------------------------------------------
   # nachtblau_docker_host_jobs: Arcanes Hintergrund-Jobs eines Hosts im Pop-up
