@@ -18,7 +18,7 @@
 #   nachtblau_docker_zeile     Container-Zeile mit Neustart und Start/Stop
 #   nachtblau_docker_projekt   Compose-Projekt-Zeile (erbt nachtblau_docker_zeile)
 #   nachtblau_docker_update    Zeile mit Image-Update und "Installieren"
-#   nachtblau_docker_autoupdate_info  Kopf des Popups "Automatische Updates"
+#   nachtblau_docker_autoupdate_info  Kopf des Pop-ups "Automatische Updates"
 #   nachtblau_docker_autoupdate_chip  Container-Chip im Popup (Auto-Update an/aus)
 #   nachtblau_docker_kopf      Kartenkopf: Icon-Kachel, Titel, Untertitel, Badge
 #   nachtblau_docker_titel     Abschnittstitel (10,5 px, Versalien)
@@ -655,94 +655,70 @@ button_card_templates:
           - align-self: center
 
   # ---------------------------------------------------------------------------
-  # nachtblau_docker_autoupdate_info: Kopf des Popups "Automatische Updates"
-  # (docker-updates-karte.yaml, ab HA-Arcane 0.9.0). Entity ist
-  # sensor.docker_letztes_image_update (Option "Arcane Updater"). Drei Zeilen:
-  # Hinweis, Zaehlung der Schalter switch.container_*_automatisch_aktualisieren
-  # ("27 automatisch · 2 ausgenommen") und das letzte Update mit Grund, auf
-  # zwei Zeilen begrenzt; waehrend eines Laufs "Arcane installiert gerade
-  # Updates ..." in Amber. Antippen oeffnet den Sensor (Verlauf, Attribute mit
-  # dem ganzen Grund). Der Hinweis ist einzeilig gehalten, damit das Popup in
-  # 629 px passt (Messung in docker-updates-karte.yaml).
+  # nachtblau_docker_autoupdate_info: Kopf des Pop-ups "Automatische Updates"
+  # (Bubble Card #docker-autoupdates in docker-updates-karte.yaml, ab
+  # HA-Arcane 0.9.0). Eine Zeile: "Automatische Updates" links (16 px), rechts
+  # die Zaehlung der Schalter switch.container_*_automatisch_aktualisieren
+  # ("28 automatisch · 1 aus"), waehrend eines Laufs von Arcanes Updater
+  # "Arcane installiert …" in Amber. Das letzte Update und den Grund eines
+  # Fehlers zeigt die Zeile "Automatische Updates" in der Karte (Halten
+  # oeffnet den Sensor); im Pop-up fehlt dafuer der Platz (Messung dort).
   nachtblau_docker_autoupdate_info:
     show_icon: false
     show_name: false
     show_state: false
     show_label: false
     tap_action:
-      action: more-info
+      action: none
     hold_action:
       action: none
     custom_fields:
-      hinweis: >-
-        <span style="font-size:12px;line-height:1.3;color:var(--nachtblau-text-sekundaer, #8794a5);">Antippen nimmt einen Container aus oder wieder auf.</span>
+      titel: >-
+        <span style="font-size:16px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Automatische Updates</span>
       summe: |
         [[[
+          const lauf = states['binary_sensor.docker_updates_werden_installiert'];
+          if (lauf && lauf.state === 'on') return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert …</span>`;
           let an = 0, aus = 0;
           for (const id of Object.keys(states)) {
             if (!/^switch\.container_.+_automatisch_aktualisieren$/.test(id)) continue;
             if (states[id].state === 'on') an++;
             else if (states[id].state === 'off') aus++;
           }
-          const txt = an + aus === 0 ? 'keine Schalter' : an + ' automatisch · ' + aus + ' ausgenommen';
-          return `<span style="font-size:13px;font-weight:700;color:var(--nachtblau-label, #b4c0cf);">${txt}</span>`;
-        ]]]
-      zuletzt: |
-        [[[
-          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
-          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
-          const lauf = states['binary_sensor.docker_updates_werden_installiert'];
-          if (lauf && lauf.state === 'on') return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert gerade Updates …</span>`;
-          if (!entity || entity.state === 'unavailable') return `<span style="font-size:12px;color:${sek};">Letztes Update: nicht verfügbar (Option „Arcane Updater“)</span>`;
-          const a = entity.attributes;
-          const d = new Date(entity.state);
-          if (isNaN(d.getTime()) || !a.resource_name) return `<span style="font-size:12px;color:${sek};">Noch kein Update über Arcanes Updater</span>`;
-          const woerter = { updated: 'aktualisiert', restarted: 'neu gestartet', skipped: 'übersprungen', failed: 'fehlgeschlagen', blocked: 'gesperrt', up_to_date: 'aktuell' };
-          const s = String(a.status || '');
-          const fehler = s === 'failed' || s === 'blocked';
-          const wann = d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-          const grund = a.error ? ' · ' + esc(a.error) : '';
-          return `<span style="font-size:12px;color:${fehler ? 'var(--nachtblau-koralle, #e7936e)' : sek};">Zuletzt: <span style="overflow-wrap:anywhere;">${esc(a.resource_name)}</span> · ${woerter[s] || esc(s || '?')} · ${wann}${grund}</span>`;
+          const txt = an + aus === 0 ? 'keine Schalter' : an + ' automatisch · ' + aus + ' aus';
+          return `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${txt}</span>`;
         ]]]
     styles:
       # Breiten-Fesseln wie im DWD-Popup (warnlage-templates.yaml): sonst
       # sizet button-card das Grid auf max-content und Text laeuft hinaus.
       card:
-        - padding: 0 2px 2px
+        - padding: 0 2px
         - border: none
         - box-shadow: none
         - background: none
         - width: 100%
         - max-width: 100%
         - box-sizing: border-box
+        - cursor: default
       grid:
-        - grid-template-areas: '"hinweis" "summe" "zuletzt"'
-        - grid-template-columns: minmax(0, 1fr)
-        - row-gap: 6px
+        - grid-template-areas: '"titel summe"'
+        - grid-template-columns: minmax(0, 1fr) auto
+        - column-gap: 10px
+        - align-items: baseline
       custom_fields:
-        hinweis:
+        titel:
           - justify-self: start
           - min-width: 0
           - text-align: left
-          - white-space: normal
-        summe:
-          - justify-self: start
-          - min-width: 0
-          - text-align: left
-        zuletzt:
-          - justify-self: start
-          - min-width: 0
-          - max-width: 100%
+          - white-space: nowrap
           - overflow: hidden
-          - white-space: normal
-          - display: -webkit-box
-          - -webkit-box-orient: vertical
-          - -webkit-line-clamp: '2'
-          - line-height: 1.3
-          - text-align: left
+          - text-overflow: ellipsis
+        summe:
+          - justify-self: end
+          - white-space: nowrap
 
   # ---------------------------------------------------------------------------
-  # nachtblau_docker_autoupdate_chip: ein Container im Popup "Automatische
+  # nachtblau_docker_autoupdate_chip: ein Container im Pop-up "Automatische
   # Updates". Entity ist switch.container_<x>_automatisch_aktualisieren (ab
   # HA-Arcane 0.9.0, Option "Auto-Update-Schalter"). Antippen schaltet um,
   # ohne Rueckfrage: Der Schalter bearbeitet nur Arcanes Liste der Container,
@@ -755,12 +731,16 @@ button_card_templates:
   # Ein Container mit dem Label com.getarcaneapp.arcane.updater=false bleibt
   # bei Arcane ausgenommen; die Integration gibt das nicht als Attribut aus,
   # Einschalten meldet dann einen Fehler mit dem Label.
-  # Name wie in den Zeilen, ohne "Container " und " Automatisch aktualisieren"
-  # ("sonarr-sonarr-1" -> "sonarr"). Masse: 3 Spalten (grid-Karte, 8 px
-  # Abstand), Chip mindestens 44 px hoch (Tippziel), Name 12 px auf bis zu
-  # drei Zeilen: gemessen mit Roboto bei 104 px Chip-Breite (360 px breites
-  # Handy) brauchen 12 der 29 Namen zwei Zeilen, nur
-  # "uptimekuma-mariadb-uptime-kuma" drei (Chip dann 57 px).
+  # Alle Chips gleich hoch (29 px), Name einzeilig in 12 px: Mit zwei Spalten
+  # bleiben im Pop-up 126 px fuer den Namen (360 px breites Handy, iPhone
+  # 17 Pro 147 px). Name wie in den Zeilen, ohne "Container " und
+  # " Automatisch aktualisieren" ("sonarr-sonarr-1" -> "sonarr"). Ist er
+  # laenger als 22 Zeichen und beginnt mit dem Namen seines Compose-Projekts
+  # (Geraet, unter dem die Integration den Container einhaengt: "Project
+  # <name>"), steht nur der Rest da: "uptimekuma-mariadb-uptime-kuma" ->
+  # "uptime-kuma" (gemessen 187 px, sonst kein Name ueber 126 px). Kuerzere
+  # Namen bleiben voll, sonst stuende etwa "redis" zweimal da. Passt ein
+  # kuenftiger Name auch gekuerzt nicht, endet er mit "…".
   nachtblau_docker_autoupdate_chip:
     variables:
       anzeige: |
@@ -771,6 +751,13 @@ button_card_templates:
           if (t.length % 2 === 0) {
             const h = t.length / 2;
             if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+          }
+          if (n.length > 22 && entity) {
+            const e = (hass.entities || {})[entity.entity_id];
+            const d = e && (hass.devices || {})[e.device_id];
+            const v = d && d.via_device_id && (hass.devices || {})[d.via_device_id];
+            const p = v ? String(v.name_by_user || v.name || '').replace(/^(Project|Projekt) /, '') : '';
+            if (p && n.startsWith(p + '-') && n.length > p.length + 1) n = n.slice(p.length + 1);
           }
           return n;
         ]]]
@@ -800,10 +787,10 @@ button_card_templates:
         ]]]
     styles:
       card:
-        - min-height: 44px
+        - height: 29px
         - box-sizing: border-box
-        - padding: 6px 8px
-        - border-radius: 12px
+        - padding: 0 8px
+        - border-radius: 10px
         - box-shadow: none
         - background: |
             [[[ return variables.an ? 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
@@ -812,8 +799,10 @@ button_card_templates:
       grid:
         - grid-template-areas: '"punkt n"'
         - grid-template-columns: 8px minmax(0, 1fr)
+        - grid-template-rows: 100%
         - column-gap: 7px
         - align-items: center
+        - height: 100%
       custom_fields:
         punkt:
           - align-self: center
@@ -822,12 +811,8 @@ button_card_templates:
           - min-width: 0
           - max-width: 100%
           - overflow: hidden
-          - white-space: normal
-          - display: -webkit-box
-          - -webkit-box-orient: vertical
-          - -webkit-line-clamp: '3'
-          - overflow-wrap: anywhere
-          - text-wrap: balance
+          - white-space: nowrap
+          - text-overflow: ellipsis
           - line-height: 1.2
           - text-align: left
 

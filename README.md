@@ -363,7 +363,7 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    „Auto-Update-Schalter“ (*Steuerung*) einschalten; beide sind
    standardmäßig aus. Die automatischen Updates selbst schaltet man in
    Arcane unter den Einstellungen ein, Home Assistant sieht diese
-   Einstellung nicht. Das Popup der Zeile braucht browser_mod.
+   Einstellung nicht. Das Pop-up der Zeile braucht Bubble Card.
 
    Ab HA-Arcane 0.8.0, beide standardmäßig aus: „Bei Änderungen sofort
    aktualisieren“ (*Abfrage*) lässt die Karten Änderungen nach Sekunden
