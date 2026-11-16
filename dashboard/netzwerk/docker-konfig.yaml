@@ -42,6 +42,11 @@
 #       Neustart oder Neuladen (Sensor vorher unavailable) nicht. Abgebrochene
 #       Laeufe (canceled, etwa wenn Arcane sich selbst neu startet) meldet sie
 #       nicht.
+#       Dazu meldet sie einen ausbleibenden Lauf: Der Job ist eingeschaltet,
+#       aber next_run liegt mehr als 15 Minuten zurueck oder Arcane nennt
+#       keinen naechsten Lauf (kein installierter Zeitplan). Einmal je
+#       Ausbleiben; erneut erst, nachdem wieder ein Lauf kam. Ist die Umgebung
+#       ganz unerreichbar (Sensor unavailable), meldet sie nichts.
 #   script.docker_alle_updates_installieren
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
 #       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
@@ -204,8 +209,8 @@ automation:
     alias: "Docker: Auto-Update fehlgeschlagen melden"
     description: >-
       Push und Eintrag im Logbuch der Docker-View (Karte Ereignisse), wenn
-      ein Lauf von Arcanes automatischen Updates fehlschlaegt oder nur
-      teilweise klappt. Quelle: Sensoren "Job Auto Update" je Umgebung
+      ein Lauf von Arcanes automatischen Updates fehlschlaegt, nur teilweise
+      klappt oder ausbleibt. Quelle: Sensoren "Job Auto Update" je Umgebung
       (HA-Arcane ab 0.10.0).
     mode: queued
     max: 10
@@ -216,39 +221,91 @@ automation:
           - sensor.docker_01_job_auto_update
           - sensor.docker_02_job_auto_update
         attribute: last_run
-    conditions:
-      # Templates: Eine Zustandsbedingung auf mehrere Entitaeten verlangt den
-      # Zustand bei allen; gemeint ist nur die ausloesende.
-      # Nach Neustart oder Neuladen nicht melden (vorher unavailable).
-      - condition: template
+        id: lauf_beendet
+      # Ausgeblieben: Template, weil die Frist an der Uhrzeit haengt (now()
+      # rendert jede Minute neu); je Umgebung ein Ausloeser
+      - trigger: template
+        id: ausgeblieben
+        variables:
+          job: sensor.docker_01_job_auto_update
         value_template: >-
-          {{ trigger.from_state is not none
-             and trigger.from_state.state not in ['unavailable', 'unknown'] }}
-      - condition: template
-        value_template: "{{ trigger.to_state.state in ['failed', 'partial'] }}"
-    variables:
-      umgebung: "{{ trigger.to_state.name | replace(' Job Auto Update', '') }}"
-      ergebnis: >-
-        {{ 'fehlgeschlagen' if trigger.to_state.state == 'failed'
-           else 'teilweise fehlgeschlagen' }}
-      grund: >-
-        {{ trigger.to_state.attributes.last_error
-           or trigger.to_state.attributes.message
-           or 'ohne Meldung von Arcane' }}
+          {% set e = 'sensor.docker_01_job_auto_update' %}
+          {% set n = state_attr(e, 'next_run') %}
+          {{ states(e) != 'unavailable' and state_attr(e, 'enabled') == true
+             and (n is none or now() - as_datetime(n) > timedelta(minutes=15)) }}
+      - trigger: template
+        id: ausgeblieben
+        variables:
+          job: sensor.docker_02_job_auto_update
+        value_template: >-
+          {% set e = 'sensor.docker_02_job_auto_update' %}
+          {% set n = state_attr(e, 'next_run') %}
+          {{ states(e) != 'unavailable' and state_attr(e, 'enabled') == true
+             and (n is none or now() - as_datetime(n) > timedelta(minutes=15)) }}
     actions:
-      - action: notify.mobile_app_iphone
-        data:
-          title: "Docker: Auto-Update {{ ergebnis }}"
-          message: "{{ grund }} · {{ umgebung }}"
-          data:
-            url: /dashboard-home/docker
-            clickAction: /dashboard-home/docker
-            group: docker
-      - action: logbook.log
-        data:
-          name: Auto-Update
-          message: "{{ ergebnis }} · {{ grund }} · {{ umgebung }}"
-          entity_id: binary_sensor.local_docker_online
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: lauf_beendet
+              # Templates: Eine Zustandsbedingung auf mehrere Entitaeten
+              # verlangt den Zustand bei allen; gemeint ist nur die
+              # ausloesende. Nach Neustart oder Neuladen nicht melden.
+              - condition: template
+                value_template: >-
+                  {{ trigger.from_state is not none
+                     and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+              - condition: template
+                value_template: "{{ trigger.to_state.state in ['failed', 'partial'] }}"
+            sequence:
+              - variables:
+                  umgebung: "{{ trigger.to_state.name | replace(' Job Auto Update', '') }}"
+              - variables:
+                  ergebnis: >-
+                    {{ 'fehlgeschlagen' if trigger.to_state.state == 'failed'
+                       else 'teilweise fehlgeschlagen' }}
+              - variables:
+                  grund: >-
+                    {{ trigger.to_state.attributes.last_error
+                       or trigger.to_state.attributes.message
+                       or 'ohne Meldung von Arcane' }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Auto-Update {{ ergebnis }}"
+                  message: "{{ grund }} · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Auto-Update
+                  message: "{{ ergebnis }} · {{ grund }} · {{ umgebung }}"
+                  entity_id: binary_sensor.local_docker_online
+          - conditions:
+              - condition: trigger
+                id: ausgeblieben
+            sequence:
+              - variables:
+                  umgebung: >-
+                    {{ state_attr(job, 'friendly_name') | replace(' Job Auto Update', '') }}
+              - variables:
+                  faellig: >-
+                    {% set n = state_attr(job, 'next_run') %}
+                    {{ 'fällig seit ' ~ as_local(as_datetime(n)).strftime('%H:%M') ~ ' Uhr'
+                       if n is not none else 'kein nächster Lauf geplant' }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Auto-Update ausgeblieben"
+                  message: "{{ faellig }} · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Auto-Update
+                  message: "ausgeblieben · {{ faellig }} · {{ umgebung }}"
+                  entity_id: binary_sensor.local_docker_online
 
 script:
   docker_alle_updates_installieren:
