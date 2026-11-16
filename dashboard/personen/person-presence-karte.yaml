@@ -114,6 +114,12 @@
 #      15.11.2026 statt des Rueckwegs auf derselben Strasse einen Bogen um den
 #      Block. iOS meldet auf laengeren Fahrten nur etwa alle 5 min, dort ist
 #      die Strecke ueberwiegend gestrichelt.
+#      Profil je Abschnitt: pedestrian (zu Fuss), bicycle (Rad) oder auto.
+#      Mit auto fehlten auf Fusspfaden Linien oder liefen daneben (Simulation
+#      Spaziergang 16.11.2026: 64 bzw. 68 % des Wegs abgedeckt, mit
+#      pedestrian 100 %). Die Art kommt aus Tempo und Aktivitaetssensor
+#      (Variable activity_entity), Regeln in der Bibliothek bei sp.art. Die
+#      Texte folgen ihr: "7,8 km zu Fuss", in der Tagesliste "Zu Fuss los".
 #   4. Karte: das Element ha-map der eingebauten Karten-Karte, mit Marker und
 #      Profilbild der Person. ha-map zeichnet eigene Pfade mit einem Kreis an
 #      jedem Punkt (auf Touch 8 px), bei einer eingerasteten Linie eine
@@ -262,7 +268,7 @@ cards:
                     // war oder als Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die
                     // Strecke unten. Am 15.11.2026 zeigte der Kopf sonst "Zuhause seit 19:32"
                     // nach einem 25-s-Sprung, statt 19:02. Historie: 48 h, einmal je Zustandswechsel.
-                    const VERSION = 1;
+                    const VERSION = 2;
                     if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== VERSION) {
                       const kp = { version: VERSION, cache: {} };
                       kp.beginn = (rows) => {
@@ -325,7 +331,7 @@ cards:
                           <ha-icon icon="mdi:map-marker-path" style="--mdc-icon-size:22px;--ha-icon-display:block;width:22px;height:22px;display:block;margin:0;"></ha-icon>
                         </div>
                         <div style="min-width:0;display:grid;gap:2px;">
-                          <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">${home ? 'Letzte Strecke' : 'Strecke seit Abfahrt'}</span>
+                          <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">${home ? 'Letzte Strecke' : 'Strecke seit Aufbruch'}</span>
                           <span style="display:flex;align-items:center;gap:7px;min-width:0;font-size:15.5px;font-weight:700;line-height:1.2;color:${text};">
                             <span style="width:7px;height:7px;flex:none;border-radius:50%;background:${farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${farbe} 18%, transparent);"></span>
                             <span style="min-width:0;${zweiZeilen}">${status}${seit}</span>
@@ -342,6 +348,8 @@ cards:
               # tag_fuer der Personenkarte, beim Tippen ausgewertet (siehe oben)
               variables:
                 tag_fuer: '[[[ return variables.tag_fuer || "eigene"; ]]]'
+                # Aktivitaetssensor des Handys fuer die Wahl Fuss/Rad/Auto
+                aktivitaet: '[[[ return variables.activity_entity || ""; ]]]'
               show_name: false
               show_state: false
               show_icon: false
@@ -367,7 +375,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 5;
+                    const VERSION = 6;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -498,10 +506,10 @@ cards:
                         });
                         return { fahrten, halte, laufend };
                       };
-                      sp.valhalla = async (hass, pts) => {
+                      sp.valhalla = async (hass, pts, profil) => {
                         const anfrage = {
                           shape: pts.map((x) => ({ lat: +x.lat.toFixed(6), lon: +x.lon.toFixed(6), time: Math.round(x.t) })),
-                          costing: 'auto', shape_match: 'map_snap',
+                          costing: profil || 'auto', shape_match: 'map_snap',
                           directions_options: { units: 'kilometers', narrative: false },
                         };
                         const res = await hass.callWS({ type: 'call_service', domain: 'rest_command', service: 'valhalla_trace', service_data: { anfrage: JSON.stringify(anfrage) }, return_response: true });
@@ -523,23 +531,87 @@ cards:
                         return erg;
                       };
                       const schluessel = (pkt) => pkt.length + '|' + pkt[0].t + '|' + pkt[pkt.length - 1].t;
+                      // Fortbewegung je Abschnitt, daraus das Profil fuer Valhalla. Mit "auto"
+                      // fehlten auf Fusspfaden Linien oder liefen als Gerade bzw. Umweg daneben
+                      // (Simulation Spaziergang 16.11.2026: 64 bzw. 68 % des Wegs abgedeckt, mit
+                      // "pedestrian" 100 %). Reihenfolge:
+                      //   1. Tempo ab 40 km/h, oder ab 25 km/h ohne Rad: Auto (Sensoren hinken nach)
+                      //   2. Aktivitaetssensor des Handys (activity_entity der Karte), wenn er im
+                      //      Abschnitt mindestens 30 % der Zeit eine Fortbewegung meldet:
+                      //      Gehen/Laufen -> Fuss, Rad -> Rad, Auto/Fahrzeug -> Auto
+                      //   3. sonst Tempo: ab 15 km/h Auto, darunter Fuss
+                      // Sicher (Anker) sind Abschnitte nach 1. oder 2. und dichte Gruppen ab
+                      // 3 Punkten mit mindestens 2 km/h. Unsichere Abschnitte dazwischen erben die
+                      // Art der Anker davor und danach, wenn diese gleich sind (oder nur einer
+                      // existiert) und der unsichere Lauf hoechstens 15 min in Bewegung ist
+                      // (Abschnitte ab 50 m). A1 hatte mitten in der Fahrt 838 m in 301 s
+                      // (10 km/h) zwischen zwei Einzelpunkten; ein laengerer Spaziergang zwischen
+                      // zwei Fahrten bleibt dagegen zu Fuss.
+                      // Tempo allein reicht nicht: Autofahrten hatten Luecken mit 4-11 km/h (A1)
+                      // und 0 km/h an Halten (B2). Der Sensor meldete beim iPhone 26 Std
+                      // "Unknown" gegen 1,8 Std Gehen/Auto, beim S25 ein Fahrzeug nur 47 s
+                      // (Recorder 14.-16.11.2026), deshalb nur als Vorrang, wenn er etwas meldet.
+                      const ARTEN = { walking: 'fuss', running: 'fuss', on_foot: 'fuss', cycling: 'rad', on_bicycle: 'rad', automotive: 'auto', in_vehicle: 'auto' };
+                      const PROFIL = { fuss: 'pedestrian', rad: 'bicycle', auto: 'auto' };
+                      sp.aktivitaet = (rows) => rows.map((r) => ({ art: ARTEN[String(r.s).toLowerCase()] || null, t: r.lu }));
+                      // Rueckgabe { art, sicher }: sicher = nach Tempo ab 25 km/h oder nach Sensor
+                      sp.art = (akt, t0, t1, kmh) => {
+                        if (kmh >= 40) return { art: 'auto', sicher: true };
+                        const dauer = { fuss: 0, rad: 0, auto: 0 };
+                        const ende = Math.max(t1, t0 + 1);
+                        (akt || []).forEach((a, i) => {
+                          if (!a.art) return;
+                          const bis = i + 1 < akt.length ? akt[i + 1].t : Infinity;
+                          const ueber = Math.min(bis, ende) - Math.max(a.t, t0);
+                          if (ueber > 0) dauer[a.art] += ueber;
+                        });
+                        const [art, d] = Object.entries(dauer).sort((x, y) => y[1] - x[1])[0];
+                        if (kmh >= 25 && art !== 'rad') return { art: 'auto', sicher: true };
+                        if (d >= 0.3 * (ende - t0)) return { art, sicher: true };
+                        return { art: kmh >= 15 ? 'auto' : 'fuss', sicher: false };
+                      };
+                      const kmh = (a, b) => (b.t > a.t ? meter(a, b) / (b.t - a.t) * 3.6 : 0);
+                      const median = (w) => { const v = w.slice().sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : 0; };
                       // Dichte Gruppen einzeln einrasten (durchgezogen), jede Luecke ueber 2 min
                       // einzeln als kuerzester Weg zwischen ihren Endpunkten (gestrichelt). Ein
                       // Auftrag fuer die ganze Fahrt erzwaenge Wenden auf der Strasse; Valhalla legte
                       // dann einen Bogen um den Block (Testfahrt 15.11.2026). Ergebnis je Punktfolge
                       // zwischengespeichert, solange die Seite offen ist.
-                      sp.rechne = async (hass, pkt) => {
-                        const k = schluessel(pkt);
-                        if (sp.cache[k]) return sp.cache[k];
+                      sp.rechne = async (hass, pkt, akt) => {
                         const gr = [];
                         pkt.forEach((x, i) => { if (i === 0 || x.t - pkt[i - 1].t > LUECKE) gr.push([x]); else gr[gr.length - 1].push(x); });
+                        // Abschnitte in Zeitfolge: dichte Gruppe (fest), dann Luecke bis zur naechsten
                         const auftraege = [];
-                        gr.forEach((g) => { if (g.length > 1) auftraege.push({ fest: true, pts: g }); });
-                        for (let i = 0; i < gr.length - 1; i++) auftraege.push({ fest: false, pts: [gr[i][gr[i].length - 1], gr[i + 1][0]] });
-                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts)
-                          .then((r) => ({ fest: a.fest, linien: r.linien, km: r.km, ok: true }))
+                        gr.forEach((g, i) => {
+                          const a0 = g[0], a1 = g[g.length - 1];
+                          if (g.length > 1) {
+                            const v = median(g.slice(1).map((x, k) => kmh(g[k], x)));
+                            const r = sp.art(akt, a0.t, a1.t, v);
+                            auftraege.push({ fest: true, pts: g, r, anker: r.sicher || (g.length >= 3 && v >= 2), dauer: a1.t - a0.t, weg: meter(a0, a1) });
+                          }
+                          if (i < gr.length - 1) {
+                            const b = gr[i + 1][0];
+                            const r = sp.art(akt, a1.t, b.t, kmh(a1, b));
+                            auftraege.push({ fest: false, pts: [a1, b], r, anker: r.sicher, dauer: b.t - a1.t, weg: meter(a1, b) });
+                          }
+                        });
+                        for (let i = 0; i < auftraege.length;) {
+                          if (auftraege[i].anker) { auftraege[i].art = auftraege[i].r.art; i++; continue; }
+                          let j = i;
+                          while (j < auftraege.length && !auftraege[j].anker) j++;
+                          const lauf = auftraege.slice(i, j);
+                          const bewegt = lauf.filter((x) => x.weg >= 50).reduce((sum, x) => sum + x.dauer, 0);
+                          const nb = [auftraege[i - 1], auftraege[j]].filter(Boolean).map((x) => x.r.art);
+                          const erben = bewegt <= 900 && nb.length && nb.every((x) => x === nb[0]);
+                          lauf.forEach((x) => { x.art = erben ? nb[0] : x.r.art; });
+                          i = j;
+                        }
+                        const k = schluessel(pkt) + '|' + auftraege.map((a) => a.art[0]).join('');
+                        if (sp.cache[k]) return sp.cache[k];
+                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art])
+                          .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, ok: true }))
                           .catch(() => ({
-                            fest: a.fest, ok: false,
+                            fest: a.fest, art: a.art, ok: false,
                             linien: [a.pts.map((x) => [x.lat, x.lon])],
                             km: a.pts.slice(1).reduce((s, x, i) => s + meter(a.pts[i], x) / 1000, 0),
                           }))), 4);
@@ -551,6 +623,7 @@ cards:
                           kmGeschaetzt: teil(false).reduce((x, e) => x + e.km, 0),
                           fehler: erg.filter((e) => !e.ok).length,
                           auftraege: erg.length,
+                          kmArt: ['fuss', 'rad', 'auto'].reduce((o, a) => Object.assign(o, { [a]: erg.filter((e) => e.art === a).reduce((x, e) => x + e.km, 0) }), {}),
                         };
                         // Fehlgeschlagene Auftraege nicht merken, die naechste Runde versucht es neu
                         if (!s.fehler) sp.cache[k] = s;
@@ -561,6 +634,19 @@ cards:
                       const uhr = (t) => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                       const dauer = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m} Min` : `${Math.floor(m / 60)} Std ${String(m % 60).padStart(2, '0')} Min`; };
                       const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+                      // Ueberwiegende Art einer Strecke (nach km) und Zusatz "zu Fuss"/"mit dem Rad"
+                      const hauptArt = (s) => Object.entries(s.kmArt).sort((x, y) => y[1] - x[1])[0][0];
+                      const ART_TXT = { fuss: 'zu Fuß', rad: 'mit dem Rad' };
+                      const artZusatz = (s) => {
+                        const ges = s.kmFest + s.kmGeschaetzt, haupt = hauptArt(s);
+                        // Nebenart erst ab 0,5 km: Standzeiten mit GPS-Zittern ergaben bei B2 0,13 km
+                        const neben = ['fuss', 'rad'].filter((a) => a !== haupt && s.kmArt[a] >= 0.5);
+                        const t = [];
+                        if (haupt !== 'auto' && s.kmArt[haupt] >= 0.95 * ges) return ART_TXT[haupt];
+                        if (haupt !== 'auto') t.push(`${kmTxt(s.kmArt[haupt])} ${ART_TXT[haupt]}`);
+                        neben.forEach((a) => t.push(`${kmTxt(s.kmArt[a])} ${ART_TXT[a]}`));
+                        return t.length ? 'davon ' + t.join(', ') : '';
+                      };
                       // Karte: das Element ha-map der eingebauten Karten-Karte. Es hat keine
                       // offizielle Schnittstelle fuer eigene Linien; die Spur kommt als eigene
                       // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine
@@ -677,11 +763,11 @@ cards:
                         ui.liste.style.display = 'none';
                         if (a.pkt.length < 2) {
                           if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
-                          ui.info.innerHTML = a.laufend ? 'Seit der Abfahrt noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`;
+                          ui.info.innerHTML = a.laufend ? 'Seit dem Aufbruch noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`;
                           return a.laufend;
                         }
                         if (!st.stand.startsWith('letzte')) ui.info.innerHTML = 'Strecke wird eingerastet …';
-                        const s = await sp.rechne(hass, a.pkt);
+                        const s = await sp.rechne(hass, a.pkt, ui.akt);
                         // Neu zeichnen und einpassen nur bei neuen Punkten, sonst bleibt der Ausschnitt
                         const stand = 'letzte|' + schluessel(a.pkt);
                         if (st.stand !== stand) {
@@ -689,8 +775,10 @@ cards:
                           sp.passe(st, s.fest.flat().concat(s.geschaetzt.flat(), a.pkt.map((x) => [x.lat, x.lon])));
                           st.stand = stand;
                         }
-                        const teile = [kmTxt(s.kmFest + s.kmGeschaetzt)];
-                        if (s.kmGeschaetzt >= 0.05) teile.push(`davon ${kmTxt(s.kmGeschaetzt)} geschätzt`);
+                        const zusatz = artZusatz(s);
+                        const teile = [kmTxt(s.kmFest + s.kmGeschaetzt) + (zusatz && !zusatz.startsWith('davon') ? ' ' + zusatz : '')];
+                        if (zusatz.startsWith('davon')) teile.push(zusatz);
+                        if (s.kmGeschaetzt >= 0.05) teile.push(`${zusatz.startsWith('davon') ? '' : 'davon '}${kmTxt(s.kmGeschaetzt)} geschätzt`);
                         teile.push(`${a.pkt.length} Punkte`);
                         ui.info.innerHTML = `<div>${teile.join(' · ')}</div>${legende}${hinweis(s.fehler, s.auftraege)}`;
                         return a.laufend;
@@ -712,7 +800,7 @@ cards:
                         }
                         if (!st.stand.startsWith('tag')) ui.info.innerHTML = kopf('Wege werden eingerastet …');
                         const erg = [];
-                        for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt));
+                        for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt, ui.akt));
                         const fest = erg.flatMap((s) => s.fest), gesch = erg.flatMap((s) => s.geschaetzt);
                         const pkt = tg.fahrten.flatMap((f) => f.pkt);
                         const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
@@ -727,7 +815,9 @@ cards:
                         const eintraege = [];
                         tg.fahrten.forEach((f, k) => {
                           const ende = f.pkt[f.pkt.length - 1];
-                          eintraege.push({ t: f.pkt[0].t, farbe: BLAU, text: f.nachHalt ? 'Weiterfahrt' : 'Abfahrt', wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                          const art = hauptArt(erg[k]);
+                          const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
+                          eintraege.push({ t: f.pkt[0].t, farbe: BLAU, text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
                           if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
                         });
                         tg.halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
@@ -740,7 +830,8 @@ cards:
                         const km = erg.reduce((s, x) => s + x.kmFest + x.kmGeschaetzt, 0);
                         const fehler = erg.reduce((s, x) => s + x.fehler, 0), gesamt = erg.reduce((s, x) => s + x.auftraege, 0);
                         const n = tg.fahrten.length, h = tg.halte.length;
-                        const teile = [kmTxt(km), `${n} ${n === 1 ? 'Fahrt' : 'Fahrten'}`];
+                        const nurAuto = erg.every((x) => hauptArt(x) === 'auto');
+                        const teile = [kmTxt(km), nurAuto ? `${n} ${n === 1 ? 'Fahrt' : 'Fahrten'}` : `${n} ${n === 1 ? 'Weg' : 'Wege'}`];
                         if (h) teile.push(`${h} ${h === 1 ? 'Halt' : 'Halte'}`);
                         ui.info.innerHTML = kopf(teile.join(' · ')) + legende + hinweis(fehler, gesamt);
                         return tg.laufend;
@@ -759,8 +850,10 @@ cards:
                       sp.lauf = async (hass, eid, ui) => {
                         try {
                           const ende = new Date(), start = new Date(ende.getTime() - FENSTER * 3600e3);
-                          const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
+                          const ids = ui.aktEid && hass.states[ui.aktEid] ? [eid, ui.aktEid] : [eid];
+                          const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: ids, minimal_response: false, no_attributes: false, significant_changes_only: false });
                           ui.z = sp.zeilen(h[eid] || []);
+                          ui.akt = ui.aktEid ? sp.aktivitaet(h[ui.aktEid] || []) : [];
                           const st = await sp.karte(ui.kasten, eid);
                           return await sp.zeige(hass, st, ui);
                         } catch (e) {
@@ -771,10 +864,10 @@ cards:
                       // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist.
                       // Den Reiter "Tagesprofil" sieht nur die Person selbst (user_id der Person =
                       // angemeldeter Benutzer), mit tag_fuer: alle jeder.
-                      sp.start = (karte, eid, h0, tagFuer) => {
+                      sp.start = (karte, eid, h0, tagFuer, aktEid) => {
                         const r = karte.shadowRoot;
                         const q = (s) => r && r.querySelector(s);
-                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], eintraege: [] };
+                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], akt: [], aktEid, eintraege: [] };
                         const wurzel = q('[data-spur]');
                         if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter || !wurzel) return;
                         // button-card (7.0.1, src/action-handler.ts) ruft auf seiner ha-card bei
@@ -825,8 +918,8 @@ cards:
                     const sp = window.__nachtblauSpur;
                     if (!this.__spurGestartet) {
                       this.__spurGestartet = true;
-                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene';
-                      setTimeout(() => sp.start(karte, eid, h0, tagFuer), 50);
+                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene', aktEid = variables.aktivitaet || '';
+                      setTimeout(() => sp.start(karte, eid, h0, tagFuer, aktEid), 50);
                     }
                     const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
                     return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
