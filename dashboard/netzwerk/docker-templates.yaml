@@ -62,7 +62,24 @@
 #   - Name ohne "Container "-Vorsatz und ohne Compose-Anhaengsel:
 #     "sonarr-sonarr-1" -> "sonarr", "docmost-db-1" -> "docmost-db".
 #   - Docker-Status auf Deutsch ("Up 2 weeks (healthy)" -> "laeuft seit
-#     2 Wochen · gesund"); unbekannte Formen erscheinen unveraendert.
+#     2 Wo. · gesund"); unbekannte Formen erscheinen unveraendert. Einheiten
+#     gekuerzt (Sek., Min., Std., Tag/Tagen, Wo., Mon., Jahr/Jahren), damit
+#     die Ports noch in die zwei Zeilen passen.
+#   - Veroeffentlichte Ports (HA-Arcane ab 0.12.0, Option "Veroeffentlichte
+#     Ports"): hinter dem Status die Host-Ports des laufenden Containers,
+#     etwa "laeuft seit 33 Std. · 80, 81, 443". Den Sensor "Ports" sucht das
+#     Template ueber das Geraet des Schalters (translation_key
+#     container_ports), nicht ueber den Namen: Bei einem entfernten Host
+#     traegt er den Host in der ID (sensor.container_docker_02_portainer_
+#     ports), der Schalter nicht (switch.container_portainer). Ports kommen
+#     dazu, solange der Port-Teil samt "+N" hoechstens 11 Zeichen hat, mit
+#     Zusatz ("gesund", "startet") hoechstens 7; passt nicht einmal das,
+#     steht nur der erste Port da. Gemessen im Nachbau mit Roboto: Die
+#     Infozeile ist 122 px (360 px breites Handy) bzw. 164 px (iPhone 17 Pro)
+#     breit; so bleibt sie auch bei "laeuft seit weniger als 1 Sek. ·
+#     startet · 9100 +1" oder "laeuft seit 11 Jahren · 8000 +2" bei
+#     hoechstens zwei Zeilen. Ohne die Option fehlt der Sensor, und die Zeile
+#     bleibt wie vorher.
 #   - Pillen "ungesund" (Rot) und "Update" (Amber), Tönung 0,12 / Rand 0,24.
 #     "Update" ist eine eigene eingebettete button-card: Antippen oeffnet den
 #     Update-Dialog von HA (installierte und neue Version, "Installieren",
@@ -178,6 +195,21 @@ button_card_templates:
           const u = states['update.' + variables.basis + '_image_update'];
           return !!u && u.state === 'on';
         ]]]
+      # Host-Ports des Containers aus dem Sensor "Ports" desselben Geraets
+      # (Attribut published, "8080→80/tcp", "127.0.0.1:5683→5683/udp"),
+      # ohne Adresse und doppelte (tcp und udp auf demselben Port)
+      ports: |
+        [[[
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          if (!reg) return [];
+          for (const e of Object.values(E)) {
+            if (e.device_id !== reg.device_id || e.platform !== 'arcane' || e.translation_key !== 'container_ports') continue;
+            const s = states[e.entity_id];
+            const p = s && Array.isArray(s.attributes.published) ? s.attributes.published : [];
+            return [...new Set(p.map((x) => String(x).split('→')[0].replace(/^.*:/, '')).filter(Boolean))];
+          }
+          return [];
+        ]]]
       akzent: |
         [[[
           const z = variables.zustand;
@@ -191,13 +223,13 @@ button_card_templates:
       text: |
         [[[
           const EINHEIT = {
-            second: ['Sekunde', 'Sekunden'], minute: ['Minute', 'Minuten'], hour: ['Stunde', 'Stunden'],
-            day: ['Tag', 'Tagen'], week: ['Woche', 'Wochen'], month: ['Monat', 'Monaten'], year: ['Jahr', 'Jahren']
+            second: ['Sek.', 'Sek.'], minute: ['Min.', 'Min.'], hour: ['Std.', 'Std.'],
+            day: ['Tag', 'Tagen'], week: ['Wo.', 'Wo.'], month: ['Mon.', 'Mon.'], year: ['Jahr', 'Jahren']
           };
           const FEST = {
-            'Less than a second': 'weniger als einer Sekunde',
-            'About a minute': 'etwa einer Minute',
-            'About an hour': 'etwa einer Stunde'
+            'Less than a second': 'weniger als 1 Sek.',
+            'About a minute': 'etwa 1 Min.',
+            'About an hour': 'etwa 1 Std.'
           };
           const dauer = (d) => {
             if (FEST[d]) return FEST[d];
@@ -278,7 +310,22 @@ button_card_templates:
       info: |
         [[[
           const farbe = variables.zustand === 'restarting' || variables.startet ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text-sekundaer, #8794a5)';
-          return `<span style="font-size:12px;color:${farbe};">${variables.text}</span>`;
+          const teile = String(variables.text).split(' · ');
+          // Ports nur bei laufendem Container; Budget fuer den Port-Teil siehe oben
+          const p = variables.zustand === 'running' ? variables.ports : [];
+          if (p.length) {
+            const budget = teile.length > 1 ? 7 : 11;
+            let n = p.length;
+            const txt = (k) => p.slice(0, k).join(', ') + (k < p.length ? ' +' + (p.length - k) : '');
+            while (n > 1 && txt(n).length > budget) n--;
+            const port = txt(n).length <= budget ? txt(n) : p[0];
+            teile.push(`<span style="color:var(--nachtblau-label, #b4c0cf);">${port}</span>`);
+          }
+          // Der erste Teil darf umbrechen, die folgenden bleiben samt "·" zusammen.
+          const inhalt = teile.map((t, i) => i === 0
+            ? `<span>${t}${teile.length > 1 ? '&nbsp;·' : ''}</span>`
+            : `<span style="white-space:nowrap;">${t}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ');
+          return `<span style="font-size:12px;color:${farbe};">${inhalt}</span>`;
         ]]]
       neustart:
         card:
