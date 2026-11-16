@@ -63,9 +63,24 @@
 #       Fehler; das Skript macht weiter und schreibt am Ende ins Logbuch,
 #       das die Karte Ereignisse zeigt: "3 von 4 erledigt · offen: grafana"
 #       (erledigt = steht danach nicht mehr an).
-#   script.docker_aufraeumen und input_text.docker_aufraeumen_status
-#       "Aufraeumen" in der Karte Speicher & Aufraeumen, mit Rueckmeldung.
-#       Das Skript schreibt seine Phase in den Helfer, den jedes Geraet sieht:
+#   script.docker_aufraeumen und input_text.docker_aufraeumen_status,
+#   input_text.docker_02_aufraeumen_status
+#       "Aufraeumen" in der Karte Speicher & Aufraeumen (je Host) und im
+#       Pop-up eines Agenten in der Karte Hosts, mit Rueckmeldung. Feld knopf:
+#       der Prune-Button des Hosts ("Ungenutztes entfernen"); ohne Angabe
+#       button.docker_ungenutztes_entfernen (docker-01). Image-Speicher und
+#       freigebbaren Speicher sucht das Skript unter den Entitaeten desselben
+#       Geraets (Endungen _image_speicher, _freigebbarer_image_speicher).
+#       Modus parallel: Zwei Hosts koennen gleichzeitig aufraeumen. Derselbe
+#       Host startet nicht ein zweites Mal, solange sein Helfer auf
+#       aufraeumen oder bericht steht und der Beginn hoechstens 25 Minuten
+#       zurueckliegt (danach gilt ein abgebrochener Lauf als beendet).
+#       Je Host ein Helfer, benannt nach dem Anfang der Button-ID:
+#       button.docker_ungenutztes_entfernen -> input_text.docker_aufraeumen_
+#       status, button.docker_02_ungenutztes_entfernen -> input_text.
+#       docker_02_aufraeumen_status; fuer einen weiteren Host einen Helfer
+#       nach diesem Muster anlegen. Das Skript schreibt seine Phase in den
+#       Helfer, den jedes Geraet sieht:
 #         aufraeumen;<Beginn>;      Prune laeuft (button.press wartet darauf)
 #         bericht;<Beginn>;         Prune fertig, neuer Speicherbericht steht aus
 #         fertig;<Beginn>;<GB>      freigegebene Menge in GB
@@ -82,7 +97,8 @@
 #       Attribut, dann zaehlt eine Aenderung des Werts, sonst endet das
 #       Warten nach 20 Minuten (Intervall 15). Ohne die Option "Freigebbarer
 #       Speicher" wartet es nicht. Zum Schluss ein Eintrag im Logbuch, den
-#       die Karte Ereignisse zeigt.
+#       die Karte Ereignisse zeigt, bei einem Agenten mit dem Host im Namen
+#       ("Aufraeumen docker-02").
 #
 # Namen in Meldungen ohne Compose-Anhaengsel wie in der Karte
 # ("sonarr-sonarr-1" -> "sonarr").
@@ -113,6 +129,10 @@ input_boolean:
 input_text:
   docker_aufraeumen_status:
     name: Docker Aufräumen Status
+    icon: mdi:broom
+    max: 100
+  docker_02_aufraeumen_status:
+    name: Docker 02 Aufräumen Status
     icon: mdi:broom
     max: 100
 
@@ -396,33 +416,70 @@ script:
   docker_aufraeumen:
     alias: "Docker: Ungenutztes aufräumen"
     description: >-
-      Docker-View, Karte Speicher & Aufräumen: entfernt ungenutzte Images,
-      Netzwerke und den Build-Cache (Button der Arcane-Integration), meldet
-      die freigegebene Menge und wartet auf den neuen Speicherbericht.
-      Braucht HA-Arcane ab 0.10.1: erst dann kehrt der Druck zurueck, wenn
-      Arcane fertig aufgeraeumt hat.
-      Phase und Ergebnis stehen in input_text.docker_aufraeumen_status.
+      Docker-View, Karte Speicher & Aufräumen: entfernt auf einem Host
+      ungenutzte Images, Netzwerke und den Build-Cache (Button der
+      Arcane-Integration, Feld knopf), meldet die freigegebene Menge und
+      wartet auf den neuen Speicherbericht. Braucht HA-Arcane ab 0.10.1:
+      erst dann kehrt der Druck zurueck, wenn Arcane fertig aufgeraeumt hat.
+      Phase und Ergebnis stehen im Status-Helfer des Hosts.
     icon: mdi:broom
-    mode: single
+    mode: parallel
+    max: 5
+    fields:
+      knopf:
+        name: Prune-Button
+        description: >-
+          Button "Ungenutztes entfernen" des Hosts; ohne Angabe docker-01.
+        example: button.docker_02_ungenutztes_entfernen
+        selector:
+          entity:
+            filter:
+              integration: arcane
+              domain: button
     sequence:
       - variables:
+          taste: >-
+            {{ knopf if knopf is defined and knopf else 'button.docker_ungenutztes_entfernen' }}
+      - variables:
+          ents: "{{ device_entities(device_id(taste)) | list }}"
+      # Unabhaengige Werte; je Block nur Werte, die nicht aufeinander zugreifen
+      # (die Oberflaeche sortiert die Schluessel eines Blocks alphabetisch).
+      - variables:
+          speicher: >-
+            {{ ents | select('match', 'sensor\\..*_image_speicher$')
+               | reject('search', '_freigebbarer_') | first | default('', true) }}
+          bericht_sensor: >-
+            {{ ents | select('match', 'sensor\\..*_freigebbarer_image_speicher$') | first | default('', true) }}
+          helfer: >-
+            input_text.{{ taste.split('.')[1] | regex_replace('_ungenutztes_entfernen$', '') }}_aufraeumen_status
+          name: >-
+            {{ 'Aufräumen ' ~ (device_attr(device_id(taste), 'name_by_user') or device_attr(device_id(taste), 'name'))
+               if device_attr(device_id(taste), 'model') == 'Arcane Agent' else 'Aufräumen' }}
+      # Sperre je Host: laeuft fuer diesen Host schon ein Lauf, nicht noch einmal
+      - condition: template
+        value_template: >-
+          {%- set t = (states(helfer) ~ ';;').split(';') -%}
+          {%- set b = as_datetime(t[1]) if t[1] else none -%}
+          {{ t[0] not in ['aufraeumen', 'bericht'] or b is none
+             or (utcnow() - b).total_seconds() > 1500 }}
+      - variables:
           beginn: "{{ utcnow().isoformat() }}"
-          vorher: "{{ states('sensor.local_docker_image_speicher') | float(none) }}"
+          vorher: "{{ states(speicher) | float(none) if speicher else none }}"
       - action: input_text.set_value
         target:
-          entity_id: input_text.docker_aufraeumen_status
+          entity_id: "{{ helfer }}"
         data:
           value: "aufraeumen;{{ beginn }};"
       # Ab HA-Arcane 0.10.1 kehrt der Druck erst zurueck, wenn Arcane das
       # Aufraeumen beendet hat und die Zaehler neu abgefragt sind.
       - action: button.press
         target:
-          entity_id: button.docker_ungenutztes_entfernen
+          entity_id: "{{ taste }}"
       # Je Wert ein eigener Schritt: Ueber die Oberflaeche gespeichert, sortiert
       # HA die Schluessel eines Blocks alphabetisch, und "frei" laese dann
       # "nachher", bevor es feststeht.
       - variables:
-          nachher: "{{ states('sensor.local_docker_image_speicher') | float(none) }}"
+          nachher: "{{ states(speicher) | float(none) if speicher else none }}"
       - variables:
           frei: >-
             {{ [vorher - nachher, 0] | max | round(4)
@@ -436,7 +493,7 @@ script:
             {%- endif -%}
       - action: input_text.set_value
         target:
-          entity_id: input_text.docker_aufraeumen_status
+          entity_id: "{{ helfer }}"
         data:
           value: "bericht;{{ beginn }};"
       # Erfuellt, sobald ein Bericht da ist, der nach dem Beginn angefragt
@@ -444,20 +501,20 @@ script:
       # wait_for_trigger: Ab 0.7.1 kann der Bericht schon da sein, bevor das
       # Warten beginnt, und ein Trigger wartete dann bis zum Timeout.
       - wait_template: >-
-          {%- set e = 'sensor.docker_freigebbarer_image_speicher' -%}
-          {%- set t = state_attr(e, 'report_started_at') -%}
-          {{ states(e) in ['unknown', 'unavailable']
+          {%- set e = bericht_sensor -%}
+          {%- set t = state_attr(e, 'report_started_at') if e else none -%}
+          {{ not e or states(e) in ['unknown', 'unavailable']
              or (t is not none and as_datetime(t) >= as_datetime(beginn))
              or (t is none and states[e].last_changed >= as_datetime(beginn)) }}
         timeout: "00:20:00"
         continue_on_timeout: true
       - action: input_text.set_value
         target:
-          entity_id: input_text.docker_aufraeumen_status
+          entity_id: "{{ helfer }}"
         data:
           value: "fertig;{{ beginn }};{{ frei }}"
       - action: logbook.log
         data:
-          name: Aufräumen
+          name: "{{ name }}"
           message: "{{ text }}"
           entity_id: binary_sensor.local_docker_online
