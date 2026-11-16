@@ -123,16 +123,33 @@ button_card_templates:
       }
     variables:
       basis: '[[[ return entity ? entity.entity_id.split(".")[1] : ""; ]]]'
+      # true in einer Gruppe, deren Titel den Host schon nennt (Container-Karte)
+      ohne_host: false
+      # Container eines entfernten Hosts heissen mit der Option "Environment im
+      # Geraetenamen" (HA-Arcane ab 0.11.0) "docker-02 dockge-dockge-1": Host
+      # abtrennen, Namen kuerzen, Host wieder voranstellen (ausser ohne_host).
+      # Den Host liefert der Geraetebaum (Modell "Environment" bzw. "Arcane Agent").
       anzeige: |
         [[[
-          let n = String((entity && entity.attributes.friendly_name) || variables.basis)
-            .replace(/^Container /, '').replace(/-\d+$/, '');
+          const host = (() => {
+            const E = hass.entities || {}, D = hass.devices || {};
+            let d = entity && E[entity.entity_id] ? D[E[entity.entity_id].device_id] : null;
+            for (let i = 0; d && i < 3; i++) {
+              if (d.model === 'Environment' || d.model === 'Arcane Agent') return d.name_by_user || d.name || '';
+              d = d.via_device_id ? D[d.via_device_id] : null;
+            }
+            return '';
+          })();
+          let n = String((entity && entity.attributes.friendly_name) || variables.basis).replace(/^Container /, '');
+          let vor = '';
+          if (host && n.startsWith(host + ' ')) { vor = host + ' '; n = n.slice(vor.length); }
+          n = n.replace(/-\d+$/, '');
           const t = n.split('-');
           if (t.length % 2 === 0) {
             const h = t.length / 2;
             if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
           }
-          return n;
+          return (variables.ohne_host ? '' : vor) + n;
         ]]]
       zustand: |
         [[[
@@ -505,17 +522,30 @@ button_card_templates:
     variables:
       titel: ''
       frage: ''
+      # Host-Praefix wie in nachtblau_docker_zeile ("docker-02 portainer")
       anzeige: |
         [[[
           if (variables.titel) return variables.titel;
+          const host = (() => {
+            const E = hass.entities || {}, D = hass.devices || {};
+            let d = entity && E[entity.entity_id] ? D[E[entity.entity_id].device_id] : null;
+            for (let i = 0; d && i < 3; i++) {
+              if (d.model === 'Environment' || d.model === 'Arcane Agent') return d.name_by_user || d.name || '';
+              d = d.via_device_id ? D[d.via_device_id] : null;
+            }
+            return '';
+          })();
           let n = String((entity && entity.attributes.friendly_name) || '')
-            .replace(/ Image Update$/, '').replace(/^Container /, '').replace(/-\d+$/, '');
+            .replace(/ Image Update$/, '').replace(/^Container /, '');
+          let vor = '';
+          if (host && n.startsWith(host + ' ')) { vor = host + ' '; n = n.slice(vor.length); }
+          n = n.replace(/-\d+$/, '');
           const t = n.split('-');
           if (t.length % 2 === 0) {
             const h = t.length / 2;
             if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
           }
-          return n;
+          return vor + n;
         ]]]
       offen: '[[[ return !!entity && entity.state === "on"; ]]]'
       laeuft: '[[[ return !!entity && !!entity.attributes.in_progress; ]]]'
@@ -677,8 +707,8 @@ button_card_templates:
         <span style="font-size:16px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Automatische Updates</span>
       summe: |
         [[[
-          const lauf = states['binary_sensor.docker_updates_werden_installiert'];
-          if (lauf && lauf.state === 'on') return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert …</span>`;
+          // Updater irgendeines Hosts ("Updates werden installiert", translation_key updater_running)
+          if (Object.values(hass.entities || {}).some((e) => e.platform === 'arcane' && e.translation_key === 'updater_running' && (states[e.entity_id] || {}).state === 'on')) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert …</span>`;
           let an = 0, aus = 0;
           for (const id of Object.keys(states)) {
             if (!/^switch\.container_.+_automatisch_aktualisieren$/.test(id)) continue;
@@ -731,7 +761,7 @@ button_card_templates:
   # Ein Container mit dem Label com.getarcaneapp.arcane.updater=false bleibt
   # bei Arcane ausgenommen; die Integration gibt das nicht als Attribut aus,
   # Einschalten meldet dann einen Fehler mit dem Label.
-  # Alle Chips gleich hoch (29 px), Name einzeilig in 12 px: Mit zwei Spalten
+  # Alle Chips gleich hoch (28 px), Name einzeilig in 12 px: Mit zwei Spalten
   # bleiben im Pop-up 126 px fuer den Namen (360 px breites Handy, iPhone
   # 17 Pro 147 px). Name wie in den Zeilen, ohne "Container " und
   # " Automatisch aktualisieren" ("sonarr-sonarr-1" -> "sonarr"). Ist er
@@ -741,17 +771,34 @@ button_card_templates:
   # "uptime-kuma" (gemessen 187 px, sonst kein Name ueber 126 px). Kuerzere
   # Namen bleiben voll, sonst stuende etwa "redis" zweimal da. Passt ein
   # kuenftiger Name auch gekuerzt nicht, endet er mit "…".
+  # Container eines entfernten Hosts (HA-Arcane ab 0.11.0, Option
+  # "Environment im Geraetenamen"): Host abtrennen, Namen kuerzen, Host wieder
+  # voranstellen, "docker-02 dockge-dockge-1" -> "docker-02 dockge"
+  # (gemessen: "docker-02 arcane-agent" 120 px).
   nachtblau_docker_autoupdate_chip:
     variables:
       anzeige: |
         [[[
+          const host = (() => {
+            const E = hass.entities || {}, D = hass.devices || {};
+            let d = entity && E[entity.entity_id] ? D[E[entity.entity_id].device_id] : null;
+            for (let i = 0; d && i < 3; i++) {
+              if (d.model === 'Environment' || d.model === 'Arcane Agent') return d.name_by_user || d.name || '';
+              d = d.via_device_id ? D[d.via_device_id] : null;
+            }
+            return '';
+          })();
           let n = String((entity && entity.attributes.friendly_name) || '')
-            .replace(/ Automatisch aktualisieren$/, '').replace(/^Container /, '').replace(/-\d+$/, '');
+            .replace(/ Automatisch aktualisieren$/, '').replace(/^Container /, '');
+          let vor = '';
+          if (host && n.startsWith(host + ' ')) { vor = host + ' '; n = n.slice(vor.length); }
+          n = n.replace(/-\d+$/, '');
           const t = n.split('-');
           if (t.length % 2 === 0) {
             const h = t.length / 2;
             if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
           }
+          if (vor) return vor + n;
           if (n.length > 22 && entity) {
             const e = (hass.entities || {})[entity.entity_id];
             const d = e && (hass.devices || {})[e.device_id];
@@ -787,7 +834,7 @@ button_card_templates:
         ]]]
     styles:
       card:
-        - height: 29px
+        - height: 28px
         - box-sizing: border-box
         - padding: 0 8px
         - border-radius: 10px
@@ -980,10 +1027,29 @@ button_card_templates:
     variables:
       typ: anzahl
       gesamt: ''
+      # Summe ueber alle Hosts statt der Entitaet: translation_key des Sensors der
+      # Umgebung (containers_running usw., HA-Arcane); summe_gesamt fuer "laufend".
+      # Ein nicht verfuegbarer Host zaehlt nicht mit. Antippen oeffnet weiter
+      # die Entitaet (docker-01).
+      summe: ''
+      summe_gesamt: ''
       warn: 'var(--nachtblau-amber, #e6b566)'
       zusatz: ''
       wert: |
         [[[
+          const summe = (tk) => {
+            let n = null;
+            for (const e of Object.values(hass.entities || {})) {
+              if (e.platform !== 'arcane' || e.translation_key !== tk) continue;
+              const v = parseFloat((states[e.entity_id] || {}).state);
+              if (!isNaN(v)) n = (n || 0) + v;
+            }
+            return n;
+          };
+          if (variables.typ === 'laufend' && variables.summe) {
+            const l = summe(variables.summe), g = summe(variables.summe_gesamt);
+            return l === null || g === null ? '–' : l + '/' + g;
+          }
           if (variables.typ === 'laufend') {
             const g = states[variables.gesamt];
             if (!entity || isNaN(parseInt(entity.state, 10)) || !g || isNaN(parseInt(g.state, 10))) return '–';
@@ -1001,6 +1067,10 @@ button_card_templates:
               n++;
             }
             return String(n);
+          }
+          if (variables.summe) {
+            const n = summe(variables.summe);
+            return n === null ? '–' : String(n);
           }
           const n = entity ? parseInt(entity.state, 10) : NaN;
           return isNaN(n) ? '–' : String(n);

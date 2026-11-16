@@ -96,12 +96,22 @@ cards:
         name: Image-Updates
         label: |
           [[[
-            const lauf = states['binary_sensor.docker_updates_werden_installiert'];
-            if (lauf && lauf.state === 'on') return 'Arcane installiert Updates …';
-            const n = entity ? parseInt(entity.state, 10) : NaN;
-            const g = states['sensor.local_docker_container'];
-            if (isNaN(n)) return 'keine Daten';
-            if (n === 0) return 'Alle ' + (g ? g.state + ' ' : '') + 'Container aktuell';
+            // Alle Hosts: Updater ("Updates werden installiert") und Zaehler ueber
+            // den translation_key der Sensoren der Umgebung
+            if (Object.values(hass.entities || {}).some((e) => e.platform === 'arcane' && e.translation_key === 'updater_running' && (states[e.entity_id] || {}).state === 'on')) return 'Arcane installiert Updates …';
+            const summe = (tk) => {
+              let z = null;
+              for (const e of Object.values(hass.entities || {})) {
+                if (e.platform !== 'arcane' || e.translation_key !== tk) continue;
+                const v = parseFloat((states[e.entity_id] || {}).state);
+                if (!isNaN(v)) z = (z || 0) + v;
+              }
+              return z;
+            };
+            const n = summe('containers_update_available');
+            const g = summe('containers_total');
+            if (n === null) return 'keine Daten';
+            if (n === 0) return 'Alle ' + (g !== null ? g + ' ' : '') + 'Container aktuell';
             // Der Zaehler enthaelt gesperrte Updates; die stehen getrennt da.
             let frei = 0, gesperrt = 0;
             for (const id of Object.keys(states)) {
@@ -119,8 +129,7 @@ cards:
           label:
             - color: |
                 [[[
-                  const lauf = states['binary_sensor.docker_updates_werden_installiert'];
-                  return lauf && lauf.state === 'on' ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text-sekundaer, #8794a5)';
+                  return Object.values(hass.entities || {}).some((e) => e.platform === 'arcane' && e.translation_key === 'updater_running' && (states[e.entity_id] || {}).state === 'on') ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text-sekundaer, #8794a5)';
                 ]]]
         custom_fields:
           badge:
@@ -148,8 +157,7 @@ cards:
                 aktiv: |
                   [[[
                     const sk = states['script.docker_alle_updates_installieren'];
-                    const lauf = states['binary_sensor.docker_updates_werden_installiert'];
-                    return variables.anzahl > 0 && !!sk && sk.state === 'off' && !(lauf && lauf.state === 'on');
+                    return variables.anzahl > 0 && !!sk && sk.state === 'off' && !Object.values(hass.entities || {}).some((e) => e.platform === 'arcane' && e.translation_key === 'updater_running' && (states[e.entity_id] || {}).state === 'on');
                   ]]]
               tap_action: |
                 [[[
@@ -385,8 +393,25 @@ cards:
         show_name: false
         show_state: false
         variables:
-          laeuft: '[[[ const l = states["binary_sensor.docker_updates_werden_installiert"]; return !!l && l.state === "on"; ]]]'
-          status: '[[[ return entity && entity.attributes.status ? String(entity.attributes.status) : ""; ]]]'
+          laeuft: "[[[ return Object.values(hass.entities || {}).some((e) => e.platform === 'arcane' && e.translation_key === 'updater_running' && (states[e.entity_id] || {}).state === 'on'); ]]]"
+          # Juengstes Update aller Hosts ("Letztes Image-Update" je Umgebung,
+          # translation_key updater_last_update); host = Name der Umgebung, wenn
+          # es nicht die lokale ist (Modell "Arcane Agent").
+          letztes: |
+            [[[
+              let best = null;
+              for (const e of Object.values(hass.entities || {})) {
+                if (e.platform !== 'arcane' || e.translation_key !== 'updater_last_update') continue;
+                const st = states[e.entity_id];
+                const t = st ? Date.parse(st.state) : NaN;
+                if (isNaN(t) || (best && best.t >= t)) continue;
+                const d = (hass.devices || {})[e.device_id];
+                const host = d && d.model === 'Arcane Agent' ? (d.name_by_user || d.name || '') : '';
+                best = { t, a: st.attributes, host };
+              }
+              return best;
+            ]]]
+          status: '[[[ return variables.letztes && variables.letztes.a.status ? String(variables.letztes.a.status) : ""; ]]]'
           akzent: |
             [[[
               if (variables.laeuft) return 'var(--nachtblau-amber, #e6b566)';
@@ -408,11 +433,13 @@ cards:
               const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
               const ganz = (t) => `<span style="white-space:nowrap;">${t}</span>`;
               if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert Updates …</span>`;
-              if (!entity || entity.state === 'unavailable') return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
-              const a = entity.attributes;
-              const d = new Date(entity.state);
-              if (isNaN(d.getTime()) || !a.resource_name) return `<span style="font-size:12px;color:${sek};">${ganz('noch kein Update')} ${ganz('über Arcanes Updater')}</span>`;
-              // Name wie in den Zeilen: "radarr-radarr-1" -> "radarr"
+              const l = variables.letztes;
+              if (!l && (!entity || entity.state === 'unavailable')) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+              if (!l || !l.a.resource_name) return `<span style="font-size:12px;color:${sek};">${ganz('noch kein Update')} ${ganz('über Arcanes Updater')}</span>`;
+              const a = l.a;
+              const d = new Date(l.t);
+              // Name wie in den Zeilen: "radarr-radarr-1" -> "radarr"; entfernter
+              // Host davor ("docker-02 valhalla")
               let n = String(a.resource_name).replace(/-\d+$/, '');
               const t = n.split('-');
               if (t.length % 2 === 0) {
@@ -426,7 +453,7 @@ cards:
               const wortHtml = s === 'updated' || s === 'restarted' ? `<span style="color:var(--nachtblau-gruen, #a6d49e);">${wort}</span>` : wort;
               const wann = d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
               // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt.
-              return `<span style="font-size:12px;color:${fehler ? 'var(--nachtblau-koralle, #e7936e)' : sek};"><span style="overflow-wrap:anywhere;">${esc(n)}&nbsp;·</span> ${ganz(wortHtml + '&nbsp;·')} ${ganz(wann)}</span>`;
+              return `<span style="font-size:12px;color:${fehler ? 'var(--nachtblau-koralle, #e7936e)' : sek};"><span style="overflow-wrap:anywhere;">${esc((l.host ? l.host + ' ' : '') + n)}&nbsp;·</span> ${ganz(wortHtml + '&nbsp;·')} ${ganz(wann)}</span>`;
             ]]]
           pfeil: >-
             <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:20px;--ha-icon-display:block;width:20px;height:20px;display:block;color:var(--nachtblau-text-sekundaer, #8794a5);"></ha-icon>
@@ -497,12 +524,26 @@ cards:
         template: nachtblau_docker_titel
         name: Arcane
 
-      - type: custom:button-card
-        template: nachtblau_docker_update
-        entity: update.local_docker_arcane
-        variables:
-          titel: Arcane selbst
-          frage: Arcane jetzt aktualisieren? Arcane lädt sein neues Image und startet neu; die Integration ist dabei kurz nicht erreichbar.
+      # Arcane auf jedem Host: die Hauptinstanz (docker-01) und je Agent dessen
+      # Version (HA-Arcane ab 0.11.0, "docker-02 Arcane"). Alle Update-Entitaeten
+      # der Integration ausser denen der Container.
+      - type: custom:auto-entities
+        card:
+          type: vertical-stack
+        card_param: cards
+        sort:
+          method: name
+        filter:
+          include:
+            - integration: arcane
+              domain: update
+              options:
+                type: custom:button-card
+                template: nachtblau_docker_update
+                variables:
+                  frage: "[[[ return variables.anzeige + ' jetzt aktualisieren? Das neue Image wird geladen und Arcane startet auf diesem Host neu; er ist in HA dabei kurz nicht erreichbar.'; ]]]"
+          exclude:
+            - entity_id: 'update.container_*'
 
   # ======================= Pop-up Automatische Updates =======================
   # Unsichtbar, bis die Zeile "Automatische Updates" den Hash
@@ -517,13 +558,15 @@ cards:
   # gemessen.
   # Inhalt: Kopf in einer Zeile (nachtblau_docker_autoupdate_info), darunter
   # ein Chip je Container in zwei Spalten (nachtblau_docker_autoupdate_chip),
-  # Chips 29 px hoch, Abstand 6 px zwischen den Spalten und 4 px zwischen den
-  # Reihen (card_mod an der grid-Karte; mit ihren 8 px waeren es 579 px),
-  # 10 px zwischen Kopf und Raster (--bubble-pop-up-gap, Standard 14 px).
-  # Gemessen im Nachbau mit Roboto: 519 px hoch bei 29 Containern, auf beiden
-  # Breiten. Die Reserve reicht fuer einen weiteren Container; ab dem 31. kommt
-  # eine sechzehnte Reihe dazu (+33 px), dann scrollt das Blatt auf dem
-  # 360 px breiten Handy.
+  # Chips 28 px hoch, Abstand 6 px zwischen den Spalten und 3 px zwischen den
+  # Reihen (card_mod an der grid-Karte), 10 px zwischen Kopf und Raster
+  # (--bubble-pop-up-gap, Standard 14 px). Container aller Hosts; die eines
+  # entfernten Hosts tragen ihn im Namen ("docker-02 portainer") und stehen
+  # nach Namen sortiert beieinander. Gemessen im Nachbau mit Roboto: 521 px
+  # hoch bei 32 Containern (28 auf docker-01, 4 auf docker-02, 16 Reihen), auf
+  # beiden Breiten; mit 29 px und 4 px waeren es 552 px. Ein Reiter je Host
+  # ist damit nicht noetig. Ab dem 33. Container kommt eine siebzehnte Reihe
+  # dazu (+31 px), dann scrollt das Blatt auf dem 360 px breiten Handy.
   - type: custom:bubble-card
     card_type: pop-up
     hash: '#docker-autoupdates'
@@ -549,7 +592,7 @@ cards:
           card_mod:
             style: |
               #root {
-                gap: 4px 6px !important;
+                gap: 3px 6px !important;
               }
         card_param: cards
         sort:
