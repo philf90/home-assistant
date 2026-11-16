@@ -50,6 +50,18 @@
 #       keinen naechsten Lauf (kein installierter Zeitplan). Einmal je
 #       Ausbleiben; erneut erst, nachdem wieder ein Lauf kam. Ist die Umgebung
 #       ganz unerreichbar (Sensor unavailable), meldet sie nichts.
+#   automation "Docker: Agent getrennt melden"
+#       Push und Logbuch-Eintrag, wenn der Arcane-Agent eines entfernten
+#       Hosts (hier docker-02) laenger als 5 Minuten getrennt ist, und ein
+#       zweiter, wenn er nach so einer Trennung wieder verbunden ist (mit der
+#       Dauer). Quelle ist der Binaersensor Online der Umgebung; HA-Arcane ab
+#       0.11.1 haelt ihn bei getrenntem Agenten verfuegbar (aus) und zeigt
+#       daneben "Agent letzter Kontakt", der in der Meldung steht. Kuerzere
+#       Trennungen (Neustart des Agenten) bleiben still, ebenso eine in
+#       Arcane deaktivierte oder in den Optionen abgewaehlte Umgebung (Sensor
+#       unavailable) und ein Neustart von Home Assistant. Fuer einen weiteren
+#       Agenten die beiden Ausloeser um dessen Online-Sensor ergaenzen und
+#       den Kontakt-Sensor in der Meldung anpassen.
 #   script.docker_alle_updates_installieren
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
 #       ausstehenden Image-Updates aller Hosts nacheinander, Container mit
@@ -114,7 +126,8 @@
 #     (Aufraeumen); fuer eine richtige Rueckmeldung HA-Arcane ab 0.10.1,
 #     fuer den neuen Speicherbericht dazu die Option "Freigebbarer Speicher";
 #     fuer die Auto-Update-Meldung HA-Arcane ab 0.10.0 mit Option "Arcane
-#     Hintergrund-Jobs" und Recht jobs:list
+#     Hintergrund-Jobs" und Recht jobs:list; fuer die Meldung eines
+#     getrennten Agenten HA-Arcane ab 0.11.1
 #   - Companion App fuer die Push-Meldung
 #   - in configuration.yaml:
 #       homeassistant:
@@ -332,6 +345,83 @@ automation:
                   name: Auto-Update
                   message: "ausgeblieben · {{ faellig }} · {{ umgebung }}"
                   entity_id: binary_sensor.local_docker_online
+
+  - id: docker_agent_getrennt_melden
+    alias: "Docker: Agent getrennt melden"
+    description: >-
+      Push und Logbuch, wenn der Arcane-Agent von docker-02 laenger als
+      5 Minuten getrennt ist, und wenn er danach wieder verbunden ist.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.docker_02_online
+        to: "off"
+        for:
+          minutes: 5
+        id: getrennt
+      - trigger: state
+        entity_id: binary_sensor.docker_02_online
+        from: "off"
+        to: "on"
+        id: wieder_da
+    actions:
+      - variables:
+          umgebung: "{{ trigger.to_state.name | replace(' Online', '') }}"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: getrennt
+            sequence:
+              - variables:
+                  text: >-
+                    {%- set k = states('sensor.docker_02_agent_letzter_kontakt') -%}
+                    seit {{ as_local(trigger.to_state.last_changed).strftime('%H:%M') }}
+                    Uhr nicht verbunden{% if k not in ['unknown', 'unavailable'] %}
+                    · letzter Kontakt {{ as_local(as_datetime(k)).strftime('%H:%M') }}
+                    Uhr{% endif %}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Agent getrennt"
+                  message: "{{ text }} · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Agent
+                  message: "getrennt · {{ text }} · {{ umgebung }}"
+                  entity_id: binary_sensor.docker_02_online
+          - conditions:
+              - condition: trigger
+                id: wieder_da
+              # Nur nach einer gemeldeten Trennung (mindestens 5 Minuten);
+              # fuer die Dauer zwischen zwei Zustaenden gibt es keine
+              # eingebaute Bedingung.
+              - condition: template
+                value_template: >-
+                  {{ (trigger.to_state.last_changed
+                      - trigger.from_state.last_changed).total_seconds() >= 300 }}
+            sequence:
+              - variables:
+                  dauer: >-
+                    {{ ((trigger.to_state.last_changed
+                         - trigger.from_state.last_changed).total_seconds() / 60)
+                       | round(0) | int }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Agent wieder verbunden"
+                  message: "nach {{ dauer }} Min. · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Agent
+                  message: "wieder verbunden nach {{ dauer }} Min. · {{ umgebung }}"
+                  entity_id: binary_sensor.docker_02_online
 
 script:
   docker_alle_updates_installieren:
