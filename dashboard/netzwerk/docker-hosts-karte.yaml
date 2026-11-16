@@ -29,6 +29,10 @@
 #            in der Karte Speicher & Aufraeumen: script.docker_aufraeumen mit
 #            Rueckmeldung). Den lokalen Host raeumt nur die Karte Speicher &
 #            Aufraeumen auf, die auch die Agenten zeigt.
+#   Ports    im Host-Pop-up die Zeile "Ports  26 belegt  ›"; Antippen oeffnet
+#            je Host ein zweites Pop-up (#docker-ports-<object_id>) mit allen
+#            belegten Host-Ports als Chips (nachtblau_docker_ports, HA-Arcane
+#            ab 0.12.0, Option "Veroeffentlichte Ports")
 #
 # Hosts sind die Binaersensoren "Online" der Umgebungen; der lokale (Modell
 # "Environment") steht vor den Agenten (Modell "Arcane Agent"). Die Werte
@@ -42,22 +46,24 @@
 # erscheint nach dem naechsten Laden der Seite. Ausgabe als Python-Literal
 # wie in docker-container-karte.yaml. Die Templates der Zeilen und Pop-ups
 # (nachtblau_docker_host, _host_info, _host_jobs, nachtblau_docker_aufraeumen,
-# nachtblau_docker_messwert; docker-templates.yaml) setzen die Vorlagen
+# nachtblau_docker_messwert, nachtblau_docker_ports; docker-templates.yaml) setzen die Vorlagen
 # selbst; im Kopfblock stehen sie nicht, weil ci/check_kopf.py nur
 # template:-Schluessel im YAML zaehlt.
 # Im Pop-up steht kein [[[ ]]]: Die Logik liegt in den Templates, damit die
 # Ausgabe der Vorlage keine JavaScript-Strings mit Anfuehrungszeichen enthaelt.
 #
-# Masse, gemessen im Nachbau mit Roboto und den Werten vom 16.11.2026, auf
-# dem 360 px breiten Handy (Inhalt 324 px) und dem iPhone 17 Pro (366 px)
-# gleich: Zeile 77 px, alle Werte in einer Zeile. Pop-up von docker-02
-# (Agent: 5 Systemzeilen, Messwerte, 4 Jobs mit Zusammenfassung,
-# Aufraeumen mit zweizeiligem Hinweis) 467 px, von docker-01 323 px; Platz wie
-# im Pop-up "Automatische Updates" (docker-updates-karte.yaml) 539 px auf dem
-# 360 px breiten Handy. Mit Zeilenhoehe 1,5 statt normal waeren es 513 px,
-# mit dreizeiligem Hinweis (kein Bericht) je 15 px mehr, also auch dann ohne
-# Scrollen. Messkacheln 102,7 px breit (iPhone 116,7 px), "50,6 GB belegt"
-# passt. Eine Zeile "Update" im Pop-up gibt es deshalb nicht: Das Update
+# Masse, gemessen im Nachbau mit Roboto (als data-URL eingebettet und als
+# geladen geprueft; eine erste Messung lief unbemerkt mit einer Ersatzschrift)
+# und den Werten vom 16.11.2026, auf dem 360 px breiten Handy (Inhalt 324 px)
+# und dem iPhone 17 Pro (366 px) gleich: Zeile 77 px, alle Werte in einer
+# Zeile. Pop-up von docker-02 (Agent: 5 Systemzeilen und Zeile Ports,
+# Messwerte, 4 Jobs mit Zusammenfassung, Aufraeumen mit zweizeiligem Hinweis)
+# 494 px, von docker-01 350 px; Platz wie im Pop-up "Automatische Updates"
+# (docker-updates-karte.yaml) 539 px auf dem 360 px breiten Handy. Mit
+# dreizeiligem Hinweis (kein Bericht) 15 px mehr, 509 px. Mit Zeilenhoehe
+# 1,5 statt normal waeren es 538 px, mit dreizeiligem Hinweis 553 px; dann
+# scrollte das Blatt um 14 px. Messkacheln 102,7 px breit (iPhone 116,7 px),
+# "50,6 GB belegt" passt. Eine Zeile "Update" im Pop-up gibt es deshalb nicht: Das Update
 # steht in Amber in der Zeile Agent bzw. Arcane.
 #
 # Voraussetzung: custom:button-card + custom:auto-entities + custom:bubble-card
@@ -152,6 +158,10 @@ cards:
   # steht im Kopf in Amber, installiert wird es in der Karte Image-Updates.
   # Messwerte und Button sucht die Vorlage unter den Entitaeten des Geraets
   # ueber die Endung der Entity-ID; fehlt einer, faellt die Kachel weg.
+  # Dazu je Host das Pop-up "Ports" (#docker-ports-<object_id>,
+  # nachtblau_docker_ports), wenn der Sensor "Belegte Host-Ports"
+  # (_belegte_host_ports, HA-Arcane ab 0.12.0) da ist; geoeffnet ueber die
+  # Zeile "Ports" im Host-Pop-up.
   - type: custom:auto-entities
     card:
       type: vertical-stack
@@ -176,6 +186,7 @@ cards:
           {%- set ram = ents | select('match', 'sensor\\..*_host_arbeitsspeicher$') | first -%}
           {%- set disk = ents | select('match', 'sensor\\..*_host_festplatte$') | first -%}
           {%- set prune = ents | select('match', 'button\\..*_ungenutztes_entfernen$') | first -%}
+          {%- set ports = ents | select('match', 'sensor\\..*_belegte_host_ports$') | first -%}
           {%- set mess = namespace(k=[]) -%}
           {%- if cpu -%}
             {%- set mess.k = mess.k + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_messwert', 'entity': cpu, 'name': 'CPU', 'variables': {'gelb': 40, 'rot': 75, 'zusatz': 'Auslastung'}}] -%}
@@ -200,5 +211,14 @@ cards:
                 'show_header': false, 'popup_mode': 'fit-content',
                 'with_bottom_offset': true, 'bg_opacity': '100',
                 'styles': stil, 'cards': karten}] -%}
+          {%- if ports -%}
+            {%- set ns2.liste = ns2.liste + [{
+                  'type': 'custom:bubble-card', 'card_type': 'pop-up',
+                  'hash': '#docker-ports-' ~ o.split('.')[1],
+                  'show_header': false, 'popup_mode': 'fit-content',
+                  'with_bottom_offset': true, 'bg_opacity': '100',
+                  'styles': stil,
+                  'cards': [{'type': 'custom:button-card', 'template': 'nachtblau_docker_ports', 'entity': ports}]}] -%}
+          {%- endif -%}
         {%- endfor -%}
         {{ ns2.liste }}
