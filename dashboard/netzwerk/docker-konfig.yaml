@@ -31,6 +31,17 @@
 #       Ereignisprotokoll auf dem Bus" ein echtes container.oom vom
 #       Docker-Daemon melden (arcane_event, Schwere error); dieses Paket
 #       nutzt das noch nicht.
+#   automation "Docker: Auto-Update fehlgeschlagen melden"
+#       Push und Logbuch-Eintrag, wenn ein Lauf von Arcanes automatischen
+#       Updates fehlschlaegt (failed) oder nur teilweise klappt (partial).
+#       Quelle sind die Sensoren "Job Auto Update" je Umgebung (HA-Arcane ab
+#       0.10.0, Option "Arcane Hintergrund-Jobs"); hier die beiden Umgebungen
+#       docker-01 und docker-02, fuer andere Umgebungen die Liste anpassen.
+#       Ausgeloest wird bei jedem neuen Lauf (Attribut last_run aendert sich),
+#       damit auch ein zweiter Fehlschlag in Folge gemeldet wird; nach einem
+#       Neustart oder Neuladen (Sensor vorher unavailable) nicht. Abgebrochene
+#       Laeufe (canceled, etwa wenn Arcane sich selbst neu startet) meldet sie
+#       nicht.
 #   script.docker_alle_updates_installieren
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
 #       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
@@ -76,7 +87,9 @@
 #     API-Rechten image-updates:apply (Sammel-Update; bis HA-Arcane 0.8.1
 #     containers:redeploy), system:prune und activities:read
 #     (Aufraeumen); fuer eine richtige Rueckmeldung HA-Arcane ab 0.10.1,
-#     fuer den neuen Speicherbericht dazu die Option "Freigebbarer Speicher"
+#     fuer den neuen Speicherbericht dazu die Option "Freigebbarer Speicher";
+#     fuer die Auto-Update-Meldung HA-Arcane ab 0.10.0 mit Option "Arcane
+#     Hintergrund-Jobs" und Recht jobs:list
 #   - Companion App fuer die Push-Meldung
 #   - in configuration.yaml:
 #       homeassistant:
@@ -186,6 +199,56 @@ automation:
             url: /dashboard-home/docker
             clickAction: /dashboard-home/docker
             group: docker
+
+  - id: docker_auto_update_fehlgeschlagen_melden
+    alias: "Docker: Auto-Update fehlgeschlagen melden"
+    description: >-
+      Push und Eintrag im Logbuch der Docker-View (Karte Ereignisse), wenn
+      ein Lauf von Arcanes automatischen Updates fehlschlaegt oder nur
+      teilweise klappt. Quelle: Sensoren "Job Auto Update" je Umgebung
+      (HA-Arcane ab 0.10.0).
+    mode: queued
+    max: 10
+    triggers:
+      # Jeder neue Lauf aendert last_run, auch bei gleichem Ergebnis
+      - trigger: state
+        entity_id:
+          - sensor.docker_01_job_auto_update
+          - sensor.docker_02_job_auto_update
+        attribute: last_run
+    conditions:
+      # Templates: Eine Zustandsbedingung auf mehrere Entitaeten verlangt den
+      # Zustand bei allen; gemeint ist nur die ausloesende.
+      # Nach Neustart oder Neuladen nicht melden (vorher unavailable).
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none
+             and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+      - condition: template
+        value_template: "{{ trigger.to_state.state in ['failed', 'partial'] }}"
+    variables:
+      umgebung: "{{ trigger.to_state.name | replace(' Job Auto Update', '') }}"
+      ergebnis: >-
+        {{ 'fehlgeschlagen' if trigger.to_state.state == 'failed'
+           else 'teilweise fehlgeschlagen' }}
+      grund: >-
+        {{ trigger.to_state.attributes.last_error
+           or trigger.to_state.attributes.message
+           or 'ohne Meldung von Arcane' }}
+    actions:
+      - action: notify.mobile_app_iphone
+        data:
+          title: "Docker: Auto-Update {{ ergebnis }}"
+          message: "{{ grund }} · {{ umgebung }}"
+          data:
+            url: /dashboard-home/docker
+            clickAction: /dashboard-home/docker
+            group: docker
+      - action: logbook.log
+        data:
+          name: Auto-Update
+          message: "{{ ergebnis }} · {{ grund }} · {{ umgebung }}"
+          entity_id: binary_sensor.local_docker_online
 
 script:
   docker_alle_updates_installieren:
