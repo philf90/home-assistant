@@ -95,7 +95,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 |---|---|---|---|---|---|
 | [`docker-container-karte.yaml`](netzwerk/docker-container-karte.yaml) | karte | Docker-Container – alle Container nach Compose-Projekt gruppiert | auto-entities, button-card, card-mod, expander-card | – | aktiv |
 | [`docker-ereignisse-karte.yaml`](netzwerk/docker-ereignisse-karte.yaml) | karte | Docker-Ereignisse – Logbuch der Container und Push bei Absturz | button-card, card-mod | – | aktiv |
-| [`docker-host-karte.yaml`](netzwerk/docker-host-karte.yaml) | karte | Docker-Host – Status, CPU, RAM, Disk und Versionen | button-card, card-mod | – | aktiv |
+| [`docker-hosts-karte.yaml`](netzwerk/docker-hosts-karte.yaml) | karte | Docker-Hosts – alle Hosts mit Arcane, je Host ein Pop-up mit Details | auto-entities, bubble-card, button-card, card-mod | – | aktiv |
 | [`docker-karte.yaml`](netzwerk/docker-karte.yaml) | karte | Docker – Container eines Docker-Hosts ueber Arcane | auto-entities, button-card, card-mod, expander-card | – | aktiv |
 | [`docker-konfig.yaml`](netzwerk/docker-konfig.yaml) | konfig | Docker – Ereignisse, Absturzmeldung und Sammel-Update fuer die Docker-View | – | `notify.mobile_app_iphone` | aktiv |
 | [`docker-projekte-karte.yaml`](netzwerk/docker-projekte-karte.yaml) | karte | Docker-Projekte – Compose-Projekte mit Start/Stop und Neustart | auto-entities, button-card, card-mod, expander-card | – | aktiv |
@@ -117,6 +117,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`unifi-unas-pro-karte.yaml`](netzwerk/unifi-unas-pro-karte.yaml) | karte | UNAS Pro – Speicher, CPU, RAM, Schaechte | button-card, card-mod | – | aktiv |
 | [`unifi-verlauf-karte.yaml`](netzwerk/unifi-verlauf-karte.yaml) | karte | Netzwerk-Verlauf – aufklappbar | apexcharts-card, button-card, card-mod, expander-card, uptime-card | – | aktiv |
 | [`wlan-karte-v2.yaml`](netzwerk/wlan-karte-v2.yaml) | karte | WLAN – Netzliste mit QR-Pop-ups | bubble-card, button-card, card-mod | `wlan_heim/wlan_gast` | aktiv |
+| [`docker-host-karte.yaml`](netzwerk/archiv/docker-host-karte.yaml) | karte | Docker-Host – Status, CPU, RAM, Disk und Versionen | button-card, card-mod | – | archiv, ersetzt durch `docker-hosts-karte.yaml` |
 | [`homematic-karte.yaml`](netzwerk/archiv/homematic-karte.yaml) | karte | Homematic IP / OpenCCU | button-card, card-mod, homematicip-system-health-card | `*_seriennr` | archiv, ersetzt durch `homematic-view.yaml` |
 | [`unifi-udm-system-karte.yaml`](netzwerk/archiv/unifi-udm-system-karte.yaml) | karte | UDM SE Systemzustand v1 | button-card, card-mod | – | archiv, ersetzt durch `unifi-udm-system-karte-v2.yaml` |
 | [`wlan-karte.yaml`](netzwerk/archiv/wlan-karte.yaml) | karte | WLAN-QR – aufklappbar | button-card, card-mod, expander-card | – | archiv, ersetzt durch `wlan-karte-v2.yaml` |
