@@ -48,7 +48,12 @@
 # liegt, hoechstens 2 km. Fehlt Places die Position, gilt die App bis 150 m
 # plus GPS-Ungenauigkeit; fehlen beide Positionen, gilt eine Quelle, wenn sie
 # hoechstens 2 min aelter ist als die Position, bei Gleichstand die App.
-# Passt keine, steht "Unterwegs" mit "zuletzt <Ort>". In Tests auf dem
+# Passt keine, steht "Unterwegs" mit "zuletzt <Ort>". Fehlt der gewaehlten
+# Quelle die Strasse, kommt sie von der anderen, wenn die nah liegt
+# (150 m plus GPS-Ungenauigkeit, ohne Position 30 s).
+# Beobachtet: Places hat _latitude/_longitude nach einem Neustart von Home
+# Assistant selbst wieder deaktiviert; dann gilt die Regel ohne Places-
+# Position (Sensoren unter Einstellungen -> Geraete -> Places wieder an). In Tests auf dem
 # Android-Handy kam der App-Sensor unterwegs nicht mit, Places schon; auf dem
 # iPhone umgekehrt zuverlaessig. Daher beide.
 # Faehrt die Person (Tempo ab 30 km/h oder Aktivitaet Automotive/in_vehicle,
@@ -963,15 +968,24 @@ cards:
           else if (geoOk || plOk) quelle = (geoOk && (!plOk || geoT >= plT)) ? 'geo' : 'places';
           // Keine Quelle passt zur Position: Anzeige wie veraltet ("zuletzt ...")
           const unpassend = !!quelle && !(quelle === 'geo' ? geoPasst : plPasst);
-          const strasse = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
+          // Hat die gewaehlte Quelle keine Strasse, kommt sie von der anderen,
+          // wenn die nah an der Position liegt: hoechstens 150 m plus GPS-
+          // Ungenauigkeit, ohne Positionsangabe hoechstens 30 s aelter. Die
+          // 2-km-Grenze waere hier zu weit (Test: Strasse 1,1 km hinter dem Auto).
+          // Anlass: Apple meldete an einer Landstrasse nur den Ort, Places die
+          // Strassennummer.
+          const nah = (d, t) => (d !== null ? d <= 150 + Math.min(pAcc, 200) : t !== null && posT !== null && t >= posT - 30000);
+          const andere = quelle === 'geo' ? (plOk && nah(dPl, plT) ? 'places' : null) : (quelle === 'places' ? (geoOk && nah(dGeo, geoT) ? 'geo' : null) : null);
+          const strasseQ = quelle === 'geo' ? geoStr : (quelle === 'places' ? plStr : null);
+          const strasse = strasseQ || (andere === 'places' ? plStr : (andere === 'geo' ? geoStr : null));
           const ort = quelle === 'geo' ? (geoOrt || plOrt) : (quelle === 'places' ? (plOrt || geoOrt) : null);
           // Strassennummer: bei App-Quelle aus deren Strasse (iOS liefert z. B. "L 123"),
           // sonst aus Places (route_number, bei Landesstrassen in street).
           // Eine route_number von Places gilt auch neben der App (Autobahn).
           const refMuster = /^(A|B|L|K|St|S|E)\s?\d+[a-z]?$/i;
           const istRef = (v) => !!v && refMuster.test(v);
-          const plRefRoh = plPasst ? (pl('route_number') || (istRef(plStr) ? plStr : null)) : null;
-          const refRoh = quelle === 'geo' ? (istRef(geoStr) ? geoStr : (plPasst ? pl('route_number') : null)) : plRefRoh;
+          const plRoute = plPasst ? pl('route_number') : null;
+          const refRoh = quelle === 'places' ? (plRoute || (istRef(strasse) ? strasse : null)) : (istRef(strasse) ? strasse : plRoute);
           const strRef = refRoh ? refRoh.split(';')[0].trim().replace(/^([A-Za-z]+)\s?(\d)/, '$1 $2') : null;
           // Alter der letzten Position
           const alterMin = posT !== null ? Math.max(0, Math.floor((Date.now() - posT) / 60000)) : null;
