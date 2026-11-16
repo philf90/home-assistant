@@ -1,0 +1,201 @@
+# ============================================================================
+# Docker-Hosts – alle Hosts mit Arcane, je Host ein Pop-up mit Details
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       netzwerk
+# Status:        aktiv
+# Karten:        auto-entities, bubble-card, button-card, card-mod
+# Templates:     nachtblau_docker_kopf (docker-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell
+# Platzhalter:   keine
+# ============================================================================
+# Erste Karte der Docker-View (docker-view.yaml), ersetzt seit HA-Arcane
+# 0.11.0 die Host-Karte (archiv/docker-host-karte.yaml), die nur den lokalen
+# Host kannte. Seit 0.11.0 meldet die Integration auch Hosts mit
+# Arcane-Agent (hier docker-02) mit eigenen Sensoren.
+#
+#   Kopf     "2 Hosts · 32 Container"; fehlt ein Host: "1 von 2 offline"
+#   Zeilen   je Host eine Zeile (nachtblau_docker_host): Name, lokal oder
+#            Agent mit Latenz, Pille online/offline/pruefen, darunter
+#            Container laufend/gesamt, CPU, RAM, Disk
+#   Pop-up   Antippen oeffnet je Host ein Bubble-Pop-up (#docker-host-
+#            <object_id des Online-Sensors>), aufgebaut wie das WLAN-Pop-up
+#            (wlan-karte-v2.yaml): Kopf mit Systemdaten und Versionen
+#            (nachtblau_docker_host_info), CPU, RAM und Disk mit Balken
+#            (nachtblau_docker_messwert, Schwellen wie bisher: CPU 40/75 %,
+#            RAM und Disk 75/90 %), Hintergrund-Jobs
+#            (nachtblau_docker_host_jobs) und bei einem Agenten "Ungenutztes
+#            aufraeumen" (nachtblau_docker_host_aufraeumen). Den lokalen Host
+#            raeumt die Karte Speicher & Aufraeumen auf.
+#
+# Hosts sind die Binaersensoren "Online" der Umgebungen; der lokale (Modell
+# "Environment") steht vor den Agenten (Modell "Arcane Agent"). Die Werte
+# einer Zeile kommen von den Sensoren desselben Geraets (translation_key),
+# weil die Entity-IDs je Host anders anfangen (local_docker_*, docker_host_*,
+# docker_02_*). Im Pop-up sucht die Jinja-Vorlage die Entitaeten der Messwerte
+# ueber device_entities und die Endungen der deutschen Entity-IDs
+# (_host_cpu, _host_arbeitsspeicher, _host_festplatte,
+# _ungenutztes_entfernen); auf einer englischen Instanz heissen sie anders.
+# Die Vorlagen lesen keine Zustaende, nur Registry-Daten; ein neuer Host
+# erscheint nach dem naechsten Laden der Seite. Ausgabe als Python-Literal
+# wie in docker-container-karte.yaml. Die Templates der Zeilen und Pop-ups
+# (nachtblau_docker_host, _host_info, _host_jobs, _host_aufraeumen,
+# nachtblau_docker_messwert; docker-templates.yaml) setzen die Vorlagen
+# selbst; im Kopfblock stehen sie nicht, weil ci/check_kopf.py nur
+# template:-Schluessel im YAML zaehlt.
+# Im Pop-up steht kein [[[ ]]]: Die Logik liegt in den Templates, damit die
+# Ausgabe der Vorlage keine JavaScript-Strings mit Anfuehrungszeichen enthaelt.
+#
+# Masse, gemessen im Nachbau mit Roboto und den Werten vom 16.11.2026, auf
+# dem 360 px breiten Handy (Inhalt 324 px) und dem iPhone 17 Pro (366 px)
+# gleich: Zeile 77 px, alle Werte in einer Zeile. Pop-up von docker-02
+# (Agent: 5 Systemzeilen, Messwerte, 4 Jobs mit Zusammenfassung,
+# Aufraeumen) 462 px, von docker-01 323 px; Platz wie im Pop-up "Automatische
+# Updates" (docker-updates-karte.yaml) 539 px auf dem 360 px breiten Handy.
+# Mit Zeilenhoehe 1,5 statt normal waeren es 514 px, also auch dann ohne
+# Scrollen. Messkacheln 102,7 px breit (iPhone 116,7 px), "50,6 GB belegt"
+# passt. Eine Zeile "Update" im Pop-up gibt es deshalb nicht: Das Update
+# steht in Amber in der Zeile Agent bzw. Arcane.
+#
+# Voraussetzung: custom:button-card + custom:auto-entities + custom:bubble-card
+#                + card-mod (HACS), Integration Arcane (HACS) ab 0.11.0 mit
+#                Option "CPU, RAM und Festplatte des Hosts" (Abfrage), fuer
+#                die Jobs Option "Arcane Hintergrund-Jobs" (ab 0.10.0), fuer
+#                Aufraeumen Option Prune-Button; aktivierte Diagnose-Sensoren
+#                Docker-Version, Arcane Version und Host Arbeitsspeicher
+#                gesamt; Templates aus docker-templates.yaml.
+type: vertical-stack
+cards:
+  # ======================= Sichtbare Karte =======================
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+      - type: custom:button-card
+        template: nachtblau_docker_kopf
+        entity: binary_sensor.local_docker_online
+        icon: mdi:server-network
+        name: Hosts
+        # Hosts: Binaersensoren "Online" der Umgebungen (translation_key
+        # environment_online); Container: Summe von containers_total
+        label: |
+          [[[
+            const E = Object.values(hass.entities || {});
+            const h = E.filter((e) => e.platform === 'arcane' && e.translation_key === 'environment_online' && states[e.entity_id]).map((e) => states[e.entity_id]);
+            if (!h.length) return 'keine Daten';
+            const weg = h.filter((x) => x.state !== 'on').length;
+            if (weg) return weg + ' von ' + h.length + ' offline';
+            let c = null;
+            for (const e of E) {
+              if (e.platform !== 'arcane' || e.translation_key !== 'containers_total') continue;
+              const v = parseFloat((states[e.entity_id] || {}).state);
+              if (!isNaN(v)) c = (c || 0) + v;
+            }
+            return h.length + (h.length === 1 ? ' Host' : ' Hosts') + (c !== null ? ' · ' + c + ' Container' : '');
+          ]]]
+        tap_action:
+          action: none
+
+      # Je Host eine Zeile; der lokale Host zuerst
+      - type: custom:auto-entities
+        card:
+          type: vertical-stack
+        card_param: cards
+        filter:
+          template: |
+            {%- set ns = namespace(lokal=[], fremd=[]) -%}
+            {%- for o in integration_entities('arcane') | select('match', 'binary_sensor\\.')
+                | select('search', '_online$') | reject('search', '^binary_sensor\\.(container|project)_') | sort -%}
+              {%- if device_attr(device_id(o), 'model') == 'Arcane Agent' -%}
+                {%- set ns.fremd = ns.fremd + [o] -%}
+              {%- else -%}
+                {%- set ns.lokal = ns.lokal + [o] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- set ns2 = namespace(liste=[]) -%}
+            {%- for o in ns.lokal + ns.fremd -%}
+              {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_host', 'entity': o}] -%}
+            {%- endfor -%}
+            {{ ns2.liste }}
+        else:
+          type: custom:button-card
+          show_icon: false
+          show_state: false
+          show_name: true
+          name: Keine Hosts. Ist die Integration Arcane eingerichtet?
+          tap_action:
+            action: none
+          hold_action:
+            action: none
+
+  # ======================= Pop-ups je Host =======================
+  # Unsichtbar, bis eine Zeile den Hash #docker-host-<object_id> setzt.
+  # Aufbau und Hintergrund wie im Pop-up "Automatische Updates"
+  # (docker-updates-karte.yaml): Bubble Card als Blatt von unten, eigener Kopf,
+  # schliessen per Wischen nach unten, Tipp daneben oder Escape.
+  # Inhalt je Host: Kopf mit Systemdaten (nachtblau_docker_host_info), CPU,
+  # RAM und Disk in einer Dreierreihe (nachtblau_docker_messwert; RAM und Disk
+  # mit "belegt von gesamt" ueber variables.belegt/gesamt), Hintergrund-Jobs
+  # (nachtblau_docker_host_jobs), bei einem Agenten Aufraeumen
+  # (nachtblau_docker_host_aufraeumen). Ein Update von Arcane bzw. dem Agenten
+  # steht im Kopf in Amber, installiert wird es in der Karte Image-Updates.
+  # Messwerte und Button sucht die Vorlage unter den Entitaeten des Geraets
+  # ueber die Endung der Entity-ID; fehlt einer, faellt die Kachel weg.
+  - type: custom:auto-entities
+    card:
+      type: vertical-stack
+    card_param: cards
+    filter:
+      template: |
+        {%- set ns = namespace(lokal=[], fremd=[]) -%}
+        {%- for o in integration_entities('arcane') | select('match', 'binary_sensor\\.')
+            | select('search', '_online$') | reject('search', '^binary_sensor\\.(container|project)_') | sort -%}
+          {%- if device_attr(device_id(o), 'model') == 'Arcane Agent' -%}
+            {%- set ns.fremd = ns.fremd + [o] -%}
+          {%- else -%}
+            {%- set ns.lokal = ns.lokal + [o] -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- set stil = '.bubble-pop-up { --bubble-pop-up-background-color: color-mix(in srgb, var(--nachtblau-seite, #171d29) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-flaeche-erhoeht, #222b3c)) !important; --bubble-pop-up-gap: 10px; }' -%}
+        {%- set ns2 = namespace(liste=[]) -%}
+        {%- for o in ns.lokal + ns.fremd -%}
+          {%- set agent = device_attr(device_id(o), 'model') == 'Arcane Agent' -%}
+          {%- set ents = device_entities(device_id(o)) | list -%}
+          {%- set cpu = ents | select('match', 'sensor\\..*_host_cpu$') | first -%}
+          {%- set ram = ents | select('match', 'sensor\\..*_host_arbeitsspeicher$') | first -%}
+          {%- set disk = ents | select('match', 'sensor\\..*_host_festplatte$') | first -%}
+          {%- set prune = ents | select('match', 'button\\..*_ungenutztes_entfernen$') | first -%}
+          {%- set mess = namespace(k=[]) -%}
+          {%- if cpu -%}
+            {%- set mess.k = mess.k + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_messwert', 'entity': cpu, 'name': 'CPU', 'variables': {'gelb': 40, 'rot': 75, 'zusatz': 'Auslastung'}}] -%}
+          {%- endif -%}
+          {%- if ram -%}
+            {%- set mess.k = mess.k + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_messwert', 'entity': ram, 'name': 'RAM', 'variables': {'belegt': 'host_memory_used', 'gesamt': 'host_memory_total'}}] -%}
+          {%- endif -%}
+          {%- if disk -%}
+            {%- set mess.k = mess.k + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_messwert', 'entity': disk, 'name': 'Disk', 'variables': {'belegt': 'host_disk_used'}}] -%}
+          {%- endif -%}
+          {%- set karten = [{'type': 'custom:button-card', 'template': 'nachtblau_docker_host_info', 'entity': o}] -%}
+          {%- if mess.k -%}
+            {%- set karten = karten + [{'type': 'grid', 'columns': 3, 'square': false, 'cards': mess.k}] -%}
+          {%- endif -%}
+          {%- set karten = karten + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_host_jobs', 'entity': o}] -%}
+          {%- if agent and prune -%}
+            {%- set karten = karten + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_host_aufraeumen', 'entity': prune}] -%}
+          {%- endif -%}
+          {%- set ns2.liste = ns2.liste + [{
+                'type': 'custom:bubble-card', 'card_type': 'pop-up',
+                'hash': '#docker-host-' ~ o.split('.')[1],
+                'show_header': false, 'popup_mode': 'fit-content',
+                'with_bottom_offset': true, 'bg_opacity': '100',
+                'styles': stil, 'cards': karten}] -%}
+        {%- endfor -%}
+        {{ ns2.liste }}

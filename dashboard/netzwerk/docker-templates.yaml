@@ -25,6 +25,10 @@
 #   nachtblau_docker_aufklapper  Kopfzeile einer expander-card mit Zahl-Chip
 #   nachtblau_docker_kpi       Kennzahl-Kachel (Laufend, Gestoppt, ...)
 #   nachtblau_docker_messwert  Messwert mit Balken (Host-CPU, -RAM, -Disk)
+#   nachtblau_docker_host      Zeile je Host der Karte Hosts (docker-hosts-karte.yaml)
+#   nachtblau_docker_host_info Kopf des Host-Pop-ups mit Systemdaten und Versionen
+#   nachtblau_docker_host_jobs Hintergrund-Jobs eines Hosts im Pop-up
+#   nachtblau_docker_host_aufraeumen  Aufraeumen eines entfernten Hosts im Pop-up
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
 #   3 Punkte -> "Raw-Konfigurationseditor" -> die Eintraege unter
@@ -1149,11 +1153,17 @@ button_card_templates:
   # Entity ist ein Sensor in %. Farbe nach Schwelle wie in system-karte.yaml:
   # ab variables.gelb Amber, ab variables.rot Rot, sonst Gruen.
   #   variables.zusatz  Text unter der Beschriftung, z. B. "5,1 von 8,3 GB"
+  #   variables.belegt, variables.gesamt  statt zusatz: translation_key der
+  #                     Sensoren desselben Geraets (host_memory_used,
+  #                     host_memory_total, host_disk_used); ergibt "5,1 von
+  #                     8,3 GB" bzw. "38,1 GB belegt" (Pop-up der Karte Hosts)
   nachtblau_docker_messwert:
     variables:
       gelb: 75
       rot: 90
       zusatz: ''
+      belegt: ''
+      gesamt: ''
       wert: |
         [[[
           const v = entity ? parseFloat(entity.state) : NaN;
@@ -1190,7 +1200,21 @@ button_card_templates:
         ]]]
       zusatz: |
         [[[
-          return variables.zusatz ? `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${variables.zusatz}</span>` : '';
+          let z = variables.zusatz;
+          if (!z && variables.belegt && entity) {
+            const E = hass.entities || {}, reg = E[entity.entity_id];
+            const wert = (tk) => {
+              for (const e of Object.values(E)) {
+                if (!reg || e.device_id !== reg.device_id || e.platform !== 'arcane' || e.translation_key !== tk) continue;
+                const v = parseFloat((states[e.entity_id] || {}).state);
+                return isNaN(v) ? null : v.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+              }
+              return null;
+            };
+            const b = wert(variables.belegt), g = variables.gesamt ? wert(variables.gesamt) : null;
+            z = b && g ? b + ' von ' + g + ' GB' : (b ? b + ' GB belegt' : '');
+          }
+          return z ? `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${z}</span>` : '';
         ]]]
     styles:
       card:
@@ -1227,3 +1251,470 @@ button_card_templates:
           - overflow: hidden
           - white-space: nowrap
           - text-overflow: ellipsis
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_host: eine Zeile je Host (Umgebung) der Karte Hosts
+  # (docker-hosts-karte.yaml, HA-Arcane ab 0.11.0). Entity ist der
+  # Binaersensor "Online" der Umgebung; alle uebrigen Werte kommen von den
+  # Sensoren desselben Geraets (translation_key), weil die Entity-IDs je Host
+  # anders anfangen (local_docker_*, docker_host_*, docker_02_*).
+  #   Titel   Name des Hosts (Geraet der Umgebung)
+  #   Info    lokal: "lokal · Arcane v3.0.1"; Agent: "Agent 3.0.1 · 0,3 ms";
+  #           getrennt: "letzter Kontakt 13:31"
+  #   Werte   Container laufend/gesamt, CPU, RAM, Disk; Farben nach den
+  #           Schwellen der Host-Messwerte (CPU 40/75 %, RAM und Disk 75/90 %)
+  #   Pille   online (Gruen), offline (Rot, Agent getrennt), pruefen (Amber,
+  #           Entitaet nicht verfuegbar)
+  # Antippen oeffnet das Pop-up des Hosts (#docker-host-<object_id>).
+  nachtblau_docker_host:
+    variables:
+      sib: |
+        [[[
+          // Sensoren desselben Geraets (der Umgebung) nach translation_key
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          const m = {};
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.platform === 'arcane' && e.translation_key && !(e.translation_key in m)) m[e.translation_key] = states[e.entity_id] || null;
+          }
+          return m;
+        ]]]
+      geraet: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return { name: d ? (d.name_by_user || d.name || '') : '', agent: !!d && d.model === 'Arcane Agent', version: d ? (d.sw_version || '') : '' };
+        ]]]
+      zustand: '[[[ return !entity || ["unavailable", "unknown"].includes(entity.state) ? "nv" : (entity.state === "on" ? "an" : "aus"); ]]]'
+    show_icon: true
+    show_name: false
+    show_state: false
+    show_label: false
+    icon: mdi:server
+    tap_action: |
+      [[[ return entity ? { action: 'navigate', navigation_path: '#docker-host-' + entity.entity_id.split('.')[1] } : { action: 'none' }; ]]]
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          return `<span style="font-size:14px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">${esc(variables.geraet.name || 'Host')}</span>`;
+        ]]]
+      info: |
+        [[[
+          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const g = variables.geraet, s = variables.sib;
+          const ganz = (t) => `<span style="white-space:nowrap;">${t}</span>`;
+          let t;
+          if (variables.zustand !== 'an' && g.agent) {
+            const k = s.agent_last_contact ? new Date(s.agent_last_contact.state) : null;
+            t = k && !isNaN(k.getTime()) ? 'letzter Kontakt ' + k.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nicht erreichbar';
+          } else if (g.agent) {
+            const l = s.agent_latency ? parseFloat(s.agent_latency.state) : NaN;
+            t = ganz('Agent ' + (g.version || '?')) + (isNaN(l) ? '' : ' ' + ganz('· ' + l.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' ms'));
+          } else {
+            t = ganz('lokal') + ' ' + ganz('· Arcane ' + (g.version || '?'));
+          }
+          return `<span style="font-size:12px;color:${sek};">${t}</span>`;
+        ]]]
+      werte: |
+        [[[
+          if (variables.zustand !== 'an') return '';
+          const s = variables.sib;
+          const z = (k) => { const v = s[k] ? parseFloat(s[k].state) : NaN; return isNaN(v) ? null : v; };
+          const farbe = (v, gelb, rot) => v === null ? 'var(--nachtblau-label, #b4c0cf)' : (v >= rot ? 'var(--nachtblau-rot, #f0736a)' : (v >= gelb ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-label, #b4c0cf)'));
+          const zahl = (v) => v === null ? '–' : v.toLocaleString('de-DE', { maximumFractionDigits: v < 10 ? 1 : 0 });
+          const teil = (n, v, gelb, rot, einheit) => `<span style="white-space:nowrap;">${n} <b style="font-weight:700;color:${farbe(v, gelb, rot)};">${zahl(v)}${einheit}</b></span>`;
+          const l = z('containers_running'), ges = z('containers_total');
+          const lauf = `<span style="white-space:nowrap;"><b style="font-weight:700;color:${l !== null && l === ges ? 'var(--nachtblau-gruen, #a6d49e)' : 'var(--nachtblau-amber, #e6b566)'};">${zahl(l)}/${zahl(ges)}</b> laufen</span>`;
+          return `<span style="display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11.5px;color:var(--nachtblau-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;">${lauf}${teil('CPU', z('host_cpu'), 40, 75, ' %')}${teil('RAM', z('host_memory_percent'), 75, 90, ' %')}${teil('Disk', z('host_disk_percent'), 75, 90, ' %')}</span>`;
+        ]]]
+      pille: |
+        [[[
+          const t = { an: ['online', 'var(--nachtblau-gruen, #a6d49e)'], aus: ['offline', 'var(--nachtblau-rot, #f0736a)'], nv: ['prüfen', 'var(--nachtblau-amber, #e6b566)'] }[variables.zustand];
+          return `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:11px;white-space:nowrap;color:${t[1]};background:color-mix(in srgb, ${t[1]} 12%, transparent);border:1px solid color-mix(in srgb, ${t[1]} 24%, transparent);"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>${t[0]}</span>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 9px 10px
+        - box-shadow: none
+        - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel pille" "i info pille" "werte werte werte"'
+        - grid-template-columns: 36px minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: |
+            [[[
+              const c = { an: 'var(--nachtblau-gruen, #a6d49e)', aus: 'var(--nachtblau-rot, #f0736a)', nv: 'var(--nachtblau-amber, #e6b566)' }[variables.zustand];
+              return 'color-mix(in srgb, ' + c + ' 16%, transparent)';
+            ]]]
+        - border: |
+            [[[
+              const c = { an: 'var(--nachtblau-gruen, #a6d49e)', aus: 'var(--nachtblau-rot, #f0736a)', nv: 'var(--nachtblau-amber, #e6b566)' }[variables.zustand];
+              return '1px solid color-mix(in srgb, ' + c + ' 24%, transparent)';
+            ]]]
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: |
+            [[[ return { an: 'var(--nachtblau-gruen, #a6d49e)', aus: 'var(--nachtblau-rot, #f0736a)', nv: 'var(--nachtblau-amber, #e6b566)' }[variables.zustand]; ]]]
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - text-align: left
+        werte:
+          - justify-self: start
+          - min-width: 0
+          - max-width: 100%
+          - margin-top: '[[[ return variables.zustand === "an" ? "6px" : "0"; ]]]'
+          - text-align: left
+        pille:
+          - align-self: center
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_host_info: Kopf des Host-Pop-ups (docker-hosts-karte.yaml).
+  # Entity ist der Binaersensor "Online" der Umgebung. Name, Pille mit
+  # "online seit 11:08" (Agent verbunden seit), darunter Systemdaten: bei
+  # einem Agenten aus den Attributen von "Online" (HA-Arcane ab 0.11.0:
+  # Betriebssystem, Kernel, CPUs, Arbeitsspeicher, Architektur, Transport,
+  # Sicherheitsmodus, Docker-Version) und dem letzten Kontakt mit Latenz; beim
+  # lokalen Host Docker- und Arcane-Version. Ein Update von Arcane bzw. dem
+  # Agenten steht in Amber ("· Update auf v3.1.0"); installiert wird es in der
+  # Karte Image-Updates, Abschnitt Arcane.
+  nachtblau_docker_host_info:
+    variables:
+      sib: |
+        [[[
+          // Sensoren desselben Geraets (der Umgebung) nach translation_key
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          const m = {};
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.platform === 'arcane' && e.translation_key && !(e.translation_key in m)) m[e.translation_key] = states[e.entity_id] || null;
+          }
+          return m;
+        ]]]
+      geraet: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return { name: d ? (d.name_by_user || d.name || '') : '', agent: !!d && d.model === 'Arcane Agent', version: d ? (d.sw_version || '') : '' };
+        ]]]
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: more-info
+    custom_fields:
+      kopf: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const z = !entity || ['unavailable', 'unknown'].includes(entity.state) ? 'nv' : (entity.state === 'on' ? 'an' : 'aus');
+          const s = variables.sib;
+          let txt = { an: 'online', aus: 'offline', nv: 'prüfen' }[z];
+          const seit = s.agent_connected_since ? new Date(s.agent_connected_since.state) : null;
+          if (z === 'an' && seit && !isNaN(seit.getTime())) txt += ' seit ' + seit.toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          const c = { an: 'var(--nachtblau-gruen, #a6d49e)', aus: 'var(--nachtblau-rot, #f0736a)', nv: 'var(--nachtblau-amber, #e6b566)' }[z];
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><span style="min-width:0;font-size:18px;font-weight:700;letter-spacing:-0.02em;color:var(--nachtblau-text, #f2f5f8);overflow-wrap:anywhere;">${esc(variables.geraet.name || 'Host')}</span><span style="flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:11px;white-space:nowrap;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;"></span>${txt}</span></div>`;
+        ]]]
+      daten: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const a = entity ? entity.attributes : {}, s = variables.sib, g = variables.geraet;
+          // Update von Arcane bzw. dem Agenten: Update-Entitaet desselben Geraets
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          let upd = null;
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.entity_id.startsWith('update.') && states[e.entity_id]) { upd = states[e.entity_id]; break; }
+          }
+          const neu = upd && upd.state === 'on' ? ' · Update auf ' + (upd.attributes.latest_version || '?') : '';
+          const zeilen = [];
+          if (g.agent) {
+            const sys = [a.os, a.kernel_version].filter(Boolean).join(' · ');
+            if (sys) zeilen.push(['System', sys]);
+            const hw = [];
+            if (a.cpus) hw.push(a.cpus + ' CPUs');
+            if (a.memory_bytes) hw.push((a.memory_bytes / 1e9).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB RAM');
+            if (a.architecture) hw.push(a.architecture);
+            if (hw.length) zeilen.push(['Hardware', hw.join(' · ')]);
+            zeilen.push(['Agent', ([g.version, a.transport, a.security_mode].filter(Boolean).join(' · ') || '–') + neu]);
+            const k = s.agent_last_contact ? new Date(s.agent_last_contact.state) : null;
+            const l = s.agent_latency ? parseFloat(s.agent_latency.state) : NaN;
+            const kt = k && !isNaN(k.getTime()) ? k.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–';
+            zeilen.push(['Kontakt', kt + (isNaN(l) ? '' : ' · ' + l.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' ms')]);
+            if (a.docker_version) zeilen.push(['Docker', a.docker_version]);
+          } else {
+            const d = s.docker_version;
+            zeilen.push(['Docker', d && !['unavailable', 'unknown'].includes(d.state) ? d.state : '–']);
+            zeilen.push(['Arcane', (g.version || '–') + neu]);
+          }
+          const kv = zeilen.map(([k, v]) => {
+            const f = neu && v.endsWith(neu) ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text, #f2f5f8)';
+            return `<span style="color:var(--nachtblau-text-sekundaer, #8794a5);">${k}</span><span style="color:${f};overflow-wrap:anywhere;">${esc(v)}</span>`;
+          }).join('');
+          return `<div style="display:grid;grid-template-columns:76px minmax(0, 1fr);gap:4px 10px;font-size:12.5px;line-height:1.35;text-align:left;">${kv}</div>`;
+        ]]]
+    styles:
+      card:
+        - padding: 0 2px
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+        - cursor: default
+      grid:
+        - grid-template-areas: '"kopf" "daten"'
+        - grid-template-columns: minmax(0, 1fr)
+        - row-gap: 10px
+      custom_fields:
+        kopf:
+          - justify-self: stretch
+          - min-width: 0
+        daten:
+          - justify-self: stretch
+          - min-width: 0
+          - white-space: normal
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_host_jobs: Arcanes Hintergrund-Jobs eines Hosts im Pop-up
+  # (HA-Arcane ab 0.10.0, Option "Arcane Hintergrund-Jobs"). Entity ist der
+  # Binaersensor "Online"; die Jobs sind die Sensoren desselben Geraets mit
+  # translation_key job. Einzeln stehen Auto Update, Image Update Watcher
+  # (job_id image-polling), Vulnerability Scan und Scheduled Prune (Attribut
+  # job_id), mit Ergebnis als
+  # Punkt (Gruen erfolgreich, Amber teilweise oder uebersprungen, Rot
+  # fehlgeschlagen, Ring ausgeschaltet) und rechts "laeuft", "aus" oder dem
+  # naechsten Lauf. Die uebrigen Jobs (Wartung) fasst eine Zeile zusammen.
+  # Fehler und ausbleibende Laeufe meldet ausserdem die Automation "Docker:
+  # Auto-Update fehlgeschlagen melden" (docker-konfig.yaml).
+  nachtblau_docker_host_jobs:
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      jobs: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          const jobs = [];
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.platform === 'arcane' && e.translation_key === 'job' && states[e.entity_id]) jobs.push(states[e.entity_id]);
+          }
+          const SEK = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const titel = `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${SEK};padding:0 2px 4px;">Hintergrund-Jobs</div>`;
+          if (!jobs.length) return titel + `<div style="font-size:12.5px;color:${SEK};">keine (Option „Arcane Hintergrund-Jobs“)</div>`;
+          const WICHTIG = ['auto-update', 'image-polling', 'vulnerability-scan', 'scheduled-prune'];
+          const farbe = (j) => {
+            const st = j.state;
+            if (st === 'failed') return 'var(--nachtblau-rot, #f0736a)';
+            if (st === 'partial' || st === 'skipped' || st === 'canceled') return 'var(--nachtblau-amber, #e6b566)';
+            if (st === 'succeeded') return 'var(--nachtblau-gruen, #a6d49e)';
+            return '';
+          };
+          const rechts = (j) => {
+            const a = j.attributes;
+            if (a.running) return 'läuft';
+            if (a.enabled === false) return 'aus';
+            const n = a.next_run ? new Date(a.next_run) : null;
+            if (n && !isNaN(n.getTime())) {
+              const heute = new Date().toDateString() === n.toDateString();
+              return 'nächster ' + (heute ? '' : n.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ', ') + n.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            }
+            return { succeeded: 'erfolgreich', partial: 'teilweise', skipped: 'übersprungen', failed: 'fehlgeschlagen', canceled: 'abgebrochen' }[j.state] || '–';
+          };
+          const name = (j) => String(j.attributes.friendly_name || '').replace(/^.* Job /, '');
+          const zeile = (j) => {
+            const f = farbe(j), aus = j.attributes.enabled === false;
+            const punkt = aus || !f ? `border:1.5px solid ${SEK};` : `background:${f};`;
+            return `<div style="display:grid;grid-template-columns:8px minmax(0, 1fr) auto;gap:8px;align-items:center;padding:5px 2px;font-size:12.5px;"><span style="width:8px;height:8px;border-radius:50%;box-sizing:border-box;${punkt}"></span><span style="color:var(--nachtblau-text, #f2f5f8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name(j))}</span><span style="color:${j.state === 'failed' ? 'var(--nachtblau-rot, #f0736a)' : SEK};white-space:nowrap;font-variant-numeric:tabular-nums;">${rechts(j)}</span></div>`;
+          };
+          const wichtig = WICHTIG.map((id) => jobs.find((j) => j.attributes.job_id === id)).filter(Boolean);
+          const rest = jobs.filter((j) => !WICHTIG.includes(j.attributes.job_id));
+          const fehler = rest.filter((j) => j.state === 'failed').length;
+          let h = titel + wichtig.map(zeile).join('');
+          if (rest.length) h += `<div style="padding:5px 2px 0;font-size:12px;color:${fehler ? 'var(--nachtblau-rot, #f0736a)' : SEK};">+ ${rest.length} Wartungs-Jobs · ${fehler ? fehler + ' fehlgeschlagen' : 'ohne Fehler'}</div>`;
+          return h;
+        ]]]
+    styles:
+      card:
+        - padding: 0
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+        - cursor: default
+      grid:
+        - grid-template-areas: '"jobs"'
+        - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        jobs:
+          - justify-self: stretch
+          - min-width: 0
+          - white-space: normal
+          - text-align: left
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_host_aufraeumen: "Ungenutztes aufraeumen" eines entfernten
+  # Hosts im Pop-up der Karte Hosts. Entity ist sein Button "Ungenutztes
+  # entfernen" (translation_key prune). Infozeile: freigebbarer Image-Speicher
+  # und Build-Cache, ungenutzte Images (Sensoren desselben Geraets). Antippen
+  # des Knopfs drueckt den Button nach Rueckfrage; ab HA-Arcane 0.10.1 kehrt
+  # der Druck erst zurueck, wenn Arcane fertig ist und die Zaehler neu sind.
+  # Der lokale Host raeumt in der Karte Speicher & Aufraeumen auf (Skript mit
+  # Rueckmeldung, docker-konfig.yaml).
+  nachtblau_docker_host_aufraeumen:
+    variables:
+      sib: |
+        [[[
+          // Sensoren desselben Geraets (der Umgebung) nach translation_key
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          const m = {};
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.platform === 'arcane' && e.translation_key && !(e.translation_key in m)) m[e.translation_key] = states[e.entity_id] || null;
+          }
+          return m;
+        ]]]
+      gb: |
+        [[[
+          const s = variables.sib;
+          let n = null;
+          for (const k of ['reclaimable_images', 'reclaimable_build_cache']) {
+            const v = s[k] ? parseFloat(s[k].state) : NaN;
+            if (!isNaN(v)) n = (n || 0) + v;
+          }
+          return n;
+        ]]]
+      aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+    show_icon: true
+    show_name: false
+    show_state: false
+    icon: mdi:broom
+    tap_action: |
+      [[[
+        if (!variables.aktiv) return { action: 'none' };
+        const gb = variables.gb === null ? '' : ' (' + variables.gb.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB)';
+        return { action: 'perform-action', perform_action: 'button.press', target: { entity_id: entity.entity_id }, confirmation: { text: 'Ungenutzte Images, Netzwerke und Build-Cache auf diesem Host entfernen' + gb + '? Container und Volumes bleiben.' } };
+      ]]]
+    hold_action:
+      action: none
+    custom_fields:
+      titel: >-
+        <span style="font-size:14px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Ungenutztes aufräumen</span>
+      info: |
+        [[[
+          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const s = variables.sib;
+          const u = s.images_unused ? parseInt(s.images_unused.state, 10) : NaN;
+          const teile = [];
+          if (variables.gb !== null) teile.push(variables.gb > 0 ? variables.gb.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB freigebbar' : 'nichts freizugeben');
+          if (!isNaN(u)) teile.push(u + (u === 1 ? ' ungenutztes Image' : ' ungenutzte Images'));
+          return `<span style="font-size:12px;color:${sek};">${teile.map((t) => `<span style="white-space:nowrap;">${t}</span>`).join(' · ') || 'keine Daten'}</span>`;
+        ]]]
+      knopf: |
+        [[[
+          const an = variables.aktiv && variables.gb !== null && variables.gb > 0;
+          const A = 'var(--nachtblau-amber, #e6b566)';
+          const stil = an
+            ? `color:${A};background:color-mix(in srgb, ${A} 12%, transparent);border:1px solid color-mix(in srgb, ${A} 24%, transparent);`
+            : 'color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+          return `<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;opacity:${variables.aktiv ? 1 : 0.4};${stil}">Aufräumen</span>`;
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel knopf" "i info knopf"'
+        - grid-template-columns: 36px minmax(0, 1fr) auto
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: 'var(--nachtblau-label, #b4c0cf)'
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - min-width: 0
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - font-size: 12px
+          - line-height: 1.25
+          - margin-top: 5px
+          - text-align: left
+        knopf:
+          - align-self: center
