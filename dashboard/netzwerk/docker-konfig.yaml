@@ -50,13 +50,19 @@
 #         bericht;<Beginn>;         Prune fertig, neuer Speicherbericht steht aus
 #         fertig;<Beginn>;<GB>      freigegebene Menge in GB
 #       <Beginn> ist UTC (ISO 8601). Die Menge ist der Image-Speicher vorher
-#       minus nachher; am 15.11.2026 war das auf das Byte die zuvor gemeldete
-#       freigebbare Menge (1,5628 GB). Auf den Bericht wartet das Skript, bis
-#       report_started_at (HA-Arcane ab 0.7.1) nach dem Beginn liegt; mit
-#       0.7.0 fehlt das Attribut, dann zaehlt eine Aenderung des Werts, sonst
-#       endet das Warten nach 20 Minuten (Intervall 15). Ohne die Option
-#       "Freigebbarer Speicher" wartet es nicht. Zum Schluss ein Eintrag im
-#       Logbuch, den die Karte Ereignisse zeigt.
+#       minus nachher, gelesen direkt nach dem Druck. Arcane 3 raeumt im
+#       Hintergrund auf und antwortet, bevor etwas geloescht ist; erst
+#       HA-Arcane ab 0.10.1 laesst den Druck warten, bis Arcane fertig ist,
+#       und aktualisiert die Zaehler, bevor er zurueckkehrt. Mit aelteren
+#       Fassungen las das Skript den Stand vor dem Prune: am 16.11.2026
+#       "nichts freizugeben", obwohl 5 Images und rund 1,25 GB weg waren
+#       (am 15.11. passte es zufaellig). Auf den neuen Bericht wartet das
+#       Skript danach nur noch fuer die Anzeige, bis report_started_at
+#       (HA-Arcane ab 0.7.1) nach dem Beginn liegt; mit 0.7.0 fehlt das
+#       Attribut, dann zaehlt eine Aenderung des Werts, sonst endet das
+#       Warten nach 20 Minuten (Intervall 15). Ohne die Option "Freigebbarer
+#       Speicher" wartet es nicht. Zum Schluss ein Eintrag im Logbuch, den
+#       die Karte Ereignisse zeigt.
 #
 # Namen in Meldungen ohne Compose-Anhaengsel wie in der Karte
 # ("sonarr-sonarr-1" -> "sonarr").
@@ -68,9 +74,9 @@
 # Voraussetzung
 #   - Integration Arcane (HACS) mit Option Events an (Standard) und den
 #     API-Rechten image-updates:apply (Sammel-Update; bis HA-Arcane 0.8.1
-#     containers:redeploy) und system:prune
-#     (Aufraeumen); fuer die Rueckmeldung nach Sekunden HA-Arcane ab 0.7.1
-#     mit Option "Freigebbarer Speicher"
+#     containers:redeploy), system:prune und activities:read
+#     (Aufraeumen); fuer eine richtige Rueckmeldung HA-Arcane ab 0.10.1,
+#     fuer den neuen Speicherbericht dazu die Option "Freigebbarer Speicher"
 #   - Companion App fuer die Push-Meldung
 #   - in configuration.yaml:
 #       homeassistant:
@@ -248,8 +254,10 @@ script:
     alias: "Docker: Ungenutztes aufräumen"
     description: >-
       Docker-View, Karte Speicher & Aufräumen: entfernt ungenutzte Images,
-      Netzwerke und den Build-Cache (Button der Arcane-Integration), wartet
-      auf den neuen Speicherbericht und meldet die freigegebene Menge.
+      Netzwerke und den Build-Cache (Button der Arcane-Integration), meldet
+      die freigegebene Menge und wartet auf den neuen Speicherbericht.
+      Braucht HA-Arcane ab 0.10.1: erst dann kehrt der Druck zurueck, wenn
+      Arcane fertig aufgeraeumt hat.
       Phase und Ergebnis stehen in input_text.docker_aufraeumen_status.
     icon: mdi:broom
     mode: single
@@ -262,10 +270,27 @@ script:
           entity_id: input_text.docker_aufraeumen_status
         data:
           value: "aufraeumen;{{ beginn }};"
-      # Wartet, bis Arcane fertig ist; die Integration fragt danach neu ab.
+      # Ab HA-Arcane 0.10.1 kehrt der Druck erst zurueck, wenn Arcane das
+      # Aufraeumen beendet hat und die Zaehler neu abgefragt sind.
       - action: button.press
         target:
           entity_id: button.docker_ungenutztes_entfernen
+      # Je Wert ein eigener Schritt: Ueber die Oberflaeche gespeichert, sortiert
+      # HA die Schluessel eines Blocks alphabetisch, und "frei" laese dann
+      # "nachher", bevor es feststeht.
+      - variables:
+          nachher: "{{ states('sensor.local_docker_image_speicher') | float(none) }}"
+      - variables:
+          frei: >-
+            {{ [vorher - nachher, 0] | max | round(4)
+               if vorher is not none and nachher is not none else '' }}
+      - variables:
+          text: >-
+            {%- if frei == '' -%}aufgeräumt
+            {%- elif frei >= 1 -%}{{ ('%.2f' | format(frei)) | replace('.', ',') }} GB freigegeben
+            {%- elif frei >= 0.001 -%}{{ (frei * 1000) | round(0) | int }} MB freigegeben
+            {%- else -%}nichts freizugeben
+            {%- endif -%}
       - action: input_text.set_value
         target:
           entity_id: input_text.docker_aufraeumen_status
@@ -283,22 +308,6 @@ script:
              or (t is none and states[e].last_changed >= as_datetime(beginn)) }}
         timeout: "00:20:00"
         continue_on_timeout: true
-      # Je Wert ein eigener Schritt: Ueber die Oberflaeche gespeichert, sortiert
-      # HA die Schluessel eines Blocks alphabetisch, und "frei" laese dann
-      # "nachher", bevor es feststeht.
-      - variables:
-          nachher: "{{ states('sensor.local_docker_image_speicher') | float(none) }}"
-      - variables:
-          frei: >-
-            {{ [vorher - nachher, 0] | max | round(4)
-               if vorher is not none and nachher is not none else '' }}
-      - variables:
-          text: >-
-            {%- if frei == '' -%}aufgeräumt
-            {%- elif frei >= 1 -%}{{ ('%.2f' | format(frei)) | replace('.', ',') }} GB freigegeben
-            {%- elif frei >= 0.001 -%}{{ (frei * 1000) | round(0) | int }} MB freigegeben
-            {%- else -%}nichts freizugeben
-            {%- endif -%}
       - action: input_text.set_value
         target:
           entity_id: input_text.docker_aufraeumen_status
