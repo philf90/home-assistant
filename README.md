@@ -305,7 +305,8 @@ Passwort); die Karte braucht davon nichts.
 Für die Docker-Karten (`docker-karte.yaml` und die übrigen `docker-*-karte.yaml`)
 und die Docker-View (`docker-view.yaml`): die Integration
 [HA-Arcane](https://github.com/philf90/HA-Arcane) (ab 0.6.0, für die
-Docker-View ab 0.7.0, für die Rückmeldung beim Aufräumen ab 0.7.1; eigenes
+Docker-View ab 0.7.0, für die Rückmeldung beim Aufräumen ab 0.7.1, für
+Updates über Arcanes Updater und die Zeile „Automatische Updates“ ab 0.9.0; eigenes
 Repository im Marketplace, ab Home Assistant 2026.2.3) und eine laufende
 [Arcane](https://github.com/getarcaneapp/arcane)-Instanz ab Version 3.0
 auf dem Docker-Host. HA-Arcane ist ein Fork von
@@ -319,15 +320,18 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    `environments:list`, `containers:list`, `projects:list`,
    `images:list`, `volumes:list`, `networks:list`, `system:read`;
    Steuern zusätzlich `containers:start`, `containers:stop`,
-   `containers:restart`, `containers:redeploy` (Image-Updates
-   installieren), `projects:deploy`, `projects:down`,
+   `containers:restart`, `image-updates:apply` (Image-Updates
+   installieren; bis HA-Arcane 0.8.1 `containers:redeploy`),
+   `projects:deploy`, `projects:down`,
    `projects:restart`. Für die Update-Entitäten außerdem
    `environments:read` (Arcane-Version weiterer Umgebungen). Für die
    Docker-View außerdem `system:upgrade`
    (Arcane selbst aktualisieren), `system:prune` (Ungenutztes
    aufräumen), `image-updates:read` (Versionshinweise im Update-Dialog)
-   und `image-updates:check` (Nach Updates suchen). Für die beiden
-   Optionen aus Schritt 4 ab HA-Arcane 0.8.0 außerdem `events:list`.
+   und `image-updates:check` (Nach Updates suchen), ab HA-Arcane 0.9.0
+   `image-updates:list` (letztes Update) und `containers:autoupdate`
+   (Auswahl der automatischen Updates). Für die Optionen aus Schritt 4
+   ab HA-Arcane 0.8.0 außerdem `events:list`.
    Welche Rechte fehlen, zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
 2. Einstellungen → Marketplace → *Add from link* →
@@ -354,9 +358,18 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    die Rückmeldung kommt nach Sekunden ab HA-Arcane 0.7.1, mit 0.7.0
    nach bis zu 15 Minuten.
 
-   Ab HA-Arcane 0.8.0, beide standardmäßig aus und für die Karten nicht
-   nötig: „Bei Änderungen sofort aktualisieren“ (*Abfrage*) lässt die
-   Karten Änderungen nach Sekunden statt nach dem Intervall zeigen;
+   Ab HA-Arcane 0.9.0 für die Zeile „Automatische Updates“ in der Karte
+   Image-Updates außerdem „Arcane Updater“ (*Entitäten*) und
+   „Auto-Update-Schalter“ (*Steuerung*) einschalten; beide sind
+   standardmäßig aus. Die automatischen Updates selbst schaltet man in
+   Arcane unter den Einstellungen ein, Home Assistant sieht diese
+   Einstellung nicht. Das Popup der Zeile braucht browser_mod.
+
+   Ab HA-Arcane 0.8.0, beide standardmäßig aus: „Bei Änderungen sofort
+   aktualisieren“ (*Abfrage*) lässt die Karten Änderungen nach Sekunden
+   statt nach dem Intervall zeigen. Für die Docker-View empfohlen: Ein
+   automatischer Lauf von Arcane dauerte am 16.11.2026 9 s und erschien
+   damit in der Karte, im Abfrageintervall von 30 s fiele er oft durch.
    „Arcane Ereignisprotokoll auf dem Bus“ (*Entitäten*) feuert jeden
    neuen Eintrag aus Arcanes Protokoll als `arcane_event`, auch
    Ereignisse direkt vom Docker-Daemon wie `container.oom`. Das Paket

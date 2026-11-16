@@ -36,7 +36,13 @@
 #       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
 #       (sein Neustart trennt die Verbindung kurz).
 #       Updates, die Arcane zurueckhaelt (update_blocked, ab HA-Arcane
-#       0.7.0), laesst es aus; HA wuerde sie ohnehin ablehnen.
+#       0.7.0), laesst es aus; HA wuerde sie ohnehin ablehnen. Waehrend
+#       Arcanes Updater installiert (binary_sensor.docker_updates_werden_
+#       installiert, ab 0.9.0), startet es nicht. Seit HA-Arcane 0.9.0
+#       meldet ein uebersprungenes oder fehlgeschlagenes Update einen
+#       Fehler; das Skript macht weiter und schreibt am Ende ins Logbuch,
+#       das die Karte Ereignisse zeigt: "3 von 4 erledigt · offen: grafana"
+#       (erledigt = steht danach nicht mehr an).
 #   script.docker_aufraeumen und input_text.docker_aufraeumen_status
 #       "Aufraeumen" in der Karte Speicher & Aufraeumen, mit Rueckmeldung.
 #       Das Skript schreibt seine Phase in den Helfer, den jedes Geraet sieht:
@@ -61,7 +67,8 @@
 #
 # Voraussetzung
 #   - Integration Arcane (HACS) mit Option Events an (Standard) und den
-#     API-Rechten containers:redeploy (Sammel-Update) und system:prune
+#     API-Rechten image-updates:apply (Sammel-Update; bis HA-Arcane 0.8.1
+#     containers:redeploy) und system:prune
 #     (Aufraeumen); fuer die Rueckmeldung nach Sekunden HA-Arcane ab 0.7.1
 #     mit Option "Freigebbarer Speicher"
 #   - Companion App fuer die Push-Meldung
@@ -179,11 +186,18 @@ script:
     alias: "Docker: alle Image-Updates installieren"
     description: >-
       Docker-View, Karte Image-Updates: installiert die ausstehenden
-      Image-Updates nacheinander, den Arcane-Container zuletzt.
-      Gesperrte Updates (update_blocked) laesst es aus.
+      Image-Updates nacheinander, den Arcane-Container zuletzt, und
+      schreibt das Ergebnis ins Logbuch. Gesperrte Updates (update_blocked)
+      laesst es aus; waehrend Arcanes Updater installiert, startet es nicht.
     icon: mdi:package-up
     mode: single
     sequence:
+      # "not on" statt "off": ohne Option "Arcane Updater" fehlt der Sensor.
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.docker_updates_werden_installiert
+            state: "on"
       - variables:
           liste: >-
             {%- set alle = integration_entities('arcane')
@@ -192,6 +206,8 @@ script:
                 | reject('is_state_attr', 'update_blocked', true) | list -%}
             {{ (alle | reject('eq', 'update.container_arcane_image_update') | list)
                + (alle | select('eq', 'update.container_arcane_image_update') | list) }}
+      - condition: template
+        value_template: "{{ liste | count > 0 }}"
       - repeat:
           for_each: "{{ liste }}"
           sequence:
@@ -199,6 +215,34 @@ script:
               target:
                 entity_id: "{{ repeat.item }}"
               continue_on_error: true
+            # Nach dem Installieren fragt die Integration neu ab; erst dann
+            # steht das Update auf off. Bleibt es on (uebersprungen,
+            # fehlgeschlagen), geht es nach 30 s weiter.
+            - wait_template: "{{ not is_state(repeat.item, 'on') }}"
+              timeout: "00:00:30"
+      # Ergebnis aus dem Stand danach, nicht aus Fehlern der Schleife: Ein
+      # Update, das noch ansteht, ist offen. "erledigt" statt "installiert",
+      # weil Arcane ein uebersprungenes Update auch verwerfen kann.
+      - variables:
+          offen: "{{ liste | select('is_state', 'on') | list }}"
+      - variables:
+          meldung: >-
+            {%- set ns = namespace(n=[]) -%}
+            {%- for e in offen -%}
+              {%- set n = (state_attr(e, 'friendly_name') or e)
+                  | regex_replace('^Container ', '') | regex_replace(' Image Update$', '')
+                  | regex_replace('-\d+$', '') -%}
+              {%- set t = n.split('-') -%}
+              {%- set h = (t | count) // 2 -%}
+              {%- set ns.n = ns.n + [t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n] -%}
+            {%- endfor -%}
+            {{ (liste | count) - (offen | count) }} von {{ liste | count }} erledigt
+            {{- (' · offen: ' ~ (ns.n | join(', '))) if ns.n else '' }}
+      - action: logbook.log
+        data:
+          name: Image-Updates
+          message: "{{ meldung }}"
+          entity_id: binary_sensor.local_docker_online
 
   docker_aufraeumen:
     alias: "Docker: Ungenutztes aufräumen"
