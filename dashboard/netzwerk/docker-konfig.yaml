@@ -21,6 +21,9 @@
 #                                          Healthcheck-Start ("starting")
 #                                          gibt es nach jedem Start
 #         arcane_project_state_changed     Projekt laeuft, teilweise, gestoppt
+#       Ereignisse eines entfernten Hosts (HA-Arcane ab 0.11.0, environment_id
+#       nicht "0") tragen den Namen der Umgebung vor dem Container
+#       ("docker-02 portainer gestartet").
 #   automation "Docker: Absturz melden"
 #       Push, wenn ein Container abstuerzt. HA-Arcane setzt crashed, wenn
 #       ein laufender Container mit Exit-Code ungleich 0 endet, und
@@ -49,12 +52,13 @@
 #       ganz unerreichbar (Sensor unavailable), meldet sie nichts.
 #   script.docker_alle_updates_installieren
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
-#       ausstehenden Image-Updates nacheinander, den Arcane-Container zuletzt
-#       (sein Neustart trennt die Verbindung kurz).
+#       ausstehenden Image-Updates aller Hosts nacheinander, Container mit
+#       einem Image von getarcaneapp (Arcane, Agenten) zuletzt (ihr Neustart
+#       trennt die Verbindung zum Host kurz).
 #       Updates, die Arcane zurueckhaelt (update_blocked, ab HA-Arcane
 #       0.7.0), laesst es aus; HA wuerde sie ohnehin ablehnen. Waehrend
-#       Arcanes Updater installiert (binary_sensor.docker_updates_werden_
-#       installiert, ab 0.9.0), startet es nicht. Seit HA-Arcane 0.9.0
+#       Arcanes Updater auf einem Host installiert (binary_sensor.*_updates_
+#       werden_installiert je Umgebung, ab 0.9.0), startet es nicht. Seit HA-Arcane 0.9.0
 #       meldet ein uebersprungenes oder fehlgeschlagenes Update einen
 #       Fehler; das Skript macht weiter und schreibt am Ende ins Logbuch,
 #       das die Karte Ereignisse zeigt: "3 von 4 erledigt · offen: grafana"
@@ -145,7 +149,9 @@ automation:
         {%- set n = roh | regex_replace('-\d+$', '') -%}
         {%- set t = n.split('-') -%}
         {%- set h = (t | count) // 2 -%}
-        {{ t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n }}
+        {%- set n = t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n -%}
+        {#- entfernter Host (HA-Arcane ab 0.11.0): Name der Umgebung davor -#}
+        {{ (d.environment ~ ' ') if d.environment and d.environment_id and d.environment_id != '0' else '' }}{{ n }}
       meldung: >-
         {%- set d = trigger.event.data -%}
         {%- if trigger.id == 'zustand' -%}
@@ -314,24 +320,37 @@ script:
       Docker-View, Karte Image-Updates: installiert die ausstehenden
       Image-Updates nacheinander, den Arcane-Container zuletzt, und
       schreibt das Ergebnis ins Logbuch. Gesperrte Updates (update_blocked)
-      laesst es aus; waehrend Arcanes Updater installiert, startet es nicht.
+      laesst es aus; waehrend Arcanes Updater auf einem Host installiert,
+      startet es nicht. Container aller Hosts; Arcane und Agenten zuletzt.
     icon: mdi:package-up
     mode: single
     sequence:
-      # "not on" statt "off": ohne Option "Arcane Updater" fehlt der Sensor.
-      - condition: not
-        conditions:
-          - condition: state
-            entity_id: binary_sensor.docker_updates_werden_installiert
-            state: "on"
+      # Kein Updater eines Hosts darf laufen ("Updates werden installiert" je
+      # Umgebung; ohne Option "Arcane Updater" gibt es keinen, dann geht es).
+      - condition: template
+        value_template: >-
+          {{ integration_entities('arcane')
+             | select('match', 'binary_sensor\..*_updates_werden_installiert$')
+             | select('is_state', 'on') | list | count == 0 }}
+      # Container mit einem Image von getarcaneapp (Arcane selbst und jeder
+      # Agent, HA-Arcane ab 0.11.0) zuletzt: ihr Neustart trennt die
+      # Verbindung zum Host kurz.
       - variables:
           liste: >-
             {%- set alle = integration_entities('arcane')
                 | select('match', 'update\.container_')
                 | select('is_state', 'on')
                 | reject('is_state_attr', 'update_blocked', true) | list -%}
-            {{ (alle | reject('eq', 'update.container_arcane_image_update') | list)
-               + (alle | select('eq', 'update.container_arcane_image_update') | list) }}
+            {%- set ns = namespace(vorn=[], hinten=[]) -%}
+            {%- for u in alle -%}
+              {%- set b = u | regex_replace('^update\.', '') | regex_replace('_image_update$', '') -%}
+              {%- if 'getarcaneapp/' in states('sensor.' ~ b ~ '_image') -%}
+                {%- set ns.hinten = ns.hinten + [u] -%}
+              {%- else -%}
+                {%- set ns.vorn = ns.vorn + [u] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.vorn + ns.hinten }}
       - condition: template
         value_template: "{{ liste | count > 0 }}"
       - repeat:
@@ -358,9 +377,13 @@ script:
               {%- set n = (state_attr(e, 'friendly_name') or e)
                   | regex_replace('^Container ', '') | regex_replace(' Image Update$', '')
                   | regex_replace('-\d+$', '') -%}
+              {#- "docker-02 dockge-dockge": Host abtrennen, kuerzen, voranstellen -#}
+              {%- set teile = n.split(' ', 1) -%}
+              {%- set vor = teile[0] ~ ' ' if teile | count > 1 else '' -%}
+              {%- set n = teile[-1] -%}
               {%- set t = n.split('-') -%}
               {%- set h = (t | count) // 2 -%}
-              {%- set ns.n = ns.n + [t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n] -%}
+              {%- set ns.n = ns.n + [vor ~ (t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n)] -%}
             {%- endfor -%}
             {{ (liste | count) - (offen | count) }} von {{ liste | count }} erledigt
             {{- (' · offen: ' ~ (ns.n | join(', '))) if ns.n else '' }}

@@ -45,17 +45,24 @@ cards:
         template: nachtblau_docker_kpi
         entity: sensor.local_docker_laufende_container
         name: Laufend
+        # Summen ueber alle Hosts (translation_key, nachtblau_docker_kpi)
         variables:
           typ: laufend
           gesamt: sensor.local_docker_container
+          summe: containers_running
+          summe_gesamt: containers_total
       - type: custom:button-card
         template: nachtblau_docker_kpi
         entity: sensor.local_docker_gestoppte_container
         name: Gestoppt
+        variables:
+          summe: containers_stopped
       - type: custom:button-card
         template: nachtblau_docker_kpi
         entity: sensor.local_docker_container_updates_verfugbar
         name: Updates
+        variables:
+          summe: containers_update_available
       - type: custom:button-card
         template: nachtblau_docker_kpi
         entity: sensor.local_docker_ungesunde_container
@@ -71,11 +78,20 @@ cards:
     show_label: true
     label: |
       [[[
-        const v = (id) => { const s = states[id]; return s && !isNaN(parseFloat(s.state)) ? parseFloat(s.state) : null; };
-        const projekte = v('sensor.local_docker_projekte');
-        const images = v('sensor.local_docker_images');
-        const frei = v('sensor.local_docker_ungenutzte_images');
-        const gb = v('sensor.local_docker_image_speicher');
+        // Summen ueber alle Hosts (translation_key der Sensoren der Umgebung)
+        const v = (tk) => {
+          let n = null;
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform !== 'arcane' || e.translation_key !== tk) continue;
+            const x = parseFloat((states[e.entity_id] || {}).state);
+            if (!isNaN(x)) n = (n || 0) + x;
+          }
+          return n;
+        };
+        const projekte = v('projects_total');
+        const images = v('images_total');
+        const frei = v('images_unused');
+        const gb = v('images_size');
         const teile = [];
         if (projekte !== null) teile.push(projekte + ' Projekte');
         if (images !== null) teile.push(images + ' Images' + (frei ? ', davon ' + frei + ' ungenutzt' : ''));

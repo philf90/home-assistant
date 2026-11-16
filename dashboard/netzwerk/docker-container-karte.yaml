@@ -16,6 +16,10 @@
 #              ("authentik · 4 Container") und die Zeilen (nachtblau_docker_zeile)
 #   Einzelne   Projekte mit nur einem Container und Container ohne Projekt
 #              (hier dockge), zugeklappt mit Zahl
+#   Hosts      Container eines entfernten Hosts (Arcane-Agent, HA-Arcane ab
+#              0.11.0) stehen in einer eigenen Gruppe vor "Einzelne"
+#              ("docker-02 · 4 Container"); ihre Zeilen ohne Host-Praefix
+#              (variables.ohne_host). Der Kopf zaehlt alle Hosts.
 #
 # Die Gruppen bildet die Jinja-Vorlage aus dem Geraetebaum: HA-Arcane haengt
 # das Geraet eines Containers an das Geraet seines Projekts (via_device,
@@ -52,12 +56,22 @@ cards:
     entity: sensor.local_docker_container
     icon: mdi:package-variant-closed
     name: Container nach Projekt
+    # Summen ueber alle Hosts (translation_key der Sensoren der Umgebung)
     label: |
       [[[
-        const g = entity ? parseInt(entity.state, 10) : NaN;
-        const p = states['sensor.local_docker_projekte'];
-        if (isNaN(g)) return 'keine Daten';
-        return g + ' Container' + (p && !isNaN(parseInt(p.state, 10)) ? ' in ' + p.state + ' Projekten' : '');
+        const summe = (tk) => {
+          let n = null;
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform !== 'arcane' || e.translation_key !== tk) continue;
+            const v = parseFloat((states[e.entity_id] || {}).state);
+            if (!isNaN(v)) n = (n || 0) + v;
+          }
+          return n;
+        };
+        const g = summe('containers_total');
+        const p = summe('projects_total');
+        if (g === null) return 'keine Daten';
+        return g + ' Container' + (p !== null ? ' in ' + p + ' Projekten' : '');
       ]]]
     tap_action:
       action: more-info
@@ -70,13 +84,20 @@ cards:
     # heissen ebenfalls switch.container_*, sind aber keine Container.
     filter:
       template: |
-        {%- set ns = namespace(g={}) -%}
+        {%- set ns = namespace(g={}, fremd={}) -%}
         {%- for s in integration_entities('arcane') | select('match', 'switch\\.container_')
             | reject('search', '_automatisch_aktualisieren$') | sort -%}
           {%- set v = device_attr(device_id(s), 'via_device_id') -%}
-          {%- set p = device_attr(v, 'name') if v and device_attr(v, 'model') == 'Compose project' else '' -%}
-          {%- set p = p | regex_replace('^Project ', '') -%}
-          {%- set ns.g = dict(ns.g, **{p: ns.g.get(p, []) + [s]}) -%}
+          {%- set projekt = v and device_attr(v, 'model') == 'Compose project' -%}
+          {%- set h = device_attr(v, 'via_device_id') if projekt else v -%}
+          {%- if h and device_attr(h, 'model') == 'Arcane Agent' -%}
+            {%- set hn = device_attr(h, 'name_by_user') or device_attr(h, 'name') -%}
+            {%- set ns.fremd = dict(ns.fremd, **{hn: ns.fremd.get(hn, []) + [s]}) -%}
+          {%- else -%}
+            {%- set p = device_attr(v, 'name') if projekt else '' -%}
+            {%- set p = p | regex_replace('^Project ', '') -%}
+            {%- set ns.g = dict(ns.g, **{p: ns.g.get(p, []) + [s]}) -%}
+          {%- endif -%}
         {%- endfor -%}
         {%- set zeile = {'type': 'custom:button-card', 'template': 'nachtblau_docker_zeile'} -%}
         {%- set ns2 = namespace(liste=[], einzeln=[]) -%}
@@ -88,6 +109,11 @@ cards:
           {%- else -%}
             {%- for s in c -%}{%- set ns2.einzeln = ns2.einzeln + [dict(zeile, entity=s)] -%}{%- endfor -%}
           {%- endif -%}
+        {%- endfor -%}
+        {%- for hn in ns.fremd | sort -%}
+          {%- set c = ns.fremd[hn] -%}
+          {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_titel', 'name': hn ~ ' · ' ~ (c | count) ~ ' Container'}] -%}
+          {%- for s in c -%}{%- set ns2.liste = ns2.liste + [dict(zeile, entity=s, variables={'ohne_host': true})] -%}{%- endfor -%}
         {%- endfor -%}
         {%- if ns2.einzeln -%}
           {%- set stil = 'ha-card { background: none !important; border: none !important; box-shadow: none !important; } '
