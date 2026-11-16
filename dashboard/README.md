@@ -102,7 +102,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`docker-speicher-karte.yaml`](netzwerk/docker-speicher-karte.yaml) | karte | Docker-Speicher – Images, Volumes, Netzwerke und Aufraeumen | button-card, card-mod | – | aktiv |
 | [`docker-templates.yaml`](netzwerk/docker-templates.yaml) | templates | Docker – button-card-Templates nachtblau_docker_* (Zeilen, Kopf, Kennzahlen) | button-card | – | aktiv |
 | [`docker-uebersicht-karte.yaml`](netzwerk/docker-uebersicht-karte.yaml) | karte | Docker-Übersicht – Kennzahlen und "Braucht Aufmerksamkeit" | auto-entities, button-card, card-mod | – | aktiv |
-| [`docker-updates-karte.yaml`](netzwerk/docker-updates-karte.yaml) | karte | Docker-Updates – Image-Updates der Container und von Arcane | auto-entities, button-card, card-mod | – | aktiv |
+| [`docker-updates-karte.yaml`](netzwerk/docker-updates-karte.yaml) | karte | Docker-Updates – Image-Updates der Container und von Arcane | auto-entities, bubble-card, button-card, card-mod | – | aktiv |
 | [`docker-verlauf-karte.yaml`](netzwerk/docker-verlauf-karte.yaml) | karte | Docker-Verlauf – Container und Image-Speicher ueber 7 Tage | apexcharts-card, button-card, card-mod | – | aktiv |
 | [`docker-view.yaml`](netzwerk/docker-view.yaml) | view | Docker – komplette Ansicht | decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`homematic-view.yaml`](netzwerk/homematic-view.yaml) | view | Homematic IP – komplette Ansicht | button-card, card-mod, decluttering-card | `*_seriennr`, `kind_1/kind_2` | aktiv |
