@@ -29,9 +29,10 @@
 #              HA, und ein Update aus HA, das auf ein laufendes Update
 #              desselben Compose-Projekts trifft, wartet bei Arcane bis zu
 #              2 Minuten und scheitert dann (Arcane v3.0.1, admitUpdate,
-#              DefaultActivitySlotWait). Gemessen im Nachbau mit Roboto:
-#              zwei Zeilen neben "Alle aktualisieren" auf dem 360 px breiten
-#              Handy, eine auf dem iPhone 17 Pro.
+#              DefaultActivitySlotWait). Gemessen im Nachbau mit geladenem
+#              Roboto: 155 px breit, neben "Alle aktualisieren" (127 px) bleiben
+#              117 px (360 px breites Handy) bzw. 151 px (iPhone 17 Pro), also
+#              auf beiden zwei Zeilen.
 #   Liste      je ausstehendem Image-Update eine Zeile (nachtblau_docker_update):
 #              Image, installierte und neue Version, "Installieren" mit
 #              Rueckfrage; ein gesperrtes Update in Koralle mit Grund und
@@ -43,8 +44,10 @@
 #              Pruefung aus dem Job "Image Update Watcher" (ab HA-Arcane 0.10.0,
 #              Option "Arcane Hintergrund-Jobs"): "Arcane prueft stuendlich ·
 #              zuletzt 14:00"; war der letzte Druck in HA spaeter, "angestossen
-#              14:30". Ohne Jobs nur der Zeitpunkt des letzten Anstosses.
-#              Recht: image-updates:check.
+#              14:30". Ist der Job fehlgeschlagen, "fehlgeschlagen" in
+#              Koralle, bei mehreren Hosts mit dem Host ("(docker-02)") bzw.
+#              der Zahl ("(2 Hosts)"). Ohne Jobs nur der Zeitpunkt des
+#              letzten Anstosses. Recht: image-updates:check.
 #   Automatisch  Zeile "Automatische Updates" (ab HA-Arcane 0.9.0, Optionen
 #              "Arcane Updater" und "Auto-Update-Schalter"): oben der naechste
 #              Lauf aus dem Job "Auto Update" (ab HA-Arcane 0.10.0, Option
@@ -133,9 +136,9 @@ cards:
             }
             const wort = (z) => z + (z === 1 ? ' Update' : ' Updates');
             if (!gesperrt) return wort(frei) + ' ausstehend';
-            // Kurzform, gemessen im Nachbau mit Roboto: "12 Updates ausstehend ·
-            // 2 gesperrt" braucht neben dem Badge auf dem 360 px breiten Handy
-            // (134 px) drei Zeilen, "12 Updates · 12 gesperrt" zwei.
+            // Kurzform, gemessen im Nachbau mit geladenem Roboto: "12 Updates
+            // ausstehend · 2 gesperrt" braucht neben dem Badge auf dem 360 px
+            // breiten Handy (117 px) drei Zeilen, "12 Updates · 12 gesperrt" zwei.
             return frei ? wort(frei) + ' · ' + gesperrt + ' gesperrt' : wort(gesperrt) + ' gesperrt';
           ]]]
         styles:
@@ -338,7 +341,9 @@ cards:
                 return (heute ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ', ') + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
               };
               // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt.
-              const zeile = (teile, farbe) => `<span style="font-size:12px;color:${farbe || sek};">${teile.map((t, i) => `<span style="white-space:nowrap;">${t}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ')}</span>`;
+              // Ein einzelner Teil darf umbrechen: "zuletzt angestossen 15.11.,
+              // 21:07" ist 173 px breit, die Spalte auf dem 360 px breiten Handy 161 px.
+              const zeile = (teile, farbe) => `<span style="font-size:12px;color:${farbe || sek};">${teile.length === 1 ? teile[0] : teile.map((t, i) => `<span style="white-space:nowrap;">${t}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ')}</span>`;
               let druck = NaN;
               for (const id of variables.knoepfe) {
                 const t = Date.parse(states[id].state);
@@ -367,7 +372,9 @@ cards:
               const plaene = [...new Set(an.map((x) => intervall(x.st.attributes.schedule)))];
               const teile = ['Arcane prüft ' + (plaene.length === 1 ? plaene[0] : 'nach Plan')];
               const fehl = an.filter((x) => x.st.state === 'failed').map((x) => x.host);
-              if (fehl.length) return zeile(teile.concat(['fehlgeschlagen' + (w.length > 1 ? ' (' + fehl.join(', ') + ')' : '')]), 'var(--nachtblau-koralle, #e7936e)');
+              // Mehrere Hosts als Zahl: "fehlgeschlagen (docker-01, docker-02)" waere
+              // 204 px breit und bricht nicht um (Spalte 161 bzw. 203 px).
+              if (fehl.length) return zeile(teile.concat(['fehlgeschlagen' + (w.length > 1 ? ' (' + (fehl.length > 1 ? fehl.length + ' Hosts' : fehl[0]) + ')' : '')]), 'var(--nachtblau-koralle, #e7936e)');
               let fertig = NaN;
               for (const x of an) {
                 const t = Date.parse(x.st.attributes.last_finished);
@@ -423,12 +430,13 @@ cards:
               - -webkit-line-clamp: '2'
               - text-wrap: balance
               - text-align: left
-            # Gemessen im Nachbau mit Roboto: Neben "Pruefen" bleiben fuer den Text
-            # auf dem 360 px breiten Handy 162 px, auf dem iPhone 17 Pro 204 px.
-            # "Arcane prueft stuendlich · zuletzt 14:00" braucht auf dem Handy zwei
-            # Zeilen, auf dem iPhone eine; die laengsten Faelle ("Arcane prueft
-            # nicht selbst · angestossen 15.11., 21:07", "... · fehlgeschlagen
-            # (docker-02)") zwei auf beiden.
+            # Gemessen im Nachbau mit geladenem Roboto: Neben "Pruefen" (65 px)
+            # bleiben fuer den Text auf dem 360 px breiten Handy 161 px, auf dem
+            # iPhone 17 Pro 203 px. "Arcane prueft stuendlich · zuletzt 14:00"
+            # braucht auf dem Handy zwei Zeilen, auf dem iPhone eine; mit
+            # "angestossen 14:30" oder einem Datum zwei auf beiden, ebenso die
+            # laengsten Faelle ("Arcane prueft nicht selbst · angestossen 15.11.,
+            # 21:07", "... · fehlgeschlagen (docker-02)").
             info:
               - justify-self: start
               - align-self: start
@@ -452,12 +460,14 @@ cards:
       # Ganze Zeile tippbar (Pfeil rechts), kein Knopf: Neben einem Knopf blieben
       # fuer die Infozeile auf dem 360 px breiten Handy 152 px, schon "radarr ·
       # aktualisiert · 16.11., 03:00" brauchte zwei Zeilen. Ohne Knopf, gemessen
-      # im Nachbau mit Roboto: 206 px (iPhone 17 Pro 248 px), der laengste Name
-      # (uptimekuma-mariadb-uptime-kuma) mit "fehlgeschlagen" und Zeitpunkt in
-      # zwei Zeilen. Darueber "naechster Lauf 15:08" (HA-Arcane ab 0.10.0) in
-      # einer Zeile, "naechster Lauf 17.11., 00:00 · docker-02 aus" auf dem
-      # Handy in zwei; zusammen hoechstens drei Zeilen (45 px), auf dem iPhone
-      # meist zwei. Die Zahl der ausgenommenen Container passte dann nicht
+      # im Nachbau mit geladenem Roboto: 206 px (iPhone 17 Pro 248 px), der
+      # laengste Name (uptimekuma-mariadb-uptime-kuma) mit "fehlgeschlagen" und
+      # Zeitpunkt in zwei Zeilen. Darueber "naechster Lauf 15:08" (HA-Arcane ab
+      # 0.10.0) in einer Zeile, "naechster Lauf 17.11., 00:00 · docker-02 aus"
+      # auf dem Handy in zwei; meist zusammen drei Zeilen (45 px), mit dem
+      # laengsten Namen und "docker-02 aus" auf dem Handy vier (60 px). Ein
+      # Container eines entfernten Hosts mit so langem Namen braeuchte drei
+      # Zeilen und endet nach zwei mit "…"; auf docker-02 gibt es keinen. Die Zahl der ausgenommenen Container passte dann nicht
       # mehr dazu, sie steht im Pop-up; den Grund eines Fehlers zeigt Halten
       # (Sensor, Attribut error).
       # Antippen setzt den Hash #docker-autoupdates; das Bubble-Pop-up am Ende
@@ -683,9 +693,9 @@ cards:
   # Reihen (card_mod an der grid-Karte), 10 px zwischen Kopf und Raster
   # (--bubble-pop-up-gap, Standard 14 px). Container aller Hosts; die eines
   # entfernten Hosts tragen ihn im Namen ("docker-02 portainer") und stehen
-  # nach Namen sortiert beieinander. Gemessen im Nachbau mit Roboto: 521 px
-  # hoch bei 32 Containern (28 auf docker-01, 4 auf docker-02, 16 Reihen), auf
-  # beiden Breiten; mit 29 px und 4 px waeren es 552 px. Ein Reiter je Host
+  # nach Namen sortiert beieinander. Gemessen im Nachbau mit geladenem Roboto:
+  # 522 px hoch bei 32 Containern (28 auf docker-01, 4 auf docker-02, 16
+  # Reihen), auf beiden Breiten; mit 29 px und 4 px waeren es 553 px. Ein Reiter je Host
   # ist damit nicht noetig. Ab dem 33. Container kommt eine siebzehnte Reihe
   # dazu (+31 px), dann scrollt das Blatt auf dem 360 px breiten Handy.
   - type: custom:bubble-card
