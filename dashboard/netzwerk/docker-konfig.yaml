@@ -21,19 +21,45 @@
 #                                          Healthcheck-Start ("starting")
 #                                          gibt es nach jedem Start
 #         arcane_project_state_changed     Projekt laeuft, teilweise, gestoppt
+#         arcane_event environment.disconnect / environment.connect
+#                                          "docker-02 getrennt" / "wieder
+#                                          verbunden" (HA-Arcane ab 0.8.0,
+#                                          Option "Arcane Ereignisprotokoll
+#                                          auf dem Bus")
+#         arcane_event container.oom       "Speicher voll (OOM, vom Docker-
+#                                          Daemon gemeldet)"
+#       Von arcane_event nur diese drei Typen: Eine Beobachtung vom 15. bis
+#       16.11.2026 (169 Ereignisse in 23 Stunden) bestand zu rund 93 % aus
+#       Aufraeumen (image.untag, image.delete, image.prune, network.prune),
+#       automatischen Updates (system.auto_update, image.pull, image.tag,
+#       project.update) und Arcanes eigenen Benachrichtigungen
+#       (notification.send). Nach Schwere zu filtern taugt nicht: Arcane
+#       stuft container.delete bei jedem Auto-Update und von Hand geloeschte
+#       Images als warning ein, und beim Neustart des Agenten kam ein
+#       container.error ohne Containernamen. container.die nutzt das Paket
+#       nicht: Es kaeme fast immer zusaetzlich zum Zustandswechsel, also
+#       doppelt, und ein gewollter Stopp liefert auch ein die (Code 0). Nur
+#       ein Container, der zwischen zwei Abfragen abstuerzt und gleich neu
+#       startet, erschiene allein ueber container.die (mit Exit-Code
+#       ungleich 0, Schwere warning); diese Luecke bleibt.
 #       Ereignisse eines entfernten Hosts (HA-Arcane ab 0.11.0, environment_id
 #       nicht "0") tragen den Namen der Umgebung vor dem Container
 #       ("docker-02 portainer gestartet").
 #   automation "Docker: Absturz melden"
 #       Push, wenn ein Container abstuerzt. HA-Arcane setzt crashed, wenn
-#       ein laufender Container mit Exit-Code ungleich 0 endet, und
-#       oom_killed bei Code 137. Code 143 (SIGTERM) ist ein regulaerer Stopp
-#       und wird nicht gemeldet; ein Stopp, den Docker nach Ablauf der
-#       Wartezeit mit SIGKILL erzwingt, endet ebenfalls mit 137 und erscheint
-#       deshalb als OOM. HA-Arcane ab 0.8.0 kann mit der Option "Arcane
-#       Ereignisprotokoll auf dem Bus" ein echtes container.oom vom
-#       Docker-Daemon melden (arcane_event, Schwere error); dieses Paket
-#       nutzt das noch nicht.
+#       ein laufender Container mit Exit-Code ungleich 0 endet. Code 143
+#       (SIGTERM) ist ein regulaerer Stopp und wird nicht gemeldet. Code 137
+#       heisst SIGKILL: Das kann Speichermangel sein, aber auch ein Stopp,
+#       den Docker nach Ablauf der Wartezeit erzwingt; der Push sagt deshalb
+#       "SIGKILL oder Speicher voll" (oom_killed von HA-Arcane schliesst nur
+#       aus dem Code). Echten Speichermangel meldet der Docker-Daemon als
+#       container.oom (arcane_event, Schwere error, HA-Arcane ab 0.8.0 mit
+#       Option "Arcane Ereignisprotokoll auf dem Bus"); dafuer kommt ein
+#       eigener Push "Speicher voll". Bei einem OOM kommen also zwei Pushes,
+#       Absturz mit Code 137 und Speicher voll. container.oom ist nicht am
+#       echten Fall erprobt: In der Beobachtung kam keines vor; Typ, Schwere
+#       und Felder stammen aus dem Quellcode von Arcane
+#       (backend/internal/event/service.go, mapDaemonEvent).
 #   automation "Docker: Auto-Update fehlgeschlagen melden"
 #       Push und Logbuch-Eintrag, wenn ein Lauf von Arcanes automatischen
 #       Updates fehlschlaegt (failed) oder nur teilweise klappt (partial).
@@ -174,21 +200,40 @@ automation:
       - trigger: event
         event_type: arcane_project_state_changed
         id: projekt
+      - trigger: event
+        event_type: arcane_event
+        event_data:
+          type: environment.disconnect
+        id: umgebung
+      - trigger: event
+        event_type: arcane_event
+        event_data:
+          type: environment.connect
+        id: umgebung
+      - trigger: event
+        event_type: arcane_event
+        event_data:
+          type: container.oom
+        id: oom
     conditions: []
     variables:
       name: >-
         {%- set d = trigger.event.data -%}
-        {%- set roh = d.project if trigger.id == 'projekt' else d.container -%}
+        {%- if trigger.id == 'umgebung' -%}
+          {{ d.resource_name or d.environment or 'Umgebung' }}
+        {%- else -%}
+        {%- set roh = d.project if trigger.id == 'projekt' else (d.resource_name if trigger.id == 'oom' else d.container) -%}
         {%- set n = roh | regex_replace('-\d+$', '') -%}
         {%- set t = n.split('-') -%}
         {%- set h = (t | count) // 2 -%}
         {%- set n = t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n -%}
         {#- entfernter Host (HA-Arcane ab 0.11.0): Name der Umgebung davor -#}
         {{ (d.environment ~ ' ') if d.environment and d.environment_id and d.environment_id != '0' else '' }}{{ n }}
+        {%- endif -%}
       meldung: >-
         {%- set d = trigger.event.data -%}
         {%- if trigger.id == 'zustand' -%}
-          {%- if d.oom_killed -%}abgestürzt: Speicher voll (OOM, Code 137)
+          {%- if d.oom_killed -%}abgestürzt (Code 137: SIGKILL oder Speicher voll)
           {%- elif d.crashed and d.exit_code == 143 -%}beendet (SIGTERM, Code 143)
           {%- elif d.crashed -%}abgestürzt (Code {{ d.exit_code }})
           {%- elif d.state == 'running' -%}{{ 'neu gestartet' if d.previous_state == 'restarting' else 'gestartet' }}
@@ -196,6 +241,10 @@ automation:
           {%- endif -%}
         {%- elif trigger.id == 'health' -%}
           {{ 'Healthcheck bestanden' if d.health == 'healthy' else 'ungesund (Healthcheck fehlgeschlagen)' }}
+        {%- elif trigger.id == 'umgebung' -%}
+          {{ 'getrennt' if d.type == 'environment.disconnect' else 'wieder verbunden' }}
+        {%- elif trigger.id == 'oom' -%}
+          Speicher voll (OOM, vom Docker-Daemon gemeldet)
         {%- else -%}
           {{ {'running': 'Projekt läuft', 'partially running': 'Projekt läuft nur teilweise', 'stopped': 'Projekt gestoppt'}.get(d.status, 'Projekt: ' ~ d.status) }}
         {%- endif -%}
@@ -218,27 +267,41 @@ automation:
         event_type: arcane_container_state_changed
         event_data:
           crashed: true
+        id: absturz
+      - trigger: event
+        event_type: arcane_event
+        event_data:
+          type: container.oom
+        id: oom
     conditions:
       - condition: state
         entity_id: input_boolean.docker_meldung_absturz
         state: "on"
-      # Exit-Code steht nur in den Ereignisdaten; ohne native Bedingung dafuer
-      - condition: template
-        value_template: "{{ trigger.event.data.exit_code != 143 }}"
+      # OOM immer; ein Absturz nur ohne Code 143. Der Exit-Code steht nur in
+      # den Ereignisdaten, eine native Bedingung dafuer gibt es nicht.
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: oom
+          - condition: template
+            value_template: "{{ trigger.event.data.exit_code != 143 }}"
     variables:
       name: >-
-        {%- set n = trigger.event.data.container | regex_replace('-\d+$', '') -%}
+        {%- set d = trigger.event.data -%}
+        {%- set n = (d.resource_name if trigger.id == 'oom' else d.container) | regex_replace('-\d+$', '') -%}
         {%- set t = n.split('-') -%}
         {%- set h = (t | count) // 2 -%}
         {{ t[:h] | join('-') if (t | count) is even and t[:h] == t[h:] else n }}
     actions:
       - action: notify.mobile_app_iphone
         data:
-          title: "Docker: {{ name }} abgestürzt"
+          title: "Docker: {{ name }} {{ 'Speicher voll' if trigger.id == 'oom' else 'abgestürzt' }}"
           message: >-
-            {{ 'Speicher voll (OOM, Exit-Code 137)' if trigger.event.data.oom_killed
-               else 'Exit-Code ' ~ trigger.event.data.exit_code }}
-            · {{ trigger.event.data.environment }}
+            {%- set d = trigger.event.data -%}
+            {%- if trigger.id == 'oom' -%}Der Docker-Daemon meldet Speichermangel (OOM)
+            {%- elif d.exit_code == 137 -%}Exit-Code 137 (SIGKILL oder Speicher voll)
+            {%- else -%}Exit-Code {{ d.exit_code }}
+            {%- endif %} · {{ d.environment or 'Docker' }}
           data:
             url: /dashboard-home/docker
             clickAction: /dashboard-home/docker
