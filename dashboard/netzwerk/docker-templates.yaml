@@ -64,27 +64,26 @@
 #     "sonarr-sonarr-1" -> "sonarr", "docmost-db-1" -> "docmost-db".
 #   - Docker-Status auf Deutsch ("Up 2 weeks (healthy)" -> "laeuft seit
 #     2 Wo. · gesund"); unbekannte Formen erscheinen unveraendert. Einheiten
-#     gekuerzt (Sek., Min., Std., Tag/Tagen, Wo., Mon., Jahr/Jahren), damit
-#     die Ports noch in die zwei Zeilen passen.
+#     gekuerzt (Sek., Min., Std., Tag/Tagen, Wo., Mon., Jahr/Jahren).
 #   - Veroeffentlichte Ports (HA-Arcane ab 0.12.0, Option "Veroeffentlichte
-#     Ports"): hinter dem Status die Host-Ports des laufenden Containers,
-#     etwa "laeuft seit 33 Std. · 80, 81, 443". Den Sensor "Ports" sucht das
-#     Template ueber das Geraet des Schalters (translation_key
-#     container_ports), nicht ueber den Namen: Bei einem entfernten Host
-#     traegt er den Host in der ID (sensor.container_docker_02_portainer_
-#     ports), der Schalter nicht (switch.container_portainer). Ports kommen
-#     dazu, solange der Port-Teil samt "+N" hoechstens 11 Zeichen hat, mit
-#     Zusatz ("gesund", "startet") hoechstens 7, und wenn der Status dabei
-#     laenger als 24 Zeichen ist ("laeuft seit weniger als 1 Sek."),
-#     hoechstens 5; passt nicht einmal das, steht nur der erste Port da.
-#     Gemessen im Nachbau mit Roboto (als data-URL eingebettet und als
-#     geladen geprueft): Die Infozeile ist 122 px (360 px breites Handy) bzw.
-#     164 px (iPhone 17 Pro) breit; alle 189 Kombinationen aus neun
-#     Dauern, ohne/mit "gesund"/"startet" und sieben Port-Listen bleiben auf
-#     beiden Breiten bei hoechstens zwei Zeilen. Ohne die 5er-Grenze braeche
-#     "laeuft seit weniger als 1 Sek. · gesund · 9100 +1" auf dem 360 px
-#     breiten Handy in drei Zeilen um. Ohne die Option fehlt der Sensor,
-#     und die Zeile bleibt wie vorher.
+#     Ports"): unter dem Status die Host-Ports des laufenden Containers als
+#     neutrale Pillen (Label-Grau getoent 0,12 / Rand 0,24, wie in DESIGN.md
+#     fuer "keine Bewertung"; 11 px fett, tabular-nums, 17 px hoch, 4 px
+#     Abstand), in eigener Zeile des Rasters, damit sie beim Scrollen immer
+#     an derselben Stelle stehen. Den Sensor "Ports" sucht das Template ueber
+#     das Geraet des Schalters (translation_key container_ports), nicht ueber
+#     den Namen: Bei einem entfernten Host traegt er den Host in der ID
+#     (sensor.container_docker_02_portainer_ports), der Schalter nicht
+#     (switch.container_portainer). Es stehen so viele Pillen da, wie samt
+#     "+N" in 122 px passen (Infospalte auf dem 360 px breiten Handy; auf dem
+#     iPhone 17 Pro 164 px, dort dieselben Pillen). Breite einer Pille,
+#     gemessen im Nachbau mit Roboto (als data-URL eingebettet und als
+#     geladen geprueft): 14 px plus 6,3 px je Zeichen, das Template rechnet
+#     mit 6,4 px. Beispiele: "80 81 443", "9100 9543", "5683 10000 +2".
+#     Hoehe: Die Zeile waechst um die Pillenzeile, auf dem 360 px breiten
+#     Handy meist um 6 px (der Status passt ohne Ports in eine Zeile), mit
+#     "gesund" um 21 px, auf dem iPhone um 21 px. Ohne die Option fehlt der
+#     Sensor, und die Zeile bleibt wie vorher.
 #   - Pillen "ungesund" (Rot) und "Update" (Amber), Tönung 0,12 / Rand 0,24.
 #     "Update" ist eine eigene eingebettete button-card: Antippen oeffnet den
 #     Update-Dialog von HA (installierte und neue Version, "Installieren",
@@ -140,13 +139,14 @@ button_card_templates:
          Die Pille steht dann unter dem Status. */
       @container (max-width: 327px) {
         #container {
-          grid-template-areas: "i titel neustart schalter" "i info neustart schalter" "i upd neustart schalter" !important;
+          grid-template-areas: "i titel neustart schalter" "i info neustart schalter" "i upd neustart schalter" "i ports neustart schalter" !important;
           grid-template-columns: 36px minmax(0, 1fr) 40px 52px !important;
-          grid-template-rows: min-content min-content min-content !important;
+          grid-template-rows: min-content min-content min-content min-content !important;
           row-gap: 0 !important;
         }
         #info { margin-top: 8px !important; }
         #upd { margin: 5px 0 0 !important; align-self: start !important; }
+        #ports { margin-top: 4px !important; }
       }
     variables:
       basis: '[[[ return entity ? entity.entity_id.split(".")[1] : ""; ]]]'
@@ -215,6 +215,7 @@ button_card_templates:
           }
           return [];
         ]]]
+      mitports: '[[[ return variables.zustand === "running" && variables.ports.length > 0; ]]]'
       akzent: |
         [[[
           const z = variables.zustand;
@@ -316,21 +317,24 @@ button_card_templates:
         [[[
           const farbe = variables.zustand === 'restarting' || variables.startet ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text-sekundaer, #8794a5)';
           const teile = String(variables.text).split(' · ');
-          // Ports nur bei laufendem Container; Budget fuer den Port-Teil siehe oben
-          const p = variables.zustand === 'running' ? variables.ports : [];
-          if (p.length) {
-            const budget = teile.length > 1 ? (teile[0].length > 24 ? 5 : 7) : 11;
-            let n = p.length;
-            const txt = (k) => p.slice(0, k).join(', ') + (k < p.length ? ' +' + (p.length - k) : '');
-            while (n > 1 && txt(n).length > budget) n--;
-            const port = txt(n).length <= budget ? txt(n) : p[0];
-            teile.push(`<span style="color:var(--nachtblau-label, #b4c0cf);">${port}</span>`);
-          }
           // Der erste Teil darf umbrechen, die folgenden bleiben samt "·" zusammen.
           const inhalt = teile.map((t, i) => i === 0
             ? `<span>${t}${teile.length > 1 ? '&nbsp;·' : ''}</span>`
             : `<span style="white-space:nowrap;">${t}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ');
           return `<span style="font-size:12px;color:${farbe};">${inhalt}</span>`;
+        ]]]
+      # Ports als Pillen; so viele, wie samt "+N" in 122 px passen (siehe oben)
+      ports: |
+        [[[
+          if (!variables.mitports) return '';
+          const p = variables.ports;
+          const w = (t) => 14 + 6.4 * String(t).length;
+          const breite = (n) => p.slice(0, n).reduce((s, x) => s + w(x), 0) + 4 * (n - 1) + (n < p.length ? 4 + w('+' + (p.length - n)) : 0);
+          let k = p.length;
+          while (k > 1 && breite(k) > 122) k--;
+          const c = 'var(--nachtblau-label, #b4c0cf)';
+          const pille = (t) => `<span style="display:inline-block;box-sizing:border-box;font-size:11px;font-weight:700;line-height:15px;padding:0 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">${t}</span>`;
+          return `<div style="display:flex;flex-wrap:nowrap;gap:4px;">${p.slice(0, k).map(pille).join('')}${k < p.length ? pille('+' + (p.length - k)) : ''}</div>`;
         ]]]
       neustart:
         card:
@@ -423,9 +427,16 @@ button_card_templates:
         # die Spalte upd: Die Statuszeile unter titel und upd zog sonst Breite
         # in die leere Spalte, auf dem 360 px breiten Handy blieben dem Namen
         # zum Teil 78 von 122 px. Lange Namen brechen in bis zu zwei Zeilen um.
-        - grid-template-areas: '[[[ return variables.update ? `"i titel upd neustart schalter" "i info info neustart schalter"` : `"i titel neustart schalter" "i info neustart schalter"`; ]]]'
+        # Die Pillenzeile der Ports gibt es nur bei laufendem Container mit Ports;
+        # eine leere Zeile kostete sonst den Zeilenabstand von 3 px.
+        - grid-template-areas: |
+            [[[
+              const p = variables.mitports;
+              if (variables.update) return '"i titel upd neustart schalter" "i info info neustart schalter"' + (p ? ' "i ports ports neustart schalter"' : '');
+              return '"i titel neustart schalter" "i info neustart schalter"' + (p ? ' "i ports neustart schalter"' : '');
+            ]]]
         - grid-template-columns: '[[[ return variables.update ? "36px minmax(0, max-content) auto 40px 52px" : "36px minmax(0, 1fr) 40px 52px"; ]]]'
-        - grid-template-rows: min-content min-content
+        - grid-template-rows: '[[[ return variables.mitports ? "min-content min-content min-content" : "min-content min-content"; ]]]'
         - column-gap: 12px
         - row-gap: 3px
         - align-items: center
@@ -475,6 +486,16 @@ button_card_templates:
           - justify-self: start
           - align-self: end
           - margin-left: -6px
+        # 1 px plus 3 px Zeilenabstand = 4 px unter dem Status (schmal: 4 px,
+        # extra_styles)
+        ports:
+          - display: '[[[ return variables.mitports ? "block" : "none"; ]]]'
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - margin-top: 1px
         neustart:
           - align-self: center
         schalter:
@@ -504,6 +525,7 @@ button_card_templates:
       startet: '[[[ return false; ]]]'
       ungesund: '[[[ return false; ]]]'
       update: '[[[ return false; ]]]'
+      ports: '[[[ return []; ]]]'
       projekt_update: |
         [[[
           const u = states['binary_sensor.' + variables.basis + '_update_verfugbar'];
