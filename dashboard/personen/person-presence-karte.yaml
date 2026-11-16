@@ -96,7 +96,9 @@
 #   1. Historie von person.* der letzten 48 h (history/history_during_period,
 #      mit Attributen, auch reine Positionsaenderungen). Zeitfenster ist die
 #      laufende Abwesenheit, sonst die letzte mit mindestens 2 genauen Punkten;
-#      Zonen ausser Zuhause zaehlen als abwesend. Die Bedingung ueberspringt
+#      Zonen ausser Zuhause zaehlen als abwesend. Dazu je der naechste genaue
+#      Punkt bis 5 min vor dem Aufbruch und nach der Rueckkehr (Abfahrt,
+#      Ankunft). Die Bedingung ueberspringt
 #      Ausreisser: Am 15.11.2026 stand person.* 25 s auf not_home, mit einer
 #      Position 2 km entfernt und 100 m Ungenauigkeit. person.* hat dieselben Positionen wie der Handy-Tracker (Messung
 #      im Recorder, 05.-15.11.2026), ohne doppelte Zeilen, und folgt einem
@@ -120,6 +122,9 @@
 #      pedestrian 100 %). Die Art kommt aus Tempo und Aktivitaetssensor
 #      (Variable activity_entity), Regeln in der Bibliothek bei sp.art. Die
 #      Texte folgen ihr: "7,8 km zu Fuss", in der Tagesliste "Zu Fuss los".
+#      Luecken mit dem Auto ohne unbefestigte Wege (exclude_unpaved): Zwischen
+#      zwei Punkten nahm Valhalla sonst Feldwege als kuerzesten Weg (Fahrt
+#      16.11.2026: 1,37 km Schotter statt der Landstrasse).
 #   4. Karte: das Element ha-map der eingebauten Karten-Karte, mit Marker und
 #      Profilbild der Person. ha-map zeichnet eigene Pfade mit einem Kreis an
 #      jedem Punkt (auf Touch 8 px), bei einer eingerasteten Linie eine
@@ -375,7 +380,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 6;
+                    const VERSION = 7;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -455,8 +460,20 @@ cards:
                       // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
                       // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
                       const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
-                      // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt, Ankunft)
-                      const spannPunkte = (z, [anf, ende]) => sp.punkte(z.slice(Math.max(0, anf - 1), Math.min(z.length, ende + 2)));
+                      // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt,
+                      // Ankunft): der naechste genaue innerhalb RAND. Nur die direkte Nachbarzeile
+                      // reichte nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau,
+                      // die Spur begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein
+                      // Punkt mit 5 m.
+                      const RAND = 300;      // s
+                      const nachbar = (z, i, schritt, t) => {
+                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) if (genau(z[k])) return k;
+                        return -1;
+                      };
+                      const spannPunkte = (z, [anf, ende]) => {
+                        const v = nachbar(z, anf - 1, -1, z[anf].t), n = nachbar(z, ende + 1, 1, z[ende].t);
+                        return sp.punkte(z.slice(v >= 0 ? v : anf, (n >= 0 ? n : ende) + 1));
+                      };
                       // Letzte Strecke: laufende oder juengste echte Abwesenheit
                       sp.abwesenheit = (z) => {
                         const wahl = spannen(z).find((s, k) => (k === 0 && s[1] === z.length - 1) || echt(z, s));
@@ -506,12 +523,13 @@ cards:
                         });
                         return { fahrten, halte, laufend };
                       };
-                      sp.valhalla = async (hass, pts, profil) => {
+                      sp.valhalla = async (hass, pts, profil, optionen) => {
                         const anfrage = {
                           shape: pts.map((x) => ({ lat: +x.lat.toFixed(6), lon: +x.lon.toFixed(6), time: Math.round(x.t) })),
                           costing: profil || 'auto', shape_match: 'map_snap',
                           directions_options: { units: 'kilometers', narrative: false },
                         };
+                        if (optionen) anfrage.costing_options = optionen;
                         const res = await hass.callWS({ type: 'call_service', domain: 'rest_command', service: 'valhalla_trace', service_data: { anfrage: JSON.stringify(anfrage) }, return_response: true });
                         const a = res && res.response;
                         if (!a || a.status !== 200 || !a.content || !a.content.trip) throw new Error('HTTP ' + (a ? a.status : '?'));
@@ -608,7 +626,16 @@ cards:
                         }
                         const k = schluessel(pkt) + '|' + auftraege.map((a) => a.art[0]).join('');
                         if (sp.cache[k]) return sp.cache[k];
-                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art])
+                        // Luecke mit dem Auto: unbefestigte Wege ausschliessen. Zwischen nur zwei
+                        // Punkten nimmt das Map-Matching den kuerzesten Weg und dafuer auch
+                        // Feldwege; Fahrt 16.11.2026: 1,6 km Luftlinie, 2,04 km davon 1,37 km
+                        // Schotter-Feldweg statt der Landstrasse; mit exclude_unpaved 2,32 km ohne
+                        // Feldweg, Routenplanung (route) 2,34 km. 35 Luecken der Testfahrten A1-B4 (als Auto):
+                        // nur A2 (dasselbe Muster, 1,37 km Feldweg) und eine um 0,03 km anders.
+                        // Gemessene Gruppen bleiben ohne die Option: Dort zeigen die Punkte, wo
+                        // gefahren wurde.
+                        const LUECKE_AUTO = { auto: { exclude_unpaved: true } };
+                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null)
                           .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, ok: true }))
                           .catch(() => ({
                             fest: a.fest, art: a.art, ok: false,
