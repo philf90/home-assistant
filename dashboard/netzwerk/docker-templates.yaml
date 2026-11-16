@@ -28,7 +28,8 @@
 #   nachtblau_docker_host      Zeile je Host der Karte Hosts (docker-hosts-karte.yaml)
 #   nachtblau_docker_host_info Kopf des Host-Pop-ups mit Systemdaten und Versionen
 #   nachtblau_docker_host_jobs Hintergrund-Jobs eines Hosts im Pop-up
-#   nachtblau_docker_host_aufraeumen  Aufraeumen eines entfernten Hosts im Pop-up
+#   nachtblau_docker_speicher_frei  Freigebbarer Speicher eines Hosts mit Balken
+#   nachtblau_docker_aufraeumen  "Ungenutztes aufraeumen" eines Hosts (Skript)
 #
 # EINMAL einfuegen: Dashboard -> 3 Punkte -> "Dashboard bearbeiten" ->
 #   3 Punkte -> "Raw-Konfigurationseditor" -> die Eintraege unter
@@ -1601,19 +1602,28 @@ button_card_templates:
           - text-align: left
 
   # ---------------------------------------------------------------------------
-  # nachtblau_docker_host_aufraeumen: "Ungenutztes aufraeumen" eines entfernten
-  # Hosts im Pop-up der Karte Hosts. Entity ist sein Button "Ungenutztes
-  # entfernen" (translation_key prune). Infozeile: freigebbarer Image-Speicher
-  # und Build-Cache, ungenutzte Images (Sensoren desselben Geraets). Antippen
-  # des Knopfs drueckt den Button nach Rueckfrage; ab HA-Arcane 0.10.1 kehrt
-  # der Druck erst zurueck, wenn Arcane fertig ist und die Zaehler neu sind.
-  # Der lokale Host raeumt in der Karte Speicher & Aufraeumen auf (Skript mit
-  # Rueckmeldung, docker-konfig.yaml).
-  nachtblau_docker_host_aufraeumen:
+  # nachtblau_docker_speicher_frei: freigebbarer Speicher eines Hosts in der
+  # Karte Speicher & Aufraeumen (docker-speicher-karte.yaml). Entity ist sein
+  # Sensor "Freigebbarer Image-Speicher" (HA-Arcane ab 0.7.0, Option
+  # "Freigebbarer Speicher"), ohne die Option der Binaersensor "Online". Alle
+  # Werte kommen von den Sensoren desselben Geraets (translation_key), weil
+  # die Entity-IDs je Host anders anfangen.
+  #   Kopf     Host und Disk-Belegung links, freigebbar von Image-Speicher
+  #            rechts
+  #   Balken   Image-Speicher, davon freigebbar (Amber); waehrend dieser Host
+  #            aufraeumt, zieht eine Spur in Amber darueber
+  #   Zeile    Images, Build-Cache, Volumes (bleiben); nach dem Aufraeumen bis
+  #            zum naechsten Bericht "Stand vor dem Aufraeumen" (erkannt an
+  #            report_started_at, HA-Arcane ab 0.7.1)
+  # "Laeuft" heisst: script.docker_aufraeumen ist an und der Status-Helfer
+  # dieses Hosts steht auf aufraeumen oder bericht (docker-konfig.yaml). Den
+  # Helfer bildet das Template aus dem Prune-Button: button.docker_02_
+  # ungenutztes_entfernen -> input_text.docker_02_aufraeumen_status.
+  nachtblau_docker_speicher_frei:
     variables:
       sib: |
         [[[
-          // Sensoren desselben Geraets (der Umgebung) nach translation_key
+          // Entitaeten desselben Geraets (der Umgebung) nach translation_key
           const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
           const m = {};
           if (reg) for (const e of Object.values(E)) {
@@ -1621,26 +1631,210 @@ button_card_templates:
           }
           return m;
         ]]]
+      host: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return d ? (d.name_by_user || d.name || '') : '';
+        ]]]
+      laeuft: |
+        [[[
+          const k = variables.sib.prune;
+          if (!k) return false;
+          const h = states['input_text.' + k.entity_id.split('.')[1].replace(/_ungenutztes_entfernen$/, '') + '_aufraeumen_status'];
+          const sk = states['script.docker_aufraeumen'];
+          return !!h && !!sk && sk.state === 'on' && /^(aufraeumen|bericht);/.test(h.state);
+        ]]]
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    # Laufspur: Amber in der Stufe "Leuchten" (0,5), 35 % der Balkenbreite,
+    # 1,6 s je Durchlauf; die Abschnitte darunter stehen solange auf 45 %,
+    # sonst ist die Spur auf dem blauen Teil kaum zu sehen (Nachbau).
+    # "Bewegung reduzieren" zeigt stattdessen den ganzen Balken in Amber,
+    # Stufe "Rand" (0,24).
+    extra_styles: |
+      .nb-lauf { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--nachtblau-amber, #e6b566) 50%, transparent), transparent); animation: nb-lauf 1.6s linear infinite; }
+      @keyframes nb-lauf { from { transform: translateX(-100%); } to { transform: translateX(286%); } }
+      @media (prefers-reduced-motion: reduce) { .nb-lauf { animation: none; width: 100%; background: color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent); } }
+    custom_fields:
+      balken: |
+        [[[
+          const SEK = 'var(--nachtblau-text-sekundaer, #8794a5)', TEXT = 'var(--nachtblau-text, #f2f5f8)';
+          const BLAU = 'var(--nachtblau-blau, #7fb3d5)', AMBER = 'var(--nachtblau-amber, #e6b566)';
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const s = variables.sib;
+          const zahl = (k) => { const v = s[k] ? parseFloat(s[k].state) : NaN; return isNaN(v) ? null : v; };
+          const gb = (v) => v < 1
+            ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
+            : v.toLocaleString('de-DE', { maximumFractionDigits: v < 10 ? 2 : 1 }) + ' GB';
+          const zeile = (t) => `<div style="font-size:12px;color:${SEK};line-height:1.3;text-wrap:balance;">${t}</div>`;
+          // Jeder Teil bleibt samt folgendem Trenner zusammen; umgebrochen wird
+          // nur nach einem "·".
+          const stuecke = (t) => t.map((x, i) => `<span style="white-space:nowrap;">${x}${i < t.length - 1 ? ' ·' : ''}</span>`).join(' ');
+          const disk = zahl('host_disk_percent');
+          const links = `<span style="min-width:0;"><b style="font-size:13px;color:${TEXT};">${esc(variables.host || 'Host')}</b>`
+            + (disk === null ? '' : ` <span style="white-space:nowrap;">· Disk ${disk.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %</span>`) + `</span>`;
+          const fs = s.reclaimable_images;
+          const frei = zahl('reclaimable_images');
+          const gesamt = zahl('images_size');
+          const rechts = frei === null ? '' : `<span style="font-variant-numeric:tabular-nums;white-space:nowrap;"><b style="font-size:14px;color:${TEXT};">${gb(frei)}</b>` + (gesamt ? ` von ${gb(gesamt)}` : '') + `</span>`;
+          const kopf = `<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 8px;font-size:12px;color:${SEK};">${links}${rechts}</div>`;
+          if (!fs || fs.state === 'unavailable') return kopf + zeile('Freigebbarer Speicher nicht verfügbar');
+          if (frei === null) return kopf + zeile('Freigebbarer Speicher: Bericht folgt, höchstens alle 15 Minuten');
+          // Bericht von vor dem letzten Druck: report_started_at (HA-Arcane ab
+          // 0.7.1) ist der Beginn des Berichts; mit 0.7.0 bleibt nur die letzte
+          // Wertaenderung. Nach 20 Minuten (Intervall 15) gilt er nicht mehr
+          // als veraltet, falls kein neuer kommt.
+          let stand = '';
+          const p = s.prune;
+          const pz = p ? new Date(p.state).getTime() : NaN;
+          const rz = new Date(fs.attributes.report_started_at || fs.last_changed).getTime();
+          if (!isNaN(pz) && Date.now() - pz < 20 * 60e3 && rz < pz) stand = 'Stand vor dem Aufräumen';
+          const laeuft = variables.laeuft;
+          const anteil = gesamt ? Math.min(100, Math.max(0, frei / gesamt * 100)) : 0;
+          // Phase der Laufspur haengt an der Uhrzeit, damit sie beim Neuzeichnen
+          // nicht von vorn beginnt.
+          const lauf = laeuft ? `<span class="nb-lauf" style="animation-delay:-${Date.now() % 1600}ms;"></span>` : '';
+          const spur = `<div style="position:relative;display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--nachtblau-aus, #3a4453);margin:7px 0 6px;">`
+            + `<span style="width:${100 - anteil}%;background:${BLAU};opacity:${laeuft ? 0.45 : 1};"></span><span style="width:${anteil}%;background:${AMBER};opacity:${laeuft ? 0.45 : 1};"></span>${lauf}</div>`;
+          const teile = ['Images ' + gb(frei)];
+          const bc = zahl('reclaimable_build_cache');
+          if (bc !== null) teile.push('Build-Cache ' + gb(bc));
+          const vol = zahl('reclaimable_volumes');
+          if (vol !== null) teile.push('Volumes ' + gb(vol) + ' (bleiben)');
+          if (stand) teile.push(stand);
+          return kopf + spur + zeile(stuecke(teile));
+        ]]]
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 10px 12px
+        - box-shadow: none
+        - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"balken"'
+        - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        balken:
+          - justify-self: stretch
+          - text-align: left
+          - white-space: normal
+          - overflow: visible
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_aufraeumen: "Ungenutztes aufraeumen" eines Hosts, in der
+  # Karte Speicher & Aufraeumen je Host und im Pop-up eines Agenten in der
+  # Karte Hosts. Entity ist sein Button "Ungenutztes entfernen" (translation_
+  # key prune). Antippen startet nach Rueckfrage script.docker_aufraeumen mit
+  # knopf = diesem Button (docker-konfig.yaml); das Skript wird direkt
+  # aufgerufen, nicht per script.turn_on, so meldet HA einen Fehler des Prune
+  # als Hinweis. Phase und Ergebnis kommen aus dem Status-Helfer des Hosts
+  # (input_text.<Anfang der Button-ID>_aufraeumen_status), den jedes Geraet
+  # sieht. Fehlt der Helfer, ist der Knopf aus ("Helfer fehlt").
+  #   Infozeile  "≈ 3,7 GB freigebbar · zuletzt 16.11., 12:17" (ungenutzte
+  #              Images plus Build-Cache), waehrend des Laufs "raeumt auf …",
+  #              dann "Werte werden aktualisiert …", danach "54 MB
+  #              freigegeben · zuletzt …"
+  #   Knopf      Amber ab 0,5 GB, ohne Bericht ab einem ungenutzten Image;
+  #              waehrend dieser Host aufraeumt "laeuft …". Ein anderer Host
+  #              kann gleichzeitig aufraeumen (Skript im Modus parallel).
+  # Container und Volumes entfernt der Button nie (HA-Arcane button.py, api.py:
+  # system/prune mit images: all, networks: unused, buildCache: unused).
+  nachtblau_docker_aufraeumen:
+    variables:
+      sib: |
+        [[[
+          // Entitaeten desselben Geraets (der Umgebung) nach translation_key
+          const E = hass.entities || {}, reg = entity ? E[entity.entity_id] : null;
+          const m = {};
+          if (reg) for (const e of Object.values(E)) {
+            if (e.device_id === reg.device_id && e.platform === 'arcane' && e.translation_key && !(e.translation_key in m)) m[e.translation_key] = states[e.entity_id] || null;
+          }
+          return m;
+        ]]]
+      host: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return d ? (d.name_by_user || d.name || '') : '';
+        ]]]
+      helfer: "[[[ return entity ? 'input_text.' + entity.entity_id.split('.')[1].replace(/_ungenutztes_entfernen$/, '') + '_aufraeumen_status' : ''; ]]]"
+      frei: |
+        [[[
+          const s = variables.sib.images_unused;
+          const n = s ? parseInt(s.state, 10) : NaN;
+          return isNaN(n) ? null : n;
+        ]]]
+      aktiv: '[[[ return !!entity && entity.state !== "unavailable" && !!states[variables.helfer]; ]]]'
+      # Phase;Beginn;GB aus dem Skript, siehe docker-konfig.yaml
+      status: |
+        [[[
+          const s = states[variables.helfer];
+          const t = s ? String(s.state).split(';') : [];
+          const v = parseFloat(t[2]);
+          return { phase: t[0] || '', beginn: t[1] || '', gb: isNaN(v) ? null : v };
+        ]]]
+      laeuft: |
+        [[[
+          const sk = states['script.docker_aufraeumen'];
+          return !!sk && sk.state === 'on' && (variables.status.phase === 'aufraeumen' || variables.status.phase === 'bericht');
+        ]]]
+      # Bericht von vor dem letzten Druck, wie im Balken
+      veraltet: |
+        [[[
+          const e = variables.sib.reclaimable_images;
+          if (!e || !entity) return false;
+          const pz = new Date(entity.state).getTime();
+          const rz = new Date(e.attributes.report_started_at || e.last_changed).getTime();
+          return !isNaN(pz) && Date.now() - pz < 20 * 60e3 && rz < pz;
+        ]]]
+      # Was der Knopf freigibt: ungenutzte Images und Build-Cache; null,
+      # solange kein Bericht da ist
       gb: |
         [[[
           const s = variables.sib;
-          let n = null;
-          for (const k of ['reclaimable_images', 'reclaimable_build_cache']) {
-            const v = s[k] ? parseFloat(s[k].state) : NaN;
-            if (!isNaN(v)) n = (n || 0) + v;
-          }
-          return n;
+          const z = (k) => { const v = s[k] ? parseFloat(s[k].state) : NaN; return isNaN(v) ? null : v; };
+          const img = z('reclaimable_images'), bc = z('reclaimable_build_cache');
+          return img === null && bc === null ? null : (img || 0) + (bc || 0);
         ]]]
-      aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+      gb_text: |
+        [[[
+          const v = variables.gb;
+          if (v === null) return '';
+          return v < 1 ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
+            : v.toLocaleString('de-DE', { maximumFractionDigits: v < 10 ? 2 : 1 }) + ' GB';
+        ]]]
+      # Amber ab 0,5 GB; ohne Bericht nach der Zahl ungenutzter Images. Nie,
+      # solange das Aufraeumen laeuft oder der Bericht von davor ist.
+      lohnt: |
+        [[[
+          if (variables.laeuft || variables.veraltet) return false;
+          if (variables.gb !== null) return variables.gb >= 0.5;
+          return variables.frei !== null && variables.frei > 0;
+        ]]]
     show_icon: true
     show_name: false
     show_state: false
     icon: mdi:broom
     tap_action: |
       [[[
-        if (!variables.aktiv) return { action: 'none' };
-        const gb = variables.gb === null ? '' : ' (' + variables.gb.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB)';
-        return { action: 'perform-action', perform_action: 'button.press', target: { entity_id: entity.entity_id }, confirmation: { text: 'Ungenutzte Images, Netzwerke und Build-Cache auf diesem Host entfernen' + gb + '? Container und Volumes bleiben.' } };
+        if (!variables.aktiv || variables.laeuft) return { action: 'none' };
+        const img = variables.frei === null ? 'alle ungenutzten Images' : (variables.frei === 1 ? '1 ungenutztes Image' : variables.frei + ' ungenutzte Images');
+        const menge = variables.gb_text && !variables.veraltet ? 'Frei werden etwa ' + variables.gb_text + '. ' : '';
+        return {
+          action: 'perform-action',
+          perform_action: 'script.docker_aufraeumen',
+          data: { knopf: entity.entity_id },
+          confirmation: { text: (variables.host || 'Host') + ' aufräumen? ' + menge + 'Entfernt werden ' + img + ', ungenutzte Netzwerke und der Build-Cache. Container und Volumes bleiben.' }
+        };
       ]]]
     hold_action:
       action: none
@@ -1650,21 +1844,41 @@ button_card_templates:
       info: |
         [[[
           const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
-          const s = variables.sib;
-          const u = s.images_unused ? parseInt(s.images_unused.state, 10) : NaN;
-          const teile = [];
-          if (variables.gb !== null) teile.push(variables.gb > 0 ? variables.gb.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB freigebbar' : 'nichts freizugeben');
-          if (!isNaN(u)) teile.push(u + (u === 1 ? ' ungenutztes Image' : ' ungenutzte Images'));
-          return `<span style="font-size:12px;color:${sek};">${teile.map((t) => `<span style="white-space:nowrap;">${t}</span>`).join(' · ') || 'keine Daten'}</span>`;
+          if (entity && entity.state !== 'unavailable' && !states[variables.helfer]) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Helfer ${variables.helfer.replace('input_text.', '')} fehlt</span>`;
+          if (!variables.aktiv) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+          if (variables.laeuft) {
+            const t = variables.status.phase === 'bericht' ? 'Werte werden aktualisiert …' : 'räumt auf …';
+            return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">${t}</span>`;
+          }
+          let zuletzt = 'noch nie';
+          const d = new Date(entity.state);
+          if (!isNaN(d.getTime())) zuletzt = 'zuletzt ' + d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          const mb = (v) => v < 1 ? Math.round(v * 1000).toLocaleString('de-DE') + ' MB'
+            : v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB';
+          // Ergebnis des Skripts, wenn es zum letzten Druck gehoert und jetzt
+          // nichts Nennenswertes mehr freizugeben ist
+          const st = variables.status;
+          const passt = st.phase === 'fertig' && st.gb !== null && Math.abs(new Date(st.beginn).getTime() - d.getTime()) < 60e3;
+          // Kurze Angaben bleiben samt "·" zusammen, "zuletzt …" ebenso; nur der
+          // Ersatztext ohne Bericht darf in sich umbrechen.
+          const ganz = (t) => `<span style="white-space:nowrap;">${t} ·</span>`;
+          let was;
+          if (variables.veraltet) was = ganz('Bericht folgt');
+          else if (passt && (variables.gb === null || variables.gb < 0.5)) was = ganz(st.gb < 0.001 ? 'nichts freizugeben' : mb(st.gb) + ' freigegeben');
+          else if (variables.gb_text) was = ganz('≈ ' + variables.gb_text + ' freigebbar');
+          else was = 'Images, Netzwerke, <span style="white-space:nowrap;">Build-Cache ·</span>';
+          return `<span style="font-size:12px;color:${sek};">${was} <span style="white-space:nowrap;">${zuletzt}</span></span>`;
         ]]]
       knopf: |
         [[[
-          const an = variables.aktiv && variables.gb !== null && variables.gb > 0;
-          const A = 'var(--nachtblau-amber, #e6b566)';
-          const stil = an
-            ? `color:${A};background:color-mix(in srgb, ${A} 12%, transparent);border:1px solid color-mix(in srgb, ${A} 24%, transparent);`
-            : 'color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
-          return `<span style="display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;opacity:${variables.aktiv ? 1 : 0.4};${stil}">Aufräumen</span>`;
+          const c = 'var(--nachtblau-amber, #e6b566)';
+          const neutral = 'color:var(--nachtblau-label, #b4c0cf);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+          const form = 'display:inline-flex;align-items:center;box-sizing:border-box;min-height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:700;white-space:nowrap;';
+          if (variables.laeuft) return `<span style="${form}${neutral}">läuft …</span>`;
+          const stil = variables.aktiv && variables.lohnt
+            ? `color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`
+            : neutral;
+          return `<span style="${form}opacity:${variables.aktiv ? 1 : 0.4};${stil}">Aufräumen</span>`;
         ]]]
     styles:
       card:
@@ -1687,20 +1901,35 @@ button_card_templates:
         - border-radius: 11px
         - margin: 0
         - align-self: center
-        - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
-        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        # Waehrend des Aufraeumens getoent in Amber (Icon-Kachel 0,16, Rand 0,24)
+        - background: |
+            [[[ return variables.laeuft ? 'color-mix(in srgb, var(--nachtblau-amber, #e6b566) 16%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.laeuft ? '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
       icon:
         - width: 19px
         - height: 19px
         - margin: 0
         - --ha-icon-display: block
-        - color: 'var(--nachtblau-label, #b4c0cf)'
+        - color: '[[[ return variables.laeuft ? "var(--nachtblau-amber, #e6b566)" : "var(--nachtblau-label, #b4c0cf)"; ]]]'
       custom_fields:
         titel:
           - justify-self: start
           - align-self: end
           - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
           - text-align: left
+        # Neben dem Knopf bleiben fuer den Hinweis in der Karte auf dem 360 px
+        # breiten Handy 116 px, auf dem iPhone 17 Pro 150 px (im Host-Pop-up
+        # mehr). "Images, Netzwerke, Build-Cache · zuletzt …" (ohne Bericht)
+        # braucht auf dem S25 drei Zeilen; "≈ 1,56 GB freigebbar · zuletzt …"
+        # ist kuerzer.
         info:
           - justify-self: start
           - align-self: start
@@ -1710,7 +1939,7 @@ button_card_templates:
           - white-space: normal
           - display: -webkit-box
           - -webkit-box-orient: vertical
-          - -webkit-line-clamp: '2'
+          - -webkit-line-clamp: '3'
           - text-wrap: balance
           - font-size: 12px
           - line-height: 1.25
@@ -1718,3 +1947,4 @@ button_card_templates:
           - text-align: left
         knopf:
           - align-self: center
+          - overflow: visible
