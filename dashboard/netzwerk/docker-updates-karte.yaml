@@ -37,13 +37,21 @@
 #              Rueckfrage; ein gesperrtes Update in Koralle mit Grund und
 #              ohne Knopf. Antippen oeffnet den Update-Dialog mit den
 #              Versionshinweisen. Ohne Update: "Alle Container-Images aktuell".
-#   Suchen     "Nach Updates suchen" (button.docker_nach_updates_suchen, ab
-#              HA-Arcane 0.7.0): laesst Arcane sofort alle Images pruefen;
-#              daneben der Zeitpunkt des letzten Anstosses aus HA.
+#   Suchen     "Nach Updates suchen" (ab HA-Arcane 0.7.0): "Pruefen" laesst
+#              Arcane sofort alle Images pruefen, auf allen Hosts (je Host ein
+#              Button, translation_key check_updates). Daneben Arcanes eigene
+#              Pruefung aus dem Job "Image Update Watcher" (ab HA-Arcane 0.10.0,
+#              Option "Arcane Hintergrund-Jobs"): "Arcane prueft stuendlich ·
+#              zuletzt 14:00"; war der letzte Druck in HA spaeter, "angestossen
+#              14:30". Ohne Jobs nur der Zeitpunkt des letzten Anstosses.
 #              Recht: image-updates:check.
 #   Automatisch  Zeile "Automatische Updates" (ab HA-Arcane 0.9.0, Optionen
-#              "Arcane Updater" und "Auto-Update-Schalter"): das letzte Update
-#              aus Arcanes Verlauf (sensor.docker_letztes_image_update:
+#              "Arcane Updater" und "Auto-Update-Schalter"): oben der naechste
+#              Lauf aus dem Job "Auto Update" (ab HA-Arcane 0.10.0, Option
+#              "Arcane Hintergrund-Jobs"; bei mehreren Hosts der frueheste,
+#              ein Host ohne automatische Updates mit "docker-02 aus"; auf
+#              allen aus: "in Arcane ausgeschaltet" in Amber), darunter das
+#              letzte Update aus Arcanes Verlauf (juengstes aller Hosts:
 #              Container, Status, Zeitpunkt), waehrend eines Laufs "Arcane
 #              installiert Updates ...". Der Sensor kennt nur den neuesten
 #              Eintrag; nach einem Lauf ueber mehrere Container steht der
@@ -55,8 +63,11 @@
 #              Container aus Arcanes automatischen Updates aus oder wieder auf,
 #              ohne Rueckfrage, denn der Container selbst wird nicht angefasst.
 #              Die automatischen Updates selbst schaltet man in Arcane ein;
-#              HA sieht diese Einstellung nicht. Rechte: image-updates:read,
-#              image-updates:list, containers:autoupdate.
+#              HA sieht diese Einstellung nur ueber die Jobs (enabled von "Auto
+#              Update" ist autoUpdate, von "Image Update Watcher"
+#              pollingEnabled; Arcane v3.0.1, types/meta.go) und kann sie nicht
+#              schalten. Rechte: image-updates:read, image-updates:list,
+#              containers:autoupdate.
 #   Arcane     Arcane selbst; die Installation laedt das neue Arcane-Image und
 #              startet es neu. Recht: system:upgrade.
 #
@@ -68,7 +79,9 @@
 #                custom:bubble-card (HACS), Integration Arcane (HACS) ab 0.7.0 mit
 #                Update-Entitaeten und Steuerung, fuer die Zeile
 #                "Automatische Updates" ab 0.9.0 mit den Optionen "Arcane
-#                Updater" und "Auto-Update-Schalter"; Rechte
+#                Updater" und "Auto-Update-Schalter", fuer naechsten Lauf
+#                und Arcanes Pruefung ab 0.10.0 mit "Arcane
+#                Hintergrund-Jobs"; Rechte
 #                image-updates:apply (bis HA-Arcane 0.8.1
 #                containers:redeploy), system:upgrade, image-updates:read,
 #                image-updates:check, image-updates:list und
@@ -275,11 +288,21 @@ cards:
                 - text-align: left
 
       # ---- Nach Updates suchen (ab HA-Arcane 0.7.0) ----
-      # Der Zustand des Buttons ist der Zeitpunkt des Drueckens, nicht das Ende
-      # der Pruefung (HA schreibt ihn vorher); Arcanes eigene, geplante
-      # Pruefungen aendern ihn nicht. Daher "zuletzt angestossen". Die Pruefung
-      # selbst dauert bis zu fuenf Minuten, einen Fortschritt meldet die
-      # Entitaet nicht. Keine Rueckfrage: Pruefen aendert nichts.
+      # "Pruefen" drueckt "Nach Updates suchen" aller Hosts (translation_key
+      # check_updates; je Umgebung ein Button, HA-Arcane ab 0.11.0 auch fuer
+      # Agenten). Der Zustand eines Buttons ist der Zeitpunkt des Drueckens,
+      # nicht das Ende der Pruefung (HA schreibt ihn vorher). Die Pruefung
+      # dauert bis zu fuenf Minuten, einen Fortschritt meldet die Entitaet
+      # nicht. Keine Rueckfrage: Pruefen aendert nichts.
+      # Infozeile (HA-Arcane ab 0.10.0, Option "Arcane Hintergrund-Jobs"):
+      # Arcanes eigene Pruefung ist der Job "Image Update Watcher" (job_id
+      # image-polling) je Host: Plan (schedule, "0 * * * *" = stuendlich) und
+      # Ende des letzten Laufs (last_finished, bei mehreren Hosts der
+      # aelteste). Der Button ruft Arcanes Pruefung direkt auf, nicht den Job;
+      # war der letzte Druck in HA spaeter, steht "angestossen" mit dessen
+      # Zeit. enabled des Jobs ist Arcanes Einstellung pollingEnabled (Arcane
+      # v3.0.1, types/meta.go); ist sie auf allen Hosts aus: "Arcane prueft
+      # nicht selbst". Ohne Jobs wie bisher "zuletzt angestossen".
       - type: custom:button-card
         entity: button.docker_nach_updates_suchen
         icon: mdi:refresh
@@ -287,11 +310,17 @@ cards:
         show_name: false
         show_state: false
         variables:
-          aktiv: '[[[ return !!entity && entity.state !== "unavailable"; ]]]'
+          knoepfe: |
+            [[[
+              return Object.values(hass.entities || {})
+                .filter((e) => e.platform === 'arcane' && e.translation_key === 'check_updates' && states[e.entity_id] && states[e.entity_id].state !== 'unavailable')
+                .map((e) => e.entity_id);
+            ]]]
+          aktiv: '[[[ return variables.knoepfe.length > 0; ]]]'
         tap_action: |
           [[[
             if (!variables.aktiv) return { action: 'none' };
-            return { action: 'perform-action', perform_action: 'button.press', target: { entity_id: entity.entity_id } };
+            return { action: 'perform-action', perform_action: 'button.press', target: { entity_id: variables.knoepfe } };
           ]]]
         hold_action:
           action: none
@@ -302,10 +331,51 @@ cards:
             [[[
               const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
               if (!variables.aktiv) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
-              const d = new Date(entity.state);
-              const txt = isNaN(d.getTime()) ? 'noch nie angestoßen'
-                : 'zuletzt angestoßen ' + d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-              return `<span style="font-size:12px;color:${sek};">${txt}</span>`;
+              const E = hass.entities || {}, D = hass.devices || {};
+              const zeit = (t) => {
+                const d = new Date(t);
+                const heute = new Date().toDateString() === d.toDateString();
+                return (heute ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ', ') + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+              };
+              // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt.
+              const zeile = (teile, farbe) => `<span style="font-size:12px;color:${farbe || sek};">${teile.map((t, i) => `<span style="white-space:nowrap;">${t}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ')}</span>`;
+              let druck = NaN;
+              for (const id of variables.knoepfe) {
+                const t = Date.parse(states[id].state);
+                if (!isNaN(t) && (isNaN(druck) || t > druck)) druck = t;
+              }
+              const w = [];
+              for (const e of Object.values(E)) {
+                if (e.platform !== 'arcane' || e.translation_key !== 'job') continue;
+                const st = states[e.entity_id];
+                const d = D[e.device_id];
+                if (st && st.state !== 'unavailable' && st.attributes.job_id === 'image-polling') w.push({ st, host: d ? (d.name_by_user || d.name || '') : '' });
+              }
+              if (!w.length) return zeile([isNaN(druck) ? 'noch nie angestoßen' : 'zuletzt angestoßen ' + zeit(druck)]);
+              const an = w.filter((x) => x.st.attributes.enabled !== false);
+              if (!an.length) return zeile(['Arcane prüft nicht selbst'].concat(isNaN(druck) ? [] : ['angestoßen ' + zeit(druck)]), 'var(--nachtblau-amber, #e6b566)');
+              const intervall = (c) => {
+                const z = String(c || '').trim().split(/\s+/);
+                if (z.length === 5 && z.slice(2).every((x) => x === '*')) {
+                  if (/^\d+$/.test(z[0]) && z[1] === '*') return 'stündlich';
+                  const n = /^\*\/(\d+)$/.exec(z[1]);
+                  if (/^\d+$/.test(z[0]) && n) return 'alle ' + n[1] + ' Std.';
+                  if (/^\d+$/.test(z[0]) && /^\d+$/.test(z[1])) return 'täglich ' + z[1].padStart(2, '0') + ':' + z[0].padStart(2, '0');
+                }
+                return 'nach Plan';
+              };
+              const plaene = [...new Set(an.map((x) => intervall(x.st.attributes.schedule)))];
+              const teile = ['Arcane prüft ' + (plaene.length === 1 ? plaene[0] : 'nach Plan')];
+              const fehl = an.filter((x) => x.st.state === 'failed').map((x) => x.host);
+              if (fehl.length) return zeile(teile.concat(['fehlgeschlagen' + (w.length > 1 ? ' (' + fehl.join(', ') + ')' : '')]), 'var(--nachtblau-koralle, #e7936e)');
+              let fertig = NaN;
+              for (const x of an) {
+                const t = Date.parse(x.st.attributes.last_finished);
+                if (!isNaN(t) && (isNaN(fertig) || t < fertig)) fertig = t;
+              }
+              if (!isNaN(druck) && (isNaN(fertig) || druck > fertig)) teile.push('angestoßen ' + zeit(druck));
+              else if (!isNaN(fertig)) teile.push('zuletzt ' + zeit(fertig));
+              return zeile(teile);
             ]]]
           knopf: |
             [[[
@@ -354,8 +424,11 @@ cards:
               - text-wrap: balance
               - text-align: left
             # Gemessen im Nachbau mit Roboto: Neben "Pruefen" bleiben fuer den Text
-            # auf dem 360 px breiten Handy 162 px, auf dem iPhone 17 Pro 204 px;
-            # "zuletzt angestossen 15.11., 18:44" steht auf beiden in einer Zeile.
+            # auf dem 360 px breiten Handy 162 px, auf dem iPhone 17 Pro 204 px.
+            # "Arcane prueft stuendlich · zuletzt 14:00" braucht auf dem Handy zwei
+            # Zeilen, auf dem iPhone eine; die laengsten Faelle ("Arcane prueft
+            # nicht selbst · angestossen 15.11., 21:07", "... · fehlgeschlagen
+            # (docker-02)") zwei auf beiden.
             info:
               - justify-self: start
               - align-self: start
@@ -381,7 +454,10 @@ cards:
       # aktualisiert · 16.11., 03:00" brauchte zwei Zeilen. Ohne Knopf, gemessen
       # im Nachbau mit Roboto: 206 px (iPhone 17 Pro 248 px), der laengste Name
       # (uptimekuma-mariadb-uptime-kuma) mit "fehlgeschlagen" und Zeitpunkt in
-      # zwei Zeilen. Die Zahl der ausgenommenen Container passte dann nicht
+      # zwei Zeilen. Darueber "naechster Lauf 15:08" (HA-Arcane ab 0.10.0) in
+      # einer Zeile, "naechster Lauf 17.11., 00:00 · docker-02 aus" auf dem
+      # Handy in zwei; zusammen hoechstens drei Zeilen (45 px), auf dem iPhone
+      # meist zwei. Die Zahl der ausgenommenen Container passte dann nicht
       # mehr dazu, sie steht im Pop-up; den Grund eines Fehlers zeigt Halten
       # (Sensor, Attribut error).
       # Antippen setzt den Hash #docker-autoupdates; das Bubble-Pop-up am Ende
@@ -412,9 +488,41 @@ cards:
               return best;
             ]]]
           status: '[[[ return variables.letztes && variables.letztes.a.status ? String(variables.letztes.a.status) : ""; ]]]'
+          # Naechster Lauf (HA-Arcane ab 0.10.0, Option "Arcane Hintergrund-
+          # Jobs"): Job "Auto Update" (job_id auto-update) je Host, next_run.
+          # Arcane fuehrt ihn nur aus, wenn die Einstellungen autoUpdate und
+          # pollingEnabled an sind (Voraussetzungen des Jobs, Arcane v3.0.1,
+          # types/meta.go); sie stehen in HA als enabled der Jobs Auto Update
+          # bzw. Image Update Watcher. an = Hosts mit beiden an, aus = Namen
+          # der uebrigen, naechster = fruehester next_run der Hosts mit an.
+          plan: |
+            [[[
+              const E = hass.entities || {}, D = hass.devices || {};
+              const h = {};
+              for (const e of Object.values(E)) {
+                if (e.platform !== 'arcane' || e.translation_key !== 'job') continue;
+                const st = states[e.entity_id];
+                if (!st || st.state === 'unavailable') continue;
+                const id = st.attributes.job_id;
+                if (id !== 'auto-update' && id !== 'image-polling') continue;
+                const d = D[e.device_id];
+                h[e.device_id] = h[e.device_id] || { name: d ? (d.name_by_user || d.name || '') : '' };
+                h[e.device_id][id] = st;
+              }
+              const hosts = Object.values(h).filter((x) => x['auto-update']);
+              if (!hosts.length) return null;
+              const ein = (x) => x['auto-update'].attributes.enabled !== false && (!x['image-polling'] || x['image-polling'].attributes.enabled !== false);
+              let naechster = NaN;
+              for (const x of hosts.filter(ein)) {
+                const t = Date.parse(x['auto-update'].attributes.next_run);
+                if (!isNaN(t) && (isNaN(naechster) || t < naechster)) naechster = t;
+              }
+              return { an: hosts.filter(ein).length, aus: hosts.filter((x) => !ein(x)).map((x) => x.name), naechster };
+            ]]]
           akzent: |
             [[[
               if (variables.laeuft) return 'var(--nachtblau-amber, #e6b566)';
+              if (variables.plan && variables.plan.an === 0) return 'var(--nachtblau-amber, #e6b566)';
               if (variables.status === 'failed' || variables.status === 'blocked') return 'var(--nachtblau-koralle, #e7936e)';
               if (variables.status === 'updated' || variables.status === 'restarted') return 'var(--nachtblau-gruen, #a6d49e)';
               return '';
@@ -433,9 +541,24 @@ cards:
               const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
               const ganz = (t) => `<span style="white-space:nowrap;">${t}</span>`;
               if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert Updates …</span>`;
+              // Erste Zeile: naechster Lauf bzw. "in Arcane ausgeschaltet",
+              // darunter das letzte Update (hoechstens zwei Zeilen)
+              const p = variables.plan;
+              let kopf = '';
+              if (p && p.an === 0) kopf = `<div style="color:var(--nachtblau-amber, #e6b566);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">in Arcane ausgeschaltet</div>`;
+              else if (p) {
+                const d = new Date(p.naechster);
+                const heute = new Date().toDateString() === d.toDateString();
+                const wann = isNaN(d.getTime()) ? '' : 'nächster Lauf ' + (heute ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ', ') + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                const teile = [wann].concat(p.aus.length ? [esc(p.aus.join(', ')) + ' aus'] : []).filter(Boolean);
+                // Umbruch nur zwischen ganzen Teilen: "naechster Lauf 17.11., 00:00 ·
+                // docker-02 aus" passt auf dem 360 px breiten Handy nicht in eine Zeile
+                if (teile.length) kopf = `<div style="color:var(--nachtblau-label, #b4c0cf);">${teile.map((t, i) => ganz(t + (i < teile.length - 1 ? '&nbsp;·' : ''))).join(' ')}</div>`;
+              }
+              const block = (html, farbe) => `<div style="font-size:12px;color:${farbe || sek};">${kopf}<div style="overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${html}</div></div>`;
               const l = variables.letztes;
-              if (!l && (!entity || entity.state === 'unavailable')) return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
-              if (!l || !l.a.resource_name) return `<span style="font-size:12px;color:${sek};">${ganz('noch kein Update')} ${ganz('über Arcanes Updater')}</span>`;
+              if (!l && (!entity || entity.state === 'unavailable')) return block('nicht verfügbar');
+              if (!l || !l.a.resource_name) return block(`${ganz('noch kein Update')} ${ganz('über Arcanes Updater')}`);
               const a = l.a;
               const d = new Date(l.t);
               // Name wie in den Zeilen: "radarr-radarr-1" -> "radarr"; entfernter
@@ -453,7 +576,7 @@ cards:
               const wortHtml = s === 'updated' || s === 'restarted' ? `<span style="color:var(--nachtblau-gruen, #a6d49e);">${wort}</span>` : wort;
               const wann = d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
               // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt.
-              return `<span style="font-size:12px;color:${fehler ? 'var(--nachtblau-koralle, #e7936e)' : sek};"><span style="overflow-wrap:anywhere;">${esc((l.host ? l.host + ' ' : '') + n)}&nbsp;·</span> ${ganz(wortHtml + '&nbsp;·')} ${ganz(wann)}</span>`;
+              return block(`<span style="overflow-wrap:anywhere;">${esc((l.host ? l.host + ' ' : '') + n)}&nbsp;·</span> ${ganz(wortHtml + '&nbsp;·')} ${ganz(wann)}`, fehler ? 'var(--nachtblau-koralle, #e7936e)' : '');
             ]]]
           pfeil: >-
             <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:20px;--ha-icon-display:block;width:20px;height:20px;display:block;color:var(--nachtblau-text-sekundaer, #8794a5);"></ha-icon>
@@ -501,17 +624,15 @@ cards:
               - -webkit-line-clamp: '2'
               - text-wrap: balance
               - text-align: left
+            # Zwei Bloecke: "naechster Lauf" (eine Zeile) und das letzte Update
+            # (hoechstens zwei Zeilen, Kuerzung im Block selbst)
             info:
-              - justify-self: start
+              - justify-self: stretch
               - align-self: start
               - min-width: 0
               - max-width: 100%
               - overflow: hidden
               - white-space: normal
-              - display: -webkit-box
-              - -webkit-box-orient: vertical
-              - -webkit-line-clamp: '2'
-              - text-wrap: balance
               - font-size: 12px
               - line-height: 1.25
               - margin-top: 5px
