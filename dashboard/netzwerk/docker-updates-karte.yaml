@@ -5,7 +5,9 @@
 # Bereich:       netzwerk
 # Status:        aktiv
 # Karten:        auto-entities, button-card, card-mod
-# Templates:     nachtblau_docker_kopf (docker-templates.yaml),
+# Templates:     nachtblau_docker_autoupdate_chip (docker-templates.yaml),
+#                nachtblau_docker_autoupdate_info (docker-templates.yaml),
+#                nachtblau_docker_kopf (docker-templates.yaml),
 #                nachtblau_docker_titel (docker-templates.yaml),
 #                nachtblau_docker_update (docker-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
@@ -17,8 +19,19 @@
 #              1 gesperrt"); "Alle aktualisieren" startet
 #              script.docker_alle_updates_installieren (docker-konfig.yaml)
 #              nach Rueckfrage und zaehlt wie das Skript nur installierbare
-#              Updates. Ohne solches Update oder waehrend das Skript laeuft
-#              ist der Knopf aus.
+#              Updates. Ohne solches Update, waehrend das Skript laeuft oder
+#              waehrend Arcanes Updater installiert, ist der Knopf aus.
+#              Installiert Arcane selbst (geplanter Lauf oder Button "Alle
+#              Updates installieren"; binary_sensor.docker_updates_werden_
+#              installiert, ab HA-Arcane 0.9.0 mit Option "Arcane Updater"),
+#              steht im Kopf "Arcane installiert Updates ..." in Amber: Die
+#              Zeilen zeigen "wird installiert" nur fuer Installationen aus
+#              HA, und ein Update aus HA, das auf ein laufendes Update
+#              desselben Compose-Projekts trifft, wartet bei Arcane bis zu
+#              2 Minuten und scheitert dann (Arcane v3.0.1, admitUpdate,
+#              DefaultActivitySlotWait). Gemessen im Nachbau mit Roboto:
+#              zwei Zeilen neben "Alle aktualisieren" auf dem 360 px breiten
+#              Handy, eine auf dem iPhone 17 Pro.
 #   Liste      je ausstehendem Image-Update eine Zeile (nachtblau_docker_update):
 #              Image, installierte und neue Version, "Installieren" mit
 #              Rueckfrage; ein gesperrtes Update in Koralle mit Grund und
@@ -28,6 +41,21 @@
 #              HA-Arcane 0.7.0): laesst Arcane sofort alle Images pruefen;
 #              daneben der Zeitpunkt des letzten Anstosses aus HA.
 #              Recht: image-updates:check.
+#   Automatisch  Zeile "Automatische Updates" (ab HA-Arcane 0.9.0, Optionen
+#              "Arcane Updater" und "Auto-Update-Schalter"): das letzte Update
+#              aus Arcanes Verlauf (sensor.docker_letztes_image_update:
+#              Container, Status, Zeitpunkt), waehrend eines Laufs "Arcane
+#              installiert Updates ...". Der Sensor kennt nur den neuesten
+#              Eintrag; nach einem Lauf ueber mehrere Container steht der
+#              letzte da. Halten oeffnet den Sensor (Verlauf, Grund eines
+#              Fehlers). Antippen oeffnet das Popup (browser_mod) mit einem
+#              Chip je Container (switch.container_*_automatisch_aktualisieren,
+#              Template nachtblau_docker_autoupdate_chip): Antippen nimmt den
+#              Container aus Arcanes automatischen Updates aus oder wieder auf,
+#              ohne Rueckfrage, denn der Container selbst wird nicht angefasst.
+#              Die automatischen Updates selbst schaltet man in Arcane ein;
+#              HA sieht diese Einstellung nicht. Rechte: image-updates:read,
+#              image-updates:list, containers:autoupdate.
 #   Arcane     Arcane selbst; die Installation laedt das neue Arcane-Image und
 #              startet es neu. Recht: system:upgrade.
 #
@@ -35,11 +63,16 @@
 # Tag; nach einer Installation stand bei new-watchtower auf beiden Seiten
 # "latest" (21.10.2026).
 #
-# Voraussetzung: custom:button-card + custom:auto-entities + card-mod (HACS),
-#                Integration Arcane (HACS) ab 0.7.0 mit Update-Entitaeten und
-#                Steuerung, Rechte containers:redeploy, system:upgrade,
-#                image-updates:read und image-updates:check; Skript aus
-#                docker-konfig.yaml, Templates aus docker-templates.yaml.
+# Voraussetzung: custom:button-card + custom:auto-entities + card-mod +
+#                browser_mod (HACS), Integration Arcane (HACS) ab 0.7.0 mit
+#                Update-Entitaeten und Steuerung, fuer die Zeile
+#                "Automatische Updates" ab 0.9.0 mit den Optionen "Arcane
+#                Updater" und "Auto-Update-Schalter"; Rechte
+#                image-updates:apply (bis HA-Arcane 0.8.1
+#                containers:redeploy), system:upgrade, image-updates:read,
+#                image-updates:check, image-updates:list und
+#                containers:autoupdate; Skript aus docker-konfig.yaml,
+#                Templates aus docker-templates.yaml.
 type: vertical-stack
 card_mod:
   style: |
@@ -59,6 +92,8 @@ cards:
     name: Image-Updates
     label: |
       [[[
+        const lauf = states['binary_sensor.docker_updates_werden_installiert'];
+        if (lauf && lauf.state === 'on') return 'Arcane installiert Updates …';
         const n = entity ? parseInt(entity.state, 10) : NaN;
         const g = states['sensor.local_docker_container'];
         if (isNaN(n)) return 'keine Daten';
@@ -76,6 +111,13 @@ cards:
         // (134 px) drei Zeilen, "12 Updates · 12 gesperrt" zwei.
         return frei ? wort(frei) + ' · ' + gesperrt + ' gesperrt' : wort(gesperrt) + ' gesperrt';
       ]]]
+    styles:
+      label:
+        - color: |
+            [[[
+              const lauf = states['binary_sensor.docker_updates_werden_installiert'];
+              return lauf && lauf.state === 'on' ? 'var(--nachtblau-amber, #e6b566)' : 'var(--nachtblau-text-sekundaer, #8794a5)';
+            ]]]
     custom_fields:
       badge:
         card:
@@ -98,10 +140,12 @@ cards:
                 }
                 return n;
               ]]]
+            # Aus, solange Arcanes Updater installiert (siehe Kopfkommentar).
             aktiv: |
               [[[
                 const sk = states['script.docker_alle_updates_installieren'];
-                return variables.anzahl > 0 && !!sk && sk.state === 'off';
+                const lauf = states['binary_sensor.docker_updates_werden_installiert'];
+                return variables.anzahl > 0 && !!sk && sk.state === 'off' && !(lauf && lauf.state === 'on');
               ]]]
           tap_action: |
             [[[
@@ -318,6 +362,196 @@ cards:
         knopf:
           - align-self: center
           - overflow: visible
+
+  # ---- Automatische Updates (ab HA-Arcane 0.9.0) ----
+  # Ganze Zeile tippbar (Pfeil rechts), kein Knopf: Neben einem Knopf blieben
+  # fuer die Infozeile auf dem 360 px breiten Handy 152 px, schon "radarr ·
+  # aktualisiert · 16.11., 03:00" brauchte zwei Zeilen. Ohne Knopf, gemessen
+  # im Nachbau mit Roboto: 206 px (iPhone 17 Pro 248 px), der laengste Name
+  # (uptimekuma-mariadb-uptime-kuma) mit "fehlgeschlagen" und Zeitpunkt in
+  # zwei Zeilen. Die Zahl der ausgenommenen Container und der Grund eines
+  # Fehlers passten dann nicht mehr dazu; beide stehen im Popup.
+  # Popup: Oberflaeche wie im DWD-Popup (warnlage-templates.yaml, Erklaerung
+  # dort), Breite bis 480 px. Hoehe gemessen (Roboto, Inhalt 344 bzw.
+  # 386 px breit): 592 px, mit zweizeiligem Grund 608 px; Grenze 629 px
+  # (DESIGN.md). Drei Spalten, weil zwei 798 px braeuchten. Die Reserve
+  # reicht fuer einen weiteren Container; ab dem 31. kommt eine elfte Reihe
+  # dazu (+52 px), dann scrollt das Popup.
+  # Im Popup steht kein [[[ ]]]: button-card wertet beim Tippen jedes
+  # Template in service_data aus (siehe person-presence-karte.yaml); die
+  # Logik liegt deshalb in den Templates nachtblau_docker_autoupdate_info
+  # und nachtblau_docker_autoupdate_chip.
+  - type: custom:button-card
+    entity: sensor.docker_letztes_image_update
+    icon: mdi:autorenew
+    show_icon: true
+    show_name: false
+    show_state: false
+    variables:
+      laeuft: '[[[ const l = states["binary_sensor.docker_updates_werden_installiert"]; return !!l && l.state === "on"; ]]]'
+      status: '[[[ return entity && entity.attributes.status ? String(entity.attributes.status) : ""; ]]]'
+      akzent: |
+        [[[
+          if (variables.laeuft) return 'var(--nachtblau-amber, #e6b566)';
+          if (variables.status === 'failed' || variables.status === 'blocked') return 'var(--nachtblau-koralle, #e7936e)';
+          if (variables.status === 'updated' || variables.status === 'restarted') return 'var(--nachtblau-gruen, #a6d49e)';
+          return '';
+        ]]]
+    tap_action:
+      action: call-service
+      service: browser_mod.popup
+      service_data:
+        title: Automatische Updates
+        style: |
+          --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+          --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+          --primary-background-color: var(--nachtblau-seite, #171d29);
+          --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+          --primary-text-color: var(--nachtblau-text, #f2f5f8);
+          --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+          --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+          --popup-min-width: min(100vw, 480px);
+          --popup-max-width: min(100vw, 480px);
+        content:
+          type: vertical-stack
+          cards:
+            - type: custom:button-card
+              template: nachtblau_docker_autoupdate_info
+              entity: sensor.docker_letztes_image_update
+            - type: custom:auto-entities
+              card:
+                type: grid
+                columns: 3
+                square: false
+              card_param: cards
+              sort:
+                method: name
+              filter:
+                include:
+                  - integration: arcane
+                    domain: switch
+                    entity_id: 'switch.container_*_automatisch_aktualisieren'
+                    options:
+                      type: custom:button-card
+                      template: nachtblau_docker_autoupdate_chip
+              else:
+                type: custom:button-card
+                show_icon: false
+                show_state: false
+                show_name: true
+                name: Keine Schalter. In der Integration unter Steuerung „Auto-Update-Schalter“ einschalten.
+                tap_action:
+                  action: none
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - padding: 10px 12px
+                    - border-radius: 14px
+                    - box-shadow: none
+                    - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+                    - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                  name:
+                    - font-size: 12px
+                    - white-space: normal
+                    - text-align: left
+                    - justify-self: start
+                    - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: >-
+        <span style="font-size:14px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Automatische Updates</span>
+      info: |
+        [[[
+          const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          const ganz = (t) => `<span style="white-space:nowrap;">${t}</span>`;
+          if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">Arcane installiert Updates …</span>`;
+          if (!entity || entity.state === 'unavailable') return `<span style="font-size:12px;color:${sek};">nicht verfügbar</span>`;
+          const a = entity.attributes;
+          const d = new Date(entity.state);
+          if (isNaN(d.getTime()) || !a.resource_name) return `<span style="font-size:12px;color:${sek};">${ganz('noch kein Update')} ${ganz('über Arcanes Updater')}</span>`;
+          // Name wie in den Zeilen: "radarr-radarr-1" -> "radarr"
+          let n = String(a.resource_name).replace(/-\d+$/, '');
+          const t = n.split('-');
+          if (t.length % 2 === 0) {
+            const h = t.length / 2;
+            if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+          }
+          const woerter = { updated: 'aktualisiert', restarted: 'neu gestartet', skipped: 'übersprungen', failed: 'fehlgeschlagen', blocked: 'gesperrt', up_to_date: 'aktuell' };
+          const s = variables.status;
+          const wort = woerter[s] || esc(s || '?');
+          const fehler = s === 'failed' || s === 'blocked';
+          const wortHtml = s === 'updated' || s === 'restarted' ? `<span style="color:var(--nachtblau-gruen, #a6d49e);">${wort}</span>` : wort;
+          const wann = d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt.
+          return `<span style="font-size:12px;color:${fehler ? 'var(--nachtblau-koralle, #e7936e)' : sek};"><span style="overflow-wrap:anywhere;">${esc(n)}&nbsp;·</span> ${ganz(wortHtml + '&nbsp;·')} ${ganz(wann)}</span>`;
+        ]]]
+      pfeil: >-
+        <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:20px;--ha-icon-display:block;width:20px;height:20px;display:block;color:var(--nachtblau-text-sekundaer, #8794a5);"></ha-icon>
+    styles:
+      card:
+        - border-radius: 14px
+        - padding: 8px 8px 8px 10px
+        - box-shadow: none
+        - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+      grid:
+        - grid-template-areas: '"i titel pfeil" "i info pfeil"'
+        - grid-template-columns: 36px minmax(0, 1fr) 20px
+        - grid-template-rows: min-content min-content
+        - column-gap: 12px
+        - row-gap: 3px
+        - align-items: center
+      img_cell:
+        - width: 36px
+        - height: 36px
+        - box-sizing: border-box
+        - border-radius: 11px
+        - margin: 0
+        - align-self: center
+        - background: |
+            [[[ return variables.akzent ? 'color-mix(in srgb, ' + variables.akzent + ' 16%, transparent)' : 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'; ]]]
+        - border: |
+            [[[ return variables.akzent ? '1px solid color-mix(in srgb, ' + variables.akzent + ' 24%, transparent)' : '1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))'; ]]]
+      icon:
+        - width: 19px
+        - height: 19px
+        - margin: 0
+        - --ha-icon-display: block
+        - color: '[[[ return variables.akzent || "var(--nachtblau-label, #b4c0cf)"; ]]]'
+      custom_fields:
+        titel:
+          - justify-self: start
+          - align-self: end
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - text-align: left
+        info:
+          - justify-self: start
+          - align-self: start
+          - min-width: 0
+          - max-width: 100%
+          - overflow: hidden
+          - white-space: normal
+          - display: -webkit-box
+          - -webkit-box-orient: vertical
+          - -webkit-line-clamp: '2'
+          - text-wrap: balance
+          - font-size: 12px
+          - line-height: 1.25
+          - margin-top: 5px
+          - text-align: left
+        pfeil:
+          - align-self: center
+          - justify-self: end
 
   - type: custom:button-card
     template: nachtblau_docker_titel
