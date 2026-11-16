@@ -19,6 +19,12 @@
 # und darunter Wochentag/Datum.
 # Nutzer nicht zu Hause -> Foto in Graustufen, Untertitel wechselt.
 #
+# Untertitel nach Ort: zuhause "Willkommen zu Hause", in einer anderen Zone
+# deren Wortlaut aus variables.ort_texte (sonst "Aktuell: <Zonenname>"),
+# ausserhalb aller Zonen "Aktuell unterwegs". Neue Zone mit eigenem Wortlaut:
+# dort eintragen, Schluessel ist der Zonenname. Laengster Text bisher
+# "Aktuell im Kindergarten": bei 360 px zwei Zeilen, bei 402 px eine.
+#
 # Wetter-Quellen (hybrid): Das Zustand-Icon kommt aus der weather-Entitaet, die
 # angezeigte Temperatur ist der lokale Messwert der HomematicIP Wetterstation.
 # Die Station liefert keinen Wetterzustand, daher bleibt das Icon bei der
@@ -75,7 +81,24 @@ variables:
              (h >= 17 && h < 22) ? 'Guten Abend' :
                                    'Gute Nacht';
     ]]]
-  untertitel: '[[[ return entity && entity.state === "home" ? "Willkommen zu Hause" : "Aktuell unterwegs"; ]]]'
+  # Wortlaut je Zone (Schluessel: Zonenname, wie ihn der Zustand der Person
+  # zeigt). Eine Zone, die hier fehlt, erscheint als "Aktuell: <Zonenname>".
+  # Der Name muss alphabetisch vor "untertitel" liegen: button-card bis v6
+  # wertet Variablen in dieser Reihenfolge aus.
+  ort_texte:
+    'Arbeit': 'Aktuell auf der Arbeit'
+    'Kindergarten': 'Aktuell im Kindergarten'
+    'Oma & Opa': 'Aktuell bei Oma & Opa'
+  # Ungeschuetzter Text: fx misst ihn, body schuetzt ihn vor dem Einsetzen ins HTML
+  untertitel: |
+    [[[
+      const s = entity ? entity.state : '';
+      if (s === 'home') return 'Willkommen zu Hause';
+      // In einer anderen Zone ist der Zustand der Zonenname
+      if (!s || ['not_home', 'unknown', 'unavailable'].includes(s)) return 'Aktuell unterwegs';
+      const texte = variables.ort_texte || {};
+      return texte[s] || ('Aktuell: ' + s);
+    ]]]
 triggers_update:
   - weather.wohnort
   - sensor.wetterstation_pro_temperatur
@@ -161,7 +184,9 @@ custom_fields:
       const meHome = me && me.state === 'home';
       const uname = variables.name;
       const timeGreeting = variables.gruss;
-      const subtitle = variables.untertitel;
+      // Zonennamen koennen & < > enthalten ("Oma & Opa")
+      const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const subtitle = esc(variables.untertitel);
       const mePic  = me && me.attributes ? me.attributes.entity_picture : null;
       const meInit = uname ? uname.trim().charAt(0).toUpperCase() : '?';
       const meAccent = meHome ? green : 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
