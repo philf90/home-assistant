@@ -604,8 +604,21 @@ button_card_templates:
   # Tag-Regel, zieht ueber Arcanes Schwachstellen-Pruefung und ueberspringt
   # unveraenderte Images; uebersprungen oder fehlgeschlagen meldet HA als
   # Fehler mit Grund.
+  # Waehrend einer Installation (in_progress) steht "wird installiert …" in
+  # Amber und der Knopf "laeuft …". Bei Arcane selbst (ab HA-Arcane 0.14.0)
+  # bleibt in_progress an, bis Arcanes Upgrade-Job endet, und die Entitaet
+  # meldet den Fortschritt (update_percentage, 1 bis 100, alle 5 s neu): dann
+  # "wird installiert · 40 %" und darunter ein Balken in Amber (4 px, Feld
+  # balken). Ohne Prozentwert, etwa bei Container-Updates, die keinen
+  # Fortschritt melden, bleibt es bei "wird installiert …". Bis 0.13 stand
+  # in_progress bei Arcane nur fuer den kurzen Anstoss an (HA setzt es selbst,
+  # solange install laeuft; homeassistant/components/update/entity.py,
+  # async_install_with_progress). Startet Arcane waehrend des Upgrades neu,
+  # ist die Entitaet kurz nicht verfuegbar und die Zeile zeigt "keine Daten".
+  # Mit Balken ist die Zeile im Nachbau 5 px hoeher (63 statt 58 px; sonst
+  # bestimmt der 40 px hohe Knopf die Hoehe).
   # Rechte: image-updates:apply (Container; bis 0.8.1 containers:redeploy),
-  # system:upgrade (Arcane),
+  # system:upgrade (Arcane), system:read (Fortschritt von Arcane, ab 0.14.0),
   # image-updates:read (Versionshinweise im Dialog).
   nachtblau_docker_update:
     variables:
@@ -638,6 +651,12 @@ button_card_templates:
         ]]]
       offen: '[[[ return !!entity && entity.state === "on"; ]]]'
       laeuft: '[[[ return !!entity && !!entity.attributes.in_progress; ]]]'
+      # Fortschritt in Prozent waehrend der Installation, sonst null
+      prozent: |
+        [[[
+          const p = entity ? entity.attributes.update_percentage : null;
+          return variables.laeuft && typeof p === 'number' && p > 0 && p <= 100 ? Math.round(p) : null;
+        ]]]
       gesperrt: '[[[ return variables.offen && entity.attributes.update_blocked === true; ]]]'
       installierbar: '[[[ return variables.offen && !variables.gesperrt; ]]]'
       akzent: |
@@ -670,13 +689,19 @@ button_card_templates:
           if (!entity || entity.state === 'unavailable') return `<span style="font-size:12px;color:${sek};">keine Daten</span>`;
           const a = entity.attributes;
           const bild = a.title ? a.title + ' · ' : '';
-          if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">${bild}wird installiert …</span>`;
+          if (variables.laeuft) return `<span style="font-size:12px;color:var(--nachtblau-amber, #e6b566);">${bild}wird installiert${variables.prozent !== null ? ' · ' + variables.prozent + ' %' : ' …'}</span>`;
           if (!variables.offen) return `<span style="font-size:12px;color:${sek};">${bild}aktuell · ${a.installed_version || '–'}</span>`;
           if (variables.gesperrt) {
             const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
             return `<span style="font-size:12px;color:var(--nachtblau-koralle, #e7936e);">gesperrt · ${esc(a.blocked_reason || 'von Arcane zurückgehalten')}</span>`;
           }
           return `<span style="font-size:12px;color:${sek};">${bild}${a.installed_version || '?'} → ${a.latest_version || '?'}</span>`;
+        ]]]
+      balken: |
+        [[[
+          const p = variables.prozent;
+          if (p === null) return '';
+          return `<div style="height:4px;border-radius:2px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${p}%;border-radius:2px;background:var(--nachtblau-amber, #e6b566);"></div></div>`;
         ]]]
       install:
         card:
@@ -723,9 +748,10 @@ button_card_templates:
         - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
         - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
-        - grid-template-areas: '"i titel install" "i info install"'
+        - grid-template-areas: |
+            [[[ return variables.prozent !== null ? '"i titel install" "i info install" "i balken install"' : '"i titel install" "i info install"'; ]]]
         - grid-template-columns: 36px minmax(0, 1fr) auto
-        - grid-template-rows: min-content min-content
+        - grid-template-rows: '[[[ return variables.prozent !== null ? "min-content min-content min-content" : "min-content min-content"; ]]]'
         - column-gap: 12px
         - row-gap: 3px
         - align-items: center
@@ -770,6 +796,13 @@ button_card_templates:
           - line-height: 1.25
           - margin-top: 5px
           - text-align: left
+        # 2 px plus 3 px Zeilenabstand = 5 px unter dem Status
+        balken:
+          - display: '[[[ return variables.prozent !== null ? "block" : "none"; ]]]'
+          - justify-self: stretch
+          - align-self: start
+          - min-width: 0
+          - margin-top: 2px
         install:
           - align-self: center
 
