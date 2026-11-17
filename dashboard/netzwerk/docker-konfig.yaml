@@ -93,10 +93,18 @@
 #       0.11.1 haelt ihn bei getrenntem Agenten verfuegbar (aus) und zeigt
 #       daneben "Agent letzter Kontakt", der in der Meldung steht. Kuerzere
 #       Trennungen (Neustart des Agenten) bleiben still, ebenso eine in
-#       Arcane deaktivierte oder in den Optionen abgewaehlte Umgebung (Sensor
-#       unavailable) und ein Neustart von Home Assistant. Fuer einen weiteren
-#       Agenten die beiden Ausloeser um dessen Online-Sensor ergaenzen und
-#       den Kontakt-Sensor in der Meldung anpassen.
+#       Arcane deaktivierte oder in den Optionen abgewaehlte Umgebung (nur
+#       deren Sensor unavailable) und ein Neustart von Home Assistant. Fuer
+#       einen weiteren Agenten die beiden Ausloeser um dessen Online-Sensor
+#       ergaenzen und den Kontakt-Sensor in der Meldung anpassen.
+#       Dazu "Arcane nicht erreichbar": Antwortet Arcane selbst nicht (Host
+#       oder Container weg), sind alle Docker-Entitaeten unavailable, auch
+#       binary_sensor.local_docker_online. Ist der laenger als 5 Minuten
+#       unavailable, kommt eine Meldung, und nach so einem Ausfall eine
+#       zweite, wenn Arcane wieder antwortet. Der Sensor von docker-02 meldet
+#       dabei nichts, weil seine Ausloeser nur auf "aus" reagieren. Eine in
+#       Home Assistant abgeschaltete Arcane-Integration meldet sich hier
+#       ebenfalls als "nicht erreichbar".
 #   script.docker_alle_updates_installieren
 #       "Alle aktualisieren" in der Karte Image-Updates: installiert die
 #       ausstehenden Image-Updates aller Hosts nacheinander, Container mit
@@ -423,6 +431,9 @@ automation:
     description: >-
       Push und Logbuch, wenn der Arcane-Agent von docker-02 laenger als
       5 Minuten getrennt ist, und wenn er danach wieder verbunden ist.
+      Ebenso, wenn Arcane selbst laenger als 5 Minuten nicht erreichbar ist
+      (Online-Sensor von docker-01 unavailable), und wenn es danach wieder
+      antwortet.
     mode: queued
     max: 10
     triggers:
@@ -437,6 +448,20 @@ automation:
         from: "off"
         to: "on"
         id: wieder_da
+      # Arcane antwortet nicht: alle Entitaeten unavailable. Nur der Sensor
+      # der lokalen Umgebung, damit es eine Meldung bleibt; eine abgewaehlte
+      # entfernte Umgebung macht nur ihren eigenen Sensor unavailable.
+      - trigger: state
+        entity_id: binary_sensor.local_docker_online
+        to: unavailable
+        for:
+          minutes: 5
+        id: arcane_weg
+      - trigger: state
+        entity_id: binary_sensor.local_docker_online
+        from: unavailable
+        to: "on"
+        id: arcane_wieder_da
     actions:
       - variables:
           umgebung: "{{ trigger.to_state.name | replace(' Online', '') }}"
@@ -494,6 +519,55 @@ automation:
                   name: Agent
                   message: "wieder verbunden nach {{ dauer }} Min. · {{ umgebung }}"
                   entity_id: binary_sensor.docker_02_online
+          - conditions:
+              - condition: trigger
+                id: arcane_weg
+            sequence:
+              - variables:
+                  text: >-
+                    seit {{ as_local(trigger.to_state.last_changed).strftime('%H:%M') }}
+                    Uhr keine Antwort von Arcane · alle Docker-Entitäten nicht verfügbar
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Arcane nicht erreichbar"
+                  message: "{{ text }} · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Arcane
+                  message: "nicht erreichbar · {{ text }} · {{ umgebung }}"
+                  entity_id: binary_sensor.local_docker_online
+          - conditions:
+              - condition: trigger
+                id: arcane_wieder_da
+              # Nach einem Neustart von Home Assistant zaehlt die Dauer erst
+              # ab dem Start, dann bleibt es still.
+              - condition: template
+                value_template: >-
+                  {{ (trigger.to_state.last_changed
+                      - trigger.from_state.last_changed).total_seconds() >= 300 }}
+            sequence:
+              - variables:
+                  dauer: >-
+                    {{ ((trigger.to_state.last_changed
+                         - trigger.from_state.last_changed).total_seconds() / 60)
+                       | round(0) | int }}
+              - action: notify.mobile_app_iphone
+                data:
+                  title: "Docker: Arcane wieder erreichbar"
+                  message: "nach {{ dauer }} Min. · {{ umgebung }}"
+                  data:
+                    url: /dashboard-home/docker
+                    clickAction: /dashboard-home/docker
+                    group: docker
+              - action: logbook.log
+                data:
+                  name: Arcane
+                  message: "wieder erreichbar nach {{ dauer }} Min. · {{ umgebung }}"
+                  entity_id: binary_sensor.local_docker_online
 
 script:
   docker_alle_updates_installieren:
