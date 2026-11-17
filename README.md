@@ -385,6 +385,10 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    Bei 32 Containern und 30 s Abfrage kamen am 17.11.2026 rund 82.600
    neue Zustände am Tag in die Datenbank, fast alle vom Arbeitsspeicher.
 
+   Ab HA-Arcane 0.14.0 zeigt die Karte Image-Updates beim Aktualisieren von
+   Arcane selbst den Fortschritt in Prozent; dafür braucht der Schlüssel
+   neben `system:upgrade` auch `system:read` (oben schon bei Anzeigen).
+
 ### Claude Usage
 
 Für die Claude-Nutzungskarte (`claude-nutzung-karte.yaml`): die Integration
