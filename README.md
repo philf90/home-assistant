@@ -331,7 +331,8 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    und `image-updates:check` (Nach Updates suchen), ab HA-Arcane 0.9.0
    `image-updates:list` (letztes Update) und `containers:autoupdate`
    (Auswahl der automatischen Updates). Für die Optionen aus Schritt 4
-   ab HA-Arcane 0.8.0 außerdem `events:list`.
+   ab HA-Arcane 0.8.0 außerdem `events:list`, für CPU und
+   Arbeitsspeicher je Container ab HA-Arcane 0.13.0 `containers:read`.
    Welche Rechte fehlen, zeigt die Integration unter
    *Konfigurieren → Berechtigungen des API-Keys*.
 2. Einstellungen → Marketplace → *Add from link* →
@@ -377,8 +378,12 @@ Docker-Socket muss dafür nicht im Netz offen stehen. Einrichtung:
    sofortigem Aktualisieren bei 30 s: CPU, RAM und Festplatte des Hosts
    kommen nur über die regelmäßige Abfrage.
 
-CPU und Arbeitsspeicher je Container liefert die Integration nicht, nur
-für den ganzen Host.
+   Ab HA-Arcane 0.13.0, beide standardmäßig aus (*Abfrage*): „CPU und
+   Arbeitsspeicher je Container“ für das Pop-up „Ressourcen“ in der Karte
+   Hosts (Recht `containers:read`) und „Volume-Größen“ für das Pop-up
+   „Volumes“ in der Karte Speicher & Aufräumen (Recht `volumes:list`).
+   Bei 32 Containern und 30 s Abfrage kamen am 17.11.2026 rund 82.600
+   neue Zustände am Tag in die Datenbank, fast alle vom Arbeitsspeicher.
 
 ### Claude Usage
 

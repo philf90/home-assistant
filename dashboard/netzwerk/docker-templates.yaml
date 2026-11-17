@@ -1503,6 +1503,20 @@ button_card_templates:
   # 4 px Polster oben und unten vergroessern die Tippflaeche; oben ergibt das
   # denselben Abstand wie zwischen den Zeilen darueber. Ohne die Option fehlt
   # die Zeile.
+  # Darunter ebenso "Ressourcen  5,5 GB · CPU 1,9 %  ›": Summe aus den
+  # Sensoren "Arbeitsspeicher" und "CPU" der Container dieses Hosts (HA-Arcane
+  # ab 0.13.0, Option "CPU und Arbeitsspeicher je Container", translation_key
+  # container_memory und container_cpu). Container gehoeren zum Host, wenn ihr
+  # Geraet direkt oder ueber das Geraet ihres Projekts (via_device) an der
+  # Umgebung haengt; ueber die Entity-ID geht es nicht, weil auf docker-02
+  # aeltere Container-Entitaeten ohne Host im Namen neben neuen mit Host
+  # stehen (sensor.container_portainer_zustand, sensor.container_docker_02_
+  # portainer_arbeitsspeicher). Antippen oeffnet das Pop-up "Ressourcen"
+  # (#docker-ressourcen-<Objekt-ID von "Online">, nachtblau_docker_ressourcen).
+  # Ohne die Option fehlt die Zeile; laeuft kein Container mit Probe (alle
+  # gestoppt oder Arcane getrennt), steht "keine Werte" ohne Pfeil.
+  # Gemessen mit Roboto: Die Zeile macht das Pop-up 25 px hoeher (docker-02
+  # 494 -> 519 px, docker-01 350 -> 375 px; Platz 539 px).
   nachtblau_docker_host_info:
     variables:
       sib: |
@@ -1521,6 +1535,35 @@ button_card_templates:
           const reg = entity ? E[entity.entity_id] : null;
           const d = reg ? D[reg.device_id] : null;
           return { name: d ? (d.name_by_user || d.name || '') : '', agent: !!d && d.model === 'Arcane Agent', version: d ? (d.sw_version || '') : '' };
+        ]]]
+      # Container dieses Hosts mit Probe: Zahl (n), Summe Arbeitsspeicher in MB
+      # (mem) und CPU in % (cpu); null ohne die Option "CPU und
+      # Arbeitsspeicher je Container"
+      res: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          if (!reg) return null;
+          const amHost = (did) => {
+            let d = D[did];
+            for (let i = 0; d && i < 3; i++) {
+              if (d.id === reg.device_id) return true;
+              d = d.via_device_id ? D[d.via_device_id] : null;
+            }
+            return false;
+          };
+          const F = { B: 1e-6, kB: 1e-3, MB: 1, GB: 1e3, KiB: 0.001024, MiB: 1.048576, GiB: 1073.741824 };
+          let n = 0, alle = 0, mem = 0, cpu = 0;
+          for (const e of Object.values(E)) {
+            if (e.platform !== 'arcane' || (e.translation_key !== 'container_memory' && e.translation_key !== 'container_cpu') || !amHost(e.device_id)) continue;
+            const s = states[e.entity_id], v = s ? parseFloat(s.state) : NaN;
+            if (e.translation_key === 'container_cpu') { if (!isNaN(v)) cpu += v; continue; }
+            alle++;
+            if (isNaN(v)) continue;
+            n++;
+            mem += v * (F[s.attributes.unit_of_measurement] || 1);
+          }
+          return alle ? { n: n, mem: mem, cpu: cpu } : null;
         ]]]
     show_icon: false
     show_name: false
@@ -1633,6 +1676,63 @@ button_card_templates:
                 - text-align: left
               pf:
                 - justify-self: end
+      ressourcen:
+        card:
+          type: custom:button-card
+          show_icon: false
+          show_name: false
+          show_state: false
+          show_label: false
+          tap_action: |
+            [[[
+              const r = variables.res;
+              if (!r || !r.n || !entity) return { action: 'none' };
+              return { action: 'navigate', navigation_path: '#docker-ressourcen-' + entity.entity_id.split('.')[1] };
+            ]]]
+          hold_action:
+            action: none
+          custom_fields:
+            l: >-
+              <span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Ressourcen</span>
+            v: |
+              [[[
+                const r = variables.res;
+                let txt = 'keine Werte';
+                if (r && r.n) {
+                  const m = r.mem >= 1000 ? (r.mem / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB' : Math.round(r.mem).toLocaleString('de-DE') + ' MB';
+                  txt = m + ' · CPU ' + r.cpu.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+                }
+                return `<span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text, #f2f5f8);">${txt}</span>`;
+              ]]]
+            pf: |
+              [[[
+                const r = variables.res;
+                if (!r || !r.n) return '';
+                return `<span style="font-size:16px;line-height:1;color:var(--nachtblau-text-sekundaer, #8794a5);">›</span>`;
+              ]]]
+          styles:
+            card:
+              - padding: 4px 0
+              - border: none
+              - border-radius: 6px
+              - box-shadow: none
+              - background: none
+              - width: 100%
+              - box-sizing: border-box
+            grid:
+              - grid-template-areas: '"l v pf"'
+              - grid-template-columns: 76px minmax(0, 1fr) auto
+              - column-gap: 10px
+              - align-items: center
+            custom_fields:
+              l:
+                - justify-self: start
+              v:
+                - justify-self: start
+                - min-width: 0
+                - text-align: left
+              pf:
+                - justify-self: end
     styles:
       card:
         - padding: 0 2px
@@ -1645,7 +1745,7 @@ button_card_templates:
         - cursor: default
       grid:
         - grid-template-areas: |
-            [[[ return variables.sib.host_ports ? '"kopf" "daten" "ports"' : '"kopf" "daten"'; ]]]
+            [[[ return '"kopf" "daten"' + (variables.sib.host_ports ? ' "ports"' : '') + (variables.res ? ' "ressourcen"' : ''); ]]]
         - grid-template-columns: minmax(0, 1fr)
         - row-gap: 0
       custom_fields:
@@ -1661,6 +1761,10 @@ button_card_templates:
           - justify-self: stretch
           - min-width: 0
           - display: '[[[ return variables.sib.host_ports ? "block" : "none"; ]]]'
+        ressourcen:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.res ? "block" : "none"; ]]]'
 
   # ---------------------------------------------------------------------------
   # nachtblau_docker_ports: Inhalt des Pop-ups "Ports" eines Hosts
@@ -1806,6 +1910,428 @@ button_card_templates:
           - text-align: left
 
   # ---------------------------------------------------------------------------
+  # nachtblau_docker_ressourcen: Inhalt des Pop-ups "Ressourcen" eines Hosts
+  # (#docker-ressourcen-<Objekt-ID von "Online">, erzeugt in
+  # docker-hosts-karte.yaml; geoeffnet ueber die Zeile "Ressourcen" im
+  # Host-Pop-up). Entity ist der Binaersensor "Online" der Umgebung. Gelesen
+  # werden die Sensoren "Arbeitsspeicher" und "CPU" der Container dieses Hosts
+  # (HA-Arcane ab 0.13.0, Option "CPU und Arbeitsspeicher je Container",
+  # translation_key container_memory und container_cpu), gefunden ueber den
+  # Geraetebaum wie in nachtblau_docker_host_info.
+  #   Kopf     "Ressourcen · docker-01" links (16 px), rechts "28 laufen",
+  #            dazu "· 1 gestoppt" (Container ohne Probe, Zustand unknown);
+  #            ist der Host getrennt (alle unavailable), "nicht verfuegbar"
+  #   Info     "5,49 GB Arbeitsspeicher · CPU 1,9 % (Summe der Container)"
+  #   Zeilen   die zehn groessten laufenden Container nach Arbeitsspeicher:
+  #            Name, RAM, CPU, darunter ein Balken (am groessten gemessen).
+  #            Jede Zeile ist eine eingebettete button-card
+  #            (nachtblau_docker_ressourcen_zeile); Antippen oeffnet den
+  #            Sensor "Arbeitsspeicher" mit seinem Verlauf.
+  #   Rest     "+ 18 weitere · zusammen 1,76 GB"
+  # CPU ist der Anteil am ganzen Host, wie Arcane ihn liefert (100 % = alle
+  # Kerne voll), gemittelt ueber das Abfrageintervall. Arbeitsspeicher ohne
+  # Seitencache wie bei docker stats. Anteile am Host-RAM zeigt das Pop-up
+  # bewusst nicht: Am 17.11.2026 lag die Summe der Container auf docker-01
+  # 0,39 GB ueber der Belegung, die der Host meldet (5,49 gegen 5,10 GB).
+  # Ein eigenes Speicherlimit steht hinter dem Namen ("mealie · Limit
+  # 1,05 GB"). Als eigenes gilt ein Limit unter dem RAM des Hosts; ohne Limit
+  # meldet Docker den ganzen Host-RAM. Den nimmt das Template aus dem Attribut
+  # memory_bytes von "Online" (Agent), dem Sensor "Host Arbeitsspeicher
+  # gesamt" (lokal) oder sonst dem groessten Limit der Container.
+  # Name wie im Pop-up "Ports" (nachtblau_docker_ports): ohne Host,
+  # Compose-Anhaengsel und, ab 18 Zeichen, ohne Projekt
+  # ("s-pdf-stirling-pdf-1" -> "stirling-pdf").
+  # Gemessen im Nachbau aus diesem Template mit den Werten vom 17.11.2026 und
+  # Roboto (als data-URL eingebettet, als geladen geprueft), 324 px Inhalt:
+  # docker-01 mit zehn Zeilen, Kopf, Info und Rest 442 px (Zeilenhoehe 1,5:
+  # 504 px), eine Zeile 34 px; docker-02 mit 4 Zeilen 237 px. Platz 539 px
+  # (siehe Pop-up "Automatische Updates"). Zwoelf Zeilen passten noch, zehn
+  # reichen fuer die Rangfolge. Kein Name wird gekuerzt.
+  nachtblau_docker_ressourcen:
+    variables:
+      host: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return d ? (d.name_by_user || d.name || '') : '';
+        ]]]
+      # l: laufende Container, groesster zuerst, je { e: Entity Arbeitsspeicher,
+      # n: Name, mem: MB, cpu: % oder null, lim: eigenes Limit in MB oder null };
+      # aus: Container ohne Probe (Zustand unknown, gestoppt); nv: nicht
+      # verfuegbar (Host getrennt); mem, cpu: Summen
+      daten: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const leer = { l: [], aus: 0, nv: 0, mem: 0, cpu: 0 };
+          if (!reg) return leer;
+          const amHost = (did) => {
+            let d = D[did];
+            for (let i = 0; d && i < 3; i++) {
+              if (d.id === reg.device_id) return true;
+              d = d.via_device_id ? D[d.via_device_id] : null;
+            }
+            return false;
+          };
+          const F = { B: 1e-6, kB: 1e-3, MB: 1, GB: 1e3, KiB: 0.001024, MiB: 1.048576, GiB: 1073.741824 };
+          const g = {};
+          let gesamt = null;
+          for (const e of Object.values(E)) {
+            if (e.platform !== 'arcane') continue;
+            if (e.device_id === reg.device_id && e.translation_key === 'host_memory_total') {
+              const s = states[e.entity_id], v = s ? parseFloat(s.state) : NaN;
+              if (!isNaN(v)) gesamt = v * (F[s.attributes.unit_of_measurement] || 1) * 1e6;
+              continue;
+            }
+            if ((e.translation_key !== 'container_memory' && e.translation_key !== 'container_cpu') || !amHost(e.device_id)) continue;
+            (g[e.device_id] = g[e.device_id] || {})[e.translation_key === 'container_memory' ? 'm' : 'c'] = e.entity_id;
+          }
+          if (entity.attributes.memory_bytes) gesamt = Number(entity.attributes.memory_bytes);
+          const host = variables.host;
+          const kurz = (d) => {
+            let c = String(d.name_by_user || d.name || '?').replace(/^Container /, '');
+            if (host && c.startsWith(host + ' ')) c = c.slice(host.length + 1);
+            let n = c.replace(/-\d+$/, '');
+            const t = n.split('-');
+            if (t.length % 2 === 0) {
+              const h = t.length / 2;
+              if (t.slice(0, h).join('-') === t.slice(h).join('-')) n = t.slice(0, h).join('-');
+            }
+            if (n.length > 17) {
+              const v = d.via_device_id ? D[d.via_device_id] : null;
+              const p = v && v.id !== reg.device_id ? String(v.name || '').replace(/^(Project|Projekt) /, '') : '';
+              if (p && n.startsWith(p + '-') && n.length > p.length + 1) n = n.slice(p.length + 1);
+            }
+            return n;
+          };
+          const l = [];
+          let aus = 0, nv = 0, maxLim = 0;
+          for (const [did, x] of Object.entries(g)) {
+            const s = x.m ? states[x.m] : null, v = s ? parseFloat(s.state) : NaN;
+            if (isNaN(v)) {
+              if (s && s.state === 'unknown') aus++;
+              else if (x.m) nv++;
+              continue;
+            }
+            const c = x.c && states[x.c] ? parseFloat(states[x.c].state) : NaN;
+            const lim = Number(s.attributes.memory_limit) || 0;
+            if (lim > maxLim) maxLim = lim;
+            l.push({ e: x.m, n: kurz(D[did] || {}), mem: v * (F[s.attributes.unit_of_measurement] || 1), cpu: isNaN(c) ? null : c, lim: lim });
+          }
+          const host_ram = gesamt || maxLim;
+          for (const z of l) z.lim = z.lim && host_ram && z.lim < host_ram * 0.99 ? z.lim / 1e6 : null;
+          l.sort((a, b) => b.mem - a.mem);
+          return { l: l, aus: aus, nv: nv, mem: l.reduce((s, z) => s + z.mem, 0), cpu: l.reduce((s, z) => s + (z.cpu || 0), 0) };
+        ]]]
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          return `<span style="font-size:16px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Ressourcen${variables.host ? ' · ' + esc(variables.host) : ''}</span>`;
+        ]]]
+      summe: |
+        [[[
+          const d = variables.daten;
+          let txt = d.l.length + ' laufen';
+          if (d.aus) txt += ' · ' + d.aus + ' gestoppt';
+          if (!d.l.length && !d.aus) txt = 'nicht verfügbar';
+          else if (d.nv) txt += ' · ' + d.nv + ' ohne Daten';
+          return `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${txt}</span>`;
+        ]]]
+      info: |
+        [[[
+          const d = variables.daten;
+          const mb = (v) => v >= 1000 ? (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: v < 10000 ? 2 : 1 }) + ' GB' : Math.round(v).toLocaleString('de-DE') + ' MB';
+          const txt = d.l.length
+            ? mb(d.mem) + ' Arbeitsspeicher · CPU ' + d.cpu.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' % (Summe der Container)'
+            : (d.aus && !d.nv ? 'Kein Container läuft.' : 'Keine Messwerte: Host getrennt oder Option „CPU und Arbeitsspeicher je Container“ aus.');
+          return `<span style="font-size:12px;line-height:1.3;color:var(--nachtblau-text-sekundaer, #8794a5);">${txt}</span>`;
+        ]]]
+      spalten: |
+        [[[
+          if (!variables.daten.l.length) return '';
+          const z = (t, r) => `<span style="text-align:${r ? 'right' : 'left'};">${t}</span>`;
+          return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto 40px;column-gap:10px;font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--nachtblau-text-sekundaer, #8794a5);">${z('Container')}${z('RAM', 1)}${z('CPU', 1)}</div>`;
+        ]]]
+      r0:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[0]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[0] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r1:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[1]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[1] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r2:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[2]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[2] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r3:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[3]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[3] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r4:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[4]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[4] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r5:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[5]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[5] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r6:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[6]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[6] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r7:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[7]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[7] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r8:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[8]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[8] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      r9:
+        card:
+          type: custom:button-card
+          template: nachtblau_docker_ressourcen_zeile
+          entity: '[[[ const z = variables.daten.l[9]; return z ? z.e : entity.entity_id; ]]]'
+          variables:
+            z: '[[[ return variables.daten.l[9] || null; ]]]'
+            max: '[[[ return variables.daten.l.length ? variables.daten.l[0].mem : 1; ]]]'
+      weiter: |
+        [[[
+          const l = variables.daten.l;
+          if (l.length <= 10) return '';
+          const r = l.slice(10).reduce((s, z) => s + z.mem, 0);
+          const mb = (v) => v >= 1000 ? (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: v < 10000 ? 2 : 1 }) + ' GB' : Math.round(v).toLocaleString('de-DE') + ' MB';
+          return `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">+ ${l.length - 10} weitere · zusammen ${mb(r)}</span>`;
+        ]]]
+    styles:
+      # Breiten-Fesseln und Abstaende wie im Pop-up "Ports": ohne Polster an
+      # der Karte, Texte ruecken 2 px ein; zwischen Kopf, Info, Liste und Rest
+      # 10 px, die Zeilen bringen ihre 5 px Polster selbst mit.
+      card:
+        - padding: 0
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+        - cursor: default
+      grid:
+        - grid-template-areas: |
+            [[[
+              const n = variables.daten.l.length, k = Math.min(10, n);
+              let a = '"titel summe" "info info"';
+              if (k) a += ' "spalten spalten"';
+              for (let i = 0; i < k; i++) a += ' "r' + i + ' r' + i + '"';
+              if (n > 10) a += ' "weiter weiter"';
+              return a;
+            ]]]
+        - grid-template-columns: minmax(0, 1fr) auto
+        - column-gap: 10px
+        - row-gap: 0
+        - align-items: baseline
+      custom_fields:
+        titel:
+          - justify-self: start
+          - min-width: 0
+          - padding-left: 2px
+          - text-align: left
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+        summe:
+          - justify-self: end
+          - padding-right: 2px
+          - white-space: nowrap
+        info:
+          - justify-self: stretch
+          - min-width: 0
+          - margin-top: 10px
+          - padding: 0 2px
+          - text-align: left
+          - white-space: normal
+        spalten:
+          - justify-self: stretch
+          - min-width: 0
+          - margin-top: 10px
+          - padding: 0 2px 2px
+        r0:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 0 ? "block" : "none"; ]]]'
+        r1:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 1 ? "block" : "none"; ]]]'
+        r2:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 2 ? "block" : "none"; ]]]'
+        r3:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 3 ? "block" : "none"; ]]]'
+        r4:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 4 ? "block" : "none"; ]]]'
+        r5:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 5 ? "block" : "none"; ]]]'
+        r6:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 6 ? "block" : "none"; ]]]'
+        r7:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 7 ? "block" : "none"; ]]]'
+        r8:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 8 ? "block" : "none"; ]]]'
+        r9:
+          - justify-self: stretch
+          - min-width: 0
+          - display: '[[[ return variables.daten.l.length > 9 ? "block" : "none"; ]]]'
+        weiter:
+          - justify-self: start
+          - margin-top: 10px
+          - padding: 0 2px
+          - text-align: left
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_ressourcen_zeile: eine Zeile im Pop-up "Ressourcen"
+  # (eingebettet in nachtblau_docker_ressourcen). Entity ist der Sensor
+  # "Arbeitsspeicher" des Containers; Antippen oeffnet ihn mit Verlauf.
+  # variables.z kommt fertig aus dem Pop-up ({ n, mem, cpu, lim }, siehe
+  # dort), variables.max ist der groesste Wert der Liste fuer den Balken.
+  # Name 12,5 px fett mit "…", RAM 12,5 px fett und CPU 12 px rechtsbuendig in
+  # Ziffern gleicher Breite, darunter der Balken (4 px, Blau). 5 px Polster
+  # oben und unten vergroessern die Tippflaeche; eine Zeile ist 34 px hoch.
+  nachtblau_docker_ressourcen_zeile:
+    variables:
+      z: null
+      max: 1
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      n: |
+        [[[
+          const z = variables.z;
+          if (!z) return '';
+          const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+          const lim = z.lim ? ` <span style="font-size:11.5px;font-weight:400;color:var(--nachtblau-text-sekundaer, #8794a5);">· Limit ${(z.lim >= 1000 ? (z.lim / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB' : Math.round(z.lim) + ' MB')}</span>` : '';
+          return `<span style="font-size:12.5px;font-weight:700;line-height:1.2;color:var(--nachtblau-text, #f2f5f8);">${esc(z.n)}${lim}</span>`;
+        ]]]
+      v: |
+        [[[
+          const z = variables.z;
+          if (!z) return '';
+          const v = z.mem;
+          const t = v >= 1000 ? (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: v < 10000 ? 2 : 1 }) + ' GB'
+            : (v >= 10 ? Math.round(v).toLocaleString('de-DE') : v.toLocaleString('de-DE', { maximumFractionDigits: 1 })) + ' MB';
+          return `<span style="font-size:12.5px;font-weight:700;line-height:1.2;color:var(--nachtblau-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;">${t}</span>`;
+        ]]]
+      c: |
+        [[[
+          const z = variables.z;
+          if (!z) return '';
+          const t = z.cpu === null ? '–' : z.cpu.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+          return `<span style="font-size:12px;line-height:1.2;color:var(--nachtblau-text-sekundaer, #8794a5);font-variant-numeric:tabular-nums;white-space:nowrap;">${t}</span>`;
+        ]]]
+      b: |
+        [[[
+          const z = variables.z;
+          const p = z && variables.max > 0 ? Math.max(0, Math.min(100, z.mem / variables.max * 100)) : 0;
+          return `<div style="height:4px;border-radius:2px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${p.toFixed(1)}%;border-radius:2px;background:var(--nachtblau-blau, #7fb3d5);"></div></div>`;
+        ]]]
+    styles:
+      card:
+        - padding: 5px 2px
+        - border: none
+        - border-radius: 6px
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - box-sizing: border-box
+      grid:
+        - grid-template-areas: '"n v c" "b b b"'
+        - grid-template-columns: minmax(0, 1fr) auto 40px
+        - column-gap: 10px
+        - row-gap: 4px
+        - align-items: center
+      custom_fields:
+        n:
+          - justify-self: stretch
+          - min-width: 0
+          - text-align: left
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+        v:
+          - justify-self: end
+        c:
+          - justify-self: end
+        b:
+          - justify-self: stretch
+          - min-width: 0
+
+  # ---------------------------------------------------------------------------
   # nachtblau_docker_host_jobs: Arcanes Hintergrund-Jobs eines Hosts im Pop-up
   # (HA-Arcane ab 0.10.0, Option "Arcane Hintergrund-Jobs"). Entity ist der
   # Binaersensor "Online"; die Jobs sind die Sensoren desselben Geraets mit
@@ -1904,6 +2430,15 @@ button_card_templates:
   #   Zeile    Images, Build-Cache, Volumes (bleiben); nach dem Aufraeumen bis
   #            zum naechsten Bericht "Stand vor dem Aufraeumen" (erkannt an
   #            report_started_at, HA-Arcane ab 0.7.1)
+  #   Volumes  "Volumes  10,1 GB belegt  ›" aus dem Sensor "Volume-Speicher
+  #            gesamt" desselben Geraets (HA-Arcane ab 0.13.0, Option
+  #            "Volume-Groessen", translation_key volumes_size_total; Messung
+  #            hoechstens alle 15 Minuten), bis zur ersten Messung "Messung
+  #            folgt". Eingebettete button-card wie die Zeile "Ports" im
+  #            Host-Pop-up: Antippen oeffnet das Pop-up "Volumes" des Hosts
+  #            (#docker-volumes-<Objekt-ID des Sensors>, nachtblau_docker_
+  #            volumes, erzeugt in docker-speicher-karte.yaml). Ohne die
+  #            Option fehlt die Zeile.
   # "Laeuft" heisst: script.docker_aufraeumen ist an und der Status-Helfer
   # dieses Hosts steht auf aufraeumen oder bericht (docker-konfig.yaml). Den
   # Helfer bildet das Template aus dem Prune-Button: button.docker_02_
@@ -2000,6 +2535,64 @@ button_card_templates:
           if (stand) teile.push(stand);
           return kopf + spur + zeile(stuecke(teile));
         ]]]
+      volumes:
+        card:
+          type: custom:button-card
+          show_icon: false
+          show_name: false
+          show_state: false
+          show_label: false
+          tap_action: |
+            [[[
+              const s = variables.sib.volumes_size_total;
+              if (!s || ['unavailable', 'unknown'].includes(s.state)) return { action: 'none' };
+              return { action: 'navigate', navigation_path: '#docker-volumes-' + s.entity_id.split('.')[1] };
+            ]]]
+          hold_action:
+            action: none
+          custom_fields:
+            l: >-
+              <span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Volumes</span>
+            v: |
+              [[[
+                const s = variables.sib.volumes_size_total;
+                const v = s ? parseFloat(s.state) : NaN;
+                const F = { B: 1e-9, kB: 1e-6, MB: 1e-3, GB: 1, TB: 1e3, MiB: 0.001048576, GiB: 1.073741824 };
+                const gbv = isNaN(v) ? NaN : v * (F[s.attributes.unit_of_measurement] || 1);
+                let txt = 'nicht verfügbar';
+                if (s && s.state === 'unknown') txt = 'Messung folgt';
+                else if (!isNaN(gbv)) txt = (gbv < 1 ? Math.round(gbv * 1000).toLocaleString('de-DE') + ' MB' : gbv.toLocaleString('de-DE', { maximumFractionDigits: gbv < 10 ? 2 : 1 }) + ' GB') + ' belegt';
+                return `<span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-text, #f2f5f8);">${txt}</span>`;
+              ]]]
+            pf: |
+              [[[
+                const s = variables.sib.volumes_size_total;
+                if (!s || ['unavailable', 'unknown'].includes(s.state)) return '';
+                return `<span style="font-size:16px;line-height:1;color:var(--nachtblau-text-sekundaer, #8794a5);">›</span>`;
+              ]]]
+          styles:
+            card:
+              - padding: 4px 0
+              - border: none
+              - border-radius: 6px
+              - box-shadow: none
+              - background: none
+              - width: 100%
+              - box-sizing: border-box
+            grid:
+              - grid-template-areas: '"l v pf"'
+              - grid-template-columns: 76px minmax(0, 1fr) auto
+              - column-gap: 10px
+              - align-items: center
+            custom_fields:
+              l:
+                - justify-self: start
+              v:
+                - justify-self: start
+                - min-width: 0
+                - text-align: left
+              pf:
+                - justify-self: end
     styles:
       card:
         - border-radius: 14px
@@ -2008,7 +2601,8 @@ button_card_templates:
         - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
         - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
       grid:
-        - grid-template-areas: '"balken"'
+        - grid-template-areas: |
+            [[[ return variables.sib.volumes_size_total ? '"balken" "volumes"' : '"balken"'; ]]]
         - grid-template-columns: minmax(0, 1fr)
       custom_fields:
         balken:
@@ -2016,6 +2610,162 @@ button_card_templates:
           - text-align: left
           - white-space: normal
           - overflow: visible
+        # 4 px plus 4 px Polster der Zeile unter der Zeile mit Images und
+        # Build-Cache; die Zeile macht den Block 30 px hoeher (gemessen)
+        volumes:
+          - justify-self: stretch
+          - min-width: 0
+          - margin-top: 4px
+          - display: '[[[ return variables.sib.volumes_size_total ? "block" : "none"; ]]]'
+
+  # ---------------------------------------------------------------------------
+  # nachtblau_docker_volumes: Inhalt des Pop-ups "Volumes" eines Hosts
+  # (#docker-volumes-<Objekt-ID des Sensors>, erzeugt in
+  # docker-speicher-karte.yaml; geoeffnet ueber die Zeile "Volumes" in
+  # nachtblau_docker_speicher_frei). Entity ist der Sensor "Volume-Speicher
+  # gesamt" der Umgebung (HA-Arcane ab 0.13.0, Option "Volume-Groessen");
+  # gelesen wird sein Attribut volumes (name, size in Byte, ref_count).
+  #   Kopf       "Volumes · docker-01" links (16 px), rechts "31 · 10,07 GB"
+  #   Groesste   die sechs groessten Volumes in Gebrauch (ref_count > 0) mit
+  #              Balken (Blau, am groessten gemessen), darunter "+ 20 weitere
+  #              in Gebrauch · zusammen 694 MB"
+  #   Ungenutzt  alle Volumes ohne Container (ref_count 0) mit Punkt und
+  #              Balken in Amber, Titel mit Summe und "bleiben beim
+  #              Aufraeumen": Der Prune-Button entfernt keine Volumes. Mehr
+  #              als acht fasst eine Zeile zusammen.
+  # Die Summe der ungenutzten ist der Sensor "Freigebbarer Volume-Speicher"
+  # (am 17.11.2026 auf beiden Hosts auf das Byte gleich). Ein Volume, dessen
+  # Groesse Docker nicht gemessen hat (-1, anderer Treiber), steht mit
+  # "unbekannt" da und zaehlt in keiner Summe. Den Container zum Volume zeigt
+  # das Pop-up nicht: Er kostete eine zweite Zeile je Volume, und die Namen
+  # tragen das Projekt meist schon ("grafana_grafana_storage").
+  # Die Liste von Arcane enthaelt auch interne Volumes, die der Sensor
+  # "Volumes" nicht zaehlt (docker-01: 31 gegen 29, arcane-backups und
+  # arcane-rustic-cache).
+  # Gemessen im Nachbau aus diesem Template mit Roboto, 324 px Inhalt:
+  # docker-01 (6 groesste, Rest, 5 ungenutzte) 456 px, Zeilenhoehe 1,5
+  # 471 px; docker-02 267 px; Platz 539 px. Lange Volume-Namen enden mit "…";
+  # in der Instanz passt jeder, auch der laengste mit 37 Zeichen.
+  nachtblau_docker_volumes:
+    variables:
+      host: |
+        [[[
+          const E = hass.entities || {}, D = hass.devices || {};
+          const reg = entity ? E[entity.entity_id] : null;
+          const d = reg ? D[reg.device_id] : null;
+          return d ? (d.name_by_user || d.name || '') : '';
+        ]]]
+      liste: |
+        [[[
+          const a = entity && Array.isArray(entity.attributes.volumes) ? entity.attributes.volumes : [];
+          return a.filter((v) => v && v.name).map((v) => ({
+            name: String(v.name),
+            size: typeof v.size === 'number' && v.size >= 0 ? v.size : null,
+            frei: v.ref_count === 0
+          })).sort((x, y) => (y.size || 0) - (x.size || 0));
+        ]]]
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: more-info
+    custom_fields:
+      titel: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          return `<span style="font-size:16px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);">Volumes${variables.host ? ' · ' + esc(variables.host) : ''}</span>`;
+        ]]]
+      summe: |
+        [[[
+          const l = variables.liste;
+          let txt;
+          if (!entity || entity.state === 'unavailable') txt = 'nicht verfügbar';
+          else if (entity.state === 'unknown') txt = 'Messung folgt';
+          else {
+            const b = l.reduce((s, v) => s + (v.size || 0), 0);
+            txt = l.length + ' · ' + (b < 1e9 ? Math.round(b / 1e6).toLocaleString('de-DE') + ' MB' : (b / 1e9).toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' GB');
+          }
+          return `<span style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${txt}</span>`;
+        ]]]
+      liste: |
+        [[[
+          const esc = (s) => String(s).replace(/[&<>"]/g, (z) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[z]);
+          if (!entity || ['unavailable', 'unknown'].includes(entity.state)) return '';
+          const l = variables.liste;
+          const SEK = 'var(--nachtblau-text-sekundaer, #8794a5)', TEXT = 'var(--nachtblau-text, #f2f5f8)';
+          const BLAU = 'var(--nachtblau-blau, #7fb3d5)', AMBER = 'var(--nachtblau-amber, #e6b566)';
+          if (!l.length) return `<span style="font-size:12px;color:${SEK};">Keine Volumes.</span>`;
+          const gr = (b) => {
+            if (b === null) return 'unbekannt';
+            const v = b / 1e6;
+            if (v >= 1000) return (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: v < 10000 ? 2 : 1 }) + ' GB';
+            if (v >= 10) return Math.round(v).toLocaleString('de-DE') + ' MB';
+            if (v >= 0.1) return v.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' MB';
+            return (v > 0 ? '&lt; 0,1' : '0') + ' MB';
+          };
+          const titel = (t) => `<div style="font-size:10.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${SEK};padding:2px 2px 0;">${t}</div>`;
+          const rest = (t) => `<div style="font-size:12px;color:${SEK};padding:0 2px;">${t}</div>`;
+          const zeile = (v, max, farbe) => {
+            const p = max > 0 && v.size ? Math.max(0, Math.min(100, v.size / max * 100)) : 0;
+            const punkt = v.frei ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${AMBER};margin-right:6px;vertical-align:1px;"></span>` : '';
+            return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;column-gap:10px;row-gap:4px;align-items:center;padding:5px 2px;">`
+              + `<span style="min-width:0;font-size:12.5px;font-weight:700;line-height:1.2;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${punkt}${esc(v.name)}</span>`
+              + `<span style="font-size:12.5px;font-weight:700;line-height:1.2;color:${v.size === null ? SEK : TEXT};font-variant-numeric:tabular-nums;white-space:nowrap;">${gr(v.size)}</span>`
+              + `<div style="grid-column:1 / -1;height:4px;border-radius:2px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${p.toFixed(1)}%;border-radius:2px;background:${farbe};"></div></div></div>`;
+          };
+          const teile = [];
+          const inUse = l.filter((v) => !v.frei), frei = l.filter((v) => v.frei);
+          if (inUse.length) {
+            const max = inUse[0].size || 0;
+            teile.push(`<div>${titel('Größte')}${inUse.slice(0, 6).map((v) => zeile(v, max, BLAU)).join('')}</div>`);
+            if (inUse.length > 6) teile.push(rest('+ ' + (inUse.length - 6) + ' weitere in Gebrauch · zusammen ' + gr(inUse.slice(6).reduce((s, v) => s + (v.size || 0), 0))));
+          }
+          if (frei.length) {
+            const max = frei[0].size || 0;
+            const summe = frei.reduce((s, v) => s + (v.size || 0), 0);
+            teile.push(`<div>${titel('Ungenutzt · ' + gr(summe) + ' · bleiben beim Aufräumen')}${frei.slice(0, 8).map((v) => zeile(v, max, AMBER)).join('')}</div>`);
+            if (frei.length > 8) teile.push(rest('+ ' + (frei.length - 8) + ' weitere ungenutzt'));
+          }
+          return `<div style="display:flex;flex-direction:column;gap:10px;">${teile.join('')}</div>`;
+        ]]]
+    styles:
+      # Breiten-Fesseln wie im Pop-up "Ports"; Titel und Zahl ruecken 2 px ein.
+      card:
+        - padding: 0
+        - border: none
+        - box-shadow: none
+        - background: none
+        - width: 100%
+        - max-width: 100%
+        - box-sizing: border-box
+        - cursor: default
+      grid:
+        - grid-template-areas: '"titel summe" "liste liste"'
+        - grid-template-columns: minmax(0, 1fr) auto
+        - column-gap: 10px
+        - row-gap: 10px
+        - align-items: baseline
+      custom_fields:
+        titel:
+          - justify-self: start
+          - min-width: 0
+          - padding-left: 2px
+          - text-align: left
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+        summe:
+          - justify-self: end
+          - padding-right: 2px
+          - white-space: nowrap
+        liste:
+          - justify-self: stretch
+          - min-width: 0
+          - text-align: left
+          - white-space: normal
 
   # ---------------------------------------------------------------------------
   # nachtblau_docker_aufraeumen: "Ungenutztes aufraeumen" eines Hosts, in der

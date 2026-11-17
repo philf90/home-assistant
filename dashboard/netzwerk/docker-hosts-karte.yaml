@@ -33,6 +33,12 @@
 #            je Host ein zweites Pop-up (#docker-ports-<object_id>) mit allen
 #            belegten Host-Ports als Chips (nachtblau_docker_ports, HA-Arcane
 #            ab 0.12.0, Option "Veroeffentlichte Ports")
+#   Ressourcen im Host-Pop-up die Zeile "Ressourcen  5,5 GB · CPU 1,9 %  ›";
+#            Antippen oeffnet je Host das Pop-up #docker-ressourcen-
+#            <object_id> mit den zehn groessten Containern nach
+#            Arbeitsspeicher, mit CPU (nachtblau_docker_ressourcen,
+#            HA-Arcane ab 0.13.0, Option "CPU und Arbeitsspeicher je
+#            Container"); Antippen eines Containers zeigt den Verlauf
 #
 # Hosts sind die Binaersensoren "Online" der Umgebungen; der lokale (Modell
 # "Environment") steht vor den Agenten (Modell "Arcane Agent"). Die Werte
@@ -46,7 +52,8 @@
 # erscheint nach dem naechsten Laden der Seite. Ausgabe als Python-Literal
 # wie in docker-container-karte.yaml. Die Templates der Zeilen und Pop-ups
 # (nachtblau_docker_host, _host_info, _host_jobs, nachtblau_docker_aufraeumen,
-# nachtblau_docker_messwert, nachtblau_docker_ports; docker-templates.yaml) setzen die Vorlagen
+# nachtblau_docker_messwert, nachtblau_docker_ports, nachtblau_docker_ressourcen;
+# docker-templates.yaml) setzen die Vorlagen
 # selbst; im Kopfblock stehen sie nicht, weil ci/check_kopf.py nur
 # template:-Schluessel im YAML zaehlt.
 # Im Pop-up steht kein [[[ ]]]: Die Logik liegt in den Templates, damit die
@@ -65,12 +72,16 @@
 # scrollte das Blatt um 14 px. Messkacheln 102,7 px breit (iPhone 116,7 px),
 # "50,6 GB belegt" passt. Eine Zeile "Update" im Pop-up gibt es deshalb nicht: Das Update
 # steht in Amber in der Zeile Agent bzw. Arcane.
+# Mit der Zeile "Ressourcen" (HA-Arcane ab 0.13.0) 25 px mehr: docker-02
+# 519 px, docker-01 375 px; mit Zeilenhoehe 1,5 docker-02 563 px.
 #
 # Voraussetzung: custom:button-card + custom:auto-entities + custom:bubble-card
 #                + card-mod (HACS), Integration Arcane (HACS) ab 0.11.0 mit
 #                Option "CPU, RAM und Festplatte des Hosts" (Abfrage), fuer
 #                die Jobs Option "Arcane Hintergrund-Jobs" (ab 0.10.0), fuer
-#                Aufraeumen Option Prune-Button; aktivierte Diagnose-Sensoren
+#                Aufraeumen Option Prune-Button, fuer die Ressourcen Option
+#                "CPU und Arbeitsspeicher je Container" (ab 0.13.0, Recht
+#                containers:read); aktivierte Diagnose-Sensoren
 #                Docker-Version, Arcane Version und Host Arbeitsspeicher
 #                gesamt; Templates aus docker-templates.yaml.
 type: vertical-stack
@@ -162,6 +173,10 @@ cards:
   # nachtblau_docker_ports), wenn der Sensor "Belegte Host-Ports"
   # (_belegte_host_ports, HA-Arcane ab 0.12.0) da ist; geoeffnet ueber die
   # Zeile "Ports" im Host-Pop-up.
+  # Ebenso je Host das Pop-up "Ressourcen" (#docker-ressourcen-<object_id>,
+  # nachtblau_docker_ressourcen), wenn es irgendeinen Sensor "Arbeitsspeicher"
+  # eines Containers gibt (sensor.container_*_arbeitsspeicher, HA-Arcane ab
+  # 0.13.0); welche Container zu welchem Host gehoeren, sucht das Template.
   - type: custom:auto-entities
     card:
       type: vertical-stack
@@ -177,6 +192,7 @@ cards:
             {%- set ns.lokal = ns.lokal + [o] -%}
           {%- endif -%}
         {%- endfor -%}
+        {%- set res = integration_entities('arcane') | select('match', 'sensor\\.container_.*_arbeitsspeicher$') | first -%}
         {%- set stil = '.bubble-pop-up { --bubble-pop-up-background-color: color-mix(in srgb, var(--nachtblau-seite, #171d29) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-flaeche-erhoeht, #222b3c)) !important; --bubble-pop-up-gap: 10px; }' -%}
         {%- set ns2 = namespace(liste=[]) -%}
         {%- for o in ns.lokal + ns.fremd -%}
@@ -219,6 +235,15 @@ cards:
                   'with_bottom_offset': true, 'bg_opacity': '100',
                   'styles': stil,
                   'cards': [{'type': 'custom:button-card', 'template': 'nachtblau_docker_ports', 'entity': ports}]}] -%}
+          {%- endif -%}
+          {%- if res -%}
+            {%- set ns2.liste = ns2.liste + [{
+                  'type': 'custom:bubble-card', 'card_type': 'pop-up',
+                  'hash': '#docker-ressourcen-' ~ o.split('.')[1],
+                  'show_header': false, 'popup_mode': 'fit-content',
+                  'with_bottom_offset': true, 'bg_opacity': '100',
+                  'styles': stil,
+                  'cards': [{'type': 'custom:button-card', 'template': 'nachtblau_docker_ressourcen', 'entity': o}]}] -%}
           {%- endif -%}
         {%- endfor -%}
         {{ ns2.liste }}

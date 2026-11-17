@@ -4,7 +4,7 @@
 # Art:           karte
 # Bereich:       netzwerk
 # Status:        aktiv
-# Karten:        auto-entities, button-card, card-mod
+# Karten:        auto-entities, bubble-card, button-card, card-mod
 # Templates:     nachtblau_docker_kopf (docker-templates.yaml),
 #                nachtblau_docker_kpi (docker-templates.yaml)
 # Einfuegen:     Karte hinzufuegen -> Manuell
@@ -28,6 +28,13 @@
 #              "Bericht folgt", nach dem Aufraeumen bis zum naechsten "Stand
 #              vor dem Aufraeumen". Waehrend der Host aufraeumt, zieht eine
 #              Spur in Amber ueber den Balken.
+#              Darunter "Volumes  10,1 GB belegt  ›" (Sensor "Volume-Speicher
+#              gesamt", HA-Arcane ab 0.13.0, Option "Volume-Groessen",
+#              hoechstens alle 15 Minuten). Antippen oeffnet das Pop-up
+#              "Volumes" des Hosts (nachtblau_docker_volumes): die sechs
+#              groessten Volumes in Gebrauch und alle ungenutzten mit Groesse.
+#              Die ungenutzten sind zusammen genau der freigebbare
+#              Volume-Speicher der Zeile darueber.
 #              Darunter "Ungenutztes aufraeumen" (nachtblau_docker_aufraeumen):
 #              startet nach Rueckfrage script.docker_aufraeumen fuer diesen
 #              Host (Feld knopf, docker-konfig.yaml). Der Button der
@@ -63,139 +70,179 @@
 # -> input_text.docker_02_aufraeumen_status. Fehlt er, zeigt die Zeile
 # "Helfer ... fehlt" und der Knopf bleibt aus.
 #
-# Voraussetzung: custom:button-card + custom:auto-entities + card-mod (HACS),
+# Die Pop-ups stehen in einer aeusseren, ungestalteten vertical-stack neben
+# der sichtbaren Karte wie in docker-hosts-karte.yaml; in der gestalteten
+# Karte braechte das unsichtbare Pop-up sonst 10 px Abstand mit.
+#
+# Voraussetzung: custom:button-card + custom:auto-entities + card-mod
+#                + custom:bubble-card (HACS),
 #                Integration Arcane (HACS) ab 0.7.0 mit Prune Button, Option
 #                "Freigebbarer Speicher" und den Rechten system:prune und
 #                system:read (Rueckmeldung nach Sekunden ab 0.7.1, richtige
-#                Menge ab 0.10.1), fuer mehrere Hosts ab 0.11.0; Skript und
+#                Menge ab 0.10.1), fuer mehrere Hosts ab 0.11.0, fuer die
+#                Volumes Option "Volume-Groessen" (ab 0.13.0, Recht
+#                volumes:list); Skript und
 #                Helfer aus docker-konfig.yaml;
 #                Templates aus docker-templates.yaml.
 type: vertical-stack
-card_mod:
-  style: |
-    #root {
-      background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
-      border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
-      border-radius: 22px !important;
-      box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
-      padding: 16px 18px !important;
-      gap: 10px !important;
-    }
 cards:
-  - type: custom:button-card
-    template: nachtblau_docker_kopf
-    entity: sensor.local_docker_image_speicher
-    icon: mdi:harddisk
-    name: Speicher & Aufräumen
-    # Image-Speicher aller Hosts (translation_key images_size) und Zahl der
-    # Hosts (environment_online)
-    label: |
-      [[[
-        const E = Object.values(hass.entities || {}).filter((e) => e.platform === 'arcane');
-        let gb = null;
-        for (const e of E) {
-          if (e.translation_key !== 'images_size') continue;
-          const v = parseFloat((states[e.entity_id] || {}).state);
-          if (!isNaN(v)) gb = (gb || 0) + v;
+  # ======================= Sichtbare Karte =======================
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
         }
-        const h = E.filter((e) => e.translation_key === 'environment_online' && states[e.entity_id]).length;
-        const teile = [];
-        if (gb !== null) teile.push(gb.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB Images');
-        if (h > 1) teile.push(h + ' Hosts');
-        return teile.length ? teile.join(' · ') : 'keine Daten';
-      ]]]
-    tap_action:
-      action: more-info
-
-  # Kennzahlen als Summe aller Hosts; Antippen oeffnet die Entitaet von
-  # docker-01. Ohne Zusatzzeile ist die Netzwerk-Kachel niedriger; alle drei
-  # fuellen die Rasterzeile und beginnen oben (button-card zentriert sonst).
-  - type: grid
-    columns: 3
-    square: false
     cards:
       - type: custom:button-card
-        template: nachtblau_docker_kpi
-        entity: sensor.local_docker_images
-        name: Images
-        styles: &kachel_hoehe
-          card:
-            - height: 100%
-            - align-items: flex-start
-        variables:
-          warn: ''
-          summe: images_total
-          zusatz: |
-            [[[
-              let n = null;
-              for (const e of Object.values(hass.entities || {})) {
-                if (e.platform !== 'arcane' || e.translation_key !== 'images_unused') continue;
-                const v = parseInt((states[e.entity_id] || {}).state, 10);
-                if (!isNaN(v)) n = (n || 0) + v;
-              }
-              return n === null ? '' : n + ' ungenutzt';
-            ]]]
-      - type: custom:button-card
-        template: nachtblau_docker_kpi
-        entity: sensor.local_docker_volumes
-        name: Volumes
-        variables:
-          warn: ''
-          summe: volumes_total
-          zusatz: |
-            [[[
-              let n = null;
-              for (const e of Object.values(hass.entities || {})) {
-                if (e.platform !== 'arcane' || e.translation_key !== 'volumes_unused') continue;
-                const v = parseInt((states[e.entity_id] || {}).state, 10);
-                if (!isNaN(v)) n = (n || 0) + v;
-              }
-              return n === null ? '' : n + ' ungenutzt';
-            ]]]
-        styles: *kachel_hoehe
-      - type: custom:button-card
-        template: nachtblau_docker_kpi
-        entity: sensor.local_docker_netzwerke
-        name: Netzwerke
-        variables:
-          warn: ''
-          summe: networks_total
-        styles: *kachel_hoehe
+        template: nachtblau_docker_kopf
+        entity: sensor.local_docker_image_speicher
+        icon: mdi:harddisk
+        name: Speicher & Aufräumen
+        # Image-Speicher aller Hosts (translation_key images_size) und Zahl der
+        # Hosts (environment_online)
+        label: |
+          [[[
+            const E = Object.values(hass.entities || {}).filter((e) => e.platform === 'arcane');
+            let gb = null;
+            for (const e of E) {
+              if (e.translation_key !== 'images_size') continue;
+              const v = parseFloat((states[e.entity_id] || {}).state);
+              if (!isNaN(v)) gb = (gb || 0) + v;
+            }
+            const h = E.filter((e) => e.translation_key === 'environment_online' && states[e.entity_id]).length;
+            const teile = [];
+            if (gb !== null) teile.push(gb.toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' GB Images');
+            if (h > 1) teile.push(h + ' Hosts');
+            return teile.length ? teile.join(' · ') : 'keine Daten';
+          ]]]
+        tap_action:
+          action: more-info
 
-  # Je Host Balken und Aufraeumen; der lokale Host zuerst
+      # Kennzahlen als Summe aller Hosts; Antippen oeffnet die Entitaet von
+      # docker-01. Ohne Zusatzzeile ist die Netzwerk-Kachel niedriger; alle drei
+      # fuellen die Rasterzeile und beginnen oben (button-card zentriert sonst).
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            template: nachtblau_docker_kpi
+            entity: sensor.local_docker_images
+            name: Images
+            styles: &kachel_hoehe
+              card:
+                - height: 100%
+                - align-items: flex-start
+            variables:
+              warn: ''
+              summe: images_total
+              zusatz: |
+                [[[
+                  let n = null;
+                  for (const e of Object.values(hass.entities || {})) {
+                    if (e.platform !== 'arcane' || e.translation_key !== 'images_unused') continue;
+                    const v = parseInt((states[e.entity_id] || {}).state, 10);
+                    if (!isNaN(v)) n = (n || 0) + v;
+                  }
+                  return n === null ? '' : n + ' ungenutzt';
+                ]]]
+          - type: custom:button-card
+            template: nachtblau_docker_kpi
+            entity: sensor.local_docker_volumes
+            name: Volumes
+            variables:
+              warn: ''
+              summe: volumes_total
+              zusatz: |
+                [[[
+                  let n = null;
+                  for (const e of Object.values(hass.entities || {})) {
+                    if (e.platform !== 'arcane' || e.translation_key !== 'volumes_unused') continue;
+                    const v = parseInt((states[e.entity_id] || {}).state, 10);
+                    if (!isNaN(v)) n = (n || 0) + v;
+                  }
+                  return n === null ? '' : n + ' ungenutzt';
+                ]]]
+            styles: *kachel_hoehe
+          - type: custom:button-card
+            template: nachtblau_docker_kpi
+            entity: sensor.local_docker_netzwerke
+            name: Netzwerke
+            variables:
+              warn: ''
+              summe: networks_total
+            styles: *kachel_hoehe
+
+      # Je Host Balken und Aufraeumen; der lokale Host zuerst
+      - type: custom:auto-entities
+        card:
+          type: vertical-stack
+        card_param: cards
+        filter:
+          template: |
+            {%- set ns = namespace(lokal=[], fremd=[]) -%}
+            {%- for o in integration_entities('arcane') | select('match', 'binary_sensor\\.')
+                | select('search', '_online$') | reject('search', '^binary_sensor\\.(container|project)_') | sort -%}
+              {%- if device_attr(device_id(o), 'model') == 'Arcane Agent' -%}
+                {%- set ns.fremd = ns.fremd + [o] -%}
+              {%- else -%}
+                {%- set ns.lokal = ns.lokal + [o] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- set ns2 = namespace(liste=[]) -%}
+            {%- for o in ns.lokal + ns.fremd -%}
+              {%- set ents = device_entities(device_id(o)) | list -%}
+              {%- set frei = ents | select('match', 'sensor\\..*_freigebbarer_image_speicher$') | first -%}
+              {%- set knopf = ents | select('match', 'button\\..*_ungenutztes_entfernen$') | first -%}
+              {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_speicher_frei', 'entity': frei or o}] -%}
+              {%- if knopf -%}
+                {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_aufraeumen', 'entity': knopf}] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns2.liste }}
+        else:
+          type: custom:button-card
+          show_icon: false
+          show_state: false
+          show_name: true
+          name: Keine Hosts. Ist die Integration Arcane eingerichtet?
+          tap_action:
+            action: none
+          hold_action:
+            action: none
+
+  # ======================= Pop-ups Volumes je Host =======================
+  # Unsichtbar, bis die Zeile "Volumes" eines Hosts den Hash
+  # #docker-volumes-<object_id des Sensors "Volume-Speicher gesamt"> setzt.
+  # Aufbau und Hintergrund wie im Pop-up "Ports" (docker-hosts-karte.yaml).
+  # Die Vorlage sucht den Sensor je Host ueber device_entities und die Endung
+  # _volume_speicher_gesamt (HA-Arcane ab 0.13.0, Option "Volume-Groessen");
+  # ohne ihn kein Pop-up.
   - type: custom:auto-entities
     card:
       type: vertical-stack
     card_param: cards
     filter:
       template: |
-        {%- set ns = namespace(lokal=[], fremd=[]) -%}
+        {%- set stil = '.bubble-pop-up { --bubble-pop-up-background-color: color-mix(in srgb, var(--nachtblau-seite, #171d29) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-flaeche-erhoeht, #222b3c)) !important; --bubble-pop-up-gap: 10px; }' -%}
+        {%- set ns2 = namespace(liste=[]) -%}
         {%- for o in integration_entities('arcane') | select('match', 'binary_sensor\\.')
             | select('search', '_online$') | reject('search', '^binary_sensor\\.(container|project)_') | sort -%}
-          {%- if device_attr(device_id(o), 'model') == 'Arcane Agent' -%}
-            {%- set ns.fremd = ns.fremd + [o] -%}
-          {%- else -%}
-            {%- set ns.lokal = ns.lokal + [o] -%}
-          {%- endif -%}
-        {%- endfor -%}
-        {%- set ns2 = namespace(liste=[]) -%}
-        {%- for o in ns.lokal + ns.fremd -%}
-          {%- set ents = device_entities(device_id(o)) | list -%}
-          {%- set frei = ents | select('match', 'sensor\\..*_freigebbarer_image_speicher$') | first -%}
-          {%- set knopf = ents | select('match', 'button\\..*_ungenutztes_entfernen$') | first -%}
-          {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_speicher_frei', 'entity': frei or o}] -%}
-          {%- if knopf -%}
-            {%- set ns2.liste = ns2.liste + [{'type': 'custom:button-card', 'template': 'nachtblau_docker_aufraeumen', 'entity': knopf}] -%}
+          {%- set vol = device_entities(device_id(o)) | select('match', 'sensor\\..*_volume_speicher_gesamt$') | first -%}
+          {%- if vol -%}
+            {%- set ns2.liste = ns2.liste + [{
+                  'type': 'custom:bubble-card', 'card_type': 'pop-up',
+                  'hash': '#docker-volumes-' ~ vol.split('.')[1],
+                  'show_header': false, 'popup_mode': 'fit-content',
+                  'with_bottom_offset': true, 'bg_opacity': '100',
+                  'styles': stil,
+                  'cards': [{'type': 'custom:button-card', 'template': 'nachtblau_docker_volumes', 'entity': vol}]}] -%}
           {%- endif -%}
         {%- endfor -%}
         {{ ns2.liste }}
-    else:
-      type: custom:button-card
-      show_icon: false
-      show_state: false
-      show_name: true
-      name: Keine Hosts. Ist die Integration Arcane eingerichtet?
-      tap_action:
-        action: none
-      hold_action:
-        action: none
