@@ -134,7 +134,10 @@
 #      2026.11, maplibre-map-engine.ts). Keine offizielle Schnittstelle: Fehlen
 #      sie nach einem Frontend-Update oder ohne WebGL2, zeichnet ha-map die
 #      Linien als eigene Pfade (mit Kreisen). Schlaegt das Einrasten fehl, steht
-#      dort die ungefilterte Linie mit Hinweis.
+#      dort die ungefilterte Linie mit Hinweis. ha-map legt eigene Ebenen unter
+#      die Beschriftung; die Punkte hebt die Karte darueber (moveLayer, auch
+#      nach einem Stilwechsel), sonst verschwinden Meldungen in Orten unter
+#      deren Namen (Fahrt 17.11.2026).
 #   Unterwegs laedt das offene Popup jede Minute neu; gerechnet wird nur, wenn
 #   neue Punkte da sind.
 # Farben: Linie Blau (Rolle "Info-Wert", wie die Zone), gemessene Punkte
@@ -380,7 +383,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 7;
+                    const VERSION = 8;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -759,6 +762,22 @@ cards:
                             eng._addCustomLayer({ id: 'ha-map-spur-geschaetzt', type: 'line', source: 'ha-map-spur-geschaetzt', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.4, 1.4] } });
                             eng._addCustomLayer({ id: 'ha-map-spur-fest', type: 'line', source: 'ha-map-spur-fest', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 4 } });
                             eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 3, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
+                            // Punkte ueber die Beschriftung: ha-map legt eigene Ebenen unter die
+                            // Ortsnamen, auch nach jedem Stilwechsel (hell/dunkel) wieder. Am
+                            // 17.11.2026 lagen beide Meldungen unterwegs mitten in Orten und
+                            // verschwanden unter deren Namen. Linien bleiben darunter, damit die
+                            // Namen lesbar bleiben. styledata kommt auch nach dem Verschieben; die
+                            // Pruefung "schon oben" beendet das.
+                            const heben = () => {
+                              const map = eng._map;
+                              try {
+                                if (!map.getLayer('ha-map-spur-punkte')) return;
+                                const ids = map.getLayersOrder ? map.getLayersOrder() : (map.getStyle() || { layers: [] }).layers.map((l) => l.id);
+                                if (ids[ids.length - 1] !== 'ha-map-spur-punkte') map.moveLayer('ha-map-spur-punkte');
+                              } catch (e) { /* Stil laedt noch: naechstes styledata */ }
+                            };
+                            heben();
+                            eng._map.on('styledata', heben);
                             zeitSchild(st);
                             st.ebenen = true;
                           } else {
