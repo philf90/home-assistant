@@ -45,6 +45,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`pollenflug-karte-v2.yaml`](klima/pollenflug-karte-v2.yaml) | karte | Pollenflug v2 – Pollenkachel mit eigenem Kopf | button-card | – | aktiv |
 | [`temperaturen-karte-v2.yaml`](klima/temperaturen-karte-v2.yaml) | karte | Temperaturen v2 – Raumliste mit 24-h-Sparkline | button-card, card-mod | `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`thermostate-karte-v3.yaml`](klima/thermostate-karte-v3.yaml) | karte | Thermostate v3 – radiale Regler mit Animation und Fenster offen | button-card, card-mod | – | aktiv |
+| [`warnlage-meldungen-konfig.yaml`](klima/warnlage-meldungen-konfig.yaml) | konfig | Wetter – DWD-Warnungen melden (Helfer, Template-Sensor, Automationen) | – | `sensor.warnregion_*`, `notify.mobile_app_iphone`, `telegram_eintrag` | aktiv |
 | [`warnlage-templates.yaml`](klima/warnlage-templates.yaml) | templates | Warnlage – Popups fuer DWD-Warnungen und Pollenflug | button-card | `sensor.warnregion_*` | aktiv |
 | [`wetter-karte-v2.yaml`](klima/wetter-karte-v2.yaml) | karte | Wetter v2 – eine Karte mit Wetter, Wind und Sonne | button-card | `weather.wohnort` | aktiv |
 | [`wetter-templates.yaml`](klima/wetter-templates.yaml) | templates | Wetter-Animation – button-card-Template nachtblau_wetter_fx | – | – | aktiv |

@@ -1,0 +1,323 @@
+# ============================================================================
+# Wetter – DWD-Warnungen melden (Helfer, Template-Sensor, Automationen)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       klima
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder Helfer in der UI anlegen und die Automationen einzeln
+#                im YAML-Editor der UI einfuegen)
+# Platzhalter:   sensor.warnregion_*, notify.mobile_app_iphone,
+#                telegram_eintrag
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Meldet jeden neuen Eintrag der DWD-Wetterwarnungen (aktuelle Warnungen und
+# Vorabinformationen) genau einmal: per Telegram, ab Stufe 2 zusaetzlich aufs
+# Handy. Seit 17.11.2026. Die Warnkarte meteoalarm-karte.yaml liest beide
+# Helfer (Ausfallzustand und Statuszeile "Zuletzt gemeldet ...").
+#
+# Warum ein Gedaechtnis statt eines Triggers auf die Warnstufe:
+#   Ein numeric_state-Trigger auf warning_count (Attribut der Warnstufe) wird
+#   wieder scharf, sobald der Sensor unavailable meldet, und feuert beim
+#   naechsten erfolgreichen Abruf erneut. Der DWD-Abruf (alle 15 min) faellt
+#   regelmaessig aus: vom 14.11. 17:00 bis 17.11. 19:10 (74 h, 296
+#   Verlaufseintraege) 12-mal, zusammen 5,4 h; 10 Ausfaelle dauerten genau
+#   einen Abruf, zwei 73 und 102 min. Die vorherige Automation meldete in
+#   dieser Zeit 10-mal, jedes Mal direkt nach einem Ausfall und nie wegen
+#   einer neuen Warnung. Von 6 neuen DWD-Eintraegen meldete sie keinen
+#   zeitnah, weil warning_count dabei ueber 0 blieb. Dieselben Daten mit der
+#   Logik unten: 6 Meldungen, je eine fuer jeden neuen Eintrag.
+#
+# Ablauf:
+#   sensor.dwd_warnlage fasst alle Eintraege als Schluessel Typ-Stufe@Beginn
+#   zusammen, Vorabinformationen mit vorangestelltem "v", z. B.
+#   "51-1@171900,52-2@171900,v63-2@181200" (DWD-Typ 51 Windboeen, 52
+#   Sturmboeen, 63 Dauerregen; Beginn als TTHHMM). Die Automation vergleicht
+#   bei jeder Aenderung mit dem Gedaechtnis input_text.dwd_warnung_gemeldet,
+#   meldet nur Schluessel, die dort fehlen, und setzt das Gedaechtnis danach
+#   auf den aktuellen Stand (abgelaufene Eintraege fallen heraus). Ausfaelle,
+#   Neustarts und Umsortierungen beim DWD loesen deshalb keine Meldung aus.
+#   Eine Meldung hat je Typ und Stufe eine Gruppe mit einer Zeile je Eintrag
+#   (Zeitraum, Messwerte) und nennt die Art der Aenderung: Verschaerfung
+#   (Stufe ueber der hoechsten gemeldeten), Weitere Warnung (Typ und Stufe
+#   schon gemeldet, neuer Beginn), Herabstufung (Typ mit hoeherer Stufe
+#   gemeldet), sonst Neue Warnung.
+#
+# Inhalt:
+#   input_text.dwd_warnung_gemeldet          Gedaechtnis (max. 255 Zeichen)
+#   input_datetime.dwd_warnung_gemeldet_um   Zeitpunkt der letzten Meldung
+#   sensor.dwd_warnlage                      Schluessel aller aktuellen
+#                                            Eintraege (Template-Sensor)
+#   automation "Wetter: DWD-Warnungen melden"
+#       Telegram bei jedem neuen Eintrag ab variables.mindest, nachts (22 bis
+#       7 Uhr) bis Stufe 2 ohne Ton. Ab Stufe 2 zusaetzlich Push an
+#       notify.mobile_app_iphone (iOS: Stufe 2 "active", ab Stufe 3
+#       "time-sensitive", nachts bis Stufe 2 "passive"); Tippen oeffnet
+#       variables.ziel.
+#   automation "Wetter: DWD-Abruf gestört melden"
+#       Push, wenn sensor.dwd_warnlage eine Stunde unavailable ist (4 Abrufe;
+#       in den 74 h oben zweimal).
+#
+# Anpassen:
+#   - sensor.warnregion_*: Sensoren der eigenen Warnregion (Platzhalter), im
+#     Template-Sensor und in der ersten Automation
+#   - telegram_eintrag: Config-Entry-ID des Telegram-Bots (Platzhalter); ohne
+#     chat_id geht die Nachricht an den ersten freigegebenen Chat des Bots
+#   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter), in beiden
+#     Automationen; push.interruption-level wertet nur iOS aus
+#   - variables.mindest: niedrigste Stufe, die gemeldet wird (1 bis 4)
+#   - variables.ziel und url der Stoerungsmeldung: Pfad, den das Tippen auf
+#     die Meldung oeffnet (hier /dashboard-home/wetter)
+#
+# Einbinden als Paket in configuration.yaml:
+#   homeassistant:
+#     packages:
+#       warnlage_meldungen: !include warnlage-meldungen-konfig.yaml
+# Danach Home Assistant neu starten oder unter Einstellungen -> Werkzeuge ->
+# YAML die Text- und Datum/Zeit-Helfer, Template-Entitaeten und Automationen
+# neu laden.
+#
+# Einmalig nach dem ersten Laden:
+#   - input_datetime.dwd_warnung_gemeldet_um auf 0 setzen (Werkzeuge ->
+#     Aktionen: input_datetime.set_datetime mit timestamp: 0). Ein neuer
+#     Datum/Zeit-Helfer startet mit "heute 00:00" (Home Assistant,
+#     input_datetime/entity.py); die Warnkarte zeigte sonst "Zuletzt gemeldet
+#     heute 00:00 Uhr" statt "Noch keine Meldung seit der Umstellung".
+#   - Das Gedaechtnis ist anfangs leer (unknown): Der erste Lauf meldet alle
+#     dann gueltigen Eintraege einmal als "Neue Warnung" (gewollt: so kommt
+#     auch die Lage an, die vor der Umstellung nie gemeldet wurde). Er beginnt
+#     mit der naechsten Aenderung von sensor.dwd_warnlage, also bei einem
+#     neuen oder abgelaufenen Eintrag oder der Rueckkehr nach einem Ausfall.
+#     Wer das nicht will, setzt input_text.dwd_warnung_gemeldet vorher auf
+#     den Zustand von sensor.dwd_warnlage.
+#
+# Achtung bei bestehenden Fassungen aus der UI: Gibt es Helfer, Template-Sensor
+# oder Automationen mit denselben Namen schon (Einstellungen -> Geraete &
+# Dienste -> Helfer bzw. Automationen & Szenen), diese vorher loeschen. Sonst
+# kollidieren die Helfer, der Template-Sensor heisst sensor.dwd_warnlage_2,
+# und die Automationen laufen zweimal (die UI-Fassung hat eine andere id),
+# jede Meldung kaeme doppelt. Eine bisherige Unwetterwarnung mit
+# numeric_state-Trigger abschalten.
+# Ohne Paket: Text- und Datum/Zeit-Helfer in der UI anlegen (Namen, Icons und
+# Laenge wie unten), den Template-Sensor als Helfer Template -> Sensor mit
+# Zustand und Verfuegbarkeit (Erweiterte Optionen) von unten, dann die
+# Automationen einzeln einfuegen (Neue Automation -> Drei-Punkte-Menue -> In
+# YAML bearbeiten; der Listeneintrag ohne "- " und ohne id).
+#
+# Voraussetzung: Integration DWD Weather Warnings (dwd_weather_warnings) mit
+#                den Sensoren "aktuelle Warnstufe" und "Vorwarnstufe",
+#                Telegram Bot, Home Assistant Companion App. Erstellt mit
+#                Home Assistant 2026.11.
+
+# Gedaechtnis der Automation: gemeldete Schluessel, mit Komma getrennt
+input_text:
+  dwd_warnung_gemeldet:
+    name: DWD Warnung gemeldet
+    icon: mdi:message-alert-outline
+    max: 255
+
+# Zeitpunkt der letzten Meldung (Statuszeile der Warnkarte). Kein initial:
+# sonst gilt der Wert nach jedem Neustart wieder; Startwert siehe oben
+input_datetime:
+  dwd_warnung_gemeldet_um:
+    name: DWD Warnung gemeldet um
+    icon: mdi:clock-alert-outline
+    has_date: true
+    has_time: true
+
+# Schluessel aller aktuellen DWD-Eintraege: Typ-Stufe@Beginn (TTHHMM wie vom
+# DWD geliefert, UTC), Vorabinformationen mit "v". Hoechstens 255 Zeichen
+# wie der Text-Helfer, ohne Eintrag "keine"
+template:
+  - sensor:
+      - name: DWD Warnlage
+        unique_id: dwd_warnlage
+        icon: mdi:weather-lightning-rainy
+        availability: |-
+          {{ has_value('sensor.warnregion_aktuelle_warnstufe')
+             and has_value('sensor.warnregion_vorwarnstufe') }}
+        state: |-
+          {%- set ns = namespace(k=[]) -%}
+          {%- for e, p in [('sensor.warnregion_aktuelle_warnstufe', ''),
+                           ('sensor.warnregion_vorwarnstufe', 'v')] -%}
+            {%- for i in range(1, (state_attr(e, 'warning_count') | int(0)) + 1) -%}
+              {%- set a = 'warning_' ~ i ~ '_' -%}
+              {%- set t = state_attr(e, a ~ 'type') -%}
+              {%- if t is not none -%}
+                {%- set s = as_datetime(state_attr(e, a ~ 'start'), none) -%}
+                {%- set ns.k = ns.k + [p ~ t ~ '-' ~ (state_attr(e, a ~ 'level') | int(0))
+                                       ~ '@' ~ (s.strftime('%d%H%M') if s else '0')] -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {%- set out = namespace(s='') -%}
+          {%- for x in ns.k | unique | sort -%}
+            {%- if (out.s ~ ',' ~ x) | length <= 256 -%}{%- set out.s = out.s ~ ',' ~ x -%}{%- endif -%}
+          {%- endfor -%}
+          {{ out.s[1:] or 'keine' }}
+
+# Erklaerungen stehen in note: an Triggern und Aktionen
+automation:
+  - id: wetter_dwd_warnungen_melden
+    alias: "Wetter: DWD-Warnungen melden"
+    description: "Meldet jeden neuen DWD-Eintrag genau einmal, mit Art der Änderung. Gedächtnis: input_text.dwd_warnung_gemeldet (Typ-Stufe@Beginn je Eintrag). Ausfälle, Neustarts und Umsortierungen lösen nichts aus, weil nur gegen das Gedächtnis verglichen wird. Ersetzt eine Unwetterwarnung mit numeric_state-Trigger auf die Warnstufe (Begründung im Kopf von warnlage-meldungen-konfig.yaml)."
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 20
+    variables:
+      mindest: 1
+      ziel: /dashboard-home/wetter
+    triggers:
+      - note: "Ändert sich, wenn ein Eintrag hinzukommt, wegfällt oder sich Typ, Stufe oder Beginn ändern, und wenn der DWD nach einem Ausfall zurückkommt. Ob etwas neu ist, entscheidet der Vergleich."
+        trigger: state
+        entity_id: sensor.dwd_warnlage
+        not_to:
+          - unavailable
+          - unknown
+    conditions:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.dwd_warnlage
+            state:
+              - unavailable
+              - unknown
+    actions:
+      - variables:
+          aktuell: "{{ states('sensor.dwd_warnlage').split(',') | reject('in', ['', 'keine']) | list }}"
+          alt: "{{ states('input_text.dwd_warnung_gemeldet').split(',') | reject('in', ['', 'keine', 'unknown', 'unavailable']) | list }}"
+      - note: "Neu ist jeder Eintrag (Typ-Stufe@Beginn), der nicht im Gedächtnis steht."
+        variables:
+          neu: |-
+            {%- set nn = namespace(neu=[]) -%} {%- for k in aktuell if k not in alt
+                 and (k.split('@')[0].split('-')[1] | int(0)) >= mindest -%}
+              {%- set nn.neu = nn.neu + [k] -%}
+            {%- endfor -%} {{ nn.neu }}
+      - if:
+          - condition: template
+            value_template: "{{ neu | count > 0 }}"
+        then:
+          - note: "Eine Gruppe je Typ und Stufe mit einer Zeile je DWD-Eintrag (eigener Zeitraum, eigene Messwerte) und der Art der Änderung. Nur Text und Zahlen, damit die Liste als Liste ankommt (keine datetime-Objekte)."
+            variables:
+              liste: |-
+                {%- macro tag(d) -%}{%- set t = (d.date() - now().date()).days -%}{{ 'heute' if t == 0 else ('morgen' if t == 1 else ['Mo','Di','Mi','Do','Fr','Sa','So'][d.weekday()] ~ ' ' ~ d.strftime('%d.%m.')) }}{%- endmacro -%} {%- macro zeitraum(s, e) -%}
+                  {%- if s is none -%}Zeitraum offen
+                  {%- else -%}{%- set s = s | as_local -%}{{ tag(s) }} {{ s.strftime('%H:%M') }}
+                    {%- if e is not none -%}{%- set e = e | as_local %} bis {{ (e.strftime('%H:%M')) if e.date() == s.date() else (tag(e) ~ ' ' ~ e.strftime('%H:%M')) }}{%- endif %} Uhr
+                  {%- endif -%}
+                {%- endmacro -%} {%- macro werte(p) -%}
+                  {%- set ns = namespace(t=[]) -%}
+                  {%- if p is mapping -%}
+                    {%- for k, v in p.items() if v is string and v is search('[0-9]') -%}
+                      {%- set ns.t = ns.t + [('exponiert' if k == 'Exponierte Böen' else k) ~ ' ' ~ v
+                           | regex_replace('\\s*\\[(.*)\\]', ' \\1') | regex_replace('([0-9])-([0-9])', '\\1–\\2')] -%}
+                    {%- endfor -%}
+                  {%- endif -%}
+                  {{ ns.t | join(', ') }}
+                {%- endmacro -%} {%- macro html(x) -%}{{ x | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') }}{%- endmacro -%} {%- set stufe = {1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung'} -%} {%- set mem = alt | map('regex_replace', '@.*$', '') | list -%} {%- set memmax = mem | map('regex_replace', '^.*-', '') | map('int') | max if mem else 0 -%} {%- set ns = namespace(w=[]) -%} {%- for e, p in [('sensor.warnregion_aktuelle_warnstufe', ''),
+                                 ('sensor.warnregion_vorwarnstufe', 'v')] -%}
+                  {%- for i in range(1, (state_attr(e, 'warning_count') | int(0)) + 1) -%}
+                    {%- set a = 'warning_' ~ i ~ '_' -%}
+                    {%- set l = state_attr(e, a ~ 'level') | int(0) -%}
+                    {%- set s = as_datetime(state_attr(e, a ~ 'start'), none) -%}
+                    {%- set k = p ~ state_attr(e, a ~ 'type') ~ '-' ~ l -%}
+                    {%- if (k ~ '@' ~ (s.strftime('%d%H%M') if s else '0')) in neu -%}
+                      {%- set w = werte(state_attr(e, a ~ 'parameters')) -%}
+                      {%- set ns.w = ns.w + [{'k': k, 'l': l, 'vorab': p == 'v',
+                          'name': html((state_attr(e, a ~ 'headline') or state_attr(e, a ~ 'name') or 'Wetterwarnung')
+                                  | regex_replace('^Amtliche (UNWETTER)?WARNUNG vor ', '')),
+                          'ts': s.timestamp() if s else 0,
+                          'zeile': html(zeitraum(s, as_datetime(state_attr(e, a ~ 'end'), none)) ~ (': ' ~ w if w else '')),
+                          'd': html(state_attr(e, a ~ 'description') or '')}] -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                {%- endfor -%} {%- set gz = namespace(z=[]) -%} {%- for k in neu | map('regex_replace', '@.*$', '') | unique | list -%}
+                  {%- set g = ns.w | selectattr('k', 'eq', k) | sort(attribute='ts') | list -%}
+                  {%- if g -%}
+                    {%- set l = g[0].l -%}{%- set typ = k.split('-')[0] -%}
+                    {%- set art = 'Verschärfung' if mem and l > memmax else
+                          ('Weitere Warnung' if k in mem else
+                          ('Herabstufung' if mem | select('match', typ ~ '-') | map('regex_replace', '^.*-', '') | map('int') | select('gt', l) | list | count > 0
+                          else 'Neue Warnung')) -%}
+                    {%- set gz.z = gz.z + [{'l': l, 'ts': g[0].ts, 'art': art,
+                        'titel': ('Vorabinformation ' if g[0].vorab else '') ~ g[0].name ~ ' · ' ~ stufe.get(l, 'Stufe ' ~ l),
+                        'zeilen': g | map(attribute='zeile') | list, 'd': g[0].d}] -%}
+                  {%- endif -%}
+                {%- endfor -%} {{ gz.z | sort(attribute='ts') | sort(attribute='l', reverse=true) }}
+          - condition: template
+            value_template: "{{ liste | count > 0 }}"
+          - variables:
+              gesamt: |-
+                {{ state_attr('sensor.warnregion_aktuelle_warnstufe', 'warning_count') | int(0)
+                   + state_attr('sensor.warnregion_vorwarnstufe', 'warning_count') | int(0) }}
+              stand: "{%- set d = as_datetime(state_attr('sensor.warnregion_aktuelle_warnstufe', 'last_update'), none) -%} {{ (d | as_local).strftime('%H:%M') if d else '–' }}"
+              stufe: "{{ liste | map(attribute='l') | max }}"
+              titel: "{{ liste[0].art ~ ': ' ~ liste[0].titel }}"
+          - action: telegram_bot.send_message
+            continue_on_error: true
+            data:
+              config_entry_id: telegram_eintrag
+              disable_notification: "{{ stufe < 3 and (now().hour >= 22 or now().hour < 7) }}"
+              message: |-
+                <b>{{ titel }}</b>
+                {%- for z in liste[0].zeilen %}
+                • {{ z }}
+                {%- endfor %}
+
+                {{ liste[0].d }}
+                {%- for x in liste[1:] %}
+
+                <b>{{ x.art }}: {{ x.titel }}</b>
+                {%- for z in x.zeilen %}
+                • {{ z }}
+                {%- endfor %}
+                {%- endfor %}
+
+                <i>Es gelten {{ gesamt }} Warnungen · DWD-Stand {{ stand }} Uhr</i>
+              parse_mode: html
+          - note: Zweiter Kanal ab Stufe 2. Nachts (22 bis 7 Uhr) bis Stufe 2 ohne Ton, ab Stufe 3 zeitkritisch.
+            if:
+              - condition: template
+                value_template: "{{ stufe >= 2 }}"
+            then:
+              - action: notify.mobile_app_iphone
+                continue_on_error: true
+                data:
+                  data:
+                    clickAction: "{{ ziel }}"
+                    group: wetter
+                    push:
+                      interruption-level: "{{ 'passive' if stufe < 3 and (now().hour >= 22 or now().hour < 7) else ['passive', 'active', 'time-sensitive', 'time-sensitive'][stufe - 1] }}"
+                    url: "{{ ziel }}"
+                  message: '{{ liste[0].zeilen[:3] | join(''\n'') | replace(''&lt;'', ''<'') | replace(''&gt;'', ''>'') | replace(''&amp;'', ''&'') }}'
+                  title: "{{ titel }}"
+          - action: input_datetime.set_datetime
+            data:
+              timestamp: "{{ now().timestamp() }}"
+            target:
+              entity_id: input_datetime.dwd_warnung_gemeldet_um
+      - note: "Immer auf den aktuellen Stand setzen: Abgelaufene Einträge fallen heraus."
+        action: input_text.set_value
+        data:
+          value: "{{ ((aktuell | join(',')) or 'keine')[:255] }}"
+        target:
+          entity_id: input_text.dwd_warnung_gemeldet
+  - id: wetter_dwd_abruf_gestoert_melden
+    alias: "Wetter: DWD-Abruf gestört melden"
+    description: "Einzelne Fehlabrufe (15 min) sind normal. Fehlt der DWD eine Stunde (4 Abrufe), kommen auch keine Warnungen an. In 74 h zweimal (73 und 102 min). Gehört zu automation.wetter_dwd_warnungen_melden."
+    mode: single
+    triggers:
+      - note: "for: beginnt bei jedem Neustart neu; das ist hier gewollt, weil nach einem Neustart erst die Integration laden muss."
+        trigger: state
+        entity_id: sensor.dwd_warnlage
+        for: "01:00:00"
+        to: unavailable
+    actions:
+      - action: notify.mobile_app_iphone
+        data:
+          data:
+            group: wetter
+            url: /dashboard-home/wetter
+          message: "Seit einer Stunde keine Daten vom DWD. Warnungen werden nach der Rückkehr gemeldet."
+          title: "DWD-Warnungen nicht verfügbar"
