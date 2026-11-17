@@ -43,13 +43,31 @@
 # - Namen in Normalschreibung (wfx.schreib, seit 14.11.2026), oben wie in
 #   der Liste und in der Warnlage-Kachel der Wetter-View; vorher stand der
 #   Titel oben gross wie vom DWD geliefert ("FROST").
+# - Seit 17.11.2026 zwei Zustaende mehr (Umbau der Unwetterwarnung). Faellt
+#   der DWD-Abruf aus (Sensor unavailable), bleibt die Karte sichtbar, solange
+#   die Automation "Wetter: DWD-Warnungen melden" Warnungen gemerkt hat
+#   (input_text.dwd_warnung_gemeldet, je Eintrag Typ-Stufe@Beginn), und zeigt
+#   grau den letzten Stand: Art der Warnung aus der Szenen-Zuordnung von
+#   nachtblau_warn_fx (nicht aus Namen), hoechste Stufe und "DWD nicht
+#   erreichbar seit ...". Zeitraeume fehlen dabei, und eine inzwischen
+#   abgelaufene Warnung steht bis zur Rueckkehr des DWD noch da. Vorher
+#   verschwand die Karte bei jedem Fehlabruf fuer 15 min (in 72 h 12 von 296
+#   Abrufen). Im Normalbetrieb steht unter den Warnungen "Zuletzt gemeldet
+#   ..." aus input_datetime.dwd_warnung_gemeldet_um; Startwert 0 heisst
+#   "Noch keine Meldung seit der Umstellung".
 #
 # Voraussetzung: custom:button-card (HACS), browser_mod (HACS), Templates
 # nachtblau_dwd_popup und nachtblau_warn_fx aus warnlage-templates.yaml. Sensoren der
 # DWD-Integration (dwd_weather_warnings) -> "aktuelle Warnstufe" + "Vorwarnstufe".
+# Fuer Ausfallzustand und Statuszeile: Helfer input_text.dwd_warnung_gemeldet
+# (max. 255 Zeichen) und input_datetime.dwd_warnung_gemeldet_um (Datum und
+# Uhrzeit), gesetzt von der Automation "Wetter: DWD-Warnungen melden" (nicht
+# im Repo). Ohne die Helfer entfallen beide, sonst bleibt die Karte wie oben.
 type: conditional
 # Sichtbar bei einer aktuellen Warnung oder einer Vorabinformation; numeric_state
-# ist bei unavailable/unknown falsch, die Karte bleibt dann aus
+# ist bei unavailable/unknown falsch. Seit 17.11.2026 zusaetzlich bei einem
+# DWD-Ausfall, wenn die Automation Warnungen gemerkt hat; ohne Warnungen steht
+# im Helfer "keine", die Karte bleibt dann aus
 conditions:
   - condition: or
     conditions:
@@ -59,6 +77,20 @@ conditions:
       - condition: numeric_state
         entity: sensor.warnregion_vorwarnstufe
         above: 0
+      - condition: and
+        conditions:
+          - condition: state
+            entity: sensor.warnregion_aktuelle_warnstufe
+            state:
+              - unavailable
+              - unknown
+          - condition: state
+            entity: input_text.dwd_warnung_gemeldet
+            state_not:
+              - keine
+              - ""
+              - unknown
+              - unavailable
 card:
   type: custom:button-card
   entity: sensor.warnregion_aktuelle_warnstufe
@@ -66,6 +98,8 @@ card:
   triggers_update:
     - sensor.warnregion_aktuelle_warnstufe
     - sensor.warnregion_vorwarnstufe
+    - input_text.dwd_warnung_gemeldet
+    - input_datetime.dwd_warnung_gemeldet_um
   # Langes Druecken zeigt weiterhin die Roh-Attribute des Sensors
   hold_action:
     action: more-info
@@ -168,6 +202,47 @@ card:
         const ordnen = (x, y) => (y.level - x.level) || ((x.start ? x.start.getTime() : 0) - (y.start ? y.start.getTime() : 0));
         const alle = lesen('sensor.warnregion_aktuelle_warnstufe', false).sort(ordnen)
           .concat(lesen('sensor.warnregion_vorwarnstufe', true).sort(ordnen));
+        // ---------- DWD-Abruf ausgefallen: letzten gemeldeten Stand zeigen ----------
+        // Seit 17.11.2026. Ohne Abruf fehlen alle Attribute, die Karte waere leer.
+        // Die conditional-Karte bleibt dann sichtbar, solange das Gedaechtnis der
+        // Automation "Wetter: DWD-Warnungen melden" Eintraege kennt
+        // (input_text.dwd_warnung_gemeldet, je Eintrag Typ-Stufe@Beginn). Zeitraeume
+        // gibt es waehrend des Ausfalls nicht; die Art kommt aus der Szenen-Zuordnung
+        // von nachtblau_warn_fx (Ereigniscodes nach CAP-DWD-Profil), nicht aus Namen.
+        const dwd = states['sensor.warnregion_aktuelle_warnstufe'];
+        if (!dwd || ['unavailable', 'unknown'].includes(dwd.state)) {
+          const gemerkt = String((states['input_text.dwd_warnung_gemeldet'] || {}).state || '')
+            .split(',').map((k) => /^(v?)(\d+)-(\d)@/.exec(k)).filter(Boolean)
+            .map((m) => ({ ii: parseInt(m[2], 10), stufe: parseInt(m[3], 10), vorab: m[1] === 'v' }))
+            .sort((a, b) => (b.stufe - a.stufe) || (a.vorab - b.vorab));
+          if (!gemerkt.length) return '';
+          const fx = variables.wfx;
+          const ARTEN = { gewitter: 'Gewitter', wind: 'Wind', starkregen: 'Starkregen', dauerregen: 'Dauerregen',
+            schnee: 'Schneefall', verwehung: 'Schneeverwehung', glaette: 'Glätte', glatteis: 'Glatteis', frost: 'Frost',
+            tauwetter: 'Tauwetter', nebel: 'Nebel', hitze: 'Hitze', uv: 'UV-Strahlung', leiter: 'Leiterseilschwingungen' };
+          const STUFEN = { 1: 'Wetterwarnung', 2: 'Markante Warnung', 3: 'Unwetterwarnung', 4: 'Extreme Warnung' };
+          const arten = [...new Set(gemerkt.map((e) => ARTEN[fx.szene(e.ii, '')] || 'Wetterwarnung'))];
+          const oben = gemerkt[0];
+          const seit = new Date(dwd ? dwd.last_changed : Date.now());
+          const uhr = isNaN(seit.getTime()) ? '' : seit.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+          const schrift = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;";
+          return `
+          <div style="display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;color:${value};${schrift}text-align:left;">
+            <div style="flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;box-sizing:border-box;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">
+              ${fx.icon(fx.szene(oben.ii, ''), label, 24)}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1 1 auto;">
+              <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;color:${label};overflow-wrap:break-word;">${esc(arten.join(', '))}</div>
+              <span style="display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;line-height:1;color:${label};background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:999px;padding:3px 8px;white-space:nowrap;">Letzter Stand · ${esc(STUFEN[oben.stufe] || ('Stufe ' + oben.stufe))}</span>
+              <span style="font-size:12.5px;color:${muted};line-height:1.2;">${uhr ? 'DWD nicht erreichbar seit ' + uhr + ' Uhr' : 'DWD nicht erreichbar'}</span>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.3;color:${muted};${schrift}text-align:left;">
+            <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--nachtblau-amber, #e6b566);"></span>
+            <span>Neuer Abruf alle 15 min. Neue Warnungen werden nach der Rückkehr gemeldet.</span>
+          </div>`;
+        }
+
         if (!alle.length) return '';
 
         // ---------- Oben die erste Warnung, darunter die weiteren ----------
@@ -270,6 +345,23 @@ card:
             ${rest.length > MAX ? `<div style="font-size:12px;color:${muted};padding-left:42px;">+${rest.length - MAX} weitere · Tippen für alle</div>` : ''}
           </div>` : '';
 
+        // ---------- Statuszeile: letzte Meldung der Automation ----------
+        // input_datetime.dwd_warnung_gemeldet_um setzt nur ein Lauf, der wirklich
+        // gemeldet hat; der Startwert 0 (1970) heisst "noch keine Meldung".
+        // Ohne den Helfer (Karte ohne die Automation uebernommen) entfaellt die Zeile.
+        const um = states['input_datetime.dwd_warnung_gemeldet_um'];
+        const umTs = um && um.attributes ? Number(um.attributes.timestamp) : NaN;
+        let gemeldet = 'Noch keine Meldung seit der Umstellung';
+        if (!isNaN(umTs) && umTs > 1000000000) {
+          const d = new Date(umTs * 1000), tl = dayLabel(d);
+          gemeldet = `Zuletzt gemeldet ${['Heute', 'Gestern', 'Morgen'].includes(tl) ? tl.toLowerCase() : 'am ' + tl} ${fmtT(d)} Uhr`;
+        }
+        const status = `
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.3;color:${muted};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;position:relative;">
+            <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--nachtblau-gruen, #a6d49e);"></span>
+            <span>${esc(gemeldet)}</span>
+          </div>`;
+
         // ---------- Aufbau ----------
         return `
           <div style="display:flex;align-items:center;gap:14px;width:100%;box-sizing:border-box;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
@@ -285,5 +377,5 @@ card:
               </div>
             </div>
             ${szene ? `<div class="wf-slot"${rest.length ? ' style="margin-bottom:0;"' : ''}>${szene}</div>` : ''}
-          </div>${liste}`;
+          </div>${liste}${um ? status : ''}`;
       ]]]
