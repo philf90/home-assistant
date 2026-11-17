@@ -167,6 +167,9 @@
 #     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
 #     Wege mit Symbol ihrer Art (mdi:car, mdi:walk, mdi:bike), Ankunft zuhause
 #     und Aufenthalte in einer Zone mit dem Icon der Zone, sonst ein Punkt.
+#     Abfahrt: Beginnt ein Weg mit einer Luecke, gilt der naechste Punkt minus
+#     Fahrzeit laut Valhalla (das iPhone meldet im Stand nichts); ein
+#     Aufenthalt endet mit dieser Abfahrt.
 #   Sichtbar ist der Reiter nur fuer die Person selbst: Attribut user_id der
 #   Person gleich dem angemeldeten Benutzer. Variable tag_fuer der
 #   Personenkarte: eigene (Standard) oder alle. Andere sehen nur die letzte
@@ -385,7 +388,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 10;
+                    const VERSION = 11;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -543,6 +546,8 @@ cards:
                         return {
                           linien: teile.map((t) => t.legs.reduce((acc, leg) => acc.concat(sp.dec(leg.shape)), [])).filter((l) => l.length > 1),
                           km: teile.reduce((s, t) => s + t.summary.length, 0),
+                          // Fahrzeit laut Valhalla (Profil, nicht die Zeitstempel der Punkte), s
+                          zeit: teile.reduce((s, t) => s + t.summary.time, 0),
                         };
                       };
                       // Hoechstens n Auftraege gleichzeitig (ein Tag kann viele Abschnitte haben)
@@ -641,7 +646,7 @@ cards:
                         // gefahren wurde.
                         const LUECKE_AUTO = { auto: { exclude_unpaved: true } };
                         const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null)
-                          .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, ok: true }))
+                          .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, zeit: r.zeit, ok: true }))
                           .catch(() => ({
                             fest: a.fest, art: a.art, ok: false,
                             linien: [a.pts.map((x) => [x.lat, x.lon])],
@@ -656,6 +661,16 @@ cards:
                           fehler: erg.filter((e) => !e.ok).length,
                           auftraege: erg.length,
                           kmArt: ['fuss', 'rad', 'auto'].reduce((o, a) => Object.assign(o, { [a]: erg.filter((e) => e.art === a).reduce((x, e) => x + e.km, 0) }), {}),
+                          // Abfahrt: Beginnt der Weg mit einer Luecke, ist der erste Punkt die letzte
+                          // Meldung am Ausgangsort; im Stand meldet das iPhone nichts. Dann gilt
+                          // naechster Punkt minus Fahrzeit der Luecke, nie vor dem ersten Punkt.
+                          // 17.11.2026: letzte Meldung 12:21:37, naechste 12:33:44 in 0,51 km
+                          // (Fahrzeit 44 s) -> Abfahrt 12:33 statt 12:21; 13:08:20 -> 13:13:59 in
+                          // 0,67 km (83 s) -> 13:12 statt 13:08. Aktivitaetssensor: Auto ab 12:33:44
+                          // bzw. 13:14:00.
+                          abfahrt: !auftraege[0].fest && erg[0].ok && typeof erg[0].zeit === 'number'
+                            ? Math.max(auftraege[0].pts[0].t, Math.round(auftraege[0].pts[1].t - erg[0].zeit))
+                            : pkt[0].t,
                         };
                         // Fehlgeschlagene Auftraege nicht merken, die naechste Runde versucht es neu
                         if (!s.fehler) sp.cache[k] = s;
@@ -851,10 +866,16 @@ cards:
                         for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt, ui.akt));
                         const fest = erg.flatMap((s) => s.fest), gesch = erg.flatMap((s) => s.geschaetzt);
                         const pkt = tg.fahrten.flatMap((f) => f.pkt);
+                        // Abfahrt je Weg (sp.rechne); ein Aufenthalt endet mit der Abfahrt danach
+                        const abfahrt = tg.fahrten.map((f, k) => erg[k].abfahrt ?? f.pkt[0].t);
+                        const halte = tg.halte.map((h) => {
+                          const k = tg.fahrten.findIndex((f) => f.nachHalt && f.pkt[0].t === h.bis);
+                          return k >= 0 ? { ...h, bis: abfahrt[k] } : h;
+                        });
                         const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
                         if (st.stand !== stand) {
-                          const schilder = tg.halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
-                            .concat(tg.fahrten.filter((f) => !f.nachHalt).map((f) => ({ halt: false, lat: f.pkt[0].lat, lon: f.pkt[0].lon, text: `ab ${uhr(f.pkt[0].t)}` })));
+                          const schilder = halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
+                            .concat(tg.fahrten.map((f, k) => ({ f, k })).filter(({ f }) => !f.nachHalt).map(({ f, k }) => ({ halt: false, lat: f.pkt[0].lat, lon: f.pkt[0].lon, text: `ab ${uhr(abfahrt[k])}` })));
                           sp.zeichne(st, fest, gesch, pkt, schilder);
                           sp.passe(st, fest.flat().concat(gesch.flat(), pkt.map((x) => [x.lat, x.lon])));
                           st.stand = stand;
@@ -882,10 +903,10 @@ cards:
                           const ende = f.pkt[f.pkt.length - 1];
                           const art = hauptArt(erg[k]);
                           const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
-                          eintraege.push({ t: f.pkt[0].t, farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                          eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
                           if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
                         });
-                        tg.halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
+                        halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
                         eintraege.sort((a, b) => a.t - b.t);
                         ui.eintraege = eintraege;
                         ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 16px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
