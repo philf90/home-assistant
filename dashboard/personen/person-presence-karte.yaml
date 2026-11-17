@@ -165,8 +165,8 @@
 #     (12,98:1) und blauem Rand, lesbar auf dunkler und heller Karte.
 #   - Tagesliste unter der Karte: Abfahrt bzw. Weiterfahrt mit km, Aufenthalt
 #     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
-#     Wege mit Symbol ihrer Art (mdi:car, mdi:walk, mdi:bike), Ankunft und
-#     Aufenthalt mit Punkt.
+#     Wege mit Symbol ihrer Art (mdi:car, mdi:walk, mdi:bike), Ankunft zuhause
+#     und Aufenthalte in einer Zone mit dem Icon der Zone, sonst ein Punkt.
 #   Sichtbar ist der Reiter nur fuer die Person selbst: Attribut user_id der
 #   Person gleich dem angemeldeten Benutzer. Variable tag_fuer der
 #   Personenkarte: eigene (Standard) oder alle. Andere sehen nur die letzte
@@ -385,7 +385,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 9;
+                    const VERSION = 10;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -860,15 +860,21 @@ cards:
                           st.stand = stand;
                         }
                         // Tagesliste nach Uhrzeit; Antippen eines Eintrags zeigt ihn auf der Karte.
-                        // Wege tragen das Symbol ihrer Art (wie sp.art sie bestimmt), Ankunft und
-                        // Aufenthalt einen Punkt. GLYPHE: Abstand der Glyphenmitte von (12, 12) im
-                        // 24er-Raster (getBBox der Pfade aus @mdi/js 7.4.47: Auto 12/13, Fuss
-                        // 12,5/11,1, Rad 12/11,6), ausgeglichen ueber 0,4 (DESIGN.md, Icons).
+                        // Wege tragen das Symbol ihrer Art (wie sp.art sie bestimmt). Ankunft zuhause
+                        // und Aufenthalte in einer Zone das Icon der Zone (Attribut icon der
+                        // zone.*-Entitaet, Aufenthalt ueber den Zonennamen), sonst ein Punkt.
+                        // GLYPHE: Abstand der Glyphenmitte von (12, 12) im 24er-Raster (getBBox der
+                        // Pfade aus @mdi/js 7.4.47: Auto 12/13, Fuss 12,5/11,1, Rad 12/11,6, Haus,
+                        // Haus mit Herz und Koffer je 12/11,5, Teddy 12/12), ausgeglichen ueber 0,4
+                        // (DESIGN.md, Icons). Andere Zonen-Icons ohne Ausgleich.
                         const SYMBOL = { auto: 'mdi:car', fuss: 'mdi:walk', rad: 'mdi:bike' };
-                        const GLYPHE = { 'mdi:car': [0, 1], 'mdi:walk': [0.5, -0.9], 'mdi:bike': [0, 0] };
+                        const GLYPHE = { 'mdi:car': [0, 1], 'mdi:walk': [0.5, -0.9], 'mdi:home': [0, -0.5], 'mdi:home-heart': [0, -0.5], 'mdi:briefcase': [0, -0.5] };
+                        const zonen = Object.values((hass && hass.states) || {}).filter((x) => x.entity_id.startsWith('zone.'));
+                        const zonenIcon = (name) => { const zo = name && zonen.find((x) => x.attributes.friendly_name === name); return (zo && zo.attributes.icon) || null; };
+                        const heimIcon = ((hass && hass.states && hass.states['zone.home']) || { attributes: {} }).attributes.icon || null;
                         const zeichen = (e) => {
                           if (!e.icon) return `<span style="width:9px;height:9px;border-radius:50%;justify-self:center;background:${e.farbe};"></span>`;
-                          const [gx, gy] = GLYPHE[e.icon];
+                          const [gx, gy] = GLYPHE[e.icon] || [0, 0];
                           return `<ha-icon icon="${e.icon}" style="--mdc-icon-size:16px;--ha-icon-display:block;width:16px;height:16px;margin:0;display:block;color:${e.farbe};transform:translate(${-gx * 16 / 24}px, ${-gy * 16 / 24}px);"></ha-icon>`;
                         };
                         const eintraege = [];
@@ -877,9 +883,9 @@ cards:
                           const art = hauptArt(erg[k]);
                           const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
                           eintraege.push({ t: f.pkt[0].t, farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
-                          if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
+                          if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
                         });
-                        tg.halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
+                        tg.halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
                         eintraege.sort((a, b) => a.t - b.t);
                         ui.eintraege = eintraege;
                         ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 16px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
