@@ -26,7 +26,7 @@
 #                       unterwegs, zugestellt) als eigene Karte
 #   pakete_popup        Formular "Sendung hinzufuegen" (browser_mod-Popup)
 #
-# Daten (README des Parcel Aggregators, Stand 2.9.0): die Sensoren
+# Daten (README des Parcel Aggregators, Stand 2.11.0): die Sensoren
 #   sensor.parcel_aggregator_incoming_parcels   aktive eingehende Pakete
 #   sensor.parcel_aggregator_awaiting_pickup    am Abholort
 #   sensor.parcel_aggregator_delivered_parcels  kuerzlich zugestellt (Fenster
@@ -34,6 +34,11 @@
 # tragen im Attribut "parcels" je Paket: carrier, barcode, sender, status,
 # raw_status, delivered, delivered_at, planned_from, planned_to, pickup,
 # pickup_point, url, history (nur mit Option "Parcel history" je Dienst).
+# Zeitstempel ohne Uhrzeit kommen als 00:00:00 Ortszeit: DPD Deutschland
+# bei delivered_at und im Verlauf, Amazon bei delivered_at ohne
+# Zustell-Ereignis. pk.wann zeigt dann nur den Tag. Ein Liefertag ohne
+# Zeitfenster (DHL, Amazon, DPD) kommt als 00:00 bis 23:59:59 und erscheint
+# als "heute" oder "morgen" ohne Uhrzeit.
 #
 # Doppelte Pakete: Eine Amazon-Bestellung kann zugleich bei Amazon und beim
 # Zusteller stehen. Amazon gibt sie an die DHL-Integration ab (README
@@ -77,7 +82,7 @@
 #
 # Voraussetzung: custom:button-card (v7), browser_mod (Popup), Integrationen
 #                aus der Familie ha-parcel-integrations (DHL, DPD, Hermes, GLS,
-#                UPS, Amazon) und Parcel Aggregator (HACS), Skript aus
+#                UPS, Amazon) und Parcel Aggregator (Marketplace), Skript aus
 #                pakete-konfig.yaml, Helfer input_boolean.paket_vor_der_tur und
 #                input_datetime.paket_erkannt_um (Paket-Erkennung der Kamera,
 #                siehe sicherheit-templates.yaml).
@@ -93,7 +98,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 3, vorher = window.__nachtblauPakete;
+          const VERSION = 4, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -173,7 +178,13 @@ button_card_templates:
             const d = new Date(t);
             return d.toLocaleDateString('de-DE', { weekday: 'short' }) + ', ' + `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
           };
-          pk.wann = t => t === null ? '' : `${pk.tag(t)} ${pk.uhr(t)}`;
+          // Punkt genau 00:00:00 ist ein reines Datum (DPD Deutschland bei
+          // Zustellung und Verlauf, Amazon ohne Zustell-Ereignis): nur der Tag
+          pk.wann = t => {
+            if (t === null) return '';
+            const d = new Date(t);
+            return d.getHours() || d.getMinutes() || d.getSeconds() || d.getMilliseconds() ? `${pk.tag(t)} ${pk.uhr(t)}` : pk.tag(t);
+          };
           // Zeitfenster: "heute 10:15–12:15 Uhr", ganzer Tag nur "morgen",
           // mehrere Tage "Mi., 12.11. bis Fr., 14.11."
           pk.fenster = p => {
@@ -239,7 +250,7 @@ button_card_templates:
           pk.fehltHinweis = () => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:13px;background:color-mix(in srgb, ${AMBER} 12%, transparent);border:1px solid color-mix(in srgb, ${AMBER} 24%, transparent);">
               <span style="flex:none;">${pk.icon('mdi:alert-circle', AMBER, 19)}</span>
               <div style="min-width:0;"><div style="font-size:13.5px;font-weight:700;color:${TEXT};">Parcel Aggregator fehlt</div>
-              <div style="font-size:12px;color:${LABEL};">${pk.esc(CFG.eingehend)} ist nicht da. Integration aus HACS laden und einrichten (Kopf von pakete-templates.yaml).</div></div></div>`;
+              <div style="font-size:12px;color:${LABEL};">${pk.esc(CFG.eingehend)} ist nicht da. Integration aus dem Marketplace laden und einrichten (Kopf von pakete-templates.yaml).</div></div></div>`;
 
           // ---------- Bedienung ----------
           pk.dienstAufruf = (domain, service, data) => pk.hass.callService(domain, service, data);
