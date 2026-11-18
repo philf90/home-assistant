@@ -48,6 +48,13 @@
 # ohne den Sensor oder ohne Zahl bleibt die Zeile wie bisher. Stand der
 # letzten Amazon-Abfrage (alle 15 Minuten in Zustellung).
 #
+# Amazon-Zustellfoto: Liefert Amazons eigene Flotte, legt ha-amazon (ab 0.8.0)
+# das Foto als Bild-Entitaet an; sensor.pakete_amazon_fotos (pakete-konfig.yaml)
+# ordnet sie der Sendungsnummer zu. In "Zuletzt zugestellt" steht dann
+# "· Foto", aufgeklappt das Foto (Tippen: Infodialog in voller Groesse). Die
+# Adresse /api/image_proxy/...?token= gilt nur bis zu 10 Minuten, deshalb
+# bildet pk.fotoUrl sie erst beim Aufklappen.
+#
 # Doppelte Pakete: Eine Amazon-Bestellung kann zugleich bei Amazon und beim
 # Zusteller stehen. Amazon gibt sie an die DHL-Integration ab (README
 # ha-amazon, "Hand-off to carrier integrations"), an DPD und Hermes aber
@@ -91,7 +98,8 @@
 # Voraussetzung: custom:button-card (v7), browser_mod (Popup), Integrationen
 #                aus der Familie ha-parcel-integrations (DHL, DPD, Hermes, GLS,
 #                UPS, Amazon) und Parcel Aggregator (Marketplace), Skript aus
-#                pakete-konfig.yaml (mit sensor.pakete_amazon_stopps), Helfer
+#                pakete-konfig.yaml (mit sensor.pakete_amazon_stopps und
+#                sensor.pakete_amazon_fotos), Helfer
 #                input_boolean.paket_vor_der_tur und
 #                input_datetime.paket_erkannt_um (Paket-Erkennung der Kamera,
 #                siehe sicherheit-templates.yaml).
@@ -104,11 +112,12 @@ button_card_templates:
     - sensor.parcel_aggregator_delivered_parcels
     - input_boolean.paket_vor_der_tur
     - sensor.pakete_amazon_stopps
+    - sensor.pakete_amazon_fotos
     variables:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 5, vorher = window.__nachtblauPakete;
+          const VERSION = 6, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -119,6 +128,7 @@ button_card_templates:
             tuer: 'input_boolean.paket_vor_der_tur',
             tuerZeit: 'input_datetime.paket_erkannt_um',
             stopps: 'sensor.pakete_amazon_stopps',
+            fotos: 'sensor.pakete_amazon_fotos',
             skript: 'paket_hinzufuegen',
             pfad: '/dashboard-home/pakete',
           };
@@ -239,10 +249,31 @@ button_card_templates:
             return Number.isInteger(n) && n >= 0 ? n : null;
           };
           pk.stoppText = n => n === null ? '' : n === 0 ? 'nächster Stopp' : n === 1 ? 'noch 1 Stopp' : `noch ${n} Stopps`;
+          // Amazon-Zustellfoto (sensor.pakete_amazon_fotos, pakete-konfig.yaml):
+          // Bild-Entitaet je zugestellter Sendung, nur solange sie verfuegbar ist
+          pk.foto = p => {
+            if (pk.gruppe(p) !== 'zugestellt') return null;
+            const s = pk.s(CFG.fotos), m = s && s.attributes ? s.attributes.fotos : null;
+            const id = m && typeof m === 'object' ? m[pk.schluessel(p)] : undefined;
+            const bild = typeof id === 'string' && id.startsWith('image.') ? pk.s(id) : null;
+            return bild && bild.state !== 'unavailable' ? id : null;
+          };
+          // Bildadresse mit dem aktuellen Token: Home Assistant wechselt ihn alle
+          // 5 Minuten und nimmt nur die letzten zwei an (components/image).
+          // Deshalb erst beim Aufklappen bilden, mit dem hass-Objekt der Seite
+          // statt dem vom letzten Rendern dieser Karte.
+          pk.fotoUrl = id => {
+            const app = document.querySelector('home-assistant'), h = (app && app.hass) || pk.hass;
+            const s = h && h.states ? h.states[id] : null;
+            return s && s.attributes && s.attributes.entity_picture ? s.attributes.entity_picture : '';
+          };
+          // Tippen aufs Foto: Infodialog der Bild-Entitaet, dort in voller Groesse
+          pk.fotoGross = (el, id) => el.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: id } }));
+          pk.fotoFehler = el => { el.style.display = 'none'; const n = el.nextElementSibling; if (n) n.style.display = 'block'; };
           pk.name = p => p.sender || `${pk.dienst(p).name} …${String(p.barcode || '').slice(-6)}`;
           pk.unter = p => {
             const g = pk.gruppe(p), fe = pk.fenster(p);
-            if (g === 'zugestellt') { const t = zeit(p.delivered_at); return t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t); }
+            if (g === 'zugestellt') { const t = zeit(p.delivered_at); return (t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
             if (g === 'abholbereit') return p.pickup_point || 'am Abholort';
             if (g === 'achtung') return p.raw_status || pk.status(p.status).text;
             // Mit Stopps ohne "heute" (steht schon im Listentitel). Textbreite bei
@@ -306,6 +337,16 @@ button_card_templates:
             const auf = !pk.offen.has(k);
             if (auf) pk.offen.add(k); else pk.offen.delete(k);
             if (p) { p.querySelector('[data-pk-verlauf]').style.display = auf ? 'flex' : 'none'; el.setAttribute('aria-expanded', String(auf)); }
+            // Zustellfoto erst jetzt laden, bei jedem Aufklappen mit aktuellem
+            // Token (pk.fotoUrl); ein Ladefehler von vorher wird zurueckgesetzt
+            const img = auf && p ? p.querySelector('img[data-pk-foto]') : null;
+            if (img) {
+              const url = pk.fotoUrl(img.dataset.pkFoto), hinweis = img.nextElementSibling;
+              img.style.display = 'block';
+              if (hinweis) hinweis.style.display = 'none';
+              if (url && img.getAttribute('src') !== url) img.setAttribute('src', url);
+              else if (!url) pk.fotoFehler(img);
+            }
           };
           // Navigation wie tap_action navigate (Frontend hoert auf location-changed)
           pk.navigiere = () => { history.pushState(null, '', CFG.pfad); window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } })); };
@@ -325,7 +366,7 @@ button_card_templates:
           // ---------- Paketzeile ----------
           pk.zeile = p => {
             const k = pk.schluessel(p), d = pk.dienst(p), auf = pk.offen.has(k), kj = pk.esc(JSON.stringify(k));
-            const code = String(p.barcode || '');
+            const code = String(p.barcode || ''), foto = pk.foto(p);
             const verlauf = Array.isArray(p.history) && p.history.length
               ? p.history.slice().reverse().slice(0, 8).map((h, i) => `<div style="position:relative;padding:0 0 9px 16px;">
                   <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? pk.status(p.status).farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
@@ -348,6 +389,8 @@ button_card_templates:
                   ${pk.pille(p.status)}
                 </div>
                 <div data-pk-verlauf style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:6px;padding:2px 12px 12px 60px;">
+                  ${foto ? `<img data-pk-foto="${pk.esc(foto)}" ${auf ? `src="${pk.esc(pk.fotoUrl(foto))}"` : ''} alt="Zustellfoto von Amazon" onerror="window.__nachtblauPakete.fotoFehler(this)" ${pk.tippAttr(`window.__nachtblauPakete.fotoGross(this,${pk.esc(JSON.stringify(foto))})`)} style="display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid ${UKR};background:${NK};cursor:pointer;">
+                  <div style="display:none;font-size:12px;color:${SEK};">Foto konnte nicht geladen werden. Zum Neuladen zu- und wieder aufklappen.</div>` : ''}
                   ${code ? `<div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(d.name)} · ${pk.esc(code)}</div>` : ''}
                   <div>${verlauf}</div>
                   ${knoepfe ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${knoepfe}</div>` : ''}
