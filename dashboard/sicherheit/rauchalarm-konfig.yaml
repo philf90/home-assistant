@@ -6,14 +6,16 @@
 # Status:        aktiv
 # Einfuegen:     configuration.yaml unter homeassistant: packages:
 #                (oder die Automationen einzeln im YAML-Editor der UI einfuegen)
-# Platzhalter:   notify.mobile_app_iphone, notify.mobile_app_handy_2,
-#                *_seriennr, telegram_eintrag
+# Platzhalter:   notify.mobile_app_iphone, *_seriennr, telegram_eintrag
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
 # Meldet einen Alarm der vier Homematic-IP-Rauchwarnmelder (HmIP-SWSD-2) an
 # Abwesende und Anwesende: kritischer Hinweis aufs iPhone (klingelt auch bei
-# Stummschaltung), Alarmton-Push aufs zweite Handy (Android, alarm_stream) und
-# Telegram, alle gleichzeitig, mit Raum und Etage des ausloesenden Melders.
+# Stummschaltung) und Telegram, beide gleichzeitig, mit Raum und Etage des
+# ausloesenden Melders. Das zweite Handy (Android) ist seit 18.11.2026 bewusst
+# nicht dabei; wer es braucht, ergaenzt im parallel-Block einen Zweig mit
+# notify.mobile_app_<handy>, data: ttl 0, priority high, channel alarm_stream
+# (Alarmton auch bei Stummschaltung).
 # Umgesetzt am 18.11.2026 nach dem Plan "Umbauplan Rauchalarm" (eigene und
 # unabhaengige Pruefung); vorher ging nur ein fester Text ohne Raum per
 # Telegram raus, und ein Alarm aus einem Neustart heraus gar nicht.
@@ -67,8 +69,8 @@
 #     Bedingungen) und in rauchalarm-karte.yaml eintragen.
 #
 # Voraussetzung: Homematic(IP) Local mit den Meldern
-#   (sensor.*_rauchmelder_alarmstatus), Companion App auf beiden Handys
-#   (iOS: "Kritische Hinweise" erlaubt), Telegram-Bot.
+#   (sensor.*_rauchmelder_alarmstatus), Companion App auf dem iPhone
+#   ("Kritische Hinweise" erlaubt), Telegram-Bot.
 
 input_boolean:
   rauchalarm_hinweis:
@@ -94,8 +96,8 @@ automation:
   - id: sicherheit_rauchalarm_melden
     alias: "Sicherheit: Rauchalarm melden"
     description: >-
-      Meldet einen Rauchalarm der vier HmIP-Rauchmelder kritisch aufs iPhone, mit Alarmton aufs
-      zweite Handy (Android) und per Telegram, mit Raum und Etage. Die Melder sind per Funk vernetzt: Der
+      Meldet einen Rauchalarm der vier HmIP-Rauchmelder kritisch aufs iPhone und per Telegram,
+      mit Raum und Etage. Die Melder sind per Funk vernetzt: Der
       auslösende steht auf primary_alarm, die übrigen auf secondary_alarm. Jeder Wechsel auf
       primary_alarm wird sofort gemeldet, also auch ein zweiter Raum oder ein erneuter Alarm. Ein
       secondary_alarm wird nur gemeldet, wenn nach 5 s kein Melder auf primary_alarm steht, und dann
@@ -230,16 +232,6 @@ automation:
                     name: default
                     critical: 1
                     volume: 1.0
-          - action: notify.mobile_app_handy_2
-            continue_on_error: true
-            data:
-              title: "{{ titel }}"
-              message: "{{ text }}"
-              data:
-                ttl: 0
-                priority: high
-                channel: alarm_stream
-                clickAction: "{{ ziel }}"
           - action: telegram_bot.send_message
             continue_on_error: true
             data:
@@ -326,16 +318,6 @@ automation:
                         name: default
                         critical: 1
                         volume: 1.0
-              - action: notify.mobile_app_handy_2
-                continue_on_error: true
-                data:
-                  title: "{{ titel }}"
-                  message: "{{ text }}"
-                  data:
-                    ttl: 0
-                    priority: high
-                    channel: alarm_stream
-                    clickAction: "{{ ziel }}"
               - action: telegram_bot.send_message
                 continue_on_error: true
                 data:
@@ -353,15 +335,6 @@ automation:
                     url: "{{ ziel }}"
                     push:
                       interruption-level: time-sensitive
-              - action: notify.mobile_app_handy_2
-                continue_on_error: true
-                data:
-                  title: "{{ titel }}"
-                  message: "{{ text }}"
-                  data:
-                    ttl: 0
-                    priority: high
-                    clickAction: "{{ ziel }}"
               - action: telegram_bot.send_message
                 continue_on_error: true
                 data:

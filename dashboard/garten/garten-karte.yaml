@@ -64,9 +64,8 @@
 #
 # Maehroboter (Dreame A2, Integration antondaubert/dreame-mower):
 #   Lawn Solo           Status aus dem Statussensor, waehrend des Maehens
-#                       Fortschritt in % mit Balken und Flaeche; Akku und
-#                       Schnitthoehe (bei Einstellungen je Zone die Spanne der
-#                       Zonen). Hinweise unter der Zeile, schwerster zuerst:
+#                       Fortschritt in % mit Balken und Flaeche; Akku.
+#                       Hinweise unter der Zeile, schwerster zuerst:
 #                       Fehler (Rot) und Warnung (Amber) mit Geraetecode im
 #                       Klartext, Infos wie "Akku schwach, faehrt zur Station"
 #                       (Amber, Frost Blau) nur ausserhalb von Maehen und
@@ -136,12 +135,18 @@
 #       "Bewaesserung: Abbruch bei Regen"  Regensensor meldet Naesse, ein
 #           Ventil offen -> alle Ventile zu
 #     Jahresablauf und Shelly-Einstellungen: doku/bewaesserung-frostschutz.md
-#   - Maehroboter: antondaubert/dreame-mower (HACS, geprueft mit v1.10.1),
+#   - Maehroboter: antondaubert/dreame-mower (HACS, geprueft mit v2.0.3),
 #     Geraet "Lawn Solo" im Bereich Garten. Genutzt: lawn_mower, Sensoren
 #     Status, Geraetecode, Batterie, Maeh Fortschritt, Klingen- und
 #     Buerstenverschleiss, Wartungszustand, "Maehen wird nach Regenschutz
-#     fortgesetzt", number Schnitthoehe, switch Regenschutz, select Wartezeit
-#     nach Regen. Andere Geraetenamen oder Bereiche aendern die Entity-IDs.
+#     fortgesetzt", switch Regenschutz, select Wartezeit nach Regen. Andere
+#     Geraetenamen oder Bereiche aendern die Entity-IDs.
+#     Schnitthoehe: Bis v1.10.1 lieferte die Integration eine number-Entitaet
+#     und die lawn_mower-Attribute cutting_height, zone_cutting_heights und
+#     mowing_preference_mode. Ab v2.0 fehlen beide (number-Plattform entfernt,
+#     Attribute nur noch zones, contours, maps, current_map_id); die
+#     Schnitthoehe laesst sich nur noch per Aktion setzen, nicht auslesen. Die
+#     Karte zeigt sie deshalb seit 18.11.2026 nicht mehr.
 type: vertical-stack
 cards:
   # ================================ POOL ================================
@@ -1286,7 +1291,7 @@ cards:
         tap_action:
           action: none
         styles: *header_styles
-      # Hauptkachel: Status, Akku, Schnitthoehe, Fortschritt und Hinweise
+      # Hauptkachel: Status, Akku, Fortschritt und Hinweise
       # (Fehler, Warnung, Info, Regenpause). Die Zustandslogik steht einmal in
       # variables.mw; die Felder rufen sie mit states, variables und entity auf.
       - type: custom:button-card
@@ -1304,7 +1309,6 @@ cards:
           regen_id: sensor.garten_lawn_solo_mahen_wird_nach_regenschutz_fortgesetzt
           akku_id: sensor.garten_lawn_solo_batterie
           fortschritt_id: sensor.garten_lawn_solo_mah_fortschritt
-          hoehe_id: number.garten_lawn_solo_schnitthohe
           mw: |
             [[[
               const GRUEN='var(--nachtblau-gruen, #a6d49e)', BLAU='var(--nachtblau-blau, #7fb3d5)', AMBER='var(--nachtblau-amber, #e6b566)', ROT='var(--nachtblau-rot, #f0736a)', GRAU='var(--nachtblau-text-sekundaer, #8794a5)';
@@ -1431,17 +1435,6 @@ cards:
                 else {icon='mdi:battery-alert';color='var(--nachtblau-rot, #f0736a)';}
                 teile.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><ha-icon icon="${icon}" style="--mdc-icon-size:16px;color:${color};"></ha-icon><span style="font-weight:600;">${level.toFixed(0)} %</span></span>`);
               }
-              // Schnitthoehe: bei Einstellungen je Zone die Spanne der Zonen
-              // der aktuellen Karte, sonst der Wert der Karte.
-              const a=e?e.attributes:{};
-              const f=(v)=>String(v).replace('.',',');
-              let hoehe='';
-              if(a.mowing_preference_mode==='per_zone'&&Array.isArray(a.zones)&&a.zone_cutting_heights){
-                const h=a.zones.map(z=>parseFloat(a.zone_cutting_heights[String(z.id)])).filter(x=>!isNaN(x));
-                if(h.length){const lo=Math.min(...h), hi=Math.max(...h); hoehe= lo===hi?`${f(lo)} cm`:`${f(lo)}–${f(hi)} cm`;}
-              }
-              if(!hoehe){const n=states[variables.hoehe_id]; const v=n?parseFloat(n.state):NaN; if(!isNaN(v)) hoehe=`${f(v)} cm`;}
-              if(hoehe) teile.push(`Schnitt ${hoehe}`);
               const p=states[variables.fortschritt_id];
               if(variables.mw.fortschritt(states,variables,e)!==null&&p&&p.attributes.current_area_sqm!=null&&p.attributes.total_area_sqm){
                 teile.push(`${Math.round(p.attributes.current_area_sqm)} von ${Math.round(p.attributes.total_area_sqm)} m²`);
