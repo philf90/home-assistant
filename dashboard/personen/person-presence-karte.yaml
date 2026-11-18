@@ -38,7 +38,8 @@
 #     Grossbuchstaben und Leerzeichen; "N/A" und "null" gelten als leer.
 #   - places_prefix: Integration Places (OpenStreetMap). Liefert zusaetzlich
 #     die Strassennummer (route_number, bei Landesstrassen teils in street)
-#     und die Richtung zu Hause.
+#     und die Richtung zu Hause; im Tagesprofil die Namen der Aufenthalte
+#     (Sensoren _place_name und _place_type).
 #   Strassennummer: Liefert die App eine Nummer als Strasse (iOS meldete auf
 #   der Testfahrt Landesstrassen wie "L 123"), kommt sie von dort, sonst von Places.
 #   Das Tempo steht nicht an person.*, sondern am Tracker in deren
@@ -97,8 +98,9 @@
 #      mit Attributen, auch reine Positionsaenderungen). Zeitfenster ist die
 #      laufende Abwesenheit, sonst die letzte mit mindestens 2 genauen Punkten;
 #      Zonen ausser Zuhause zaehlen als abwesend. Dazu je der naechste genaue
-#      Punkt bis 5 min vor dem Aufbruch und nach der Rueckkehr (Abfahrt,
-#      Ankunft). Die Bedingung ueberspringt
+#      Punkt zu Hause bis 30 min vor dem Aufbruch und nach der Rueckkehr
+#      (Abfahrt, Ankunft; zu Hause meldet das iPhone etwa alle 15 min). Diese
+#      Punkte zaehlen zu keinem Aufenthalt. Die Bedingung ueberspringt
 #      Ausreisser: Am 15.11.2026 stand person.* 25 s auf not_home, mit einer
 #      Position 2 km entfernt und 100 m Ungenauigkeit. person.* hat dieselben Positionen wie der Handy-Tracker (Messung
 #      im Recorder, 05.-15.11.2026), ohne doppelte Zeilen, und folgt einem
@@ -171,6 +173,10 @@
 #     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
 #     Wege mit Symbol ihrer Art (mdi:car, mdi:walk, mdi:bike), Ankunft zuhause
 #     und Aufenthalte in einer Zone mit dem Icon der Zone, sonst ein Punkt.
+#     Name eines Aufenthalts: die Zone, sonst der Ortsname aus Places
+#     (<places_prefix>_place_name, Typ aus _place_type), der waehrend des
+#     Aufenthalts am laengsten galt; Strassen zaehlen nicht, bei Haltestellen
+#     ("Ort, Name") faellt der Ort weg. Ohne Namen steht "Aufenthalt".
 #     Abfahrt: Beginnt ein Weg mit einer Luecke, gilt der naechste Punkt minus
 #     Fahrzeit laut Valhalla (das iPhone meldet im Stand nichts); ein
 #     Aufenthalt endet mit dieser Abfahrt.
@@ -367,6 +373,8 @@ cards:
                 tag_fuer: '[[[ return variables.tag_fuer || "eigene"; ]]]'
                 # Aktivitaetssensor des Handys fuer die Wahl Fuss/Rad/Auto
                 aktivitaet: '[[[ return variables.activity_entity || ""; ]]]'
+                # Places-Praefix: Ortsnamen fuer Aufenthalte ohne Zone (Tagesliste)
+                places: '[[[ return variables.places_prefix || ""; ]]]'
               show_name: false
               show_state: false
               show_icon: false
@@ -392,7 +400,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 12;
+                    const VERSION = 14;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -473,13 +481,21 @@ cards:
                       // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
                       const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
                       // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt,
-                      // Ankunft): der naechste genaue innerhalb RAND. Nur die direkte Nachbarzeile
-                      // reichte nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau,
-                      // die Spur begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein
-                      // Punkt mit 5 m.
-                      const RAND = 300;      // s
+                      // Ankunft): der naechste genaue Punkt zu Hause innerhalb RAND, ohne eine
+                      // andere Abwesenheit zu ueberspringen. Nur die direkte Nachbarzeile reichte
+                      // nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau, die Spur
+                      // begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein Punkt mit
+                      // 5 m. 300 s reichten auch nicht: Am 18.11.2026 (Fussweg 190 m, 20 min an
+                      // einer Stelle) lag die letzte Meldung zu Hause 15 min vor dem Aufbruch und
+                      // die erste nach der Rueckkehr 5:52 min nach der letzten unterwegs; Hin- und
+                      // Rueckweg fehlten. Zu Hause meldet das iPhone etwa alle 15 min. Die
+                      // Abfahrt schaetzt sp.rechne, einen Aufenthalt am Haus verhindert sp.tag.
+                      const RAND = 1800; // s
                       const nachbar = (z, i, schritt, t) => {
-                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) if (genau(z[k])) return k;
+                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) {
+                          if (weg(z[k].s)) break;
+                          if (z[k].s === 'home' && genau(z[k])) return k;
+                        }
                         return -1;
                       };
                       const spannPunkte = (z, [anf, ende]) => {
@@ -512,6 +528,44 @@ cards:
                           return { i, j, von: pkt[i].t, bis: pkt[j].t, lat: teil.reduce((s, x) => s + x.lat, 0) / teil.length, lon: teil.reduce((s, x) => s + x.lon, 0) / teil.length, name: zone || '' };
                         });
                       };
+                      // Ortsnamen fuer Aufenthalte ohne Zone, aus der Integration Places
+                      // (OpenStreetMap): Sensoren <places_prefix>_place_name und _place_type. Places
+                      // fragt bei jeder neuen Position ab und schreibt beide Sensoren zugleich; der
+                      // Verlauf speichert nur Aenderungen, deshalb gilt je Zeitpunkt der letzte
+                      // Wert beider Sensoren. Strassen (Typ motorway bis footway) nennen keinen Ort
+                      // und fallen weg. Haltestellen heissen in OpenStreetMap oft "Ort, Name": Bei
+                      // ihnen faellt der Ort vor dem ersten Komma weg (18.11.2026: Places nannte fuer
+                      // eine Halle nur die gleichnamige Bushaltestelle davor).
+                      const KEIN_ORT = new Set(['', 'unknown', 'unavailable', 'none', 'null']);
+                      const STRASSE = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'road', 'track', 'pedestrian', 'footway', 'path', 'cycleway', 'bridleway', 'steps', 'busway']);
+                      const HALTESTELLE = new Set(['bus_stop', 'tram_stop', 'stop_position', 'platform']);
+                      sp.orte = (namen, typen) => {
+                        const ev = namen.map((r) => ({ t: r.lu, name: r.s })).concat(typen.map((r) => ({ t: r.lu, typ: r.s }))).sort((a, b) => a.t - b.t);
+                        const out = [];
+                        let name = '', typ = '';
+                        ev.forEach((e) => {
+                          if ('name' in e) name = String(e.name ?? ''); else typ = String(e.typ ?? '');
+                          const letzte = out[out.length - 1];
+                          // beide Sensoren derselben Abfrage liegen Millisekunden auseinander
+                          if (letzte && e.t - letzte.t < 2) { letzte.name = name; letzte.typ = typ; } else out.push({ t: e.t, name, typ });
+                        });
+                        return out;
+                      };
+                      // Name, der waehrend des Aufenthalts am laengsten galt. Es zaehlen nur
+                      // Abfragen ab 2 min vor Beginn: Ein Wert von davor stammt von der Anfahrt.
+                      sp.ortName = (orte, von, bis) => {
+                        const dauer = new Map();
+                        orte.forEach((o, k) => {
+                          if (o.t < von - 120 || o.t > bis) return;
+                          if (KEIN_ORT.has(o.name.trim().toLowerCase()) || STRASSE.has(o.typ)) return;
+                          const ende = Math.min(bis, k + 1 < orte.length ? orte[k + 1].t : bis);
+                          const name = HALTESTELLE.has(o.typ) && o.name.includes(', ') ? o.name.slice(o.name.indexOf(', ') + 2) : o.name;
+                          dauer.set(name.trim(), (dauer.get(name.trim()) || 0) + Math.max(0, ende - Math.max(von, o.t)));
+                        });
+                        let best = '', max = -1;
+                        dauer.forEach((d, n) => { if (d > max) { best = n; max = d; } });
+                        return best;
+                      };
                       // Tag: alle echten Abwesenheiten, die nach "start" enden, zerlegt in Fahrten
                       // (zwischen Zuhause und Aufenthalten) und Aufenthalte. Punkte vor "start"
                       // fallen weg.
@@ -526,7 +580,12 @@ cards:
                           const pkt = spannPunkte(z, s).filter((x) => x.t >= start);
                           if (pkt.length < 2) return;
                           let von = 0;
-                          sp.halte(pkt).forEach((h) => {
+                          // Punkte zu Hause am Anfang und Ende (aus spannPunkte) gehoeren zu keinem
+                          // Aufenthalt: Mit der Meldung 15 min vor dem Aufbruch entstand sonst ein
+                          // Aufenthalt "am Haus" (18.11.2026).
+                          const a0 = pkt[0].s === 'home' ? 1 : 0;
+                          const a1 = pkt[pkt.length - 1].s === 'home' ? pkt.length - 1 : pkt.length;
+                          sp.halte(pkt.slice(a0, a1)).map((h) => ({ ...h, i: h.i + a0, j: h.j + a0 })).forEach((h) => {
                             if (h.i > von) fahrten.push({ pkt: pkt.slice(von, h.i + 1), nachHalt: von > 0 });
                             halte.push(h);
                             von = h.j;
@@ -882,7 +941,7 @@ cards:
                         const halte = tg.halte.map((h) => {
                           const k = tg.fahrten.findIndex((f) => f.nachHalt && f.pkt[0].t === h.bis);
                           return k >= 0 ? { ...h, bis: abfahrt[k] } : h;
-                        });
+                        }).map((h) => ({ ...h, ort: h.name ? '' : sp.ortName(ui.orte || [], h.von, h.bis) }));
                         const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
                         if (st.stand !== stand) {
                           const schilder = halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
@@ -917,7 +976,7 @@ cards:
                           eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
                           if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
                         });
-                        halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
+                        halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || h.ort || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
                         eintraege.sort((a, b) => a.t - b.t);
                         ui.eintraege = eintraege;
                         ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 16px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
@@ -947,10 +1006,12 @@ cards:
                       sp.lauf = async (hass, eid, ui) => {
                         try {
                           const ende = new Date(), start = new Date(ende.getTime() - FENSTER * 3600e3);
-                          const ids = ui.aktEid && hass.states[ui.aktEid] ? [eid, ui.aktEid] : [eid];
+                          const ortIds = ui.ortPfx ? [ui.ortPfx + '_place_name', ui.ortPfx + '_place_type'].filter((x) => hass.states[x]) : [];
+                          const ids = (ui.aktEid && hass.states[ui.aktEid] ? [eid, ui.aktEid] : [eid]).concat(ortIds);
                           const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: ids, minimal_response: false, no_attributes: false, significant_changes_only: false });
                           ui.z = sp.zeilen(h[eid] || []);
                           ui.akt = ui.aktEid ? sp.aktivitaet(h[ui.aktEid] || []) : [];
+                          ui.orte = ortIds.length === 2 ? sp.orte(h[ortIds[0]] || [], h[ortIds[1]] || []) : [];
                           const st = await sp.karte(ui.kasten, eid);
                           return await sp.zeige(hass, st, ui);
                         } catch (e) {
@@ -961,10 +1022,10 @@ cards:
                       // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist.
                       // Den Reiter "Tagesprofil" sieht nur die Person selbst (user_id der Person =
                       // angemeldeter Benutzer), mit tag_fuer: alle jeder.
-                      sp.start = (karte, eid, h0, tagFuer, aktEid) => {
+                      sp.start = (karte, eid, h0, tagFuer, aktEid, ortPfx) => {
                         const r = karte.shadowRoot;
                         const q = (s) => r && r.querySelector(s);
-                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], akt: [], aktEid, eintraege: [] };
+                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], akt: [], aktEid, ortPfx, orte: [], eintraege: [] };
                         const wurzel = q('[data-spur]');
                         if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter || !wurzel) return;
                         // button-card (7.0.1, src/action-handler.ts) ruft auf seiner ha-card bei
@@ -1015,8 +1076,8 @@ cards:
                     const sp = window.__nachtblauSpur;
                     if (!this.__spurGestartet) {
                       this.__spurGestartet = true;
-                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene', aktEid = variables.aktivitaet || '';
-                      setTimeout(() => sp.start(karte, eid, h0, tagFuer, aktEid), 50);
+                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene', aktEid = variables.aktivitaet || '', ortPfx = variables.places || '';
+                      setTimeout(() => sp.start(karte, eid, h0, tagFuer, aktEid, ortPfx), 50);
                     }
                     const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
                     return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
