@@ -40,6 +40,14 @@
 # Zeitfenster (DHL, Amazon, DPD) kommt als 00:00 bis 23:59:59 und erscheint
 # als "heute" oder "morgen" ohne Uhrzeit.
 #
+# Amazon-Stopps: Faehrt Amazons eigene Flotte, nennt Amazon die Stopps bis
+# zur Zustellung (raw.stops_away, README ha-amazon "Stops away", ab 0.9.0).
+# Der Aggregator laesst raw weg, deshalb sammelt sensor.pakete_amazon_stopps
+# (pakete-konfig.yaml) sie je Sendungsnummer. Zeilen und Kacheln einer
+# Sendung in Zustellung zeigen dann "noch 3 Stopps" vor dem Zeitfenster;
+# ohne den Sensor oder ohne Zahl bleibt die Zeile wie bisher. Stand der
+# letzten Amazon-Abfrage (alle 15 Minuten in Zustellung).
+#
 # Doppelte Pakete: Eine Amazon-Bestellung kann zugleich bei Amazon und beim
 # Zusteller stehen. Amazon gibt sie an die DHL-Integration ab (README
 # ha-amazon, "Hand-off to carrier integrations"), an DPD und Hermes aber
@@ -83,7 +91,8 @@
 # Voraussetzung: custom:button-card (v7), browser_mod (Popup), Integrationen
 #                aus der Familie ha-parcel-integrations (DHL, DPD, Hermes, GLS,
 #                UPS, Amazon) und Parcel Aggregator (Marketplace), Skript aus
-#                pakete-konfig.yaml, Helfer input_boolean.paket_vor_der_tur und
+#                pakete-konfig.yaml (mit sensor.pakete_amazon_stopps), Helfer
+#                input_boolean.paket_vor_der_tur und
 #                input_datetime.paket_erkannt_um (Paket-Erkennung der Kamera,
 #                siehe sicherheit-templates.yaml).
 # ============================================================================
@@ -94,11 +103,12 @@ button_card_templates:
     - sensor.parcel_aggregator_awaiting_pickup
     - sensor.parcel_aggregator_delivered_parcels
     - input_boolean.paket_vor_der_tur
+    - sensor.pakete_amazon_stopps
     variables:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 4, vorher = window.__nachtblauPakete;
+          const VERSION = 5, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -108,6 +118,7 @@ button_card_templates:
             zugestellt: 'sensor.parcel_aggregator_delivered_parcels',
             tuer: 'input_boolean.paket_vor_der_tur',
             tuerZeit: 'input_datetime.paket_erkannt_um',
+            stopps: 'sensor.pakete_amazon_stopps',
             skript: 'paket_hinzufuegen',
             pfad: '/dashboard-home/pakete',
           };
@@ -219,13 +230,29 @@ button_card_templates:
             g.zugestellt.sort((a, b) => (zeit(b.delivered_at) ?? 0) - (zeit(a.delivered_at) ?? 0));
             return g;
           };
+          // Amazon-Stopps (sensor.pakete_amazon_stopps, pakete-konfig.yaml): nur
+          // bei Sendungen in Zustellung, Schluessel wie pk.schluessel
+          pk.stopps = p => {
+            if (p.status !== 'out_for_delivery') return null;
+            const s = pk.s(CFG.stopps), m = s && s.attributes ? s.attributes.stopps : null;
+            const n = m && typeof m === 'object' ? m[pk.schluessel(p)] : undefined;
+            return Number.isInteger(n) && n >= 0 ? n : null;
+          };
+          pk.stoppText = n => n === null ? '' : n === 0 ? 'nächster Stopp' : n === 1 ? 'noch 1 Stopp' : `noch ${n} Stopps`;
           pk.name = p => p.sender || `${pk.dienst(p).name} …${String(p.barcode || '').slice(-6)}`;
           pk.unter = p => {
             const g = pk.gruppe(p), fe = pk.fenster(p);
             if (g === 'zugestellt') { const t = zeit(p.delivered_at); return t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t); }
             if (g === 'abholbereit') return p.pickup_point || 'am Abholort';
             if (g === 'achtung') return p.raw_status || pk.status(p.status).text;
-            if (g === 'heute') return fe || 'heute';
+            // Mit Stopps ohne "heute" (steht schon im Listentitel). Textbreite bei
+            // 360 px: 135 px. "noch 12 Stopps · heute 07:00–13:00 Uhr" fuellt dort
+            // mit Roboto zwei Zeilen ganz und braucht mit breiterer Schrift (Inter,
+            // 128 px) drei; ohne "heute" bleibt Reserve
+            if (g === 'heute') {
+              const st = pk.stoppText(pk.stopps(p));
+              return st ? [st, fe.replace(/^heute\s*/, '')].filter(Boolean).join(' · ') : (fe || 'heute');
+            }
             return fe ? 'voraussichtlich ' + fe : (p.raw_status || pk.status(p.status).text);
           };
 
@@ -350,7 +377,7 @@ button_card_templates:
           // sonst getoent (heute Amber, spaeter Blau)
           pk.hero = p => {
             const d = pk.dienst(p), unterwegs = p.status === 'out_for_delivery';
-            const zeile2 = (unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung') + (pk.fenster(p) ? ' · ' + pk.fenster(p) : '');
+            const zeile2 = [unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung', pk.stoppText(pk.stopps(p)), pk.fenster(p)].filter(Boolean).join(' · ');
             const ic = unterwegs ? 'mdi:truck-delivery' : 'mdi:calendar-clock';
             const c = pk.gruppe(p) === 'heute' ? AMBER : BLAU;
             const kachelVoll = `<span style="width:40px;height:40px;border-radius:12px;flex:none;display:grid;place-items:center;background:rgba(58, 44, 18, 0.12);border:1px solid rgba(58, 44, 18, 0.24);">${pk.icon(ic, '#3a2c12', 22)}</span>`;

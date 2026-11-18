@@ -19,6 +19,13 @@
 #                                Sendung melden); steuert zusammen mit
 #                                sensor.parcel_aggregator_awaiting_pickup die
 #                                Sichtbarkeit der Home-Karte (pakete-karte.yaml)
+#   sensor.pakete_amazon_stopps  Stopps des Fahrers bis zur Zustellung je
+#                                Amazon-Sendung in Zustellung (nur Amazons
+#                                eigene Flotte, Stand der letzten Abfrage,
+#                                alle 15 Minuten); Zustand: Zahl solcher
+#                                Sendungen, Attribut stopps: {Nummer: Stopps}.
+#                                Liest pakete-templates.yaml fuer "noch 3
+#                                Stopps"
 #   script.paket_hinzufuegen     traegt eine Sendungsnummer bei DHL, Hermes,
 #                                GLS oder UPS ein (Formular "+ Sendung");
 #                                Felder nummer und dienst (dhl, hermes, gls,
@@ -66,9 +73,10 @@
 # Danach Home Assistant neu starten oder unter Einstellungen -> Werkzeuge ->
 # YAML Template-Entitaeten, Skripte und Automationen neu laden.
 #
-# Den Sensor kann man stattdessen auch in der UI anlegen (Einstellungen ->
-# Geraete & Dienste -> Helfer -> Template -> Template-Sensor, Name "Pakete in
-# Zustellung", Zustand wie unten); dann den template:-Block hier weglassen.
+# Den Sensor "Pakete in Zustellung" kann man stattdessen auch in der UI
+# anlegen (Einstellungen -> Geraete & Dienste -> Helfer -> Template ->
+# Template-Sensor, Zustand wie unten); dann ihn hier weglassen. "Pakete
+# Amazon Stopps" braucht YAML, weil der UI-Helfer keine Attribute kennt.
 #
 # Ohne Paket: Skript und Automation einzeln einfuegen (Neues Skript bzw. Neue
 # Automation -> Drei-Punkte-Menue -> In YAML bearbeiten). Einzufuegen ist beim
@@ -92,6 +100,40 @@ template:
           {% set mit = p | selectattr('barcode') | map(attribute='barcode') | map('string')
              | map('replace', ' ', '') | map('upper') | unique | list | count %}
           {{ mit + (p | rejectattr('barcode') | list | count) }}
+
+      # Stopps bis zur Zustellung bei Amazons eigener Flotte. Amazon traegt
+      # sie nur in raw.stops_away, das der Aggregator weglaesst; gelesen wird
+      # die Paketliste der Amazon-Sensoren, gefunden ueber die Integration
+      # (keine Entity-ID noetig). Schluessel wie in pakete-templates.yaml
+      # (pk.schluessel): Sendungsnummer ohne Leerraum, gross geschrieben.
+      # Die Schleife steht in state und attributes, weil beide Templates
+      # getrennt gerendert werden.
+      - name: Pakete Amazon Stopps
+        unique_id: pakete_amazon_stopps
+        icon: mdi:map-marker-distance
+        state: >-
+          {%- set ns = namespace(m={}) %}
+          {%- for s in expand(integration_entities('amazon_orders') | select('match', 'sensor\.') | list) %}
+            {%- for p in (s.attributes.get('parcels') or []) if p.get('status') == 'out_for_delivery' and p.get('barcode') %}
+              {%- set n = (p.get('raw') or {}).get('stops_away') %}
+              {%- if n is number and n is not boolean %}
+                {%- set ns.m = dict(ns.m, **{(p.barcode | string | regex_replace('\s', '') | upper): n | int}) %}
+              {%- endif %}
+            {%- endfor %}
+          {%- endfor %}
+          {{ ns.m | count }}
+        attributes:
+          stopps: >-
+            {%- set ns = namespace(m={}) %}
+            {%- for s in expand(integration_entities('amazon_orders') | select('match', 'sensor\.') | list) %}
+              {%- for p in (s.attributes.get('parcels') or []) if p.get('status') == 'out_for_delivery' and p.get('barcode') %}
+                {%- set n = (p.get('raw') or {}).get('stops_away') %}
+                {%- if n is number and n is not boolean %}
+                  {%- set ns.m = dict(ns.m, **{(p.barcode | string | regex_replace('\s', '') | upper): n | int}) %}
+                {%- endif %}
+              {%- endfor %}
+            {%- endfor %}
+            {{ ns.m }}
 
 script:
   paket_hinzufuegen:
