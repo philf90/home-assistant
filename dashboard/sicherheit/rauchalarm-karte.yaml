@@ -1,0 +1,326 @@
+# ============================================================================
+# Rauchalarm-Karte (Home View)
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sicherheit
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Karte hinzufuegen -> Manuell (Home View, Section 0, direkt
+#                nach der Top-Navigation und vor dem Begruessungs-Banner)
+# Platzhalter:   *_seriennr
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Alarmkarte im Nachtblau-Stil fuer die vier Homematic-IP-Rauchwarnmelder.
+# Umgesetzt am 18.11.2026 nach dem Entwurf "Rauchalarm-Karte Home"
+# (Gestaltung 1 "Gefuellte Alarmkachel", Aktivierung B "Alarm, danach Hinweis
+# bis Gesehen").
+#
+# Zwei Zustaende an derselben Stelle, nie beide zugleich:
+#
+#   Alarm      solange einer der Melder auf primary_alarm (Rauch selbst
+#              erkannt) oder secondary_alarm (per Funk mitalarmiert) steht.
+#              Die Karte liest den Melderzustand direkt, ohne Automation und
+#              ohne die 5 s Wartezeit der Push-Automation. Breite rote Kachel,
+#              gefuellt wie eine "an"-Kachel (DESIGN.md: gefuellte Kachel fuer
+#              kritische Werte; Rot ohne Verlauf, Schrift #3d1512, 5,6:1).
+#              Darin jeder Raum mit Rauch als eigene Zeile "Raum · Etage",
+#              sonst "Ursprung unbekannt". Darunter "seit", die Zahl der
+#              mitalarmierenden Melder und, falls einer nicht erreichbar ist,
+#              eine rote Zeile. Antippen oeffnet die Sicherheit-View.
+#              Zwei Ringe um das Symbol laufen dreimal und stehen dann als
+#              Schein (Muster der Auto-Karte); "Bewegung reduzieren" zeigt nur
+#              den Schein.
+#   Hinweis    nach dem Alarm, solange input_boolean.rauchalarm_hinweis an
+#              ist: "Rauchalarm vorbei" (Amber) mit Raum und Uhrzeit, oder
+#              "Entwarnung unsicher" (Rot), solange ein Melder nicht
+#              erreichbar ist; wechselt von selbst, sobald er zurueck ist.
+#              Antippen fragt nach und schaltet den Hinweis aus ("Gesehen",
+#              gilt fuer alle Benutzer). Kein Zeitlimit.
+#
+# Eine Karte statt zwei: Beide Zustaende stehen an derselben Stelle. Ein
+# einziges Grid-Element vermeidet eine zweite Luecke in der Section, die
+# Aktion beim Antippen haengt am Zustand (tap_action als Template, Muster aus
+# docker-templates.yaml).
+#
+# Helfer und Automation: rauchalarm-konfig.yaml
+#   input_boolean.rauchalarm_hinweis   an = Hinweis nach dem Alarm steht
+#   input_datetime.rauchalarm_beginn   Beginn (Datum und Uhrzeit)
+#   input_text.rauchalarm_ort          "Raum|Etage;Raum|Etage", leer =
+#                                      Ursprung unbekannt
+#   automation "Sicherheit: Rauchalarm-Hinweis merken" setzt alle drei.
+#
+# Raum und Etage im Alarm kommen live aus dem Bereich des Melder-Geraets
+# (hass.entities -> hass.devices -> hass.areas -> hass.floors). Fehlt die
+# Etage, steht der Raum allein da.
+#
+# "seit": fruehester Wechsel eines Melders in den Alarm. Der Beginn aus dem
+# Helfer wird genommen, wenn er frueher liegt und hoechstens 6 h davor (nach
+# einem Neustart ist last_changed neu gestempelt; ein alter, nicht gesehener
+# Hinweis zaehlt nicht).
+#
+# Nicht dabei: intrusion_alarm (Einbruchalarm ueber die Melder, zeigt die
+# Sicherheit-View) und die Audioerkennung der Kameras. Ein Stummschalten gibt
+# es nicht: Die Melder haben in Home Assistant keine Entitaet dafuer.
+#
+# Breiten: Inhalt 306 px (Galaxy S25) bzw. 348 px (iPhone 17 Pro). Bei 306 px
+# bricht "Kinderzimmer ... · Obergeschoss" in zwei Zeilen um; vor dem
+# Trennpunkt steht ein geschuetztes Leerzeichen, damit keine Zeile mit "·"
+# beginnt. Gemessen im Entwurf: 187 px hoch bei 360, 168 px bei 402.
+#
+# Neuer Melder: in conditions, triggers_update und variables.melder ergaenzen,
+# ebenso in den drei Rauchalarm-Automationen (rauchalarm-konfig.yaml).
+#
+# Voraussetzung: custom:button-card (HACS), sensor.time (Integration
+# "Time & Date") fuer das Mitzaehlen der Minuten, Helfer und Automation aus
+# rauchalarm-konfig.yaml.
+type: conditional
+conditions:
+  - condition: or
+    conditions:
+      - condition: state
+        entity: input_boolean.rauchalarm_hinweis
+        state: "on"
+      - condition: state
+        entity: sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+        state: &im_alarm [primary_alarm, secondary_alarm]
+      - condition: state
+        entity: sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+        state: *im_alarm
+      - condition: state
+        entity: sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+        state: *im_alarm
+      - condition: state
+        entity: sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        state: *im_alarm
+card:
+  type: custom:button-card
+  entity: input_boolean.rauchalarm_hinweis
+  show_name: false
+  show_state: false
+  show_icon: false
+  show_label: false
+  triggers_update:
+    - input_boolean.rauchalarm_hinweis
+    - input_datetime.rauchalarm_beginn
+    - input_text.rauchalarm_ort
+    - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+    - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+    - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+    - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+    - sensor.time
+  variables:
+    melder:
+      - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+      - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+      - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+      - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+    hinweis: input_boolean.rauchalarm_hinweis
+    beginn: input_datetime.rauchalarm_beginn
+    ort: input_text.rauchalarm_ort
+    ziel: /dashboard-home/sicherheit
+    # modus: alarm | vorbei | unsicher | aus
+    lage: |
+      [[[
+        const z = (id) => (states[id] || {}).state;
+        const ALARM = ['primary_alarm', 'secondary_alarm'];
+        const herd = variables.melder.filter((id) => z(id) === 'primary_alarm');
+        const alarm = variables.melder.filter((id) => ALARM.includes(z(id)));
+        const weg = variables.melder.filter((id) => [undefined, 'unavailable', 'unknown'].includes(z(id)));
+        const ruhig = variables.melder.filter((id) => z(id) === 'idle_off');
+        const an = z(variables.hinweis) === 'on';
+        const modus = alarm.length ? 'alarm' : !an ? 'aus' : weg.length ? 'unsicher' : 'vorbei';
+        return { herd, alarm, weg, ruhig, an, modus };
+      ]]]
+  tap_action: |
+    [[[
+      if (variables.lage.modus === 'alarm') return { action: 'navigate', navigation_path: variables.ziel };
+      if (variables.lage.modus === 'aus') return { action: 'none' };
+      return {
+        action: 'perform-action',
+        perform_action: 'input_boolean.turn_off',
+        target: { entity_id: variables.hinweis },
+        confirmation: { text: 'Hinweis auf den Rauchalarm entfernen? Er verschwindet für alle.' }
+      };
+    ]]]
+  hold_action:
+    action: navigate
+    navigation_path: /dashboard-home/sicherheit
+  styles:
+    card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+      - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+      - box-shadow: '0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))'
+      - overflow: hidden
+      # Statusrand links nur beim Hinweis (wie Haustuer-Karte). Muss NACH
+      # "border" stehen, sonst ueberschreibt die Kurzform ihn wieder.
+      - border-left: |
+          [[[
+            const m = variables.lage.modus;
+            if (m === 'unsicher') return '4px solid var(--nachtblau-rot, #f0736a)';
+            if (m === 'vorbei') return '4px solid var(--nachtblau-amber, #e6b566)';
+            return '1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))';
+          ]]]
+    grid:
+      - grid-template-areas: '"body"'
+    custom_fields:
+      body:
+        - width: 100%
+        - min-width: 0
+  extra_styles: |
+    /* Gefuellte Alarmkachel: Fuellung und Schrift in beiden Modi gleich,
+       Rand und Leuchten ueber die Theme-Variablen (DESIGN.md, Heller Modus) */
+    .rk-fk { background: #f0736a; color: #3d1512; border: 1px solid var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5)); box-shadow: 0 0 14px -3px var(--nachtblau-leuchten-rot, rgba(240, 115, 106, 0.5)); border-radius: 16px; padding: 14px 16px; display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; align-items: center; }
+    /* Icon-Kachel in der Fuellung: Flaeche 0,12, Rand 0,24, Schein 0,18 der Schrift */
+    .rk-fi { position: relative; width: 42px; height: 42px; box-sizing: border-box; border-radius: 13px; background: rgba(61, 21, 18, 0.12); border: 1px solid rgba(61, 21, 18, 0.24); box-shadow: 0 0 0 3px rgba(61, 21, 18, 0.18); display: grid; place-items: center; }
+    .rk-ring { position: absolute; inset: -1px; border-radius: 13px; border: 1px solid rgba(61, 21, 18, 0.5); opacity: 0; pointer-events: none; animation: rk-ring 2.6s ease-out 3; }
+    @keyframes rk-ring { from { transform: scale(1); opacity: 0.9; } to { transform: scale(1.55); opacity: 0; } }
+    .rk-titel { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+    .rk-ort { font-size: 14px; font-weight: 500; line-height: 1.3; margin-top: 3px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+    .rk-ort + .rk-ort { margin-top: 1px; }
+    .rk-zeilen { margin-top: 12px; display: grid; gap: 8px; }
+    .rk-z { display: flex; align-items: center; gap: 9px; font-size: 13px; line-height: 1.3; color: var(--nachtblau-label, #b4c0cf); min-width: 0; }
+    .rk-z > span { min-width: 0; }
+    .rk-sek { color: var(--nachtblau-text-sekundaer, #8794a5); }
+    .rk-rechts { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; color: var(--nachtblau-text-sekundaer, #8794a5); white-space: nowrap; }
+    /* Rote Zeile: Text in Textfarbe, rote Schrift auf roter Toenung bliebe unter 4,5:1 */
+    .rk-warn { padding: 8px 10px; border-radius: 13px; background: color-mix(in srgb, var(--nachtblau-rot, #f0736a) 12%, transparent); border: 1px solid color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent); color: var(--nachtblau-text, #f2f5f8); font-weight: 600; }
+    /* Hinweis nach dem Alarm */
+    .rk-kopf { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 14px; align-items: center; }
+    .rk-ik { width: 46px; height: 46px; box-sizing: border-box; border-radius: 14px; display: grid; place-items: center; }
+    .rk-t { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+    .rk-u { font-size: 13px; color: var(--nachtblau-label, #b4c0cf); margin-top: 3px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; text-wrap: balance; }
+    .rk-fuss { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); display: flex; align-items: center; gap: 9px; font-size: 12.5px; line-height: 1.3; color: var(--nachtblau-text-sekundaer, #8794a5); min-width: 0; }
+    .rk-fuss > span { min-width: 0; }
+    .rk-chip { margin-left: auto; flex: none; font-size: 13px; font-weight: 600; color: var(--nachtblau-label, #b4c0cf); background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)); border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); border-radius: 11px; padding: 6px 12px; white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) {
+      .rk-ring { animation: none !important; opacity: 0 !important; }
+    }
+  custom_fields:
+    body: |
+      [[[
+        const L = variables.lage;
+        if (L.modus !== 'alarm') this.__rauchRing = null;
+        if (L.modus === 'aus') return '';
+
+        // ---------- Nachtblau-Palette ----------
+        const TEXT = 'var(--nachtblau-text, #f2f5f8)';
+        const SEK = 'var(--nachtblau-text-sekundaer, #8794a5)';
+        const ROT = 'var(--nachtblau-rot, #f0736a)';
+        const AMBER = 'var(--nachtblau-amber, #e6b566)';
+        const GRUEN = 'var(--nachtblau-gruen, #a6d49e)';
+        const AUF_ROT = '#3d1512';
+
+        // ---------- Bausteine ----------
+        const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        // Glyphenmitte im 24er-Raster, gemessen an @mdi/js 7.4.47 (nur ab 0,4 Einheiten)
+        const GLYPHE = { 'mdi:broadcast': [0, -0.7] };
+        const icon = (name, c, px) => {
+          const g = GLYPHE[name] || [0, 0];
+          return `<ha-icon icon="${name}" style="--mdc-icon-size:${px}px;--ha-icon-display:block;width:${px}px;height:${px}px;margin:0;display:block;flex:none;color:${c};transform:translate(${-g[0] * px / 24}px, ${-g[1] * px / 24}px);"></ha-icon>`;
+        };
+        const nb = '&nbsp;· ';   // geschuetztes Leerzeichen: keine Zeile beginnt mit "·"
+
+        // ---------- Raum und Etage aus der Registry ----------
+        const ortVon = (id) => {
+          const E = hass.entities || {}, D = hass.devices || {}, A = hass.areas || {}, F = hass.floors || {};
+          const e = E[id], d = e && e.device_id ? D[e.device_id] : null;
+          const a = A[(e && e.area_id) || (d && d.area_id) || ''];
+          const f = a && a.floor_id ? F[a.floor_id] : null;
+          const s = states[id];
+          return { raum: a ? a.name : ((s && s.attributes && s.attributes.friendly_name) || id), etage: f ? f.name : '' };
+        };
+
+        // ---------- Zeit ----------
+        const p2 = (n) => String(n).padStart(2, '0');
+        const uhr = (t) => { const d = new Date(t); return `${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+        const tageHer = (t) => Math.round((new Date(new Date().toDateString()) - new Date(new Date(t).toDateString())) / 86400000);
+        const wann = (t) => {
+          const n = tageHer(t);
+          if (n === 0) return 'heute ' + uhr(t);
+          if (n === 1) return 'gestern ' + uhr(t);
+          if (n > 1 && n < 7) return new Date(t).toLocaleDateString('de-DE', { weekday: 'short' }) + ' ' + uhr(t);
+          const d = new Date(t);
+          return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}. ${uhr(t)}`;
+        };
+        const dauer = (ms) => {
+          const min = Math.floor(ms / 60000);
+          if (min < 1) return 'gerade eben';
+          if (min < 60) return `${min} Min.`;
+          const h = Math.floor(min / 60), m = min % 60;
+          return m ? `${h} Std. ${m} Min.` : `${h} Std.`;
+        };
+        const bs = states[variables.beginn];
+        const beginnHelfer = bs && bs.attributes && bs.attributes.timestamp ? bs.attributes.timestamp * 1000 : NaN;
+
+        // ================= Alarm =================
+        if (L.modus === 'alarm') {
+          const lc = L.alarm.map((id) => Date.parse((states[id] || {}).last_changed)).filter(Number.isFinite);
+          let start = lc.length ? Math.min(...lc) : Date.now();
+          if (L.an && Number.isFinite(beginnHelfer) && beginnHelfer <= start && start - beginnHelfer < 6 * 3600000) start = beginnHelfer;
+          const seit = (tageHer(start) === 0 ? uhr(start) : wann(start)) + nb + dauer(Date.now() - start);
+
+          const orte = L.herd.map(ortVon);
+          const ortHtml = orte.length
+            ? orte.map((o) => `<div class="rk-ort">${esc(o.raum)}${o.etage ? nb + esc(o.etage) : ''}</div>`).join('')
+            : '<div class="rk-ort">Ursprung unbekannt</div>';
+          const mit = L.alarm.length - L.herd.length;
+          const mitText = L.herd.length
+            ? (mit === 0 ? 'Kein weiterer Melder alarmiert mit' : mit === 1 ? '1 weiterer Melder alarmiert mit' : `${mit} weitere Melder alarmieren mit`)
+            : `Kein Melder meldet selbst Rauch, ${mit} ${mit === 1 ? 'alarmiert' : 'alarmieren'} mit`;
+          const wegHtml = L.weg.length
+            ? `<div class="rk-z rk-warn">${icon('mdi:access-point-off', ROT, 17)}<span>Nicht erreichbar: ${L.weg.map((id) => esc(ortVon(id).raum)).join(', ')}</span></div>`
+            : '';
+
+          // Ringe dreimal ab dem ersten Zeichnen dieser Karte; die Phase haengt
+          // an der Startzeit, damit ein Neuzeichnen (jede Minute) sie nicht
+          // neu startet.
+          if (!this.__rauchRing) this.__rauchRing = Date.now();
+          const r = (Date.now() - this.__rauchRing) / 1000;
+          const ringe = r < 9.1
+            ? `<span class="rk-ring" style="animation-delay:${-r}s"></span><span class="rk-ring" style="animation-delay:${1.3 - r}s"></span>`
+            : '';
+
+          return `
+            <div style="width:100%; color:${TEXT}; text-align:left;">
+              <div class="rk-fk">
+                <div class="rk-fi">${ringe}${icon('mdi:smoke-detector-variant-alert', AUF_ROT, 25)}</div>
+                <div style="min-width:0;"><div class="rk-titel">Rauchalarm</div>${ortHtml}</div>
+              </div>
+              <div class="rk-zeilen">
+                <div class="rk-z">${icon('mdi:clock-outline', SEK, 17)}<span>seit ${seit}</span><span class="rk-rechts">Sicherheit${icon('mdi:chevron-right', SEK, 18)}</span></div>
+                <div class="rk-z">${icon('mdi:broadcast', SEK, 17)}<span class="rk-sek">${mitText}</span></div>
+                ${wegHtml}
+              </div>
+            </div>`;
+        }
+
+        // ================= Hinweis nach dem Alarm =================
+        const roh = (states[variables.ort] || {}).state;
+        const orte = (roh && !['unknown', 'unavailable'].includes(roh))
+          ? roh.split(';').filter(Boolean).map((x) => { const [raum, etage] = x.split('|'); return { raum, etage: etage || '' }; })
+          : [];
+        const zeit = Number.isFinite(beginnHelfer) ? wann(beginnHelfer) : '';
+        const unsicher = L.modus === 'unsicher';
+        const farbe = unsicher ? ROT : AMBER;
+        const kachel = `background:color-mix(in srgb, ${farbe} 16%, transparent); border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);`;
+        const titel = unsicher ? 'Entwarnung unsicher' : 'Rauchalarm vorbei';
+        const raeume = orte.length ? orte.map((o) => esc(o.raum)).join(', ') : 'Ursprung unbekannt';
+        const unter = unsicher
+          ? `${L.weg.map((id) => esc(ortVon(id).raum)).join(', ')} nicht erreichbar`
+          : raeume + (zeit ? nb + zeit : '');
+        const fuss = unsicher
+          ? (zeit ? `Rauchalarm ${zeit}${nb}vor Ort prüfen` : 'Vor Ort prüfen')
+          : (L.ruhig.length === variables.melder.length ? `Alle ${variables.melder.length} Melder wieder ruhig` : 'Kein Melder mehr im Rauchalarm');
+
+        return `
+          <div style="width:100%; color:${TEXT}; text-align:left;">
+            <div class="rk-kopf">
+              <div class="rk-ik" style="${kachel}">${icon(unsicher ? 'mdi:access-point-off' : 'mdi:smoke-detector-variant', farbe, 24)}</div>
+              <div style="min-width:0;"><div class="rk-t">${titel}</div><div class="rk-u">${unter}</div></div>
+            </div>
+            <div class="rk-fuss">${icon(unsicher ? 'mdi:alert-circle' : 'mdi:check-circle', unsicher ? ROT : GRUEN, 16)}<span>${fuss}</span><span class="rk-chip">Gesehen</span></div>
+          </div>`;
+      ]]]

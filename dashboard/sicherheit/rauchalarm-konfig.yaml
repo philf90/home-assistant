@@ -1,5 +1,5 @@
 # ============================================================================
-# Sicherheit – Rauchalarm (Automationen)
+# Sicherheit – Rauchalarm (Automationen und Helfer)
 # ----------------------------------------------------------------------------
 # Art:           konfig
 # Bereich:       sicherheit
@@ -35,6 +35,22 @@
 #   automation "Sicherheit: Rauchalarm Entwarnung"
 #       sobald kein Melder mehr im Alarm ist, mit Dauer; ist ein Melder dabei
 #       nicht erreichbar, kritisch "Entwarnung unsicher" mit dem Raum.
+#   automation "Sicherheit: Rauchalarm-Hinweis merken"   (seit 18.11.2026)
+#       merkt Beginn und Raum eines Alarms fuer die Rauchalarm-Karte der Home
+#       View (rauchalarm-karte.yaml) und schaltet den Hinweis ein. Die Karte
+#       zeigt damit nach dem Alarm "Rauchalarm vorbei" bzw. "Entwarnung
+#       unsicher", bis jemand "Gesehen" tippt. Neuer Alarm (Hinweis aus, oder
+#       kein anderer Melder seit mehr als 60 s im Alarm): Beginn und Raeume
+#       neu; laufender Alarm: ein weiterer Raum mit Rauch kommt dazu. Modus
+#       queued, damit die Schreibzugriffe auf die Helfer nacheinander laufen.
+#       Aendert nichts am Versand. "Aktionen ausfuehren" ohne Alarm setzt
+#       nichts (der erste Schritt bricht ab).
+#   input_boolean.rauchalarm_hinweis, input_datetime.rauchalarm_beginn,
+#   input_text.rauchalarm_ort
+#       Helfer der Karte, ohne initial, damit sie einen Neustart ueberstehen.
+#       Der Ort steht als "Raum|Etage;Raum|Etage", leer = Ursprung unbekannt.
+#       In der Instanz ueber die UI angelegt; hier die gleichwertige Fassung
+#       fuer ein Package.
 #
 # Raum und Etage kommen aus dem Bereich, dem das Melder-Geraet zugeordnet ist
 # (area_name, floor_name). Melder also den richtigen Bereichen zuordnen.
@@ -47,12 +63,32 @@
 #     (ServiceNotFound) beendet den Lauf trotz continue_on_error.
 #   - Telegram mit parse_mode plain_text, unabhaengig vom Standard-Parser des
 #     Bots.
-#   - Neuer Melder: in beiden Automationen (Trigger, Variable melder,
-#     Bedingungen) eintragen.
+#   - Neuer Melder: in allen drei Automationen (Trigger, Variable melder,
+#     Bedingungen) und in rauchalarm-karte.yaml eintragen.
 #
 # Voraussetzung: Homematic(IP) Local mit den Meldern
 #   (sensor.*_rauchmelder_alarmstatus), Companion App auf beiden Handys
 #   (iOS: "Kritische Hinweise" erlaubt), Telegram-Bot.
+
+input_boolean:
+  rauchalarm_hinweis:
+    name: Rauchalarm-Hinweis
+    icon: mdi:smoke-detector-variant-alert
+
+input_datetime:
+  rauchalarm_beginn:
+    name: Rauchalarm Beginn
+    icon: mdi:clock-alert-outline
+    has_date: true
+    has_time: true
+
+input_text:
+  rauchalarm_ort:
+    name: Rauchalarm Ort
+    icon: mdi:map-marker-alert-outline
+    min: 0
+    max: 255
+    mode: text
 
 automation:
   - id: sicherheit_rauchalarm_melden
@@ -66,8 +102,9 @@ automation:
       nur einmal. Beim Start von Home Assistant werden die Melder geprüft, weil die Trigger erst nach
       dem Laden der Integrationen zuhören. Manuell ausgeführt (Aktionen ausführen) geht eine
       TEST-Meldung über alle Kanäle, außer während eines echten Alarms. Neuer Melder: in den
-      Triggern und in der Variablen melder ergänzen, ebenso in "Sicherheit: Rauchalarm Entwarnung".
-      Raum und Etage kommen aus dem Bereich des Melders.
+      Triggern und in der Variablen melder ergänzen, ebenso in "Sicherheit: Rauchalarm Entwarnung",
+      "Sicherheit: Rauchalarm-Hinweis merken" und in der Rauchalarm-Karte der Home View. Raum und
+      Etage kommen aus dem Bereich des Melders.
     mode: parallel
     max: 10
     trace:
@@ -220,7 +257,8 @@ automation:
       nicht erreichbar (zum Beispiel durch Feuer zerstört), kommt statt der Entwarnung eine kritische
       Meldung "Entwarnung unsicher". Ein Alarmende während eines Neustarts wird nicht gemeldet.
       Eigene Automation, damit sie die Alarmmeldung nie blockiert. Neuer Melder: in Triggern,
-      Bedingung und der Variablen melder ergänzen.
+      Bedingung und der Variablen melder ergänzen, ebenso in "Sicherheit: Rauchalarm melden",
+      "Sicherheit: Rauchalarm-Hinweis merken" und in der Rauchalarm-Karte der Home View.
     mode: single
     max_exceeded: silent
     variables:
@@ -330,3 +368,115 @@ automation:
                   config_entry_id: telegram_eintrag
                   parse_mode: plain_text
                   message: "{{ titel }}\n{{ text }}"
+
+  - id: sicherheit_rauchalarm_hinweis_merken
+    alias: "Sicherheit: Rauchalarm-Hinweis merken"
+    description: >-
+      Merkt Beginn und Raum eines Rauchalarms für die Rauchalarm-Karte der Home View und schaltet
+      input_boolean.rauchalarm_hinweis ein. Nach dem Alarm zeigt die Karte damit "Rauchalarm vorbei"
+      (oder "Entwarnung unsicher", solange ein Melder nicht erreichbar ist), bis jemand auf der
+      Karte "Gesehen" tippt; das schaltet den Hinweis aus. Neuer Alarm (Hinweis aus, oder kein
+      anderer Melder seit mehr als 60 s im Alarm): Beginn und Räume neu. Laufender Alarm: ein
+      weiterer Raum mit Rauch wird ergänzt. Ändert nichts am Versand, der läuft über "Sicherheit:
+      Rauchalarm melden". Raum und Etage kommen aus dem Bereich des Melders, gespeichert als
+      Raum|Etage, mehrere mit ; getrennt, leer heißt Ursprung unbekannt. Neuer Melder: in den
+      Triggern, im ersten Schritt (Melder im Alarm) und in der Variablen melder ergänzen, ebenso in
+      "Sicherheit: Rauchalarm melden", "Sicherheit: Rauchalarm Entwarnung" und in der
+      Rauchalarm-Karte.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 20
+    variables:
+      melder:
+        - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+        - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+        - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+        - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+    triggers:
+      - trigger: state
+        id: alarm
+        entity_id:
+          - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+          - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+          - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+          - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        to:
+          - primary_alarm
+          - secondary_alarm
+        note: >-
+          state auf dem Alarmstatus statt eines Rauch-Triggers auf dem Binärsensor: Nur so kommt
+          auch der Wechsel secondary_alarm -> primary_alarm an (ein mitalarmierter Melder erkennt
+          selbst Rauch), der Binärsensor bleibt dabei an.
+      - trigger: homeassistant
+        id: start
+        event: start
+        note: >-
+          Ein Alarm, der während eines Neustarts beginnt, käme sonst nicht an (die Melder sind vor
+          den Triggern geladen).
+    conditions: []
+    actions:
+      - condition: state
+        entity_id:
+          - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+          - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+          - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+          - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        match: any
+        state:
+          - primary_alarm
+          - secondary_alarm
+        note: >-
+          Als Schritt statt als Bedingung, damit auch "Aktionen ausführen" ohne Alarm nichts setzt.
+          Beendet auch einen Lauf aus der Warteschlange, wenn der Alarm schon vorbei ist.
+      - variables:
+          herd: "{{ melder | select('is_state', 'primary_alarm') | list }}"
+          beginn: >-
+            {{ expand(melder) | selectattr('state', 'in', ['primary_alarm', 'secondary_alarm'])
+            | map(attribute='last_changed') | map('as_timestamp') | min }}
+          laeuft_schon: >-
+            {%- set ns = namespace(n=0) -%} {%- if trigger.id == 'alarm' -%} {%- set grenze =
+            as_timestamp(trigger.to_state.last_changed) - 60 -%} {%- for s in expand(melder) if
+            s.entity_id != trigger.entity_id and s.state in ['primary_alarm', 'secondary_alarm'] and
+            as_timestamp(s.last_changed) < grenze -%}{%- set ns.n = ns.n + 1 -%}{%- endfor -%} {%-
+            endif -%} {{ ns.n > 0 }}
+        note: >-
+          beginn: frühester Wechsel in den Alarm der Melder, die gerade alarmieren. laeuft_schon:
+          ein anderer Melder ist seit mehr als 60 s vor diesem Wechsel im Alarm.
+      - variables:
+          neu: >-
+            {{ not is_state('input_boolean.rauchalarm_hinweis', 'on') or (trigger.id == 'alarm' and
+            not laeuft_schon) }}
+        note: >-
+          Eigener Schritt: liest laeuft_schon aus dem Schritt davor (die Schlüssel eines Blocks
+          werden sortiert gespeichert). Beim Start mit Hinweis an gilt der Alarm als laufend, weil
+          last_changed beim Start neu gestempelt wird.
+      - variables:
+          text: >-
+            {%- set ns = namespace(l=[]) -%} {%- set alt = states('input_text.rauchalarm_ort') -%}
+            {%- if not neu and alt not in ['unknown', 'unavailable'] -%}{%- set ns.l =
+            alt.split(';') | reject('eq', '') | list -%}{%- endif -%} {%- for e in herd -%} {%- set
+            r = ((area_name(e) or state_attr(e, 'friendly_name') or e) | replace(';', ',') |
+            replace('|', '/')) ~ '|' ~ ((floor_name(e) or '') | replace(';', ',') | replace('|',
+            '/')) -%} {%- if r not in ns.l -%}{%- set ns.l = ns.l + [r] -%}{%- endif -%} {%- endfor
+            -%} {{ (ns.l | join(';'))[:255] }}
+        note: "Neuer Alarm: nur die Räume mit Rauch. Laufender Alarm: bisherige Räume plus neue."
+      - if:
+          - condition: template
+            value_template: "{{ neu }}"
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.rauchalarm_beginn
+            data:
+              timestamp: "{{ beginn }}"
+        note: Den Beginn setzt nur ein neuer Alarm.
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.rauchalarm_ort
+        data:
+          value: "{{ text }}"
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.rauchalarm_hinweis
+        note: Zuletzt, damit die Karte beim Umschalten schon Beginn und Raum hat.

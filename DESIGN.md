@@ -421,7 +421,8 @@ Navigationsleiste und ihr More-Menü (`navigation-templates.yaml` und
 `haustuer-ereignis-karte.yaml`, `person-presence-karte.yaml`,
 `fenster-lichter-karte.yaml`, `haustuer-lock-karte.yaml`,
 `pollenflug-karte-v2.yaml`, `wlan-karte-v2.yaml`, `muellabfuhr-karte-v2.yaml`,
-`meteoalarm-karte.yaml` und `welcome-banner-karte.yaml` samt Wetteranimation
+`meteoalarm-karte.yaml`, `rauchalarm-karte.yaml` (seit 18.11.2026) und
+`welcome-banner-karte.yaml` samt Wetteranimation
 (siehe „Animierte Hintergründe“), dazu die Wetter-View (`wetter-view.yaml`,
 `wetter-karte-v2.yaml`, Popups in `warnlage-templates.yaml`)
 und die Lichter-View („Licht & Fenster“) mit `fenster-karte.yaml`,
@@ -752,8 +753,11 @@ sich mit leichter Welle bis zum Tankstand, die Füllung in der Stufe „Rand“
 (0,24), damit das Symbol darauf 3:1 hält; knappe oder fällige Werte und ein
 offenes Schloss zeigen zwei Ringe, die dreimal laufen und dann als Schein
 stehen bleiben; unter 4 °C funkeln Eiskristalle in Weiß mit Deckkraft am
-Bildrand. Das Energiefluss-Diagramm (`energie-flow-karte.yaml`, Entwurf
-und Messwerte in `energiefluss.html`) bewegt nur die Leitungen:
+Bildrand. Die Rauchalarm-Karte (`rauchalarm-karte.yaml`) zeigt im Alarm zwei
+Ringe um das Symbol der gefüllten Kachel nach demselben Muster, dreimal ab
+dem ersten Zeichnen der Karte, danach steht der Schein; die Phase hängt an
+diesem Zeitpunkt, damit das minütliche Neuzeichnen sie nicht neu startet.
+Das Energiefluss-Diagramm (`energie-flow-karte.yaml`, Entwurf und Messwerte in `energiefluss.html`) bewegt nur die Leitungen:
 Lichtstriche in der Farbe der Quelle bzw. des Verbrauchers auf einer Spur in
 der Stufe „Fläche“ (0,12), Breite und Tempo logarithmisch nach Leistung in
 sechs Stufen. Weil die Karte bei jedem Sensor-Update neu zeichnet (gemessen
