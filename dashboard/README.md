@@ -180,7 +180,8 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`rauchalarm-konfig.yaml`](sicherheit/rauchalarm-konfig.yaml) | konfig | Sicherheit – Rauchalarm (Automationen) | – | `notify.mobile_app_iphone`, `notify.mobile_app_handy_2`, `*_seriennr`, `telegram_eintrag` | aktiv |
+| [`rauchalarm-karte.yaml`](sicherheit/rauchalarm-karte.yaml) | karte | Rauchalarm-Karte (Home View) | button-card | `*_seriennr` | aktiv |
+| [`rauchalarm-konfig.yaml`](sicherheit/rauchalarm-konfig.yaml) | konfig | Sicherheit – Rauchalarm (Automationen und Helfer) | – | `notify.mobile_app_iphone`, `notify.mobile_app_handy_2`, `*_seriennr`, `telegram_eintrag` | aktiv |
 | [`sicherheit-templates.yaml`](sicherheit/sicherheit-templates.yaml) | templates | Sicherheit – button-card-Templates | – | `person.bewohner`, `*_seriennr`, `kind_1/kind_2` | aktiv |
 | [`sicherheit-view.yaml`](sicherheit/sicherheit-view.yaml) | view | Sicherheit – komplette Ansicht | button-card, card-mod, decluttering-card | – | aktiv |
 | [`wachmodus-konfig.yaml`](sicherheit/wachmodus-konfig.yaml) | konfig | Sicherheit – Wachmodus und Meldungen (Helfer, Automationen) | – | `person.bewohner`, `notify.mobile_app_iphone`, `*_seriennr`, `telegram_eintrag` | aktiv |
