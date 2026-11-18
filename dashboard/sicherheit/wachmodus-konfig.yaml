@@ -41,11 +41,28 @@
 #       (nicht doppelt, wenn der Door Hub in der Minute davor einen Zugang
 #       gemeldet hat). Eigene Automation mit 5 s Sperre: der Door Hub meldet
 #       jeden Zugang zweimal (1-2 ms Abstand).
+#   input_boolean.haustur_abschluss_ausstehend  Merker: Haus wurde leer, waehrend
+#                                            die Haustuer nicht verriegelt war
+#   automation "Haustuer: Abschluss ausstehend merken"
+#       setzt den Merker, wenn das Haus bei unverriegelter Tuer leer wird, und
+#       loescht ihn, sobald jemand heimkommt, das Schloss verriegelt ist oder
+#       jemand bewusst oeffnet bzw. entriegelt (G3-Leser, App). Eigene
+#       Automation im Modus queued, damit kein Lauf der zweiten sie blockiert.
 #   automation "Haustuer abschliessen bei Abwesenheit"
 #       schliesst die Haustuer ab, sobald zone.home 3 Minuten leer ist, und
-#       meldet ueber Telegram erst nach bestaetigtem "locked". Steht die Tuer
-#       offen: Warnung und bis zu 1 Stunde Warten auf das Schliessen;
-#       abgeschlossen wird danach nur, wenn noch niemand zuhause ist.
+#       meldet ueber Telegram erst nach bestaetigtem "locked". Seit 18.11.2026
+#       (Plan "Umbauplan Haustuer-Abschluss", zwei Pruefungen) holt sie einen
+#       ausstehenden Abschluss nach: nach einem Neustart von Home Assistant,
+#       wenn Schloss oder Tuerkontakt nach einer Stoerung zurueck sind, wenn
+#       die offene Tuer geschlossen wird und 1 Stunde nach dem Gehen. Diese
+#       Wege verlangen erneut 3 Minuten Leere. Vorher liess ein Neustart in
+#       den 3 Minuten nach dem Gehen die Tuer ohne Meldung offen (22 Neustarts
+#       in 10 Tagen), und nach einer Stoerung wurde nie nachgeholt. Geprueft
+#       wird positiv: abgeschlossen wird nur bei Tuerkontakt "zu" und ruhendem
+#       Schloss (10 s), sonst Meldung; Meldungen halten das Abschliessen nie
+#       auf (continue_on_error), Fehlerfaelle zusaetzlich als Push. Abbrueche
+#       in if-Zweigen sind ausdrueckliche stop: Eine fehlschlagende Bedingung
+#       beendet dort nur den Zweig, nicht den Lauf.
 #   automation "Unifi: G3 Reader Pro - Haustuer oeffnen (Door Hub)"
 #       oeffnet die Haustuer (lock.open am HmIP-DLD), wenn der Door Hub einen
 #       gewaehrten Zugang meldet. Loest das Ereignis der UniFi-Access-
@@ -83,9 +100,11 @@
 # vorher loeschen, sonst kommt jede Meldung doppelt.
 #
 # Voraussetzung: Home Assistant 2026.7 oder neuer (Trigger
-#                zone.occupancy_cleared, zone.entered, door.opened,
-#                window.opened, event.received; Bedingung
-#                zone.occupancy_is_not_detected), Companion App,
+#                zone.occupancy_cleared, zone.occupancy_detected,
+#                zone.entered, door.opened, door.closed, window.opened,
+#                event.received; Bedingungen zone.occupancy_is_detected,
+#                zone.occupancy_is_not_detected; Vorlagenfunktion
+#                state_translated), Companion App,
 #                Integrationen Homematic(IP) Local, UniFi Protect, UniFi
 #                Access, Telegram Bot.
 
@@ -108,6 +127,9 @@ input_boolean:
   sicherheit_meldung_person:
     name: "Sicherheit: Meldung Person an Außenkamera"
     icon: mdi:cctv
+  haustur_abschluss_ausstehend:
+    name: Haustür Abschluss ausstehend
+    icon: mdi:lock-clock
 
 automation:
   - id: sicherheit_wachmodus_nach_anwesenheit
@@ -472,78 +494,300 @@ automation:
               interruption-level: time-sensitive
       - delay: "00:01:00"
 
+  - id: haustur_abschluss_ausstehend_merken
+    alias: "Haustür: Abschluss ausstehend merken"
+    description: >-
+      Merkt, dass das Haus leer wurde, während die Haustür nicht verriegelt war. Der Merker
+      übersteht Neustarts. Die Abschließ-Automation holt damit einen ausstehenden Abschluss
+      nach einem Neustart, nach einer Gerätestörung oder nach dem Schließen einer offenen Tür
+      nach. Gelöscht wird er, sobald jemand zu Hause ist, das Schloss verriegelt ist oder jemand
+      bewusst öffnet oder aufschließt (G3-Leser, App); solches Öffnen wird deshalb nie wieder
+      abgeschlossen.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: zone.occupancy_cleared
+        id: leer
+        options:
+          zone: zone.home
+      - trigger: zone.occupancy_detected
+        id: da
+        options:
+          zone: zone.home
+      - trigger: state
+        entity_id: lock.haustur_schloss
+        id: verriegelt
+        to: locked
+      - note: "Die Abschließ-Automation öffnet oder entriegelt nie selbst."
+        trigger: state
+        entity_id: lock.haustur_schloss
+        id: bewusst
+        to:
+          - opening
+          - unlocking
+      - trigger: homeassistant
+        event: start
+        id: start
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: leer
+            sequence:
+              - note: Eindeutig setzen, damit ein veralteter Merker nicht stehen bleibt.
+                if:
+                  - condition: state
+                    entity_id: lock.haustur_schloss
+                    state: locked
+                then:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.haustur_abschluss_ausstehend
+                else:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.haustur_abschluss_ausstehend
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id:
+                      - da
+                      - verriegelt
+                      - bewusst
+                  - condition: and
+                    conditions:
+                      - condition: trigger
+                        id: start
+                      - condition: zone.occupancy_is_detected
+                        options:
+                          zone: zone.home
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.haustur_abschluss_ausstehend
+
   - id: haustuer_abschliessen_bei_abwesenheit
     alias: "Haustür abschließen bei abwesend"
     description: >-
-      Schliesst die Haustuer ab, wenn zone.home mindestens 3 Minuten leer ist.
-      Die 3 Minuten filtern GPS-Spruenge (laengster beobachteter Fehlsprung
-      2:20 min) und die kurzen 0-Werte beim Neuladen. Steht die Tuer offen,
-      wird gewarnt und bis zu 1 Stunde auf das Schliessen gewartet;
-      abgeschlossen wird danach nur, wenn noch niemand zuhause ist.
-      Erfolgsmeldung erst nach bestaetigtem "locked".
+      Schließt die Haustür ab, wenn zone.home mindestens 3 Minuten leer ist (laut bisheriger
+      Beschreibung filtern die 3 Minuten GPS-Sprünge bis 2:20 min). Steht der Abschluss danach
+      noch aus (input_boolean.haustur_abschluss_ausstehend), holt ihn die Automation nach: nach
+      einem Neustart, wenn Schloss oder Türkontakt zurück sind, wenn die offene Tür geschlossen
+      wird und 1 Stunde nach dem Gehen. Diese Nachhol-Wege verlangen erneut 3 Minuten Leere.
+      Abgeschlossen wird nur bei Türkontakt „zu“ und ruhendem Schloss; ist etwas nicht bereit,
+      kommt eine Meldung. Meldungen halten das Abschließen nie auf.
     mode: single
+    max_exceeded: silent
+    trace:
+      stored_traces: 50
+    variables:
+      zusatz: |-
+        {{ {'neustart': ' (nach Neustart)', 'zurueck': ' (nach Störung)',
+            'tuer_zu': ' (Tür wurde geschlossen)'}.get(trigger.id, '') }}
     triggers:
       - trigger: zone.occupancy_cleared
+        id: verlassen
+        options:
+          for: "00:03:00"
+          zone: zone.home
+      - note: "Ein Neustart setzt die 3-Minuten-Uhr oben zurück und bricht laufende Läufe ab."
+        trigger: homeassistant
+        event: start
+        id: neustart
+      - note: "Schloss oder Türkontakt wieder gültig, nach einem Neustart oder einer Störung."
+        trigger: state
+        entity_id:
+          - lock.haustur_schloss
+          - binary_sensor.haustur
+        for: "00:00:10"
+        from:
+          - unavailable
+          - unknown
+        id: zurueck
+        not_to:
+          - unavailable
+          - unknown
+      - note: "Ersetzt die frühere Stunde Warten im Lauf; übersteht Neustarts und hat kein Zeitlimit."
+        trigger: door.closed
+        id: tuer_zu
+        options:
+          for: "00:00:10"
+        target:
+          entity_id: binary_sensor.haustur
+      - note: "Erinnerung bei offener Tür und einmaliger Nachhol-Versuch, 1 h nach dem Gehen."
+        trigger: zone.occupancy_cleared
+        id: leer_1h
+        options:
+          for: "01:00:00"
+          zone: zone.home
+    conditions:
+      - condition: zone.occupancy_is_not_detected
         options:
           zone: zone.home
-          for: "00:03:00"
-    conditions:
-      - condition: state
-        entity_id: lock.haustur_schloss
-        state: unlocked
+      - note: Nachhol-Wege nur, wenn ein Abschluss aussteht.
+        condition: or
+        conditions:
+          - condition: trigger
+            id: verlassen
+          - condition: state
+            entity_id: input_boolean.haustur_abschluss_ausstehend
+            state: "on"
     actions:
-      # Offene Tuer: der Riegel faehrt sonst ins Leere und die Tuer schliesst
-      # nicht mehr
+      - if:
+          - condition: trigger
+            id:
+              - neustart
+              - zurueck
+              - tuer_zu
+        then:
+          - note: >-
+              3 Minuten Leere wie beim Verlassen. Fängt den 0-Sprung von zone.home beim Start
+              und Heimkehrer, deren Handy die Zone spät meldet.
+            wait_template: "{{ not is_state('zone.home', '0') }}"
+            timeout: "00:03:00"
+          - note: >-
+              Ausdrücklich stoppen: Eine fehlschlagende Bedingung beendet hier nur den then-Zweig,
+              nicht den Lauf (helpers/script.py, _ConditionFail).
+            if:
+              - condition: not
+                conditions:
+                  - condition: zone.occupancy_is_not_detected
+                    options:
+                      zone: zone.home
+            then:
+              - stop: Jemand zu Hause
+      - note: "Nach einem Start sind die Geräte 21–33 s später zurück; im Normalfall sofort\
+          \ weiter."
+        wait_template: "{{ has_value('lock.haustur_schloss') and has_value('binary_sensor.haustur')\
+          \ }}"
+        timeout: "00:10:00"
+      - note: "Übergangszustände (opening, locking, unlocking) dauern 1,5–14,4 s."
+        wait_template: "{{ states('lock.haustur_schloss') in ['locked', 'unlocked', 'jammed',\
+          \ 'open'] }}"
+        timeout: "00:00:30"
+      - if:
+          - condition: state
+            entity_id: lock.haustur_schloss
+            state: locked
+        then:
+          - stop: Bereits abgeschlossen
+      - if:
+          - condition: or
+            conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: lock.haustur_schloss
+                    state: unlocked
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.haustur
+                    state:
+                      - "on"
+                      - "off"
+        then:
+          - note: "Sicherheitshalber; die Rückkehr des Geräts holt den Abschluss nach."
+            action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.haustur_abschluss_ausstehend
+          - parallel:
+              - action: telegram_bot.send_message
+                continue_on_error: true
+                data:
+                  config_entry_id: telegram_eintrag
+                  message: >-
+                    Niemand zu Hause, aber Schloss „{{ state_translated('lock.haustur_schloss')
+                    }}“, Türkontakt „{{ state_translated('binary_sensor.haustur') }}“ – noch
+                    nicht abgeschlossen, wird nachgeholt{{ zusatz }}.
+              - action: notify.mobile_app_iphone
+                continue_on_error: true
+                data:
+                  message: >-
+                    Schloss „{{ state_translated('lock.haustur_schloss') }}“, Türkontakt „{{
+                    state_translated('binary_sensor.haustur') }}“{{ zusatz }}.
+                  title: "Haustür nicht abgeschlossen"
+          - stop: "Gerät nicht bereit"
       - if:
           - condition: state
             entity_id: binary_sensor.haustur
             state: "on"
         then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.haustur_abschluss_ausstehend
           - action: telegram_bot.send_message
+            continue_on_error: true
             data:
               config_entry_id: telegram_eintrag
-              message: Niemand zu Hause, aber die Haustür steht offen – sie wird abgeschlossen, sobald sie geschlossen ist.
-          - wait_template: "{{ is_state('binary_sensor.haustur', 'off') }}"
-            timeout: "01:00:00"
-            continue_on_timeout: true
-          - if:
-              - condition: state
-                entity_id: binary_sensor.haustur
-                state: "on"
-            then:
-              - action: telegram_bot.send_message
-                data:
-                  config_entry_id: telegram_eintrag
-                  message: Haustür steht seit 1 Stunde offen – nicht abgeschlossen.
-              - stop: Haustür nach 1 Stunde noch offen
-      # Nach dem Warten erneut: inzwischen heimgekommen oder schon abgeschlossen
-      - condition: zone.occupancy_is_not_detected
-        options:
-          zone: zone.home
-      - condition: state
-        entity_id: lock.haustur_schloss
-        state: unlocked
-      - action: lock.lock
+              message: |-
+                {{ 'Haustür steht seit 1 Stunde offen, niemand zu Hause – noch nicht abgeschlossen.'
+                   if trigger.id == 'leer_1h' else
+                   'Niemand zu Hause, aber die Haustür steht offen – sie wird abgeschlossen, sobald sie geschlossen ist' ~ zusatz ~ '.' }}
+          - stop: "Wartet auf das Schließen der Tür"
+      - note: >-
+          Letzte Prüfung direkt vor dem Abschließen. Tür und Schloss müssen 10 s ruhen: Nach
+          einem Öffnen meldet der Kontakt bis zu 5,3 s später „offen“.
+        if:
+          - condition: or
+            conditions:
+              - condition: not
+                conditions:
+                  - condition: zone.occupancy_is_not_detected
+                    options:
+                      zone: zone.home
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.haustur
+                    for: "00:00:10"
+                    state: "off"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: lock.haustur_schloss
+                    for: "00:00:10"
+                    state: unlocked
+        then:
+          - stop: "Jemand zu Hause oder Tür bzw. Schloss gerade bewegt"
+      - note: "Homematic-Fehler kommen als HomeAssistantError an; der Lauf geht weiter zur Prüfung."
+        action: lock.lock
+        continue_on_error: true
         target:
           entity_id: lock.haustur_schloss
-      # Das Schloss (HmIP-DLD) braucht 6-8 s bis "locked"
-      - wait_template: "{{ is_state('lock.haustur_schloss', 'locked') }}"
+      - note: "Das Schloss (HmIP-DLD) braucht 4–14 s bis „locked“."
+        wait_template: "{{ is_state('lock.haustur_schloss', 'locked') }}"
         timeout: "00:01:00"
-        continue_on_timeout: true
       - if:
           - condition: state
             entity_id: lock.haustur_schloss
             state: locked
         then:
           - action: telegram_bot.send_message
+            continue_on_error: true
             data:
               config_entry_id: telegram_eintrag
-              message: Haustür durch Abwesenheit automatisch abgeschlossen.
+              message: "Haustür durch Abwesenheit automatisch abgeschlossen{{ zusatz }}."
         else:
-          - action: telegram_bot.send_message
-            data:
-              config_entry_id: telegram_eintrag
-              message: "Abschließen fehlgeschlagen – Schlosszustand: {{ states('lock.haustur_schloss') }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.haustur_abschluss_ausstehend
+          - parallel:
+              - action: telegram_bot.send_message
+                continue_on_error: true
+                data:
+                  config_entry_id: telegram_eintrag
+                  message: >-
+                    Abschließen fehlgeschlagen – Schloss „{{ state_translated('lock.haustur_schloss')
+                    }}“{{ zusatz }}.
+              - action: notify.mobile_app_iphone
+                continue_on_error: true
+                data:
+                  message: >-
+                    Abschließen fehlgeschlagen, Schloss „{{ state_translated('lock.haustur_schloss')
+                    }}“{{ zusatz }}.
+                  title: "Haustür nicht abgeschlossen"
 
   - id: unifi_g3_reader_haustuer_oeffnen
     alias: "Unifi: G3 Reader Pro - Haustür öffnen (Door Hub)"
