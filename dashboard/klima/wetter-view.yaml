@@ -44,6 +44,16 @@
 # pfx.stufe() (bis 1 gruen, bis 2 amber, 2,5 koralle, 3 rot); die
 # Icon-Kachel im Kopf folgt der Warnlage.
 #
+# Gedaechtnis wie die Warnkarte auf Home (seit 18.11.2026): Faellt der
+# DWD-Abruf aus (Sensor unavailable), zeigt die Warnkachel grau den letzten
+# gemeldeten Stand aus input_text.dwd_warnung_gemeldet (Art, hoechste Stufe,
+# "DWD nicht erreichbar seit ..."); ohne gemerkte Warnung "Keine Daten" mit
+# derselben Zeile. Die Icon-Kachel im Kopf ist dann grau. Unter der
+# Zeitleiste steht "Zuletzt gemeldet ..." aus
+# input_datetime.dwd_warnung_gemeldet_um. Vorher stand bei jedem Ausfall nur
+# "Keine Daten", und der Kopf zeigte gruen "keine Warnung". Helfer und
+# Automation: warnlage-meldungen-konfig.yaml.
+#
 # Warnlage & Pollen bekommt die Nachtblau-Huelle ueber card-mod am
 # vertical-stack (wie energie-monatsbilanz-karte.yaml).
 #
@@ -59,7 +69,9 @@
 #                Pollenflug (HACS, Region 101) und Uhrzeit & Datum
 #                (sensor.date_time, fuer die Zeitleiste), Templates aus
 #                navigation-templates.yaml, wetter-templates.yaml und
-#                warnlage-templates.yaml.
+#                warnlage-templates.yaml. Fuer Ausfallzustand und
+#                Statuszeile die Helfer aus warnlage-meldungen-konfig.yaml
+#                (ohne sie bleibt die Kachel wie vorher).
 title: Wetter
 path: wetter
 icon: flat-ui:weather
@@ -86,7 +98,7 @@ sections:
             }
         cards:
           - type: custom:button-card
-            icon: '[[[ return variables.warnstufe > 0 || variables.vorwarnstufe > 0 ? "mdi:alert-outline" : "mdi:shield-check-outline"; ]]]'
+            icon: '[[[ return variables.ausfall || variables.warnstufe > 0 || variables.vorwarnstufe > 0 ? "mdi:alert-outline" : "mdi:shield-check-outline"; ]]]'
             name: Warnlage & Pollen
             label: Tippen für Details
             show_icon: true
@@ -101,8 +113,12 @@ sections:
             variables:
               warnstufe: '[[[ return parseInt(states["sensor.warnregion_aktuelle_warnstufe"]?.state) || 0; ]]]'
               vorwarnstufe: '[[[ return parseInt(states["sensor.warnregion_vorwarnstufe"]?.state) || 0; ]]]'
+              # DWD-Abruf ausgefallen: grau statt gruen, die Warnkachel zeigt den
+              # letzten gemeldeten Stand (seit 18.11.2026; vorher gruen "keine Warnung")
+              ausfall: '[[[ const s = states["sensor.warnregion_aktuelle_warnstufe"]; return !s || ["unavailable", "unknown"].includes(s.state); ]]]'
               accent: |
                 [[[
+                  if (variables.ausfall) return 'var(--nachtblau-text-sekundaer, #8794a5)';
                   if (variables.warnstufe >= 3) return 'var(--nachtblau-rot, #f0736a)';
                   if (variables.warnstufe > 0 || variables.vorwarnstufe > 0) return 'var(--nachtblau-amber, #e6b566)';
                   return 'var(--nachtblau-gruen, #a6d49e)';
@@ -177,6 +193,8 @@ sections:
                   - sensor.warnregion_aktuelle_warnstufe
                   - sensor.warnregion_vorwarnstufe
                   - sensor.date_time
+                  - input_text.dwd_warnung_gemeldet
+                  - input_datetime.dwd_warnung_gemeldet_um
                 show_name: false
                 show_state: false
                 show_icon: false
@@ -270,7 +288,43 @@ sections:
                             <div style="font-size:12px;color:${muted};margin-top:2px;line-height:1.35;">${text}</div>
                           </div>
                         </div>`;
-                      if (!daten) return ruhig('Keine Daten', 'DWD-Warnung', false);
+                      // ---------- DWD-Abruf ausgefallen: letzten gemeldeten Stand zeigen ----------
+                      // Seit 18.11.2026, wie meteoalarm-karte.yaml: Ohne Abruf fehlen alle
+                      // Attribute. Das Gedaechtnis der Automation "Wetter: DWD-Warnungen
+                      // melden" (input_text.dwd_warnung_gemeldet, je Eintrag Typ-Stufe@Beginn)
+                      // nennt Art und Stufe; Zeitraeume gibt es waehrend des Ausfalls nicht.
+                      // Die Art kommt aus der Szenen-Zuordnung von nachtblau_warn_fx
+                      // (Ereigniscodes nach CAP-DWD-Profil), nicht aus Namen.
+                      if (!daten) {
+                        const sAkt = states['sensor.warnregion_aktuelle_warnstufe'];
+                        const seit = new Date(sAkt ? sAkt.last_changed : NaN);
+                        const uhr = isNaN(seit.getTime()) ? '' : seit.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        const weg = uhr ? `DWD nicht erreichbar seit ${uhr} Uhr` : 'DWD nicht erreichbar';
+                        const gemerkt = String((states['input_text.dwd_warnung_gemeldet'] || {}).state || '')
+                          .split(',').map((k) => /^(v?)(\d+)-(\d)@/.exec(k)).filter(Boolean)
+                          .map((m) => ({ ii: parseInt(m[2], 10), stufe: parseInt(m[3], 10), vorab: m[1] === 'v' }))
+                          .sort((a, b) => (b.stufe - a.stufe) || (a.vorab - b.vorab));
+                        if (!gemerkt.length) return ruhig('Keine Daten', weg, false);
+                        const ARTEN = { gewitter: 'Gewitter', wind: 'Wind', starkregen: 'Starkregen', dauerregen: 'Dauerregen',
+                          schnee: 'Schneefall', verwehung: 'Schneeverwehung', glaette: 'Glätte', glatteis: 'Glatteis', frost: 'Frost',
+                          tauwetter: 'Tauwetter', nebel: 'Nebel', hitze: 'Hitze', uv: 'UV-Strahlung', leiter: 'Leiterseilschwingungen' };
+                        const arten = [...new Set(gemerkt.map((e) => ARTEN[wfx.szene(e.ii, '')] || 'Wetterwarnung'))];
+                        const oben = gemerkt[0];
+                        const neutral = 'background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));';
+                        return `
+                          <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;color:${value};">
+                            <div style="flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;box-sizing:border-box;${neutral}">${wfx.icon(wfx.szene(oben.ii, ''), label, 22)}</div>
+                            <div style="min-width:0;display:flex;flex-direction:column;gap:4px;">
+                              <div style="font-size:15.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.25;color:${label};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${esc(arten.join(', '))}</div>
+                              <div style="display:flex;flex-wrap:wrap;gap:5px;"><span style="display:inline-flex;align-items:center;font-size:11px;font-weight:700;line-height:1;border-radius:999px;padding:3px 8px;white-space:nowrap;color:${label};${neutral}">Letzter Stand · ${esc(LABEL[oben.stufe] || ('Stufe ' + oben.stufe))}</span></div>
+                              <div style="font-size:12px;color:${muted};line-height:1.35;">${weg}</div>
+                            </div>
+                          </div>
+                          <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.3;color:${muted};text-align:left;">
+                            <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--nachtblau-amber, #e6b566);"></span>
+                            <span>Neuer Abruf alle 15 min. Neue Warnungen werden nach der Rückkehr gemeldet.</span>
+                          </div>`;
+                      }
                       if (!zeige.length) return ruhig('Keine Warnung', 'DWD-Wetter&shy;warnung', true);
 
                       // ---------- Kopfzeile: hoechste Warnung ----------
@@ -353,9 +407,27 @@ sections:
                         const rechts = x > 0.9;
                         ticks += `<span style="position:absolute;top:0;left:${(x * 100).toFixed(2)}%;transform:translateX(${rechts ? '-100%' : '-50%'});white-space:nowrap;">${t.getHours()}${rechts ? ' Uhr' : ''}</span>`;
                       }
+                      // ---------- Statuszeile: letzte Meldung der Automation ----------
+                      // Seit 18.11.2026, wie meteoalarm-karte.yaml. Der Startwert 0 (1970)
+                      // heisst "noch keine Meldung"; ohne den Helfer entfaellt die Zeile.
+                      const um = states['input_datetime.dwd_warnung_gemeldet_um'];
+                      const umTs = um && um.attributes ? Number(um.attributes.timestamp) : NaN;
+                      let gemeldet = 'Noch keine Meldung seit der Umstellung';
+                      if (!isNaN(umTs) && umTs > 1000000000) {
+                        const d = new Date(umTs * 1000), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+                        const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+                        const diff = Math.round((dd - t0) / 86400000);
+                        const tag = diff === 0 ? 'heute' : diff === -1 ? 'gestern' : diff === 1 ? 'morgen' : 'am ' + d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '');
+                        gemeldet = `Zuletzt gemeldet ${tag} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+                      }
+                      const status = um ? `
+                          <div style="margin-top:7px;padding-top:9px;border-top:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.3;color:var(--nachtblau-text-sekundaer, #8794a5);">
+                            <span style="flex:none;width:7px;height:7px;border-radius:50%;background:var(--nachtblau-gruen, #a6d49e);"></span>
+                            <span>${gemeldet}</span>
+                          </div>` : '';
                       return `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;">
                           <div style="position:relative;display:flex;flex-direction:column;gap:2px;">${spuren}<span style="position:absolute;top:-2px;bottom:-2px;left:0;width:2px;border-radius:1px;background:${label};"></span></div>
-                          <div style="position:relative;height:14px;font-size:11px;color:${label};">${ticks}</div>
+                          <div style="position:relative;height:14px;font-size:11px;color:${label};">${ticks}</div>${status}
                         </div>`;
                     ]]]
               # ---- Pollen: nachtblau_pollen_kachel (warnlage-templates.yaml) ----
