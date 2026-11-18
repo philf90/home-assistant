@@ -53,6 +53,17 @@
 # ausserdem entfaellt er in HA 2027.1. Der Helfer bleibt an, bis die Tuer
 # aufgeht, hoechstens 5 Minuten (Automationen in haustuer-ereignis-karte.yaml).
 #
+# Chip "Klingel · vor X Min." (seit 18.11.2026): liest den Zeitstempel aus
+# input_datetime.haustur_geklingelt_um, den "Haustür: Klingeln merken" bei
+# jedem Klingeln setzt. Vorher sensor.haustur_last_doorbell_ring; UniFi
+# Protect streicht auch diesen Sensor mit HA 2027.1 (Quellcode 2026.11.2,
+# unifiprotect/migrate.py), und Dashboards loesen dafuer keinen
+# Reparaturhinweis aus. Die Event-Entitaet taugt nicht direkt: sie faellt bei
+# jedem Neustart von Home Assistant auf "unknown" (belegt 18.11.2026, 07:30
+# bis zum naechsten Klingeln um 09:06). Gelesen wird das Attribut timestamp,
+# nicht der Zustand: "2026-11-18 09:06:37" ohne Zeitzone liest Safari nicht
+# zuverlaessig. Ein nie gesetzter Helfer (timestamp 0) zeigt "–".
+#
 # Die Liste unter variables.kameras der Kopfkarte muss zu den Kacheln passen:
 # wer eine Kamera ergaenzt, traegt sie an beiden Stellen ein.
 #
@@ -64,8 +75,9 @@
 #                + browser_mod (alle via HACS), WebRTC Camera (HACS),
 #                Integration UniFi Protect, Integration "Time & Date"
 #                (sensor.time), Helfer input_boolean.paket_vor_der_tur,
-#                input_datetime.paket_erkannt_um und
-#                input_boolean.haustur_hat_geklingelt (siehe
+#                input_datetime.paket_erkannt_um,
+#                input_boolean.haustur_hat_geklingelt und
+#                input_datetime.haustur_geklingelt_um (siehe
 #                haustuer-ereignis-karte.yaml), Templates aus
 #                navigation-templates.yaml und kameras-templates.yaml.
 type: sections
@@ -92,7 +104,7 @@ sections:
               - benutzer_id_2
               - benutzer_id_1
         variables:
-          klingel_zeit: sensor.haustur_last_doorbell_ring
+          klingel_zeit: input_datetime.haustur_geklingelt_um
           paket: input_boolean.paket_vor_der_tur
           paket_zeit: input_datetime.paket_erkannt_um
           kameras:
@@ -151,7 +163,11 @@ sections:
                 return min < 1 ? 'gerade eben' : min < 60 ? `vor ${min} Min.` : h < 24 ? `vor ${h} Std.` : (d === 1 ? 'vor 1 Tag' : `vor ${d} Tagen`);
               };
               const chip = (label, wert, c) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:11px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));color:var(--nachtblau-label, #b4c0cf);font-size:12.5px;font-weight:600;white-space:nowrap;">${label}<b style="font-weight:700;color:${c || 'var(--nachtblau-text, #f2f5f8)'};">${wert}</b></span>`;
-              const ring = Date.parse(st(variables.klingel_zeit));
+              // Letztes Klingeln aus dem input_datetime (Attribut timestamp, seit
+              // 18.11.2026); der Rueckfall Date.parse gilt fuer einen Zeitstempel-Sensor
+              const kz = states[variables.klingel_zeit];
+              const kts = kz && kz.attributes ? kz.attributes.timestamp : undefined;
+              const ring = kts !== undefined ? (kts > 1000000000 ? kts * 1000 : NaN) : Date.parse(st(variables.klingel_zeit));
               const pz = states[variables.paket_zeit];
               const pMs = (pz && pz.attributes && pz.attributes.timestamp) ? pz.attributes.timestamp * 1000 : NaN;
               const paket = st(variables.paket) === 'on'
