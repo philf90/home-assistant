@@ -34,6 +34,11 @@
 #                                meldet "in Zustellung", "abholbereit" und
 #                                Probleme fuer alle Paketdienste zugleich,
 #                                ueber die Ereignisse des Parcel Aggregators
+#   automation "Pakete: Amazon-Fahrer fast da"
+#                                meldet je Amazon-Sendung einmal, sobald der
+#                                Fahrer nur noch schwelle (3) Stopps oder
+#                                weniger vor ihr hat; liest
+#                                sensor.pakete_amazon_stopps
 #
 # Aktionen und Felder aus den READMEs der Integrationen (Stand 11/2026):
 #   dhl.track_parcel      tracking_code, direction, config_entry_id (optional)
@@ -247,3 +252,66 @@ automation:
             url: "{{ ziel }}"
             clickAction: "{{ ziel }}"
             group: pakete
+
+  - id: pakete_amazon_stopps
+    alias: "Pakete: Amazon-Fahrer fast da"
+    description: >-
+      Pakete-View: meldet aufs Handy, sobald Amazons eigener Fahrer nur noch
+      wenige Stopps (Variable schwelle) vor einer Sendung hat, je Sendung
+      einmal. Quelle ist sensor.pakete_amazon_stopps; die Zahl ist so frisch
+      wie die letzte Amazon-Abfrage (alle 15 Minuten in Zustellung).
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id: sensor.pakete_amazon_stopps
+        attribute: stopps
+    # Nach einem Neustart oder Neuladen der Templates fehlt der alte Zustand
+    # (none oder unavailable); ohne diese Bedingung kaeme die Meldung erneut
+    conditions:
+      - "{{ trigger.from_state is not none and trigger.to_state is not none and is_number(trigger.from_state.state) }}"
+    variables:
+      schwelle: 3
+    # Jede variables-Liste hat nur unabhaengige Schluessel: Home Assistant
+    # speichert sie alphabetisch und rendert sie in dieser Reihenfolge
+    actions:
+      # Sendungen, die die Schwelle gerade erreicht haben (vorher darueber
+      # oder noch nicht da); weitere Stopps darunter melden nichts mehr
+      - variables:
+          neu: >-
+            {%- set alt = trigger.from_state.attributes.get('stopps') or {} %}
+            {%- set jetzt = trigger.to_state.attributes.get('stopps') or {} %}
+            {%- set ns = namespace(l=[]) %}
+            {%- for k, n in jetzt.items() if n is number and n <= schwelle and not (alt.get(k) is number and alt.get(k) <= schwelle) %}
+              {%- set ns.l = ns.l + [k] %}
+            {%- endfor %}
+            {{ ns.l }}
+      - condition: template
+        value_template: "{{ neu | count > 0 }}"
+      - repeat:
+          for_each: "{{ neu }}"
+          sequence:
+            # Name wie in pakete-templates.yaml: Absender, sonst Nummernende
+            - variables:
+                n: "{{ trigger.to_state.attributes.stopps[repeat.item] }}"
+                name: >-
+                  {%- set ns = namespace(s='') %}
+                  {%- for p in (state_attr('sensor.parcel_aggregator_incoming_parcels', 'parcels') or []) if p.get('barcode') and (p.barcode | string | regex_replace('\s', '') | upper) == repeat.item %}
+                    {%- set ns.s = p.get('sender') or '' %}
+                  {%- endfor %}
+                  {{ ns.s or ('Sendung …' ~ repeat.item[-6:]) }}
+            - action: notify.mobile_app_iphone
+              data:
+                title: "Fahrer fast da · Amazon"
+                message: >-
+                  {{ name }}: {{ 'du bist der nächste Stopp.' if n == 0 else 'noch 1 Stopp bis zu dir.' if n == 1 else 'noch ' ~ n ~ ' Stopps bis zu dir.' }}
+                data:
+                  url: /dashboard-home/pakete
+                  clickAction: /dashboard-home/pakete
+                  group: pakete
+                  tag: "{{ 'pakete-stopps-' ~ repeat.item }}"
+                  # iOS: zeitkritisch, kommt durch jeden Fokus (auch "Nicht
+                  # stoeren"), der zeitkritische Mitteilungen erlaubt;
+                  # Android ignoriert den Schluessel
+                  push:
+                    interruption-level: time-sensitive
