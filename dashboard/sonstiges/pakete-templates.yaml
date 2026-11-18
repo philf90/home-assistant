@@ -24,6 +24,7 @@
 #   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
 #   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
 #                       unterwegs, zugestellt) als eigene Karte
+#   pakete_meldungen    Schalter je Push-Meldung (Karte "Meldungen")
 #   pakete_popup        Formular "Sendung hinzufuegen" (browser_mod-Popup)
 #
 # Daten (README des Parcel Aggregators, Stand 2.11.0): die Sensoren
@@ -70,6 +71,12 @@
 #   unterwegs    alle anderen aktiven, nach planned_from sortiert
 #   zugestellt   aus dem Sensor "delivered", neueste zuerst
 #
+# Meldungen: je Push-Meldung ein Schalter input_boolean.pakete_meldung_*
+# (pakete-konfig.yaml), Liste in CFG.meldungen. Karte und Schalter wie die
+# Karte "Meldungen" in sicherheit-templates.yaml (sh.schalter, sh.pille):
+# Kopf mit Glocke und "N von 5 an", je Meldung eine Zeile mit Schalter. Die
+# Automationen fragen die Schalter selbst ab; die Karte schaltet nur.
+#
 # Farben (DESIGN.md): Unterwegs Blau getoent, In Zustellung Amber gefuellt
 # (Schrift #3a2c12 7,2:1), Abholbereit Koralle-Orange getoent und immer mit
 # Text, Zugestellt Gruen getoent, Problem und Ruecksendung Rot gefuellt
@@ -100,7 +107,8 @@
 #                UPS, Amazon) und Parcel Aggregator (Marketplace), Skript aus
 #                pakete-konfig.yaml (mit sensor.pakete_amazon_stopps und
 #                sensor.pakete_amazon_fotos), Helfer
-#                input_boolean.paket_vor_der_tur und
+#                input_boolean.paket_vor_der_tur,
+#                input_boolean.pakete_meldung_* (pakete-konfig.yaml) und
 #                input_datetime.paket_erkannt_um (Paket-Erkennung der Kamera,
 #                siehe sicherheit-templates.yaml).
 # ============================================================================
@@ -113,11 +121,16 @@ button_card_templates:
     - input_boolean.paket_vor_der_tur
     - sensor.pakete_amazon_stopps
     - sensor.pakete_amazon_fotos
+    - input_boolean.pakete_meldung_zustellung
+    - input_boolean.pakete_meldung_abholbereit
+    - input_boolean.pakete_meldung_problem
+    - input_boolean.pakete_meldung_stopps
+    - input_boolean.pakete_meldung_zustellfoto
     variables:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 6, vorher = window.__nachtblauPakete;
+          const VERSION = 7, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -129,6 +142,15 @@ button_card_templates:
             tuerZeit: 'input_datetime.paket_erkannt_um',
             stopps: 'sensor.pakete_amazon_stopps',
             fotos: 'sensor.pakete_amazon_fotos',
+            // Schalter der Push-Meldungen (pakete-konfig.yaml): Helfer, Titel, Text.
+            // Texte einzeilig bei 360 px: Platz 246 px, laengster 239 px (Roboto 12 px)
+            meldungen: [
+              ['input_boolean.pakete_meldung_zustellung', 'In Zustellung', 'kommt heute, Zeitfenster falls bekannt'],
+              ['input_boolean.pakete_meldung_abholbereit', 'Abholbereit', 'Abholort, bei Adresse mit Kartenknopf'],
+              ['input_boolean.pakete_meldung_problem', 'Probleme', 'Problem mit der Sendung oder Rücksendung'],
+              ['input_boolean.pakete_meldung_stopps', 'Amazon-Fahrer fast da', 'noch höchstens 3 Stopps, einmal je Sendung'],
+              ['input_boolean.pakete_meldung_zustellfoto', 'Amazon-Zustellfoto', 'nach der Zustellung, mit Foto vom Ablageort'],
+            ],
             skript: 'paket_hinzufuegen',
             pfad: '/dashboard-home/pakete',
           };
@@ -288,7 +310,8 @@ button_card_templates:
           };
 
           // ---------- Bausteine ----------
-          const GLYPHE = { 'mdi:calendar-clock': [1, 0] };
+          // mdi:bell-ring-outline gemessen wie in sicherheit-templates.yaml
+          const GLYPHE = { 'mdi:calendar-clock': [1, 0], 'mdi:bell-ring-outline': [0, 0.5] };
           pk.glyphe = (icon, px) => { const g = GLYPHE[icon] || [0, 0]; return `translate(${-g[0] * px / 24}px, ${-g[1] * px / 24}px)`; };
           pk.icon = (icon, c, px) => `<ha-icon icon="${icon}" style="--mdc-icon-size:${px}px;--ha-icon-display:block;width:${px}px;height:${px}px;margin:0;display:block;flex:none;color:${c};transform:${pk.glyphe(icon, px)};"></ha-icon>`;
           pk.kachel = (icon, c, px, r, ip) => `<span style="width:${px}px;height:${px}px;border-radius:${r}px;flex:none;display:grid;place-items:center;background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">${pk.icon(icon, c, ip)}</span>`;
@@ -499,6 +522,32 @@ button_card_templates:
             return pk.block(pk.titel(t, (pk.gruppen()[gruppe] || []).length) + pk.liste(gruppe, leer));
           };
 
+          // ---------- Meldungen (Schalter) ----------
+          // Wie sicherheit-templates.yaml: sh.pille, sh.schalter, Kopf der Abschnitte
+          pk.pille = (c, t) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+          pk.schalter = (eid, titel, text) => {
+            const an = pk.z(eid) === 'on', js = `window.__nachtblauPakete.dienstAufruf('input_boolean','toggle',{entity_id:'${eid}'})`;
+            return `<div role="switch" tabindex="0" aria-checked="${an}" ${pk.tippAttr(js)} style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid ${RAND};">
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:${an ? TEXT : LABEL};">${titel}</div>
+                  <div style="font-size:12px;color:${SEK};">${text}</div>
+                </div>
+                <span style="position:relative;width:42px;height:24px;border-radius:12px;flex:none;background:${an ? `color-mix(in srgb, ${BLAU} 45%, transparent)` : 'color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)))'};border:1px solid ${an ? `color-mix(in srgb, ${BLAU} 50%, transparent)` : UKR};">
+                  <span style="position:absolute;top:2px;left:${an ? 20 : 2}px;width:18px;height:18px;border-radius:50%;background:${an ? 'color-mix(in srgb, var(--nachtblau-text, #f2f5f8) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-flaeche-erhoeht, #222b3c))' : SEK};"></span>
+                </span>
+              </div>`;
+          };
+          pk.meldungenKarte = () => {
+            const n = CFG.meldungen.filter(([e]) => pk.z(e) === 'on').length;
+            const kopf = `<div style="display:grid;grid-template-columns:min-content minmax(0,1fr) min-content;align-items:center;gap:0 14px;">
+                ${pk.kachel('mdi:bell-ring-outline', BLAU, 44, 13, 23)}
+                <div style="min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">Meldungen</div>
+                <div style="font-size:12.5px;line-height:1.35;color:${SEK};">Push aufs iPhone</div></div>
+                ${pk.pille(n ? BLAU : SEK, `${n} von ${CFG.meldungen.length} an`)}</div>`;
+            const zeilen = CFG.meldungen.map(([e, t, x]) => pk.s(e) ? pk.schalter(e, t, x) : pk.hinweisText(`${pk.esc(e)} fehlt (Helfer aus pakete-konfig.yaml anlegen)`)).join('');
+            return pk.block(kopf + `<div style="display:flex;flex-direction:column;">${zeilen}</div>`);
+          };
+
           // ---------- Formular "Sendung hinzufuegen" ----------
           // Oberflaeche wie das Fahrzeiten-Popup (fahrzeiten-templates.yaml)
           pk.popupStil = '--ha-card-background: var(--nachtblau-huelle-oben, #1b2231);'
@@ -634,6 +683,12 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[ return variables.pk.listenKarte(variables.gruppe); ]]]
+
+  pakete_meldungen:
+    template: pakete_huelle
+    custom_fields:
+      inhalt: |
+        [[[ return variables.pk.meldungenKarte(); ]]]
 
   pakete_popup:
     template: pakete_daten
