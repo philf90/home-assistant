@@ -1,0 +1,93 @@
+# ============================================================================
+# Klingel-Ansage auf Alexa (Automation)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       sonstiges
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder die Automation im YAML-Editor der UI einfuegen)
+# Platzhalter:   keine
+# ============================================================================
+# Sagt auf vier Alexa-Geraeten "Es ist jemand an der Tür", wenn an der
+# G4 Doorbell Pro PoE geklingelt wird. Bis 18.11.2026 nur in der Instanz,
+# seitdem hier.
+#
+# Ausloeser seit 18.11.2026: event.received auf event.haustur_turklingel
+# (Typ ring), derselbe wie bei "Haustür: Klingeln merken"
+# (haustuer-ereignis-karte.yaml). Vorher ein Geraete-Ausloeser auf
+# binary_sensor.haustur_doorbell. Warum das umgestellt werden musste:
+#   - UniFi Protect streicht den Sensor mit HA 2027.1.0. Beleg im Quellcode von
+#     HA 2026.11.2, unifiprotect/migrate.py: _RING_AND_MOTION_SENSOR_REPLACEMENTS
+#     fuehrt den Binaersensor "doorbell" (und den Sensor
+#     "doorbell_last_trip_time") mit der Event-Entitaet als Ersatz,
+#     PRIVATE_ONLY_BREAKS_IN = "2027.1.0". Neue Installationen bekommen beide
+#     schon nicht mehr.
+#   - Home Assistant warnt nur, wenn es eine Automation oder ein Skript findet,
+#     das den Sensor nutzt (migrate.py, _async_repair_if_used). Der
+#     Geraete-Ausloeser speicherte den Sensor als Registry-ID. Bei
+#     Binaersensoren bleibt sie unaufgeloest (Modul device_trigger der
+#     Integration binary_sensor, cv.entity_id_or_uuid), und
+#     async_extract_entities (Paket helpers.trigger)
+#     nimmt einen Geraete-Ausloeser nur mit aufgeloester Entity-ID mit. Die
+#     Instanz zeigte deshalb keinen Reparaturhinweis; die Ansage waere mit
+#     2027.1 ohne Warnung verstummt.
+#   - Gleichwertig, gemessen 08.-18.11.2026: 6 Klingeln, beide Entitaeten
+#     jedes Mal, die Event-Entitaet 36-78 ms spaeter. Bei beiden
+#     Protect-Ausfaellen (11.11. und 18.11.) fielen beide gleichzeitig aus.
+#
+# event.received ueberspringt die Rueckkehr aus "unavailable": Nach einem
+# Protect-Ausfall kommt die Entitaet mit dem alten Zeitstempel zurueck, das ist
+# kein Klingeln. Der Wechsel aus "unknown" (nach einem HA-Neustart) zaehlt.
+#
+# Anpassen: die notify-Dienste der Alexa-Geraete (Alexa Media Player legt je
+# Geraet notify.alexa_media_<geraet> an) und den Text unter message.
+# Hinweis: Bei der Klingel einen Geraete-Ausloeser zu vermeiden lohnt sich
+# auch sonst: Er verweist auf Registry- und Geraete-IDs, die beim erneuten
+# Einbinden des Geraets wechseln (in der Instanz stand eine Geraete-ID, die es
+# nach der Aufteilung zusammengelegter Geraete nicht mehr gab).
+#
+# Voraussetzung: Integration UniFi Protect mit der G4 Doorbell
+#   (event.haustur_turklingel), Alexa Media Player (HACS).
+
+automation:
+  - id: klingel_ansage_alexa
+    alias: "TTS: G4 Doorbell Pro PoE klingelt"
+    description: >-
+      Sagt auf vier Alexa-Geräten „Es ist jemand an der Tür“, wenn an der
+      G4 Doorbell Pro PoE geklingelt wird. Auslöser ist die Event-Entität der
+      Klingel (event.received, Typ ring). Bis 18.11.2026 hing die Ansage an
+      einem Geräte-Auslöser auf binary_sensor.haustur_doorbell, den UniFi
+      Protect mit HA 2027.1.0 streicht; Home Assistant zeigte dafür keinen
+      Reparaturhinweis, weil der Geräte-Auslöser den Sensor nur über seine
+      Registry-ID kannte.
+    triggers:
+      - trigger: event.received
+        target:
+          entity_id: event.haustur_turklingel
+        options:
+          event_type:
+            - ring
+    conditions: []
+    actions:
+      - parallel:
+          - action: notify.alexa_media_kuche
+            data:
+              message: "Es ist jemand an der Tür"
+              data:
+                type: tts
+          - action: notify.alexa_media_echo_dot_wohnzimmer
+            data:
+              message: "Es ist jemand an der Tür"
+              data:
+                type: tts
+          - action: notify.alexa_media_schlafzimmer
+            data:
+              message: "Es ist jemand an der Tür"
+              data:
+                type: tts
+          - action: notify.alexa_media_wohnzimmer
+            data:
+              message: "Es ist jemand an der Tür"
+              data:
+                type: tts
+    mode: single

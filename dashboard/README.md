@@ -193,6 +193,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`claude-nutzung-karte.yaml`](sonstiges/claude-nutzung-karte.yaml) | karte | Claude – Nutzungslimits des Abos | button-card | `sensor.claude_usage_konto_*` | aktiv |
 | [`kameras-templates.yaml`](sonstiges/kameras-templates.yaml) | templates | Kameras – Decluttering-Template nachtblau_kamera_kachel | button-card, webrtc-camera | – | aktiv |
 | [`kameras-view.yaml`](sonstiges/kameras-view.yaml) | view | Kameras – komplette Ansicht | button-card, card-mod, decluttering-card | `kind_1/kind_2`, `benutzer_id_1/benutzer_id_2` | aktiv |
+| [`klingel-ansage-konfig.yaml`](sonstiges/klingel-ansage-konfig.yaml) | konfig | Klingel-Ansage auf Alexa (Automation) | – | – | aktiv |
 | [`muellabfuhr-karte-v2.yaml`](sonstiges/muellabfuhr-karte-v2.yaml) | karte | Muellabfuhr v2 – Countdown | button-card, card-mod | `VG Wohnort` | aktiv |
 | [`pakete-karte.yaml`](sonstiges/pakete-karte.yaml) | karte | Pakete – kompakte Karte fuer Home | button-card | – | aktiv |
 | [`pakete-konfig.yaml`](sonstiges/pakete-konfig.yaml) | konfig | Pakete – Skript "Sendung hinzufuegen" und Meldungen | – | `notify.mobile_app_iphone` | aktiv |
