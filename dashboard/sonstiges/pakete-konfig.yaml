@@ -44,6 +44,11 @@
 #                                Fahrer nur noch schwelle (3) Stopps oder
 #                                weniger vor ihr hat; liest
 #                                sensor.pakete_amazon_stopps
+#   automation "Pakete: Amazon-Zustellfoto"
+#                                meldet eine Amazon-Zustellung mit Foto der
+#                                eigenen Flotte, das Foto als Bild der
+#                                Meldung; ueber das Ereignis
+#                                amazon_orders_parcel_delivered
 #
 # Aktionen und Felder aus den READMEs der Integrationen (Stand 11/2026):
 #   dhl.track_parcel      tracking_code, direction, config_entry_id (optional)
@@ -353,3 +358,41 @@ automation:
                   # Android ignoriert den Schluessel
                   push:
                     interruption-level: time-sensitive
+
+  - id: pakete_amazon_zustellfoto
+    alias: "Pakete: Amazon-Zustellfoto"
+    description: >-
+      Pakete-View: meldet aufs Handy, wenn Amazons eigene Flotte eine Sendung
+      mit Zustellfoto zugestellt hat, und zeigt das Foto in der Meldung.
+      Ohne Foto keine Meldung (die Zustellung meldet die Kamera, Paket vor
+      der Tuer).
+    mode: queued
+    max: 10
+    # Ereignis der Amazon-Integration, nicht des Aggregators: nur dort steht
+    # raw.delivery_photo_entity_id. Die Bild-Entitaet existiert schon, wenn
+    # es feuert (README ha-amazon "Delivery photo", ab 0.8.0)
+    triggers:
+      - trigger: event
+        event_type: amazon_orders_parcel_delivered
+    # Kein Schluessel liest einen anderen: Home Assistant speichert variables
+    # alphabetisch und rendert sie in dieser Reihenfolge
+    variables:
+      foto: "{{ (trigger.event.data.get('raw') or {}).get('delivery_photo_entity_id') or '' }}"
+      name: "{{ trigger.event.data.get('sender') or ('Sendung …' ~ (trigger.event.data.get('barcode') | string)[-6:]) }}"
+      ziel: /dashboard-home/pakete
+    conditions:
+      - "{{ foto is string and foto.startswith('image.') }}"
+    actions:
+      - action: notify.mobile_app_iphone
+        data:
+          title: "Zugestellt · Amazon"
+          message: "{{ name }} wurde zugestellt."
+          data:
+            # Die Companion-App laedt den Pfad mit dem eigenen Konto, kein
+            # Token noetig (README ha-amazon "Delivery photo" und deren
+            # Beispiel-Automation unter examples/automations)
+            image: "{{ '/api/image_proxy/' ~ foto }}"
+            url: "{{ ziel }}"
+            clickAction: "{{ ziel }}"
+            group: pakete
+            tag: "{{ 'pakete-zugestellt-' ~ trigger.event.data.get('barcode') }}"
