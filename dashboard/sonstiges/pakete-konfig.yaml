@@ -26,6 +26,11 @@
 #                                Sendungen, Attribut stopps: {Nummer: Stopps}.
 #                                Liest pakete-templates.yaml fuer "noch 3
 #                                Stopps"
+#   sensor.pakete_amazon_fotos   Zustellfoto je zugestellter Amazon-Sendung
+#                                (nur Amazons eigene Flotte); Zustand: Zahl
+#                                der Fotos, Attribut fotos: {Nummer:
+#                                Bild-Entitaet}. Liest pakete-templates.yaml
+#                                fuer das Foto in "Zuletzt zugestellt"
 #   script.paket_hinzufuegen     traegt eine Sendungsnummer bei DHL, Hermes,
 #                                GLS oder UPS ein (Formular "+ Sendung");
 #                                Felder nummer und dienst (dhl, hermes, gls,
@@ -81,7 +86,8 @@
 # Den Sensor "Pakete in Zustellung" kann man stattdessen auch in der UI
 # anlegen (Einstellungen -> Geraete & Dienste -> Helfer -> Template ->
 # Template-Sensor, Zustand wie unten); dann ihn hier weglassen. "Pakete
-# Amazon Stopps" braucht YAML, weil der UI-Helfer keine Attribute kennt.
+# Amazon Stopps" und "Pakete Amazon Fotos" brauchen YAML, weil der
+# UI-Helfer keine Attribute kennt.
 #
 # Ohne Paket: Skript und Automation einzeln einfuegen (Neues Skript bzw. Neue
 # Automation -> Drei-Punkte-Menue -> In YAML bearbeiten). Einzufuegen ist beim
@@ -135,6 +141,38 @@ template:
                 {%- set n = (p.get('raw') or {}).get('stops_away') %}
                 {%- if n is number and n is not boolean %}
                   {%- set ns.m = dict(ns.m, **{(p.barcode | string | regex_replace('\s', '') | upper): n | int}) %}
+                {%- endif %}
+              {%- endfor %}
+            {%- endfor %}
+            {{ ns.m }}
+
+      # Zustellfoto von Amazons eigener Flotte. Amazon legt es als Bild-
+      # Entitaet an und nennt sie in raw.delivery_photo_entity_id der
+      # zugestellten Sendung (README ha-amazon "Delivery photo", ab 0.8.0);
+      # der Aggregator laesst raw weg. Schluessel wie bei den Stopps. Das Foto
+      # bleibt, solange die Sendung in Amazons Liste "zugestellt" steht.
+      - name: Pakete Amazon Fotos
+        unique_id: pakete_amazon_fotos
+        icon: mdi:camera-outline
+        state: >-
+          {%- set ns = namespace(m={}) %}
+          {%- for s in expand(integration_entities('amazon_orders') | select('match', 'sensor\.') | list) %}
+            {%- for p in (s.attributes.get('parcels') or []) if p.get('delivered') and p.get('barcode') %}
+              {%- set e = (p.get('raw') or {}).get('delivery_photo_entity_id') %}
+              {%- if e is string and e.startswith('image.') %}
+                {%- set ns.m = dict(ns.m, **{(p.barcode | string | regex_replace('\s', '') | upper): e}) %}
+              {%- endif %}
+            {%- endfor %}
+          {%- endfor %}
+          {{ ns.m | count }}
+        attributes:
+          fotos: >-
+            {%- set ns = namespace(m={}) %}
+            {%- for s in expand(integration_entities('amazon_orders') | select('match', 'sensor\.') | list) %}
+              {%- for p in (s.attributes.get('parcels') or []) if p.get('delivered') and p.get('barcode') %}
+                {%- set e = (p.get('raw') or {}).get('delivery_photo_entity_id') %}
+                {%- if e is string and e.startswith('image.') %}
+                  {%- set ns.m = dict(ns.m, **{(p.barcode | string | regex_replace('\s', '') | upper): e}) %}
                 {%- endif %}
               {%- endfor %}
             {%- endfor %}
