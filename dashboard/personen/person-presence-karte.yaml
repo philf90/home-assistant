@@ -97,8 +97,9 @@
 #      mit Attributen, auch reine Positionsaenderungen). Zeitfenster ist die
 #      laufende Abwesenheit, sonst die letzte mit mindestens 2 genauen Punkten;
 #      Zonen ausser Zuhause zaehlen als abwesend. Dazu je der naechste genaue
-#      Punkt bis 5 min vor dem Aufbruch und nach der Rueckkehr (Abfahrt,
-#      Ankunft). Die Bedingung ueberspringt
+#      Punkt zu Hause bis 30 min vor dem Aufbruch und nach der Rueckkehr
+#      (Abfahrt, Ankunft; zu Hause meldet das iPhone etwa alle 15 min). Diese
+#      Punkte zaehlen zu keinem Aufenthalt. Die Bedingung ueberspringt
 #      Ausreisser: Am 15.11.2026 stand person.* 25 s auf not_home, mit einer
 #      Position 2 km entfernt und 100 m Ungenauigkeit. person.* hat dieselben Positionen wie der Handy-Tracker (Messung
 #      im Recorder, 05.-15.11.2026), ohne doppelte Zeilen, und folgt einem
@@ -392,7 +393,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 12;
+                    const VERSION = 13;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -473,13 +474,21 @@ cards:
                       // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
                       const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
                       // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt,
-                      // Ankunft): der naechste genaue innerhalb RAND. Nur die direkte Nachbarzeile
-                      // reichte nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau,
-                      // die Spur begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein
-                      // Punkt mit 5 m.
-                      const RAND = 300;      // s
+                      // Ankunft): der naechste genaue Punkt zu Hause innerhalb RAND, ohne eine
+                      // andere Abwesenheit zu ueberspringen. Nur die direkte Nachbarzeile reichte
+                      // nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau, die Spur
+                      // begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein Punkt mit
+                      // 5 m. 300 s reichten auch nicht: Am 18.11.2026 (Fussweg 190 m, 20 min an
+                      // einer Stelle) lag die letzte Meldung zu Hause 15 min vor dem Aufbruch und
+                      // die erste nach der Rueckkehr 5:52 min nach der letzten unterwegs; Hin- und
+                      // Rueckweg fehlten. Zu Hause meldet das iPhone etwa alle 15 min. Die
+                      // Abfahrt schaetzt sp.rechne, einen Aufenthalt am Haus verhindert sp.tag.
+                      const RAND = 1800; // s
                       const nachbar = (z, i, schritt, t) => {
-                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) if (genau(z[k])) return k;
+                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) {
+                          if (weg(z[k].s)) break;
+                          if (z[k].s === 'home' && genau(z[k])) return k;
+                        }
                         return -1;
                       };
                       const spannPunkte = (z, [anf, ende]) => {
@@ -526,7 +535,12 @@ cards:
                           const pkt = spannPunkte(z, s).filter((x) => x.t >= start);
                           if (pkt.length < 2) return;
                           let von = 0;
-                          sp.halte(pkt).forEach((h) => {
+                          // Punkte zu Hause am Anfang und Ende (aus spannPunkte) gehoeren zu keinem
+                          // Aufenthalt: Mit der Meldung 15 min vor dem Aufbruch entstand sonst ein
+                          // Aufenthalt "am Haus" (18.11.2026).
+                          const a0 = pkt[0].s === 'home' ? 1 : 0;
+                          const a1 = pkt[pkt.length - 1].s === 'home' ? pkt.length - 1 : pkt.length;
+                          sp.halte(pkt.slice(a0, a1)).map((h) => ({ ...h, i: h.i + a0, j: h.j + a0 })).forEach((h) => {
                             if (h.i > von) fahrten.push({ pkt: pkt.slice(von, h.i + 1), nachHalt: von > 0 });
                             halte.push(h);
                             von = h.j;
