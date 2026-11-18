@@ -38,7 +38,10 @@
 #   automation "Pakete: Meldungen"
 #                                meldet "in Zustellung", "abholbereit" und
 #                                Probleme fuer alle Paketdienste zugleich,
-#                                ueber die Ereignisse des Parcel Aggregators
+#                                ueber die Ereignisse des Parcel Aggregators;
+#                                "abholbereit" mit Knopf "Karte und
+#                                Oeffnungszeiten" (Apple Karten), wenn der
+#                                Abholort eine Adresse hat
 #   automation "Pakete: Amazon-Fahrer fast da"
 #                                meldet je Amazon-Sendung einmal, sobald der
 #                                Fahrer nur noch schwelle (3) Stopps oder
@@ -295,6 +298,18 @@ automation:
             url: "{{ ziel }}"
             clickAction: "{{ ziel }}"
             group: pakete
+            # Abholbereit: Knopf "Karte und Oeffnungszeiten". Keine
+            # Paket-Integration liefert Oeffnungszeiten; Apple Karten zeigt
+            # sie zur Adresse. Nur wenn pickup_point eine Postleitzahl hat
+            # (DHL und Hermes nennen die Adresse, GLS nur den Namen, DPD, UPS
+            # und Amazon nichts), sonst traefe die Suche womoeglich einen
+            # falschen Ort. "\\b" statt "\b": in Jinja waere \b ein Rueckschritt.
+            # Sonst eine leere Liste, also kein Knopf.
+            actions: >-
+              {%- set ort = p.pickup_point if trigger.id == 'abholbereit' else none %}
+              {%- if ort is string and ort | regex_search('\\b\\d{5}\\b') %}
+              {{- [{'action': 'URI', 'title': 'Karte und Öffnungszeiten', 'uri': 'https://maps.apple.com/?q=' ~ (ort | urlencode)}] }}
+              {%- else %}[]{% endif %}
 
   - id: pakete_amazon_stopps
     alias: "Pakete: Amazon-Fahrer fast da"
