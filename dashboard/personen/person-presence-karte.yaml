@@ -124,7 +124,11 @@
 #      Texte folgen ihr: "7,8 km zu Fuss", in der Tagesliste "Zu Fuss los".
 #      Luecken mit dem Auto ohne unbefestigte Wege (exclude_unpaved): Zwischen
 #      zwei Punkten nahm Valhalla sonst Feldwege als kuerzesten Weg (Fahrt
-#      16.11.2026: 1,37 km Schotter statt der Landstrasse).
+#      16.11.2026: 1,37 km Schotter statt der Landstrasse). Fuer Luecken
+#      ausserdem breakage_distance = dreifache Luftlinie, mindestens 10 km
+#      (Server-Vorgabe 10 km; Fahrt 18.11.2026: 10,06 km in 5 min auf der
+#      Autobahn scheiterte). Der Server muss breakage_distance in
+#      meili.customizable freigeben (bewegungsspur-konfig.yaml).
 #   4. Karte: das Element ha-map der eingebauten Karten-Karte, mit Marker und
 #      Profilbild der Person. ha-map zeichnet eigene Pfade mit einem Kreis an
 #      jedem Punkt (auf Touch 8 px), bei einer eingerasteten Linie eine
@@ -388,7 +392,7 @@ cards:
                 spur: |
                   [[[[
                     // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 11;
+                    const VERSION = 12;
                     if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                       const sp = { version: VERSION, cache: {} };
                       const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -531,13 +535,14 @@ cards:
                         });
                         return { fahrten, halte, laufend };
                       };
-                      sp.valhalla = async (hass, pts, profil, optionen) => {
+                      sp.valhalla = async (hass, pts, profil, optionen, spur) => {
                         const anfrage = {
                           shape: pts.map((x) => ({ lat: +x.lat.toFixed(6), lon: +x.lon.toFixed(6), time: Math.round(x.t) })),
                           costing: profil || 'auto', shape_match: 'map_snap',
                           directions_options: { units: 'kilometers', narrative: false },
                         };
                         if (optionen) anfrage.costing_options = optionen;
+                        if (spur) anfrage.trace_options = spur;
                         const res = await hass.callWS({ type: 'call_service', domain: 'rest_command', service: 'valhalla_trace', service_data: { anfrage: JSON.stringify(anfrage) }, return_response: true });
                         const a = res && res.response;
                         if (!a || a.status !== 200 || !a.content || !a.content.trip) throw new Error('HTTP ' + (a ? a.status : '?'));
@@ -645,7 +650,13 @@ cards:
                         // Gemessene Gruppen bleiben ohne die Option: Dort zeigen die Punkte, wo
                         // gefahren wurde.
                         const LUECKE_AUTO = { auto: { exclude_unpaved: true } };
-                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null)
+                        // Luecke: breakage_distance (Server 10 000 m, in meili.customizable
+                        // freigegeben) auf das Dreifache der Luftlinie, mindestens 10 000 m. Fahrt
+                        // 18.11.2026: 10,06 km Luftlinie in 301 s auf der Autobahn, Valhalla
+                        // "Exceeded breakage distance for all pairs: 10000 meters", Karte zeigte
+                        // dort die Gerade; mit 30 000 m 10,42 km ueber die Autobahn.
+                        const spurOpt = (a) => (a.fest ? null : { breakage_distance: Math.max(10000, Math.round(3 * a.weg)) });
+                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null, spurOpt(a))
                           .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, zeit: r.zeit, ok: true }))
                           .catch(() => ({
                             fest: a.fest, art: a.art, ok: false,
