@@ -1,0 +1,332 @@
+# ============================================================================
+# Sicherheit – Rauchalarm (Automationen)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       sicherheit
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder die Automationen einzeln im YAML-Editor der UI einfuegen)
+# Platzhalter:   notify.mobile_app_iphone, notify.mobile_app_handy_2,
+#                *_seriennr, telegram_eintrag
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Meldet einen Alarm der vier Homematic-IP-Rauchwarnmelder (HmIP-SWSD-2) an
+# Abwesende und Anwesende: kritischer Hinweis aufs iPhone (klingelt auch bei
+# Stummschaltung), Alarmton-Push aufs zweite Handy (Android, alarm_stream) und
+# Telegram, alle gleichzeitig, mit Raum und Etage des ausloesenden Melders.
+# Umgesetzt am 18.11.2026 nach dem Plan "Umbauplan Rauchalarm" (eigene und
+# unabhaengige Pruefung); vorher ging nur ein fester Text ohne Raum per
+# Telegram raus, und ein Alarm aus einem Neustart heraus gar nicht.
+#
+# Inhalt:
+#   automation "Sicherheit: Rauchalarm melden"
+#       Die Melder sind per Funk vernetzt: der ausloesende steht auf
+#       primary_alarm, die uebrigen auf secondary_alarm. Jeder Wechsel auf
+#       primary_alarm wird sofort gemeldet (zweiter Raum, erneuter Alarm). Ein
+#       secondary_alarm meldet nur, wenn nach 5 s kein Ursprung bekannt ist,
+#       und dann genau einmal. Modus parallel: nichts wird verworfen.
+#       Start-Trigger: Beim Start von Home Assistant sind die Melder geladen,
+#       bevor die Trigger zuhoeren (gemessen: 10 s vorher); ohne ihn kaeme ein
+#       Alarm aus dem Neustart heraus nie an. Bewusst ein state-Trigger statt
+#       air_quality.smoke_detected: nur er feuert, wenn ein Melder nach einer
+#       Unterbrechung zur CCU direkt im Alarm zurueckkommt.
+#       "Aktionen ausfuehren" schickt eine TEST-Meldung ueber alle Kanaele,
+#       ausser waehrend eines echten Alarms.
+#   automation "Sicherheit: Rauchalarm Entwarnung"
+#       sobald kein Melder mehr im Alarm ist, mit Dauer; ist ein Melder dabei
+#       nicht erreichbar, kritisch "Entwarnung unsicher" mit dem Raum.
+#
+# Raum und Etage kommen aus dem Bereich, dem das Melder-Geraet zugeordnet ist
+# (area_name, floor_name). Melder also den richtigen Bereichen zuordnen.
+#
+# Hinweise:
+#   - Die Schluessel eines variables-Blocks werden in der Instanz sortiert
+#     gespeichert; HA rendert sie der Reihe nach. Deshalb liest jeder Block nur
+#     Werte aus frueheren Schritten (titel/text in einem eigenen Schritt).
+#   - Versand ist immer der letzte Schritt: ein fehlender Dienst
+#     (ServiceNotFound) beendet den Lauf trotz continue_on_error.
+#   - Telegram mit parse_mode plain_text, unabhaengig vom Standard-Parser des
+#     Bots.
+#   - Neuer Melder: in beiden Automationen (Trigger, Variable melder,
+#     Bedingungen) eintragen.
+#
+# Voraussetzung: Homematic(IP) Local mit den Meldern
+#   (sensor.*_rauchmelder_alarmstatus), Companion App auf beiden Handys
+#   (iOS: "Kritische Hinweise" erlaubt), Telegram-Bot.
+
+automation:
+  - id: sicherheit_rauchalarm_melden
+    alias: "Sicherheit: Rauchalarm melden"
+    description: >-
+      Meldet einen Rauchalarm der vier HmIP-Rauchmelder kritisch aufs iPhone, mit Alarmton aufs
+      zweite Handy (Android) und per Telegram, mit Raum und Etage. Die Melder sind per Funk vernetzt: Der
+      auslösende steht auf primary_alarm, die übrigen auf secondary_alarm. Jeder Wechsel auf
+      primary_alarm wird sofort gemeldet, also auch ein zweiter Raum oder ein erneuter Alarm. Ein
+      secondary_alarm wird nur gemeldet, wenn nach 5 s kein Melder auf primary_alarm steht, und dann
+      nur einmal. Beim Start von Home Assistant werden die Melder geprüft, weil die Trigger erst nach
+      dem Laden der Integrationen zuhören. Manuell ausgeführt (Aktionen ausführen) geht eine
+      TEST-Meldung über alle Kanäle, außer während eines echten Alarms. Neuer Melder: in den
+      Triggern und in der Variablen melder ergänzen, ebenso in "Sicherheit: Rauchalarm Entwarnung".
+      Raum und Etage kommen aus dem Bereich des Melders.
+    mode: parallel
+    max: 10
+    trace:
+      stored_traces: 20
+    variables:
+      melder:
+        - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+        - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+        - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+        - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+      ziel: /dashboard-home/sicherheit
+    triggers:
+      - trigger: state
+        id: herd
+        entity_id:
+          - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+          - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+          - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+          - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        to: primary_alarm
+        note: >-
+          state statt air_quality.smoke_detected: Er feuert auch, wenn ein Melder nach einer
+          Verbindungsunterbrechung zur CCU direkt im Alarm zurückkommt (unavailable -> primary_alarm).
+      - trigger: state
+        id: netz
+        entity_id:
+          - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+          - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+          - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+          - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        to: secondary_alarm
+      - trigger: homeassistant
+        id: start
+        event: start
+        note: >-
+          Beim Start sind die Melder schon geladen, bevor die Trigger zuhören (18.11.: Melder 07:30:25,
+          Start 07:30:35). Ein Alarm aus dem Neustart heraus käme ohne diesen Trigger nicht an.
+    conditions: []
+    actions:
+      - variables:
+          test: "{{ trigger.platform is none }}"
+      - if:
+          - condition: trigger
+            id: netz
+        then:
+          - wait_template: "{{ melder | select('is_state', 'primary_alarm') | list | count > 0 }}"
+            timeout: "00:00:05"
+          - if:
+              - condition: template
+                value_template: >-
+                  {% set netz = melder | select('is_state', 'secondary_alarm') | list %}
+                  {{ wait.completed or not netz or trigger.entity_id != netz[0] }}
+            then:
+              - stop: Ursprung bekannt, Alarm vorbei oder ein anderer Lauf meldet
+        note: >-
+          Weitergeleiteter Alarm: Den Ursprung meldet der Lauf des primary_alarm. Nur wenn nach 5 s
+          keiner da ist, meldet genau ein Lauf (der erste Melder der Liste im secondary_alarm).
+      - if:
+          - condition: trigger
+            id: start
+        then:
+          - wait_template: "{{ melder | select('has_value') | list | count == melder | count }}"
+            timeout: "00:02:00"
+          - if:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id:
+                      - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+                      - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+                      - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+                      - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+                    state:
+                      - primary_alarm
+                      - secondary_alarm
+                    match: any
+            then:
+              - stop: Kein Melder im Alarm
+      - if:
+          - condition: template
+            value_template: "{{ test }}"
+          - condition: state
+            entity_id:
+              - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+              - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+              - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+              - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+            state:
+              - primary_alarm
+              - secondary_alarm
+            match: any
+        then:
+          - stop: Kein Test während eines echten Alarms
+      - variables:
+          herd: "{{ melder | select('is_state', 'primary_alarm') | list }}"
+          alarm: "{{ melder | select('is_state', ['primary_alarm', 'secondary_alarm']) | list }}"
+      - note: "Eigener Schritt: liest herd und alarm aus dem Schritt davor (die Schlüssel eines Blocks werden sortiert gespeichert)."
+        variables:
+          titel: >-
+            {%- macro raum(e) -%}{{ area_name(e) or state_attr(e, 'friendly_name') or e }}{%- endmacro -%}
+            {%- if test -%}TEST: Rauchalarm
+            {%- elif trigger.id == 'herd' -%}Rauchalarm: {{ raum(trigger.entity_id) }}
+            {%- elif herd -%}Rauchalarm: {% for e in herd %}{{ raum(e) }}{{ ', ' if not loop.last else '' }}{% endfor %}
+            {%- else -%}Rauchalarm
+            {%- endif -%}
+          text: >-
+            {%- macro ort(e) -%}{{ area_name(e) or state_attr(e, 'friendly_name') or e }}{{ ' (' ~ floor_name(e) ~ ')' if floor_name(e) else '' }}{%- endmacro -%}
+            {%- if test -%}Probelauf der Rauchalarm-Meldung, kein Alarm.
+            {%- elif trigger.id == 'herd' -%}Rauch erkannt: {{ ort(trigger.entity_id) }}.{{ ' Der Melder war vorher nicht erreichbar.' if trigger.from_state.state in ['unavailable', 'unknown'] else '' }}
+            {%- elif trigger.id == 'start' and herd -%}Beim Start von Home Assistant im Alarm. Rauch erkannt: {% for e in herd %}{{ ort(e) }}{{ ', ' if not loop.last else '' }}{% endfor %}.
+            {%- else -%}{{ 'Beim Start von Home Assistant im Alarm. ' if trigger.id == 'start' else '' }}Ursprung unbekannt. Melder im Alarm: {% for e in alarm %}{{ ort(e) }}{{ ', ' if not loop.last else '' }}{% endfor %}.
+            {%- endif %} {{ now().strftime('%H:%M') }} Uhr
+      - parallel:
+          - action: notify.mobile_app_iphone
+            continue_on_error: true
+            data:
+              title: "{{ titel }}"
+              message: "{{ text }}"
+              data:
+                url: "{{ ziel }}"
+                push:
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+          - action: notify.mobile_app_handy_2
+            continue_on_error: true
+            data:
+              title: "{{ titel }}"
+              message: "{{ text }}"
+              data:
+                ttl: 0
+                priority: high
+                channel: alarm_stream
+                clickAction: "{{ ziel }}"
+          - action: telegram_bot.send_message
+            continue_on_error: true
+            data:
+              config_entry_id: telegram_eintrag
+              parse_mode: plain_text
+              message: "{{ titel }}\n{{ text }}"
+        note: >-
+          Letzter Schritt: Ein fehlender Dienst (ServiceNotFound) beendet den Lauf trotz
+          continue_on_error, die anderen Zweige senden trotzdem.
+
+  - id: sicherheit_rauchalarm_entwarnung
+    alias: "Sicherheit: Rauchalarm Entwarnung"
+    description: >-
+      Meldet das Ende eines Rauchalarms, sobald kein Melder mehr im Alarm ist. Ist dabei ein Melder
+      nicht erreichbar (zum Beispiel durch Feuer zerstört), kommt statt der Entwarnung eine kritische
+      Meldung "Entwarnung unsicher". Ein Alarmende während eines Neustarts wird nicht gemeldet.
+      Eigene Automation, damit sie die Alarmmeldung nie blockiert. Neuer Melder: in Triggern,
+      Bedingung und der Variablen melder ergänzen.
+    mode: single
+    max_exceeded: silent
+    variables:
+      melder:
+        - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+        - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+        - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+        - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+      ziel: /dashboard-home/sicherheit
+    triggers:
+      - trigger: state
+        entity_id:
+          - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+          - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+          - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+          - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+        from:
+          - primary_alarm
+          - secondary_alarm
+        to: idle_off
+    conditions:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id:
+              - sensor.rauchmelder_wohnzimmer_rauchmelder_alarmstatus
+              - sensor.rauchmelder_schlafzimmer_rauchmelder_alarmstatus
+              - sensor.hmip_swsd_2_seriennr_rauchmelder_alarmstatus
+              - sensor.rauchmelder_buro_rauchmelder_alarmstatus
+            state:
+              - primary_alarm
+              - secondary_alarm
+            match: any
+        note: Erst wenn kein Melder mehr im Alarm ist; ein nicht erreichbarer Melder blockiert nicht.
+    actions:
+      - variables:
+          test: "{{ trigger.platform is none }}"
+          weg: "{{ melder | reject('has_value') | list }}"
+          minuten: >-
+            {{ ((now() - trigger.from_state.last_changed).total_seconds() / 60) | round(0) | int
+               if trigger.platform == 'state' else 0 }}
+      - note: "Eigener Schritt: liest test, weg und minuten aus dem Schritt davor (die Schlüssel eines Blocks werden sortiert gespeichert)."
+        variables:
+          titel: >-
+            {{ 'TEST: ' if test else '' }}{{ 'Entwarnung unsicher' if weg else 'Rauchalarm beendet' }}
+          text: >-
+            {%- if test -%}Probelauf der Entwarnung.
+            {%- elif weg -%}Kein Melder mehr im Alarm, aber nicht erreichbar: {% for e in weg %}{{ area_name(e) or e }}{{ ', ' if not loop.last else '' }}{% endfor %}. Bitte prüfen.
+            {%- else -%}Alle Rauchmelder wieder ruhig, Alarm dauerte {{ 'etwa ' ~ minuten ~ ' min' if minuten >= 1 else 'unter 1 min' }}.
+            {%- endif %} {{ now().strftime('%H:%M') }} Uhr
+      - if:
+          - condition: template
+            value_template: "{{ weg | count > 0 }}"
+        then:
+          - parallel:
+              - action: notify.mobile_app_iphone
+                continue_on_error: true
+                data:
+                  title: "{{ titel }}"
+                  message: "{{ text }}"
+                  data:
+                    url: "{{ ziel }}"
+                    push:
+                      sound:
+                        name: default
+                        critical: 1
+                        volume: 1.0
+              - action: notify.mobile_app_handy_2
+                continue_on_error: true
+                data:
+                  title: "{{ titel }}"
+                  message: "{{ text }}"
+                  data:
+                    ttl: 0
+                    priority: high
+                    channel: alarm_stream
+                    clickAction: "{{ ziel }}"
+              - action: telegram_bot.send_message
+                continue_on_error: true
+                data:
+                  config_entry_id: telegram_eintrag
+                  parse_mode: plain_text
+                  message: "{{ titel }}\n{{ text }}"
+        else:
+          - parallel:
+              - action: notify.mobile_app_iphone
+                continue_on_error: true
+                data:
+                  title: "{{ titel }}"
+                  message: "{{ text }}"
+                  data:
+                    url: "{{ ziel }}"
+                    push:
+                      interruption-level: time-sensitive
+              - action: notify.mobile_app_handy_2
+                continue_on_error: true
+                data:
+                  title: "{{ titel }}"
+                  message: "{{ text }}"
+                  data:
+                    ttl: 0
+                    priority: high
+                    clickAction: "{{ ziel }}"
+              - action: telegram_bot.send_message
+                continue_on_error: true
+                data:
+                  config_entry_id: telegram_eintrag
+                  parse_mode: plain_text
+                  message: "{{ titel }}\n{{ text }}"
