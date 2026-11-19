@@ -12,6 +12,11 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
 4. Entity-IDs unter "entity:" und "triggers_update:" sehen wie "domain.objekt"
    aus (klein geschrieben, keine Leerzeichen). Werte mit Templates oder
    Decluttering-Variablen ("[[name]]") werden uebersprungen.
+5. Aktionen in der aktuellen Schreibweise: "action: perform-action" mit
+   "perform_action" und "data" statt "action: call-service" mit "service" und
+   "service_data". Die alte Form laeuft weiter (button-card und HA-Frontend
+   setzen sie in denselben Zweig um), ist aber nur noch Rueckwaertskompatibilitaet.
+   Geprueft wird auch ein per Template berechneter action-Wert.
 
 Aufruf: python ci/check_yaml.py [datei ...]
 Ohne Argumente werden alle Lovelace-YAMLs geprueft (Art "lovelace" aus
@@ -165,6 +170,18 @@ def check_file(path: Path, known_cards: set[str]) -> list[str]:
                     f"{path.name}: 'entity: {entity}' sieht nicht wie eine "
                     "Entity-ID aus (erwartet 'domain.objekt', klein geschrieben)"
                 )
+
+        action = value.get("action")
+        if isinstance(action, str) and "call-service" in action:
+            errors.append(
+                f"{path.name}: 'action: call-service' (unter '{node_path or 'root'}') -- "
+                "neue Schreibweise: action: perform-action, perform_action: <dienst>, data: ..."
+            )
+        if "service_data" in value and "action" in value:
+            errors.append(
+                f"{path.name}: 'service_data' in einer Aktion (unter '{node_path or 'root'}') -- "
+                "heisst jetzt 'data'"
+            )
 
         triggers = value.get("triggers_update")
         if isinstance(triggers, str):
