@@ -31,8 +31,14 @@
 #   automation "Sicherheit: Wachmodus nach Anwesenheit"
 #       an, sobald zone.home 3 Minuten leer ist; die Meldung wartet bis zu
 #       60 s, bis die Haustuer verriegelt ist oder ihr Kontakt offen meldet,
-#       und nennt alles, was noch offen ist. Aus, sobald jemand heimkommt
-#       (sofort, sonst meldet der eigene Zugang als Alarm).
+#       und nennt, was noch offen ist und welche Kontakte (oder das Schloss)
+#       keinen Status haben. Aus, sobald jemand heimkommt (sofort, sonst
+#       meldet der eigene Zugang als Alarm). Seit 19.11.2026 neustartfest:
+#       Ein Neustart setzt die 3-Minuten-Uhr des Triggers zurueck, darum
+#       wartet sie nach dem Start bis zu 3 Minuten und gleicht den Wachmodus
+#       mit zone.home ab (Meldung mit "(nach Neustart)"). Heimkehr zusaetzlich
+#       ueber zone.occupancy_detected, weil zone.entered Wechsel aus
+#       unavailable/unknown ueberspringt.
 #   automation "Sicherheit: Meldungen im Wachmodus"
 #       Tuer oder Fenster geoeffnet, Keypad gesperrt. Die Haustuer nicht, wenn
 #       der Door Hub in den 60 s davor einen gewaehrten Zugang gemeldet hat.
@@ -137,14 +143,22 @@ automation:
     description: >-
       Sicherheits-View: schaltet input_boolean.wachmodus an, sobald zone.home
       3 Minuten leer ist (gleicher Zeitpunkt wie das automatische Abschliessen;
-      filtert GPS-Spruenge), und sofort aus, sobald jemand heimkommt. Beim
-      Einschalten wartet die Meldung bis zu 60 s, bis die Haustuer verriegelt
-      ist oder der Tuerkontakt offen meldet, und nennt dann, was noch offen
-      ist. Schalter der Meldung: input_boolean.sicherheit_meldung_wachmodus.
-      Die Kellertuer (Innentuer, steht dauerhaft offen) ist absichtlich nicht
-      in der Liste.
+      filtert GPS-Spruenge), und sofort aus, sobald jemand heimkommt.
+      Neustartfest seit 19.11.2026: Nach einem Start von Home Assistant wartet
+      sie bis zu 3 Minuten; ist dann jemand zu Hause, geht der Wachmodus aus,
+      war das Haus die ganzen 3 Minuten leer, geht er an (ein Neustart setzt
+      die 3-Minuten-Uhr des Triggers zurueck). Heimkehr zusaetzlich ueber
+      zone.occupancy_detected, weil zone.entered Wechsel aus
+      unavailable/unknown ueberspringt. Beim Einschalten wartet die Meldung
+      bis zu 60 s, bis die Haustuer verriegelt ist oder der Tuerkontakt offen
+      meldet, und nennt dann, was offen ist und welche Kontakte oder das
+      Schloss keinen Status haben. Schalter der Meldung:
+      input_boolean.sicherheit_meldung_wachmodus. Die Kellertuer (Innentuer,
+      steht dauerhaft offen) ist absichtlich nicht in der Liste.
     mode: queued
     max: 5
+    trace:
+      stored_traces: 20
     variables:
       ziel: /dashboard-home/sicherheit
       personen:
@@ -171,6 +185,8 @@ automation:
       namen:
         binary_sensor.fenster_kinderzimmer: Kinderzimmer 1
         binary_sensor.fenster_buro: Kinderzimmer 2
+      # Kennzeichnet Meldungen aus dem Abgleich nach einem Neustart
+      zusatz: "{{ ' (nach Neustart)' if trigger.id == 'start' else '' }}"
     triggers:
       - trigger: zone.occupancy_cleared
         options:
@@ -186,11 +202,37 @@ automation:
           zone: zone.home
           behavior: first
         id: da
+      # zone.entered ueberspringt Wechsel aus unavailable/unknown; die Zone
+      # selbst meldet jede Heimkehr
+      - trigger: zone.occupancy_detected
+        options:
+          zone: zone.home
+        id: da
+      # Ein Neustart setzt die 3-Minuten-Uhr oben zurueck und bricht laufende
+      # Laeufe ab; danach wird der Wachmodus mit zone.home abgeglichen
+      - trigger: homeassistant
+        event: start
+        id: start
     actions:
+      # zone.home steht beim Start kurz auf 0: bis zu 3 Minuten warten, ob
+      # jemand zu Hause ist. Bleibt sie 0, war das Haus 3 Minuten leer.
+      - if:
+          - condition: trigger
+            id: start
+        then:
+          - wait_template: "{{ not is_state('zone.home', '0') }}"
+            timeout: "00:03:00"
+            continue_on_timeout: true
       - choose:
-          - conditions:
+          - alias: Wachmodus an
+            conditions:
               - condition: trigger
-                id: weg
+                id:
+                  - weg
+                  - start
+              - condition: zone.occupancy_is_not_detected
+                options:
+                  zone: zone.home
               - condition: state
                 entity_id: input_boolean.wachmodus
                 state: "off"
@@ -209,19 +251,28 @@ automation:
               - variables:
                   offen: >-
                     {% set ns = namespace(l=[]) %}{% for e in kontakte | select('is_state', 'on') %}{% set ns.l = ns.l + [namen.get(e) or state_attr(e, 'friendly_name')] %}{% endfor %}{{ ns.l }}
+                  ohne: >-
+                    {% set ns = namespace(l=[]) %}{% for e in kontakte if states(e) in ['unavailable', 'unknown'] %}{% set ns.l = ns.l + [namen.get(e) or state_attr(e, 'friendly_name') or e] %}{% endfor %}{{ ns.l }}
                   schloss: "{{ states('lock.haustur_schloss') }}"
               - action: notify.mobile_app_iphone
+                continue_on_error: true
                 data:
                   title: Wachmodus an
                   message: >-
-                    {% set t = [] %}{% if schloss != 'locked' %}{% set t = t + ['Haustür nicht verriegelt'] %}{% endif %}{% if offen | count > 0 %}{% set t = t + ['offen: ' ~ (offen | join(', '))] %}{% endif %}Niemand zuhause. {{ (t | join(' · ')) if t else 'Alles zu und verriegelt.' }}
+                    {% set t = [] %}{% if schloss in ['unavailable', 'unknown'] %}{% set t = t + ['Haustür-Schloss ohne Status'] %}{% elif schloss != 'locked' %}{% set t = t + ['Haustür nicht verriegelt'] %}{% endif %}{% if offen | count > 0 %}{% set t = t + ['offen: ' ~ (offen | join(', '))] %}{% endif %}{% if ohne | count > 0 %}{% set t = t + ['ohne Status: ' ~ (ohne | join(', '))] %}{% endif %}Niemand zuhause{{ zusatz }}. {{ (t | join(' · ')) if t else 'Alles zu und verriegelt.' }}
                   data:
                     url: "{{ ziel }}"
                     clickAction: "{{ ziel }}"
                     group: sicherheit
-          - conditions:
+          - alias: Wachmodus aus
+            conditions:
               - condition: trigger
-                id: da
+                id:
+                  - da
+                  - start
+              - condition: zone.occupancy_is_detected
+                options:
+                  zone: zone.home
               - condition: state
                 entity_id: input_boolean.wachmodus
                 state: "on"
@@ -233,9 +284,10 @@ automation:
                 entity_id: input_boolean.sicherheit_meldung_wachmodus
                 state: "on"
               - action: notify.mobile_app_iphone
+                continue_on_error: true
                 data:
                   title: Wachmodus aus
-                  message: "{{ personen | select('is_state', 'home') | map('state_attr', 'friendly_name') | join(' und ') or 'Jemand' }} ist zuhause."
+                  message: "{{ personen | select('is_state', 'home') | map('state_attr', 'friendly_name') | join(' und ') or 'Jemand' }} ist zuhause{{ zusatz }}."
                   data:
                     url: "{{ ziel }}"
                     clickAction: "{{ ziel }}"
