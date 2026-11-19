@@ -1,0 +1,78 @@
+# ============================================================================
+# Batterien – Hinweiszeile fuer Home
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     nachtblau_batterien (batterien-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell (Home View, Section 0, direkt
+#                vor der WLAN-Karte)
+# Platzhalter:   keine
+# ============================================================================
+# Zeigt "2 Batterien wechseln" mit Geraet und Wert, solange sensor.batterien
+# mindestens einen offenen Fall hat (visibility, sonst keine Luecke). Sichtbar
+# fuer alle Benutzer. Farbe nach der hoechsten offenen Stufe: Amber (Hinweis),
+# Koralle-Orange (erhoeht), Rot (kritisch oder nicht erreichbar); die Pille
+# nennt die Stufe als Wort (DESIGN.md: Koralle nie ohne Text).
+#
+# Antippen oeffnet das Popup "Batterien" mit der Liste (Wechseln,
+# Beobachten). Die Einstellungen liegen in der Karte der System-View
+# (batterien-karte.yaml).
+#
+# Voraussetzung: custom:button-card und browser_mod (HACS), sensor.batterien
+# aus batterien-konfig.yaml, Template nachtblau_batterien.
+type: custom:button-card
+template: nachtblau_batterien
+variables:
+  modus: hinweis
+visibility:
+  - condition: numeric_state
+    entity: sensor.batterien
+    above: 0
+styles:
+  card:
+    - padding: 10px 14px 10px 10px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: '0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))'
+    - overflow: hidden
+    # Statusrand links nach der hoechsten Stufe; muss NACH "border" stehen
+    - border-left: |
+        [[[
+          const h = Number(((states['sensor.batterien'] || {}).attributes || {}).hoechste_stufe) || 0;
+          const c = h === 3 ? 'var(--nachtblau-rot, #f0736a)' : h === 2 ? 'var(--nachtblau-koralle, #e7936e)' : 'var(--nachtblau-amber, #e6b566)';
+          return '4px solid ' + c;
+        ]]]
+tap_action:
+  action: call-service
+  service: browser_mod.popup
+  service_data:
+    title: Batterien
+    style: |
+      --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+      --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+      --primary-background-color: var(--nachtblau-seite, #171d29);
+      --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+      --primary-text-color: var(--nachtblau-text, #f2f5f8);
+      --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+      --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+      --popup-min-width: min(100vw, 480px);
+      --popup-max-width: min(100vw, 480px);
+    content:
+      type: custom:button-card
+      template: nachtblau_batterien
+      variables:
+        modus: liste
+      tap_action:
+        action: none
+      styles:
+        card:
+          - padding: 0
+          - border: none
+          - box-shadow: none
+          - background: none
+          - width: 100%
+          - max-width: 100%
+          - box-sizing: border-box

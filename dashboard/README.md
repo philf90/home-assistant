@@ -190,6 +190,10 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`batterien-hinweis-karte.yaml`](sonstiges/batterien-hinweis-karte.yaml) | karte | Batterien – Hinweiszeile fuer Home | button-card | – | aktiv |
+| [`batterien-karte.yaml`](sonstiges/batterien-karte.yaml) | karte | Batterien – Karte fuer die System-View | button-card | – | aktiv |
+| [`batterien-konfig.yaml`](sonstiges/batterien-konfig.yaml) | konfig | Batterien – Meldung in drei Stufen (Helfer, Sensor, Skripte, Automation) | – | `notify.mobile_app_iphone`, `telegram_eintrag` | aktiv |
+| [`batterien-templates.yaml`](sonstiges/batterien-templates.yaml) | templates | Batterien – Darstellung fuer Hinweiszeile, Karte und Popups | – | – | aktiv |
 | [`claude-nutzung-karte.yaml`](sonstiges/claude-nutzung-karte.yaml) | karte | Claude – Nutzungslimits des Abos | button-card | `sensor.claude_usage_konto_*` | aktiv |
 | [`kameras-templates.yaml`](sonstiges/kameras-templates.yaml) | templates | Kameras – Decluttering-Template nachtblau_kamera_kachel | button-card, webrtc-camera | – | aktiv |
 | [`kameras-view.yaml`](sonstiges/kameras-view.yaml) | view | Kameras – komplette Ansicht | button-card, card-mod, decluttering-card | `kind_1/kind_2`, `benutzer_id_1/benutzer_id_2` | aktiv |
