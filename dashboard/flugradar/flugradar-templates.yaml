@@ -33,7 +33,10 @@
 #   flug_verfolgen_kopf / flug_verfolgen   P10 Flug verfolgen
 #   flug_meldungen_kopf / flug_meldungen   P8 Schalter der Meldungen, darunter
 #                                   die Zeile ADS-B-Schluessel (Zustand, Antippen
-#                                   oeffnet den Dialog von input_text.adsb_schluessel)
+#                                   oeffnet das Popup #adsb-schluessel)
+#   flug_schluessel                 Inhalt des Bubble-Card-Popups #adsb-schluessel:
+#                                   Zustand, Ablaufdatum, Schluessel eintragen,
+#                                   Ablaufdatum aendern, Schluessel entfernen
 #   Helfer und Automationen dazu: siehe Kopf von flugradar-view.yaml.
 #
 # Popup (P2): Abschnitt "Ankunft" mit Abweichung vom Flugplan
@@ -142,7 +145,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 21, vorher = window.__flugradar;
+          const VERSION = 22, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -776,45 +779,192 @@ button_card_templates:
               : fr.schalter(e, t, x, e.endsWith('_notfall') ? adsbFehlt : '') + (e.endsWith('_notfall') ? fr.schluessel() : '')).join('');
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`;
           };
-          // Dialog einer Entitaet oeffnen wie die more-info-Aktion von HA (Ereignis hass-more-info,
-          // bubbles + composed, damit es aus dem Shadow DOM bis <home-assistant> kommt).
-          fr.mehrInfo = (el, entityId) => (el && el.isConnected ? el : document.querySelector('home-assistant'))
-            .dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
-          // ADS-B-Schluessel (adsb.lol, 30 Tage): Zustand aus den Hilfsvariablen der Automation
-          // "Fluege: ADS-B abfragen". Antippen oeffnet den Dialog von input_text.adsb_schluessel
-          // (Passwortfeld, gespeichert beim Verlassen des Felds oder mit Enter).
-          fr.schluessel = () => {
+          // ---------- ADS-B-Schluessel (Zeile in P8, Popup #adsb-schluessel) ----------
+          // Zustand aus den Hilfsvariablen der Automation "Fluege: ADS-B abfragen". Den Zeitpunkt der
+          // letzten Abfrage kennt der Browser nicht: HA schickt nur last_changed/last_updated
+          // (core.py, as_compressed_state), und ein gleichbleibender Wert loest kein Ereignis aus.
+          fr.FARBE = { gruen: 'var(--nachtblau-gruen, #a6d49e)', amber: 'var(--nachtblau-amber, #e6b566)', blau: 'var(--nachtblau-blau, #7fb3d5)', grau: 'var(--nachtblau-text-sekundaer, #8794a5)', rot: 'var(--nachtblau-rot, #f0736a)' };
+          fr.SCHLUESSEL_ICON = 'M22 18v4h-4v-3h-3v-3h-3l-2.26-2.26c-.55.17-1.13.26-1.74.26a6 6 0 1 1 6-6c0 .61-.09 1.19-.26 1.74L22 18M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z';
+          // Popup oeffnen wie fr.waehle das Flug-Popup (Hash + location-changed, wie navigate)
+          fr.oeffne = hash => {
+            if (location.hash === hash) return;
+            history.pushState(null, '', location.pathname + location.search + hash);
+            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+          };
+          fr.schluesselZustand = () => {
+            const { gruen: GRUEN, amber: AMBER, blau: BLAU, grau: GRAU } = fr.FARBE;
             const k = fr.zustand('input_text.adsb_schluessel');
-            if (k === undefined) return fr.hinweis('input_text.adsb_schluessel fehlt');
-            const leer = ['', 'unknown', 'unavailable'].includes(k);
             const gesperrt = fr.zustand('input_boolean.adsb_schluessel_gesperrt') === 'on';
             const antwort = fr.zustand('sensor.adsb_notfall_schluessel');
             const gb = String(fr.zustand('input_datetime.adsb_schluessel_gueltig_bis') || '');
             const d = new Date(), heute = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             const datum = /^\d{4}-\d{2}-\d{2}$/.test(gb) ? `${gb.slice(8, 10)}.${gb.slice(5, 7)}.` : '';
             const tage = datum ? Math.round((new Date(gb + 'T12:00') - new Date(heute + 'T12:00')) / 864e5) : null;
-            const GRUEN = 'var(--nachtblau-gruen, #a6d49e)', AMBER = 'var(--nachtblau-amber, #e6b566)';
-            const BLAU = 'var(--nachtblau-blau, #7fb3d5)', GRAU = 'var(--nachtblau-text-sekundaer, #8794a5)';
-            let farbe, status, text;
-            if (leer) {
-              [farbe, status, text] = [GRAU, 'kein Schlüssel', 'ohne Schlüssel alle 3 min · antippen zum Eintragen'];
-            } else if (gesperrt && tage !== null && tage < 0) {
-              [farbe, status, text] = [AMBER, 'abgelaufen', `seit ${datum} · ohne Schlüssel alle 3 min · antippen für einen neuen`];
-            } else if (gesperrt) {
-              [farbe, status, text] = [AMBER, 'gesperrt', 'letzte Abfrage fehlgeschlagen · stündlich neuer Versuch, solange ohne Schlüssel alle 3 min'];
-            } else if (antwort === undefined || ['unavailable', 'unknown'].includes(antwort)) {
-              [farbe, status, text] = [BLAU, 'wird geprüft', 'erste Abfrage mit Schlüssel binnen 2 min'];
-            } else {
-              [farbe, status, text] = [tage !== null && tage <= 3 ? AMBER : GRUEN, 'aktiv', `alle 2 min${datum ? ` · gültig bis ${datum}` : ''}`];
+            const z = { fehlt: k === undefined, leer: k === undefined || ['', 'unknown', 'unavailable'].includes(k), gesperrt, gb: datum ? gb : '', datum, tage };
+            if (z.leer) {
+              return Object.assign(z, { farbe: GRAU, status: 'kein Schlüssel', zeile: 'ohne Schlüssel alle 3 min · antippen zum Eintragen', satz: 'Abfrage ohne Schlüssel alle 3 min', takt: 3 });
             }
-            const oeffne = "window.__flugradar.mehrInfo(event.target,'input_text.adsb_schluessel')";
-            return `<div role="button" tabindex="0" aria-label="ADS-B-Schlüssel: ${status}. Antippen zum Eintragen oder Ändern" ${fr.tippAttr(oeffne)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${oeffne}}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));">
+            if (gesperrt && tage !== null && tage < 0) {
+              return Object.assign(z, { farbe: AMBER, status: 'abgelaufen', zeile: `seit ${datum} · ohne Schlüssel alle 3 min · antippen für einen neuen`, satz: `seit ${datum} abgelaufen, Abfrage ohne Schlüssel alle 3 min`, takt: 3 });
+            }
+            if (gesperrt) {
+              // Die Automation hebt die Sperre um :31 auf, die naechste Abfrage mit Schluessel ist um :32.
+              const n = new Date(d.getTime());
+              if (d.getMinutes() >= 31) n.setHours(n.getHours() + 1);
+              const um = `${String(n.getHours()).padStart(2, '0')}:32`;
+              return Object.assign(z, { farbe: AMBER, status: 'gesperrt', zeile: 'letzte Abfrage fehlgeschlagen · stündlich neuer Versuch, solange ohne Schlüssel alle 3 min', satz: `letzte Abfrage fehlgeschlagen, neuer Versuch gegen ${um}, solange ohne Schlüssel`, takt: 3 });
+            }
+            if (antwort === undefined || ['unavailable', 'unknown'].includes(antwort)) {
+              return Object.assign(z, { farbe: BLAU, status: 'wird geprüft', zeile: 'erste Abfrage mit Schlüssel binnen 2 min', satz: 'erste Abfrage mit Schlüssel binnen 2 min', takt: 2 });
+            }
+            if (tage !== null && tage >= 0 && tage <= 3) {
+              return Object.assign(z, { farbe: AMBER, status: 'läuft ab', zeile: `alle 2 min · gültig bis ${datum}`, satz: `noch ${tage} Tag${tage === 1 ? '' : 'e'} gültig, neuen Schlüssel bei adsb.lol holen`, takt: 2 });
+            }
+            const vorbei = tage !== null && tage < 0;
+            return Object.assign(z, { farbe: vorbei ? AMBER : GRUEN, status: 'aktiv', zeile: `alle 2 min${datum ? ` · gültig bis ${datum}` : ''}`, satz: vorbei ? 'Abfrage mit Schlüssel alle 2 min, Ablaufdatum überschritten' : 'Abfrage mit Schlüssel alle 2 min', takt: 2 });
+          };
+          // Zeile unter "Notfaelle" in der Karte "Meldungen"; Antippen oeffnet das Popup.
+          fr.schluessel = () => {
+            const z = fr.schluesselZustand();
+            if (z.fehlt) return fr.hinweis('input_text.adsb_schluessel fehlt');
+            const c = z.farbe, oeffne = "window.__flugradar.oeffne('#adsb-schluessel')";
+            return `<div role="button" tabindex="0" aria-label="ADS-B-Schlüssel: ${z.status}. Antippen öffnet die Einstellungen" ${fr.tippAttr(oeffne)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${oeffne}}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));">
                 <div style="min-width:0;">
                   <div style="font-size:13.5px;font-weight:700;color:var(--nachtblau-label, #b4c0cf);">ADS-B-Schlüssel</div>
-                  <div style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${text}</div>
+                  <div style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${z.zeile}</div>
                 </div>
-                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:4px 9px;border-radius:9px;white-space:nowrap;"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:block;"><path fill="currentColor" d="M22 18v4h-4v-3h-3v-3h-3l-2.26-2.26c-.55.17-1.13.26-1.74.26a6 6 0 1 1 6-6c0 .61-.09 1.19-.26 1.74L22 18M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></svg>${status}</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);padding:4px 9px;border-radius:9px;white-space:nowrap;"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:block;"><path fill="currentColor" d="${fr.SCHLUESSEL_ICON}"/></svg>${z.status}</span>
               </div>`;
+          };
+          // Popup, oberer Teil (wird neu gezeichnet): Kopf, Zustand, Kacheln, Laufzeit.
+          fr.schluesselInhalt = () => {
+            const z = fr.schluesselZustand();
+            if (z.fehlt) return fr.hinweis('input_text.adsb_schluessel fehlt – Hilfsvariablen siehe Kopf von flugradar-view.yaml.');
+            const c = z.farbe, SEK = 'var(--nachtblau-text-sekundaer, #8794a5)';
+            const kachel = (l, w, s) => `<div style="min-width:0;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));border-radius:13px;padding:9px 10px;display:grid;gap:1px;">
+                <span style="font-size:11px;color:${SEK};">${l}</span>
+                <span style="font-size:17px;font-weight:700;letter-spacing:-0.01em;color:var(--nachtblau-text, #f2f5f8);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${w}</span>
+                <span style="font-size:11px;line-height:1.3;color:${SEK};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;">${s}</span>
+              </div>`;
+            const nf = fr.zustand('sensor.adsb_notfall');
+            const anzahl = nf === undefined || ['unavailable', 'unknown'].includes(nf) ? null : ['keine', ''].includes(nf) ? 0 : nf.split(';').length;
+            const tageText = t => t === null ? 'kein Datum' : t >= 0 ? `noch ${t} Tag${t === 1 ? '' : 'e'}` : `seit ${-t} Tag${t === -1 ? '' : 'en'} vorbei`;
+            const kacheln = [
+              z.leer ? kachel('Gültig bis', '–', 'kein Schlüssel') : kachel('Gültig bis', z.datum || '–', tageText(z.tage)),
+              kachel('Notfälle', anzahl === null ? '–' : String(anzahl), anzahl === null ? 'keine Daten' : 'unter 50 km'),
+              kachel('Takt', `${z.takt} min`, z.takt === 2 ? 'sonst 3 min' : z.leer ? '500 am Tag je IP' : 'solange ohne')
+            ].join('');
+            const rest = z.tage === null ? null : Math.max(0, Math.min(30, z.tage));
+            const leiste = z.leer || rest === null ? '' : `<div style="display:grid;gap:5px;">
+                <div style="height:6px;border-radius:6px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${Math.round(rest / 30 * 100)}%;border-radius:6px;background:${c};"></div></div>
+                <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:${SEK};font-variant-numeric:tabular-nums;"><span>${rest} von 30 Tagen</span><span>läuft ab ${z.datum}</span></div>
+              </div>`;
+            return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 14px;align-items:center;">
+                <div style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:${c};background:color-mix(in srgb, ${c} 16%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" style="display:block;"><path fill="currentColor" d="${fr.SCHLUESSEL_ICON}"/></svg></div>
+                <div style="min-width:0;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;color:var(--nachtblau-text, #f2f5f8);">ADS-B-Schlüssel</div><div style="font-size:12.5px;color:${SEK};">adsb.lol · Notfallerkennung</div></div>
+                ${fr.zuKnopf()}
+              </div>
+              <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;">${fr.badge(c, z.status, false)}<span style="font-size:12.5px;line-height:1.35;color:var(--nachtblau-label, #b4c0cf);">${z.satz}</span></div>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">${kacheln}</div>
+              ${leiste}
+            </div>`;
+          };
+          // Popup, unterer Teil: konstantes HTML wie fr.EINGABE (siehe Kopf), damit Text, Fokus und
+          // ein offener Datumswaehler das Neuzeichnen ueberstehen. Was vom Zustand abhaengt, setzt
+          // fr.schluesselSync nach jedem Zeichnen direkt im DOM.
+          fr.SCHLUESSEL = `<div data-fr-schluessel ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:grid;gap:10px;">
+              <div data-fr-titel style="font-size:11.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--nachtblau-text-sekundaer, #8794a5);">Neuen Schlüssel eintragen</div>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;">
+                <div style="position:relative;min-width:0;">
+                  <input data-fr-feld type="password" placeholder="Schlüssel einfügen" aria-label="ADS-B-Schlüssel" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" maxlength="255"
+                    onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__flugradar.schluesselSpeichern(this)}" onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
+                    style="${F}box-sizing:border-box;width:100%;min-width:0;height:42px;font-size:16px;font-weight:600;color:var(--nachtblau-text, #f2f5f8);background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));border:1px solid color-mix(in srgb, rgba(255, 255, 255, 0.1) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)));border-radius:12px;padding:0 44px 0 12px;outline:none;">
+                  <button type="button" data-fr-auge aria-label="Schlüssel beim Tippen zeigen" aria-pressed="false" ${fr.tippAttr('window.__flugradar.schluesselAuge(this)')} style="position:absolute;right:4px;top:4px;width:34px;height:34px;padding:0;border:0;border-radius:9px;background:none;color:var(--nachtblau-text-sekundaer, #8794a5);display:grid;place-items:center;cursor:pointer;"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:block;"><path fill="currentColor" d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg></button>
+                </div>
+                <button type="button" ${fr.tippAttr('window.__flugradar.schluesselSpeichern(this)')} style="${F}height:42px;font-size:13px;font-weight:700;color:var(--nachtblau-blau, #7fb3d5);background:color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 12%, transparent);border:1px solid color-mix(in srgb, var(--nachtblau-blau, #7fb3d5) 24%, transparent);border-radius:12px;padding:0 14px;cursor:pointer;">Speichern</button>
+              </div>
+              <div data-fr-status role="status" style="font-size:12px;line-height:1.4;color:var(--nachtblau-text-sekundaer, #8794a5);min-height:16px;"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <label data-fr-datum-box style="display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px 0 12px;border-radius:12px;border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));color:var(--nachtblau-label, #b4c0cf);font-size:12.5px;font-weight:700;cursor:pointer;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:block;flex:none;"><path fill="currentColor" d="M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1"/></svg>
+                  <input data-fr-datum type="date" aria-label="Ablaufdatum des Schlüssels" onchange="window.__flugradar.schluesselDatum(this)" style="${F}font-size:12.5px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);background:none;border:0;padding:0;margin:0;min-width:0;outline:none;">
+                </label>
+                <button type="button" data-fr-weg ${fr.tippAttr('window.__flugradar.schluesselEntfernen(this)')} style="${F}display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:12px;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--nachtblau-rot, #f0736a);background:color-mix(in srgb, var(--nachtblau-rot, #f0736a) 8%, transparent);border:1px solid color-mix(in srgb, var(--nachtblau-rot, #f0736a) 22%, transparent);"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="display:block;flex:none;"><path fill="currentColor" d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H16V19H8V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg><span>Entfernen</span></button>
+              </div>
+              <div style="font-size:11.5px;line-height:1.4;color:var(--nachtblau-text-sekundaer, #8794a5);">Der Schlüssel wird nur in Home Assistant gespeichert und hier nie angezeigt. Ohne gültigen Schlüssel fragt Home Assistant alle 3 min ohne Schlüssel ab.</div>
+            </div>`;
+          fr.schluesselSync = el => {
+            const root = el && el.shadowRoot, box = root && root.querySelector('[data-fr-schluessel]');
+            if (!box) return;
+            const z = fr.schluesselZustand();
+            box.querySelector('[data-fr-titel]').textContent = z.leer ? 'Schlüssel eintragen' : 'Neuen Schlüssel eintragen';
+            box.querySelector('[data-fr-weg]').style.display = z.leer ? 'none' : 'inline-flex';
+            box.querySelector('[data-fr-datum-box]').style.display = z.leer ? 'none' : 'inline-flex';
+            const dat = box.querySelector('[data-fr-datum]');
+            if (root.activeElement !== dat && z.gb && dat.value !== z.gb) dat.value = z.gb;
+          };
+          fr.schluesselMelde = (box, farbe, text) => { const st = box.querySelector('[data-fr-status]'); st.style.color = farbe; st.textContent = text; };
+          fr.schluesselAuge = el => {
+            const inp = el.parentNode.querySelector('[data-fr-feld]'), zeigen = inp.type === 'password';
+            inp.type = zeigen ? 'text' : 'password';
+            el.setAttribute('aria-pressed', String(zeigen));
+            el.style.color = zeigen ? fr.FARBE.blau : fr.FARBE.grau;
+          };
+          fr.schluesselSpeichern = el => {
+            const box = el.closest('[data-fr-schluessel]'), inp = box.querySelector('[data-fr-feld]');
+            const v = (inp.value || '').trim(), F2 = fr.FARBE;
+            if (!v) { fr.schluesselMelde(box, F2.amber, 'Schlüssel einfügen, dann Speichern.'); inp.focus(); return; }
+            if (/\s/.test(v) || v.length > 255) { fr.schluesselMelde(box, F2.amber, 'Das sieht nicht nach einem Schlüssel aus (Leerzeichen oder über 255 Zeichen).'); return; }
+            if (v === fr.zustand('input_text.adsb_schluessel')) { fr.schluesselMelde(box, F2.grau, 'Dieser Schlüssel ist schon eingetragen.'); inp.value = ''; return; }
+            fr.schluesselMelde(box, F2.grau, 'Speichere …');
+            fr.hass.callService('input_text', 'set_value', { entity_id: 'input_text.adsb_schluessel', value: v }).then(() => {
+              inp.value = '';
+              inp.type = 'password';
+              const auge = box.querySelector('[data-fr-auge]');
+              auge.setAttribute('aria-pressed', 'false');
+              auge.style.color = F2.grau;
+              fr.schluesselMelde(box, F2.grau, 'Gespeichert. Abfrage mit Schlüssel läuft …');
+              // Die Automation hebt eine alte Sperre sofort auf und fragt mit dem neuen Schluessel ab
+              // (Zeitlimit 10 s). Scheitert das, setzt sie die Sperre wieder.
+              const start = Date.now();
+              let frei = false;
+              const pruefe = () => {
+                const gesperrt = fr.zustand('input_boolean.adsb_schluessel_gesperrt') === 'on';
+                if (!gesperrt) frei = true;
+                if (gesperrt && frei) { fr.schluesselMelde(box, F2.amber, 'adsb.lol hat den Schlüssel nicht angenommen (ungültig, abgelaufen oder Kontingent verbraucht). Es geht ohne Schlüssel weiter.'); return; }
+                if (Date.now() - start > 12000) {
+                  const a = fr.zustand('sensor.adsb_notfall_schluessel');
+                  if (frei && a !== undefined && !['unavailable', 'unknown'].includes(a)) fr.schluesselMelde(box, F2.gruen, 'Angenommen. Abfrage mit Schlüssel alle 2 min.');
+                  else fr.schluesselMelde(box, F2.grau, 'Noch keine Antwort von adsb.lol; der Zustand oben zeigt das Ergebnis.');
+                  return;
+                }
+                setTimeout(pruefe, 1000);
+              };
+              setTimeout(pruefe, 1000);
+            }).catch(e => fr.schluesselMelde(box, F2.rot, 'Fehler: ' + (e && e.message ? e.message : e)));
+          };
+          fr.schluesselDatum = inp => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.value)) return;
+            const box = inp.closest('[data-fr-schluessel]');
+            fr.hass.callService('input_datetime', 'set_datetime', { entity_id: 'input_datetime.adsb_schluessel_gueltig_bis', date: inp.value })
+              .then(() => fr.schluesselMelde(box, fr.FARBE.grau, `Ablaufdatum auf ${inp.value.slice(8, 10)}.${inp.value.slice(5, 7)}.${inp.value.slice(0, 4)} gesetzt.`))
+              .catch(e => fr.schluesselMelde(box, fr.FARBE.rot, 'Fehler: ' + (e && e.message ? e.message : e)));
+          };
+          // Entfernen mit Rueckfrage im Popup: erstes Antippen fragt, zweites binnen 5 s leert das Feld.
+          fr.schluesselEntfernen = el => {
+            const box = el.closest('[data-fr-schluessel]'), text = el.querySelector('span');
+            if (!(el.dataset.frFrage && Date.now() - Number(el.dataset.frFrage) < 5000)) {
+              el.dataset.frFrage = String(Date.now());
+              text.textContent = 'Wirklich entfernen?';
+              setTimeout(() => { if (el.dataset.frFrage && Date.now() - Number(el.dataset.frFrage) >= 5000) { delete el.dataset.frFrage; text.textContent = 'Entfernen'; } }, 5100);
+              return;
+            }
+            delete el.dataset.frFrage;
+            text.textContent = 'Entfernen';
+            fr.hass.callService('input_text', 'set_value', { entity_id: 'input_text.adsb_schluessel', value: '' })
+              .then(() => fr.schluesselMelde(box, fr.FARBE.grau, 'Entfernt. Abfrage ohne Schlüssel alle 3 min.'))
+              .catch(e => fr.schluesselMelde(box, fr.FARBE.rot, 'Fehler: ' + (e && e.message ? e.message : e)));
           };
 
           // ---------- Tageszaehler und naechster Ueberflug (P6, P7) ----------
@@ -1175,6 +1325,52 @@ button_card_templates:
     custom_fields:
       inhalt: |
         [[[ return variables.fr.meldungen(); ]]]
+
+  # ======================= ADS-B-Schluessel (Popup #adsb-schluessel) =======================
+  # Zwei Felder wie flug_verfolgen: "inhalt" wird neu gezeichnet, "eingabe" ist konstant
+  # (fr.SCHLUESSEL), damit Text, Fokus und ein offener Datumswaehler eine Aktualisierung
+  # ueberstehen. Was im festen Teil vom Zustand abhaengt (Titel, Entfernen, Datum), setzt
+  # fr.schluesselSync nach jedem Zeichnen. Den Schluessel zeigt das Popup nie an; es hat
+  # keinen Verlauf und keine Aktivitaet wie der Standard-Dialog von HA.
+  flug_schluessel:
+    template: flug_daten
+    show_icon: false
+    show_name: false
+    show_label: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    triggers_update:
+    - input_text.adsb_schluessel
+    - input_boolean.adsb_schluessel_gesperrt
+    - input_datetime.adsb_schluessel_gueltig_bis
+    - sensor.adsb_notfall_schluessel
+    styles:
+      card:
+      - background: none
+      - box-shadow: none
+      - border: none
+      - padding: 2px 2px 8px
+      - cursor: default
+      custom_fields:
+        inhalt:
+        - width: 100%
+        eingabe:
+        - width: 100%
+      grid:
+      - grid-template-areas: '"inhalt" "eingabe"'
+      - row-gap: 14px
+    custom_fields:
+      inhalt: |
+        [[[
+          const fr = variables.fr, el = this;
+          setTimeout(() => fr.schluesselSync(el), 0);
+          return fr.schluesselInhalt();
+        ]]]
+      eingabe: |
+        [[[ return variables.fr.SCHLUESSEL; ]]]
 
   # ======================= Flug verfolgen (P10) =======================
   flug_verfolgen_kopf:
