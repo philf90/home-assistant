@@ -16,7 +16,8 @@
 #
 # Aufbau: Foto des angemeldeten Nutzers links, Begruessung "Hi, <Name>!" mit
 # statusabhaengigem Untertitel, rechts Wetter (Aussentemperatur + Zustand-Icon)
-# und darunter Wochentag/Datum.
+# und darunter Wochentag/Datum. Die Person kommt ueber die Benutzer-ID des
+# Kontos (Personen in Home Assistant mit dem Benutzer verknuepfen).
 # Nutzer nicht zu Hause -> Foto in Graustufen, Untertitel wechselt. Ring ums
 # Foto wie in person-presence-karte.yaml: gruen zuhause, blau in einer anderen
 # Zone, sonst neutral.
@@ -63,7 +64,20 @@
 # Voraussetzung: custom:button-card (HACS) und Template nachtblau_wetter_fx.
 type: custom:button-card
 template: nachtblau_wetter_fx
-entity: '[[[ return "person." + user.name.toLowerCase() ]]]'
+# Person ueber die Benutzer-ID des angemeldeten Kontos (Attribut user_id der
+# Person), nicht ueber den Anzeigenamen: Kontoname und Objekt-ID muessen nicht
+# uebereinstimmen (Tablet- oder Gastkonto, Doppelname, Umlaut, Umbenennung).
+# Kein Treffer: keine Entitaet, die Karte zeigt dann den neutralen Rueckfall
+# (Kontoname mit Initiale, Untertitel "Willkommen", Tippen ohne Wirkung).
+# button-card wertet das Template nur beim Einrichten aus und setzt danach nur
+# die gefundene Person auf die Liste der ueberwachten Entitaeten.
+entity: |
+  [[[
+    const uid = user && user.id;
+    const p = uid && Object.keys(states).find((id) => id.startsWith('person.')
+      && ((states[id] || {}).attributes || {}).user_id === uid);
+    return p || '';
+  ]]]
 variables:
   weather_entity: weather.wohnort
   temperature_entity: sensor.wetterstation_pro_temperatur
@@ -94,7 +108,9 @@ variables:
   # Ungeschuetzter Text: fx misst ihn, body schuetzt ihn vor dem Einsetzen ins HTML
   untertitel: |
     [[[
-      const s = entity ? entity.state : '';
+      // Konto ohne verknuepfte Person (z. B. Wandtablet): keine Ortsangabe
+      if (!entity) return 'Willkommen';
+      const s = entity.state;
       if (s === 'home') return 'Willkommen zu Hause';
       // In einer anderen Zone ist der Zustand der Zonenname
       if (!s || ['not_home', 'unknown', 'unavailable'].includes(s)) return 'Aktuell unterwegs';
@@ -106,7 +122,8 @@ triggers_update:
   - sensor.wetterstation_pro_temperatur
   - sun.sun
 tap_action:
-  action: more-info
+  # Ohne Person gibt es kein Detailfenster
+  action: '[[[ return entity ? "more-info" : "none"; ]]]'
 show_name: false
 show_state: false
 show_icon: false
