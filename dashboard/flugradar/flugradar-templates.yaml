@@ -31,7 +31,9 @@
 #                                   (Diagramme in flugradar-view.yaml)
 #   flug_heute_kopf / flug_heute    P6 Tageszaehler, P7 naechster Ueberflug
 #   flug_verfolgen_kopf / flug_verfolgen   P10 Flug verfolgen
-#   flug_meldungen_kopf / flug_meldungen   P8 Schalter der Meldungen
+#   flug_meldungen_kopf / flug_meldungen   P8 Schalter der Meldungen, darunter
+#                                   die Zeile ADS-B-Schluessel (Zustand, Antippen
+#                                   oeffnet den Dialog von input_text.adsb_schluessel)
 #   Helfer und Automationen dazu: siehe Kopf von flugradar-view.yaml.
 #
 # Popup (P2): Abschnitt "Ankunft" mit Abweichung vom Flugplan
@@ -140,7 +142,7 @@ button_card_templates:
       fr: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 20, vorher = window.__flugradar;
+          const VERSION = 21, vorher = window.__flugradar;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; vorher.ausUrl(); return vorher; }
           if (vorher) {
             if (vorher.subs) vorher.subs.clear();
@@ -760,7 +762,7 @@ button_card_templates:
             ['input_boolean.flug_meldung_tief', 'Tief und nah', 'unter 1.500 m und unter 5 km'],
             ['input_boolean.flug_meldung_sonderflug', 'Sonderflüge', 'Hubschrauber, Militär, Polizei, Rettung unter 15 km'],
             ['input_boolean.flug_meldung_selten', 'Seltene Typen', 'z. B. B748, A388, A124, C17, A400 beim Eintritt'],
-            ['input_boolean.flug_meldung_notfall', 'Notfälle', 'Squawk 7500 / 7600 / 7700 binnen 3 min, ADS-B-Kennung ab 2 Abfragen in Folge · unter 50 km'],
+            ['input_boolean.flug_meldung_notfall', 'Notfälle', 'Squawk 7500 / 7600 / 7700 binnen 2–3 min, ADS-B-Kennung ab 2 Abfragen in Folge · unter 50 km'],
             ['input_boolean.flug_meldung_verfolgt', 'Verfolgte Flüge', 'Start, Landung, am Gate']
           ];
           fr.meldungenAn = () => fr.MELDUNGEN.filter(([e]) => fr.zustand(e) === 'on').length;
@@ -771,8 +773,48 @@ button_card_templates:
             const adsbFehlt = adsb === undefined ? 'sensor.adsb_notfall fehlt' : ['unavailable', 'unknown'].includes(adsb) ? 'ADS-B-Abfrage derzeit nicht erreichbar' : '';
             const zeilen = fr.MELDUNGEN.map(([e, t, x]) => fr.zustand(e) === undefined
               ? fr.hinweis(`${e} fehlt`)
-              : fr.schalter(e, t, x, e.endsWith('_notfall') ? adsbFehlt : '')).join('');
+              : fr.schalter(e, t, x, e.endsWith('_notfall') ? adsbFehlt : '') + (e.endsWith('_notfall') ? fr.schluessel() : '')).join('');
             return `<div ${fr.touchAttr} style="${F}pointer-events:auto;white-space:normal;display:flex;flex-direction:column;">${zeilen}</div>`;
+          };
+          // Dialog einer Entitaet oeffnen wie die more-info-Aktion von HA (Ereignis hass-more-info,
+          // bubbles + composed, damit es aus dem Shadow DOM bis <home-assistant> kommt).
+          fr.mehrInfo = (el, entityId) => (el && el.isConnected ? el : document.querySelector('home-assistant'))
+            .dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
+          // ADS-B-Schluessel (adsb.lol, 30 Tage): Zustand aus den Hilfsvariablen der Automation
+          // "Fluege: ADS-B abfragen". Antippen oeffnet den Dialog von input_text.adsb_schluessel
+          // (Passwortfeld, gespeichert beim Verlassen des Felds oder mit Enter).
+          fr.schluessel = () => {
+            const k = fr.zustand('input_text.adsb_schluessel');
+            if (k === undefined) return fr.hinweis('input_text.adsb_schluessel fehlt');
+            const leer = ['', 'unknown', 'unavailable'].includes(k);
+            const gesperrt = fr.zustand('input_boolean.adsb_schluessel_gesperrt') === 'on';
+            const antwort = fr.zustand('sensor.adsb_notfall_schluessel');
+            const gb = String(fr.zustand('input_datetime.adsb_schluessel_gueltig_bis') || '');
+            const d = new Date(), heute = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const datum = /^\d{4}-\d{2}-\d{2}$/.test(gb) ? `${gb.slice(8, 10)}.${gb.slice(5, 7)}.` : '';
+            const tage = datum ? Math.round((new Date(gb + 'T12:00') - new Date(heute + 'T12:00')) / 864e5) : null;
+            const GRUEN = 'var(--nachtblau-gruen, #a6d49e)', AMBER = 'var(--nachtblau-amber, #e6b566)';
+            const BLAU = 'var(--nachtblau-blau, #7fb3d5)', GRAU = 'var(--nachtblau-text-sekundaer, #8794a5)';
+            let farbe, status, text;
+            if (leer) {
+              [farbe, status, text] = [GRAU, 'kein Schlüssel', 'ohne Schlüssel alle 3 min · antippen zum Eintragen'];
+            } else if (gesperrt && tage !== null && tage < 0) {
+              [farbe, status, text] = [AMBER, 'abgelaufen', `seit ${datum} · ohne Schlüssel alle 3 min · antippen für einen neuen`];
+            } else if (gesperrt) {
+              [farbe, status, text] = [AMBER, 'gesperrt', 'letzte Abfrage fehlgeschlagen · stündlich neuer Versuch, solange ohne Schlüssel alle 3 min'];
+            } else if (antwort === undefined || ['unavailable', 'unknown'].includes(antwort)) {
+              [farbe, status, text] = [BLAU, 'wird geprüft', 'erste Abfrage mit Schlüssel binnen 2 min'];
+            } else {
+              [farbe, status, text] = [tage !== null && tage <= 3 ? AMBER : GRUEN, 'aktiv', `alle 2 min${datum ? ` · gültig bis ${datum}` : ''}`];
+            }
+            const oeffne = "window.__flugradar.mehrInfo(event.target,'input_text.adsb_schluessel')";
+            return `<div role="button" tabindex="0" aria-label="ADS-B-Schlüssel: ${status}. Antippen zum Eintragen oder Ändern" ${fr.tippAttr(oeffne)} onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${oeffne}}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));">
+                <div style="min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;color:var(--nachtblau-label, #b4c0cf);">ADS-B-Schlüssel</div>
+                  <div style="font-size:12px;color:var(--nachtblau-text-sekundaer, #8794a5);">${text}</div>
+                </div>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);padding:4px 9px;border-radius:9px;white-space:nowrap;"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:block;"><path fill="currentColor" d="M22 18v4h-4v-3h-3v-3h-3l-2.26-2.26c-.55.17-1.13.26-1.74.26a6 6 0 1 1 6-6c0 .61-.09 1.19-.26 1.74L22 18M7 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></svg>${status}</span>
+              </div>`;
           };
 
           // ---------- Tageszaehler und naechster Ueberflug (P6, P7) ----------
@@ -1126,6 +1168,10 @@ button_card_templates:
     - input_boolean.flug_meldung_selten
     - input_boolean.flug_meldung_notfall
     - input_boolean.flug_meldung_verfolgt
+    - input_text.adsb_schluessel
+    - input_boolean.adsb_schluessel_gesperrt
+    - input_datetime.adsb_schluessel_gueltig_bis
+    - sensor.adsb_notfall_schluessel
     custom_fields:
       inhalt: |
         [[[ return variables.fr.meldungen(); ]]]
