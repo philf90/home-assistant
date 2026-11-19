@@ -42,23 +42,12 @@ from dateien import dateien
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Regel 1, Bestand vor der Regel (Stand 25.10.2026): Datei -> Zahl der Icons
-# ohne "--ha-icon-display: block". Darf nur sinken.
+# Regel 1, Bestand vor der Regel (Stand 25.10.2026, gesenkt am 19.11.2026):
+# Datei -> Zahl der Icons ohne "--ha-icon-display: block". Darf nur sinken.
 BESTAND: dict[str, int] = {
-    "dashboard/allgemein/navigation-templates.yaml": 10,
-    "dashboard/allgemein/top-navigation-karte.yaml": 10,
-    "dashboard/garten/garten-karte.yaml": 6,
-    "dashboard/garten/pflanzen-templates.yaml": 1,
-    "dashboard/garten/pflanzen-view.yaml": 1,
-    "dashboard/licht/fenster-lichter-karte.yaml": 1,
-    "dashboard/licht/haustuer-lock-karte.yaml": 3,
     "dashboard/licht/lichter-glow-karte.yaml": 15,
     "dashboard/licht/lichter-mushroom-karte.yaml": 1,
     "dashboard/licht/lichter-slider-karte.yaml": 1,
-    "dashboard/netzwerk/docker-templates.yaml": 1,
-    "dashboard/netzwerk/unifi-leitungen-karte.yaml": 1,
-    "dashboard/netzwerk/wlan-karte-v2.yaml": 1,
-    "dashboard/sonstiges/muellabfuhr-karte-v2.yaml": 1,
 }
 
 HA_TAGS = (
