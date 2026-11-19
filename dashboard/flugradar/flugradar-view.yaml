@@ -80,6 +80,14 @@
 #       input_boolean.flug_meldung_tief, _sonderflug, _selten, _notfall,
 #       _verfolgt                        (Schalter der Meldungen)
 #       input_select.flug_verkehr_zeitraum  (Optionen "24 h", "7 Tage")
+#       input_text.adsb_schluessel       (Modus Passwort, min. 0, max. 255,
+#                                         API-Schluessel von adsb.lol; leer =
+#                                         ohne Schluessel; eintragen ueber die
+#                                         Zeile "ADS-B-Schluessel" in P8)
+#       input_datetime.adsb_schluessel_gueltig_bis  (nur Datum; setzt die
+#                                         Automation beim Eintragen auf +30 Tage)
+#       input_boolean.adsb_schluessel_gesperrt  (setzt die Automation, wenn die
+#                                         Abfrage mit Schluessel scheitert)
 #   - Automationen (UI), Beschreibung jeweils in der Automation:
 #       "Fluege: Ein- und Austritt zaehlen"  Events flightradar24_entry/_exit:
 #           counter.flug_heute, _nachts (22-6 Uhr), _nah (closest_distance
@@ -87,14 +95,31 @@
 #       "Fluege: laufend auswerten"  jede Aktualisierung des Sensors: naechster
 #           Ueberflug (input_text.flug_bestwert), counter.flug_tief (in der Luft
 #           unter 1.500 m), Meldungen tief und nah / Sonderflug
-#       "Fluege: ADS-B abfragen"  alle 3 Minuten homeassistant.update_entity
-#           fuer sensor.adsb_notfall (automatisches Intervall des Eintrags ist
-#           aus). adsb.lol erlaubt ohne Schluessel 500 Abfragen am Tag je IP,
-#           neu ab 00:00 UTC; darueber kommt HTTP 429 ohne Inhalt, Scrape meldet
-#           "Index '0' not found" und der Sensor wird nicht verfuegbar. Alle
-#           3 Minuten sind 480, dazu fragt Scrape bei jedem Start von HA einmal
-#           ab. Bis 19.11.2026 jede Minute: dann war das Kontingent taeglich
-#           um 09:21 aufgebraucht und die Erkennung bis 01:00 blind.
+#       "Fluege: ADS-B abfragen"  homeassistant.update_entity fuer die beiden
+#           Scrape-Sensoren (automatisches Intervall beider Eintraege aus),
+#           Modus queued:
+#           - mit Schluessel alle 2 Minuten (sensor.adsb_notfall_schluessel),
+#             solange input_text.adsb_schluessel nicht leer und
+#             input_boolean.adsb_schluessel_gesperrt aus ist. Der 30-Tage-
+#             Schluessel (anonymous) erlaubt laut adsb.lol 500 Abfragen am Tag
+#             und zaehlt nicht gegen das Kontingent je IP (Test 19.11.2026:
+#             keine x-ratelimit-Header, kein 429). Ist er verbraucht, uebernimmt
+#             der Weg ohne Schluessel den Rest des Tages.
+#           - ohne Schluessel alle 3 Minuten (sensor.adsb_notfall_frei), wenn
+#             kein Schluessel da oder er gesperrt ist. adsb.lol erlaubt ohne
+#             Schluessel 500 Abfragen am Tag je IP; 3 Minuten sind 480.
+#           - Scheitert die Abfrage mit Schluessel (401 abgelaufen/ungueltig,
+#             429 verbraucht, Zeitueberschreitung), wird gesperrt gesetzt und,
+#             wenn der freie Sensor seit 4 min nicht abgefragt wurde, sofort
+#             ohne Schluessel abgefragt.
+#           - Die Sperre faellt stuendlich um :31, solange gueltig_bis nicht
+#             vorbei ist, taeglich um 01:00:30 und 02:00:30 (Kontingente neu ab
+#             00:00 UTC, Winter- und Sommerzeit) und bei einem neuen Schluessel;
+#             der wird sofort abgefragt und setzt gueltig_bis auf heute + 30.
+#           Kontingent ueberschritten: HTTP 429 ohne Inhalt, Scrape meldet
+#           "Index '0' not found", der Sensor wird nicht verfuegbar. Bis
+#           19.11.2026 ohne Schluessel jede Minute: dann war das Kontingent
+#           taeglich um 09:21 aufgebraucht und die Erkennung bis 01:00 blind.
 #       "Fluege: Notfall melden (ADS-B)"  jede Aenderung von sensor.adsb_notfall:
 #           Squawk 7500/7600/7700 sofort, ADS-B-Notfallkennung ohne passenden
 #           Squawk erst, wenn die ICAO-Adresse auch in der vorigen Abfrage
@@ -110,10 +135,19 @@
 #     /dashboard-home/fluege?flug=<ID>-<Callsign> mit offenem Popup: ist der
 #     Flug noch im Bereich, ist er gewaehlt (Ring, Karte zentriert), sonst zeigt
 #     das Popup "nicht mehr im Bereich" mit Link auf Flightradar24.
-#   - Integration Scrape, Eintrag "ADS-B Notfall (adsb.lol)" (UI):
-#       Ressource https://api.adsb.lol/v2/point/<breite>/<laenge>/27 (27 nm um
-#       zone.home, Koordinaten mit 4 Nachkommastellen), Sensor sensor.adsb_notfall, Selektor "body" (lxml packt
-#       JSON-Text direkt in <body>), Wert-Template:
+#   - Integration Scrape, zwei Eintraege (UI) mit gleicher Ressource
+#       https://api.adsb.lol/v2/point/<breite>/<laenge>/27 (27 nm um zone.home,
+#       Koordinaten mit 4 Nachkommastellen), Zeitlimit 10 s:
+#       "ADS-B Notfall (adsb.lol)"            -> sensor.adsb_notfall_frei
+#       "ADS-B Notfall (adsb.lol, Schluessel)" -> sensor.adsb_notfall_schluessel,
+#           Header x-api-key: {{ states('input_text.adsb_schluessel') }}
+#           (Header sind Vorlagen und werden bei jeder Abfrage neu gerendert;
+#           der Schluessel steht nur in der Hilfsvariable, nie in der Datei).
+#       Je ein Sensor, Selektor "body" (lxml packt JSON-Text direkt in <body>),
+#       Verfuegbarkeit (nur JSON mit der Liste ac, sonst z. B. "invalid api
+#       key" bei 401):
+#       {% set j = value | from_json(default={}) %}{{ j is mapping and j.ac is defined }}
+#       Wert-Template:
 #       {% set ac = (value | from_json).ac | default([]) %}
 #       {% set ns = namespace(l=[]) %}
 #       {% for a in ac %}
@@ -127,12 +161,27 @@
 #         {% endif %}
 #       {% endfor %}
 #       {{ (ns.l | join(';'))[:250] if ns.l else 'keine' }}
-#       Polling des Eintrags deaktiviert (Systemoptionen), Abfrage per Automation.
+#       Polling beider Eintraege deaktiviert (Systemoptionen), Abfrage per
+#       Automation.
+#   - Template-Helfer "ADSB Notfall" -> sensor.adsb_notfall (Quelle fuer Karte,
+#       Popup und Meldung): Wert des Schluessel-Sensors, wenn er in den letzten
+#       5 min geantwortet hat (last_reported), sonst des freien (10 min), sonst
+#       nicht verfuegbar:
+#       {%- set weg = ['unavailable', 'unknown'] -%}
+#       {%- set k = states.sensor.adsb_notfall_schluessel -%}
+#       {%- set f = states.sensor.adsb_notfall_frei -%}
+#       {%- set k_ok = k is not none and k.state not in weg and
+#             (now() - k.last_reported).total_seconds() < 300 -%}
+#       {%- set f_ok = f is not none and f.state not in weg and
+#             (now() - f.last_reported).total_seconds() < 600 -%}
+#       {{ k.state if k_ok else (f.state if f_ok else 'unknown') }}
+#       Verfuegbarkeit (erweiterte Optionen): {{ k_ok or f_ok }} mit denselben
+#       Zeilen davor.
 #   Grenzen: Nach einem Neustart feuert die Integration fuer bereits anwesende
 #   Fluege kein Eintritts-Event (api/flight.py, is_first_run); diese zaehlen
 #   nicht. Den Squawk liefert die FR24-Integration (v2.3.0) trotz Silver-Login
 #   nicht (in der FR24-App ist er sichtbar); Notfaelle kommen deshalb aus
-#   ADS-B (adsb.lol, ohne Schluessel, 500 Abfragen am Tag je IP).
+#   ADS-B (adsb.lol, mit Schluessel alle 2, ohne alle 3 Minuten).
 #
 # Hinweis Diagramm (P5): apexcharts-card laedt den Verlauf ueber
 # history/period MIT Attributen (graphEntry.ts _fetchRecent); bei diesem
