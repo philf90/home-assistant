@@ -209,884 +209,888 @@ cards:
       # Reiter Tagesprofil im Popup: eigene = nur die Person selbst, alle = jeder
       tag_fuer: eigene
     tap_action: &spur_popup
-      action: perform-action
-      perform_action: browser_mod.popup
-      # button-card wertet beim Tippen jedes [[[ ]]] in data aus
-      # (_objectEvalTemplate): Titel und Entitaet kommen so von der Karte, die
-      # Aktion gilt fuer beide Personen. [[[[ ]]]] (vier Klammern) verschont
-      # button-card beim Tippen und reicht es als [[[ ]]] an die Karte im
-      # Popup weiter: Der Kopf rechnet dort live (Minutentakt ueber sensor.time).
-      data:
-        title: '[[[ return (entity && entity.attributes.friendly_name) || "Bewegung"; ]]]'
-        # Oberflaeche wie im Tankstellen- und DWD-Popup (warnlage-templates.yaml,
-        # Erklaerung dort), Breite auf 480 px gedeckelt (Kartenhoehe, siehe oben)
-        style: |
-          --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
-          --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
-          --primary-background-color: var(--nachtblau-seite, #171d29);
-          --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
-          --primary-text-color: var(--nachtblau-text, #f2f5f8);
-          --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
-          --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
-          --popup-min-width: min(100vw, 480px);
-          --popup-max-width: min(100vw, 480px);
-        content:
-          type: vertical-stack
-          cards:
-            # Kopf: Icon-Kachel in der Statusfarbe der Karte (Gruen zuhause,
-            # Blau in einer Zone, Rot unterwegs), darunter Status mit Uhrzeit
-            # und unterwegs das Alter der letzten Position
-            - type: custom:button-card
-              entity: '[[[ return entity.entity_id; ]]]'
-              show_name: false
-              show_state: false
-              show_icon: false
-              show_label: false
-              tap_action:
-                action: none
-              hold_action:
-                action: none
-              styles:
-                card:
-                  - padding: 2px 4px 6px
-                  - background: none
-                  - border: none
-                  - box-shadow: none
-                  - cursor: default
-                grid:
-                  - grid-template-areas: '"kopf"'
+      # Browser-Aufruf (fire-dom-event): das Popup oeffnet nur auf dem Geraet, auf
+      # dem getippt wurde. Als Dienstaufruf ohne browser_id ginge es laut
+      # browser_mod-Doku an alle registrierten, gerade verbundenen Browser.
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        # button-card wertet beim Tippen jedes [[[ ]]] in der Aktion aus
+        # (_objectEvalTemplate): Titel und Entitaet kommen so von der Karte, die
+        # Aktion gilt fuer beide Personen. [[[[ ]]]] (vier Klammern) verschont
+        # button-card beim Tippen und reicht es als [[[ ]]] an die Karte im
+        # Popup weiter: Der Kopf rechnet dort live (Minutentakt ueber sensor.time).
+        data:
+          title: '[[[ return (entity && entity.attributes.friendly_name) || "Bewegung"; ]]]'
+          # Oberflaeche wie im Tankstellen- und DWD-Popup (warnlage-templates.yaml,
+          # Erklaerung dort), Breite auf 480 px gedeckelt (Kartenhoehe, siehe oben)
+          style: |
+            --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+            --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+            --primary-background-color: var(--nachtblau-seite, #171d29);
+            --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+            --primary-text-color: var(--nachtblau-text, #f2f5f8);
+            --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+            --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+            --popup-min-width: min(100vw, 480px);
+            --popup-max-width: min(100vw, 480px);
+          content:
+            type: vertical-stack
+            cards:
+              # Kopf: Icon-Kachel in der Statusfarbe der Karte (Gruen zuhause,
+              # Blau in einer Zone, Rot unterwegs), darunter Status mit Uhrzeit
+              # und unterwegs das Alter der letzten Position
+              - type: custom:button-card
+                entity: '[[[ return entity.entity_id; ]]]'
+                show_name: false
+                show_state: false
+                show_icon: false
+                show_label: false
+                tap_action:
+                  action: none
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - padding: 2px 4px 6px
+                    - background: none
+                    - border: none
+                    - box-shadow: none
+                    - cursor: default
+                  grid:
+                    - grid-template-areas: '"kopf"'
+                  custom_fields:
+                    kopf:
+                      - width: 100%
+                      - min-width: 0
                 custom_fields:
-                  kopf:
-                    - width: 100%
-                    - min-width: 0
-              custom_fields:
-                kopf: |
-                  [[[[
-                    const e = entity;
-                    states['sensor.time']; // Minutentakt fuer das Alter der Position
-                    const gruen = 'var(--nachtblau-gruen, #a6d49e)';
-                    const blau = 'var(--nachtblau-blau, #7fb3d5)';
-                    const rot = 'var(--nachtblau-rot, #f0736a)';
-                    const text = 'var(--nachtblau-text, #f2f5f8)';
-                    const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
-                    const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const raw = e ? e.state : 'unknown';
-                    const home = raw === 'home';
-                    const weg = raw === 'not_home';
-                    const unbekannt = !e || ['unknown', 'unavailable'].includes(raw);
-                    const zone = !home && !weg && !unbekannt;
-                    const farbe = home ? gruen : (zone ? blau : (weg ? rot : sek));
-                    const status = home ? 'Zuhause' : (weg ? 'Unterwegs' : (unbekannt ? 'Ort unbekannt' : esc(raw)));
-                    // Uhrzeit: heute "09:54", gestern "gestern 18:51", sonst "Mo 16:35"
-                    const uhr = (t) => {
-                      const d = new Date(t);
-                      const hm = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                      const heute = new Date(); heute.setHours(0, 0, 0, 0);
-                      if (d >= heute) return hm;
-                      if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
-                      return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
-                    };
-                    // "seit": Beginn des aktuellen Zustands ohne kurze Ausreisser. Ein Abschnitt
-                    // mit anderem Zustand zaehlt nicht, wenn er kuerzer als 2 min ist, unbekannt
-                    // war oder als Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die
-                    // Strecke unten. Am 15.11.2026 zeigte der Kopf sonst "Zuhause seit 19:32"
-                    // nach einem 25-s-Sprung, statt 19:02. Historie: 48 h, einmal je Zustandswechsel.
-                    const VERSION = 2;
-                    if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== VERSION) {
-                      const kp = { version: VERSION, cache: {} };
-                      kp.beginn = (rows) => {
-                        let attr = null;
-                        const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
-                        if (!z.length) return null;
-                        const genau = (x) => x.a && typeof x.a.latitude === 'number' && (x.a.gps_accuracy ?? 999) <= 50;
-                        // Abschnitte gleichen Zustands
-                        const ab = [];
-                        z.forEach((x) => {
-                          const l = ab[ab.length - 1];
-                          if (l && l.s === x.s) { l.genau += genau(x) ? 1 : 0; return; }
-                          ab.push({ s: x.s, von: x.t, genau: genau(x) ? 1 : 0 });
-                        });
-                        ab.forEach((x, i) => { x.bis = i + 1 < ab.length ? ab[i + 1].von : Infinity; });
-                        const ausreisser = (x) => ['unknown', 'unavailable'].includes(x.s) || x.bis - x.von < 120
-                          || (x.s !== 'home' && x.genau < 2);
-                        let i = ab.length - 1;
-                        const jetzt = ab[i].s;
-                        // Rueckwaerts: Ausreisser zwischen zwei Abschnitten des aktuellen Zustands ueberspringen
-                        for (let k = i - 1; k >= 0; k--) {
-                          if (!ausreisser(ab[k])) break;
-                          if (k - 1 >= 0 && ab[k - 1].s === jetzt) { i = k - 1; k = i; continue; }
-                          if (k - 1 < 0) break;
-                        }
-                        return ab[i].von;
+                  kopf: |
+                    [[[[
+                      const e = entity;
+                      states['sensor.time']; // Minutentakt fuer das Alter der Position
+                      const gruen = 'var(--nachtblau-gruen, #a6d49e)';
+                      const blau = 'var(--nachtblau-blau, #7fb3d5)';
+                      const rot = 'var(--nachtblau-rot, #f0736a)';
+                      const text = 'var(--nachtblau-text, #f2f5f8)';
+                      const sek = 'var(--nachtblau-text-sekundaer, #8794a5)';
+                      const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                      const raw = e ? e.state : 'unknown';
+                      const home = raw === 'home';
+                      const weg = raw === 'not_home';
+                      const unbekannt = !e || ['unknown', 'unavailable'].includes(raw);
+                      const zone = !home && !weg && !unbekannt;
+                      const farbe = home ? gruen : (zone ? blau : (weg ? rot : sek));
+                      const status = home ? 'Zuhause' : (weg ? 'Unterwegs' : (unbekannt ? 'Ort unbekannt' : esc(raw)));
+                      // Uhrzeit: heute "09:54", gestern "gestern 18:51", sonst "Mo 16:35"
+                      const uhr = (t) => {
+                        const d = new Date(t);
+                        const hm = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        const heute = new Date(); heute.setHours(0, 0, 0, 0);
+                        if (d >= heute) return hm;
+                        if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
+                        return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
                       };
-                      kp.lade = async (hass, eid) => {
-                        const ende = new Date(), start = new Date(ende.getTime() - 48 * 3600e3);
-                        const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
-                        return kp.beginn(h[eid] || []);
-                      };
-                      window.__nachtblauKopf = kp;
-                    }
-                    const kp = window.__nachtblauKopf;
-                    let seitT = e ? Date.parse(e.last_changed) : NaN;
-                    if (e) {
-                      const c = kp.cache[e.entity_id];
-                      if (!c || c.lc !== e.last_changed) {
-                        const karte = this, hh = this._hass || hass, eintrag = { lc: e.last_changed, t: null };
-                        kp.cache[e.entity_id] = eintrag;
-                        kp.lade(hh, e.entity_id).then((t) => {
-                          // Nur frueher als der letzte Wechsel uebernehmen; beginnt der Abschnitt am
-                          // Anfang der 48 h, gilt der letzte Wechsel
-                          if (t && t * 1000 < seitT - 1000) { eintrag.t = t * 1000; if (karte.requestUpdate) karte.requestUpdate(); }
-                        }).catch(() => {});
-                      } else if (c.t) {
-                        seitT = c.t;
-                      }
-                    }
-                    const seit = !unbekannt && !isNaN(seitT) ? ' seit ' + uhr(seitT) : '';
-                    const posT = e ? Date.parse(e.last_updated) : NaN;
-                    const min = isNaN(posT) ? null : Math.max(0, Math.floor((Date.now() - posT) / 60000));
-                    const alter = min === null ? '' : (min < 1 ? 'gerade eben' : (min < 60 ? `vor ${min} Min` : 'um ' + uhr(posT)));
-                    const zeile2 = weg && alter ? `Letzte Position ${alter}` : '';
-                    const zweiZeilen = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
-                    return `
-                      <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-                        <div style="width:42px;height:42px;flex:none;border-radius:13px;display:grid;place-items:center;color:${farbe};background:color-mix(in srgb, ${farbe} 16%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);">
-                          <ha-icon icon="mdi:map-marker-path" style="--mdc-icon-size:22px;--ha-icon-display:block;width:22px;height:22px;display:block;margin:0;"></ha-icon>
-                        </div>
-                        <div style="min-width:0;display:grid;gap:2px;">
-                          <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">${home ? 'Letzte Strecke' : 'Strecke seit Aufbruch'}</span>
-                          <span style="display:flex;align-items:center;gap:7px;min-width:0;font-size:15.5px;font-weight:700;line-height:1.2;color:${text};">
-                            <span style="width:7px;height:7px;flex:none;border-radius:50%;background:${farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${farbe} 18%, transparent);"></span>
-                            <span style="min-width:0;${zweiZeilen}">${status}${seit}</span>
-                          </span>
-                          ${zeile2 ? `<span style="font-size:12.5px;line-height:1.25;color:${sek};">${zeile2}</span>` : ''}
-                        </div>
-                      </div>`;
-                  ]]]]
-            # Strecke: laufende bzw. letzte Abwesenheit, auf Strassen eingerastet
-            # (Valhalla ueber rest_command.valhalla_trace, bewegungsspur-konfig.yaml).
-            # Erklaerung im Kopfkommentar der Datei, Abschnitt "Bewegungsspur".
-            - type: custom:button-card
-              entity: '[[[ return entity.entity_id; ]]]'
-              # tag_fuer der Personenkarte, beim Tippen ausgewertet (siehe oben)
-              variables:
-                tag_fuer: '[[[ return variables.tag_fuer || "eigene"; ]]]'
-                # Aktivitaetssensor des Handys fuer die Wahl Fuss/Rad/Auto
-                aktivitaet: '[[[ return variables.activity_entity || ""; ]]]'
-                # Places-Praefix: Ortsnamen fuer Aufenthalte ohne Zone (Tagesliste)
-                places: '[[[ return variables.places_prefix || ""; ]]]'
-              show_name: false
-              show_state: false
-              show_icon: false
-              show_label: false
-              tap_action:
-                action: none
-              hold_action:
-                action: none
-              styles:
-                card:
-                  - padding: 0 4px 4px
-                  - background: none
-                  - border: none
-                  - box-shadow: none
-                  - cursor: default
-                grid:
-                  - grid-template-areas: '"spur"'
-                custom_fields:
-                  spur:
-                    - width: 100%
-                    - min-width: 0
-              custom_fields:
-                spur: |
-                  [[[[
-                    // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                    const VERSION = 14;
-                    if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
-                      const sp = { version: VERSION, cache: {} };
-                      const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
-                      const GENAU = 50;      // m: ungenauere Punkte (Netzortung) fallen weg
-                      const FENSTER = 48;    // h Historie (deckt Letzte Strecke, Heute und 24 Std)
-                      const HALT_S = 600;    // s: Aufenthalt ab 10 Min ...
-                      const HALT_M = 150;    // m: ... im Umkreis von 150 m
-                      const BLAU = '#7fb3d5', VIOLETT = '#b399d4', GRUEN = '#a6d49e', PUNKT = '#b4c0cf';
-                      const GRUND = '#10151d', FLAECHE = '#222b3c', HELL = '#f2f5f8', GRAU = '#8794a5';
-                      // Kartenhoehe: quadratisch, hoechstens so hoch, dass das Popup ohne Scrollen
-                      // passt. Abzug = alles ausser der Karte (iPhone 17 Pro gemessen: 288 px bis
-                      // zur Karte inkl. 62 px Statusleiste, darunter ~24 px Rand) ohne Safe Area,
-                      // die env() je Geraet abzieht; im Tagesprofil zusaetzlich Liste (104 px),
-                      // Abstand und Umschalter.
-                      const SICHER = 'env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)';
-                      const HOCH_LETZTE = `calc(100vh - 260px - ${SICHER})`;
-                      const HOCH_TAG = `calc(100vh - 390px - ${SICHER})`;
-                      sp.hochLetzte = HOCH_LETZTE;
-                      const SCHRIFT = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
-                      sp.esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                      // Polyline mit Genauigkeit 6 (Valhalla)
-                      sp.dec = (s) => {
-                        let i = 0, lat = 0, lon = 0; const out = [];
-                        while (i < s.length) {
-                          for (let k = 0; k < 2; k++) {
-                            let sh = 0, res = 0, b;
-                            do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
-                            const d = (res & 1) ? ~(res >> 1) : (res >> 1);
-                            if (k === 0) lat += d; else lon += d;
-                          }
-                          out.push([lat / 1e6, lon / 1e6]);
-                        }
-                        return out;
-                      };
-                      const meter = (a, b) => {
-                        const r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
-                        const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
-                        return 12742000 * Math.asin(Math.sqrt(h));
-                      };
-                      const weg = (s) => s !== 'home' && s !== 'unknown' && s !== 'unavailable';
-                      const genau = (x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU;
-                      // Zeilen der Historie (person.*) -> {s, a, t}; eine Zeile ohne Attribute erbt die der vorigen
-                      sp.zeilen = (rows) => {
-                        let attr = null;
-                        return rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
-                      };
-                      // Genaue Punkte; mehrere Meldungen innerhalb einer Sekunde: die genaueste;
-                      // gleiche Position nur einmal
-                      sp.punkte = (z) => {
-                        const p = z.filter(genau)
-                          .map((x) => ({ lat: x.a.latitude, lon: x.a.longitude, acc: x.a.gps_accuracy ?? 999, t: x.t, s: x.s }))
-                          .sort((a, b) => a.t - b.t);
-                        const out = [];
-                        p.forEach((x) => {
-                          const l = out[out.length - 1];
-                          if (l && x.t - l.t < 1) { if (x.acc < l.acc) out[out.length - 1] = x; return; }
-                          if (l && l.lat === x.lat && l.lon === x.lon) return;
-                          out.push(x);
-                        });
-                        return out;
-                      };
-                      // Abwesenheiten als [Anfang, Ende] (Indizes der Zeilen), die juengste zuerst.
-                      // Zonen ausser Zuhause zaehlen als abwesend.
-                      const spannen = (z) => {
-                        const out = [];
-                        for (let i = z.length - 1; i >= 0; i--) {
-                          if (!weg(z[i].s)) continue;
-                          let anf = i;
-                          while (anf > 0 && weg(z[anf - 1].s)) anf--;
-                          out.push([anf, i]);
-                          i = anf;
-                        }
-                        return out;
-                      };
-                      // Eine abgeschlossene Abwesenheit ohne mindestens 2 genaue Punkte unterwegs
-                      // ist ein Ausreisser: Am 15.11.2026 sprang person.* fuer 25 s auf not_home,
-                      // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
-                      // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
-                      const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
-                      // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt,
-                      // Ankunft): der naechste genaue Punkt zu Hause innerhalb RAND, ohne eine
-                      // andere Abwesenheit zu ueberspringen. Nur die direkte Nachbarzeile reichte
-                      // nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau, die Spur
-                      // begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein Punkt mit
-                      // 5 m. 300 s reichten auch nicht: Am 18.11.2026 (Fussweg 190 m, 20 min an
-                      // einer Stelle) lag die letzte Meldung zu Hause 15 min vor dem Aufbruch und
-                      // die erste nach der Rueckkehr 5:52 min nach der letzten unterwegs; Hin- und
-                      // Rueckweg fehlten. Zu Hause meldet das iPhone etwa alle 15 min. Die
-                      // Abfahrt schaetzt sp.rechne, einen Aufenthalt am Haus verhindert sp.tag.
-                      const RAND = 1800; // s
-                      const nachbar = (z, i, schritt, t) => {
-                        for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) {
-                          if (weg(z[k].s)) break;
-                          if (z[k].s === 'home' && genau(z[k])) return k;
-                        }
-                        return -1;
-                      };
-                      const spannPunkte = (z, [anf, ende]) => {
-                        const v = nachbar(z, anf - 1, -1, z[anf].t), n = nachbar(z, ende + 1, 1, z[ende].t);
-                        return sp.punkte(z.slice(v >= 0 ? v : anf, (n >= 0 ? n : ende) + 1));
-                      };
-                      // Letzte Strecke: laufende oder juengste echte Abwesenheit
-                      sp.abwesenheit = (z) => {
-                        const wahl = spannen(z).find((s, k) => (k === 0 && s[1] === z.length - 1) || echt(z, s));
-                        if (!wahl) return { pkt: [], laufend: false };
-                        return { pkt: spannPunkte(z, wahl), laufend: wahl[1] === z.length - 1 };
-                      };
-                      // Aufenthalte in einer Punktfolge: Punkte, die mindestens HALT_S innerhalb
-                      // HALT_M um den ersten bleiben, oder eine Meldeluecke von mindestens HALT_S
-                      // mit hoechstens 2 x HALT_M Ortswechsel (iOS meldet im Stand bis zu 30 min
-                      // nichts). Name: die Zone, in der die Person dabei stand, sonst leer.
-                      sp.halte = (pkt) => {
-                        const out = [];
-                        let i = 0;
-                        while (i < pkt.length) {
-                          let j = i;
-                          while (j + 1 < pkt.length && meter(pkt[i], pkt[j + 1]) <= HALT_M) j++;
-                          if (j > i && pkt[j].t - pkt[i].t >= HALT_S) { out.push([i, j]); i = j + 1; }
-                          else if (i + 1 < pkt.length && pkt[i + 1].t - pkt[i].t >= HALT_S && meter(pkt[i], pkt[i + 1]) <= 2 * HALT_M) { out.push([i, i + 1]); i += 2; }
-                          else i++;
-                        }
-                        return out.map(([i, j]) => {
-                          const teil = pkt.slice(i, j + 1);
-                          const zone = teil.map((x) => x.s).find((s) => s && weg(s) && s !== 'not_home');
-                          return { i, j, von: pkt[i].t, bis: pkt[j].t, lat: teil.reduce((s, x) => s + x.lat, 0) / teil.length, lon: teil.reduce((s, x) => s + x.lon, 0) / teil.length, name: zone || '' };
-                        });
-                      };
-                      // Ortsnamen fuer Aufenthalte ohne Zone, aus der Integration Places
-                      // (OpenStreetMap): Sensoren <places_prefix>_place_name und _place_type. Places
-                      // fragt bei jeder neuen Position ab und schreibt beide Sensoren zugleich; der
-                      // Verlauf speichert nur Aenderungen, deshalb gilt je Zeitpunkt der letzte
-                      // Wert beider Sensoren. Strassen (Typ motorway bis footway) nennen keinen Ort
-                      // und fallen weg. Haltestellen heissen in OpenStreetMap oft "Ort, Name": Bei
-                      // ihnen faellt der Ort vor dem ersten Komma weg (18.11.2026: Places nannte fuer
-                      // eine Halle nur die gleichnamige Bushaltestelle davor).
-                      const KEIN_ORT = new Set(['', 'unknown', 'unavailable', 'none', 'null']);
-                      const STRASSE = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'road', 'track', 'pedestrian', 'footway', 'path', 'cycleway', 'bridleway', 'steps', 'busway']);
-                      const HALTESTELLE = new Set(['bus_stop', 'tram_stop', 'stop_position', 'platform']);
-                      sp.orte = (namen, typen) => {
-                        const ev = namen.map((r) => ({ t: r.lu, name: r.s })).concat(typen.map((r) => ({ t: r.lu, typ: r.s }))).sort((a, b) => a.t - b.t);
-                        const out = [];
-                        let name = '', typ = '';
-                        ev.forEach((e) => {
-                          if ('name' in e) name = String(e.name ?? ''); else typ = String(e.typ ?? '');
-                          const letzte = out[out.length - 1];
-                          // beide Sensoren derselben Abfrage liegen Millisekunden auseinander
-                          if (letzte && e.t - letzte.t < 2) { letzte.name = name; letzte.typ = typ; } else out.push({ t: e.t, name, typ });
-                        });
-                        return out;
-                      };
-                      // Name, der waehrend des Aufenthalts am laengsten galt. Es zaehlen nur
-                      // Abfragen ab 2 min vor Beginn: Ein Wert von davor stammt von der Anfahrt.
-                      sp.ortName = (orte, von, bis) => {
-                        const dauer = new Map();
-                        orte.forEach((o, k) => {
-                          if (o.t < von - 120 || o.t > bis) return;
-                          if (KEIN_ORT.has(o.name.trim().toLowerCase()) || STRASSE.has(o.typ)) return;
-                          const ende = Math.min(bis, k + 1 < orte.length ? orte[k + 1].t : bis);
-                          const name = HALTESTELLE.has(o.typ) && o.name.includes(', ') ? o.name.slice(o.name.indexOf(', ') + 2) : o.name;
-                          dauer.set(name.trim(), (dauer.get(name.trim()) || 0) + Math.max(0, ende - Math.max(von, o.t)));
-                        });
-                        let best = '', max = -1;
-                        dauer.forEach((d, n) => { if (d > max) { best = n; max = d; } });
-                        return best;
-                      };
-                      // Tag: alle echten Abwesenheiten, die nach "start" enden, zerlegt in Fahrten
-                      // (zwischen Zuhause und Aufenthalten) und Aufenthalte. Punkte vor "start"
-                      // fallen weg.
-                      sp.tag = (z, start) => {
-                        const fahrten = [], halte = [];
-                        let laufend = false;
-                        spannen(z).reverse().forEach((s) => {
-                          const offen = s[1] === z.length - 1;
-                          if (z[s[1]].t < start && !offen) return;
-                          if (!offen && !echt(z, s)) return;
-                          laufend = laufend || offen;
-                          const pkt = spannPunkte(z, s).filter((x) => x.t >= start);
-                          if (pkt.length < 2) return;
-                          let von = 0;
-                          // Punkte zu Hause am Anfang und Ende (aus spannPunkte) gehoeren zu keinem
-                          // Aufenthalt: Mit der Meldung 15 min vor dem Aufbruch entstand sonst ein
-                          // Aufenthalt "am Haus" (18.11.2026).
-                          const a0 = pkt[0].s === 'home' ? 1 : 0;
-                          const a1 = pkt[pkt.length - 1].s === 'home' ? pkt.length - 1 : pkt.length;
-                          sp.halte(pkt.slice(a0, a1)).map((h) => ({ ...h, i: h.i + a0, j: h.j + a0 })).forEach((h) => {
-                            if (h.i > von) fahrten.push({ pkt: pkt.slice(von, h.i + 1), nachHalt: von > 0 });
-                            halte.push(h);
-                            von = h.j;
+                      // "seit": Beginn des aktuellen Zustands ohne kurze Ausreisser. Ein Abschnitt
+                      // mit anderem Zustand zaehlt nicht, wenn er kuerzer als 2 min ist, unbekannt
+                      // war oder als Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die
+                      // Strecke unten. Am 15.11.2026 zeigte der Kopf sonst "Zuhause seit 19:32"
+                      // nach einem 25-s-Sprung, statt 19:02. Historie: 48 h, einmal je Zustandswechsel.
+                      const VERSION = 2;
+                      if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== VERSION) {
+                        const kp = { version: VERSION, cache: {} };
+                        kp.beginn = (rows) => {
+                          let attr = null;
+                          const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
+                          if (!z.length) return null;
+                          const genau = (x) => x.a && typeof x.a.latitude === 'number' && (x.a.gps_accuracy ?? 999) <= 50;
+                          // Abschnitte gleichen Zustands
+                          const ab = [];
+                          z.forEach((x) => {
+                            const l = ab[ab.length - 1];
+                            if (l && l.s === x.s) { l.genau += genau(x) ? 1 : 0; return; }
+                            ab.push({ s: x.s, von: x.t, genau: genau(x) ? 1 : 0 });
                           });
-                          if (von < pkt.length - 1) fahrten.push({ pkt: pkt.slice(von), nachHalt: von > 0, heim: !offen });
-                        });
-                        return { fahrten, halte, laufend };
-                      };
-                      sp.valhalla = async (hass, pts, profil, optionen, spur) => {
-                        const anfrage = {
-                          shape: pts.map((x) => ({ lat: +x.lat.toFixed(6), lon: +x.lon.toFixed(6), time: Math.round(x.t) })),
-                          costing: profil || 'auto', shape_match: 'map_snap',
-                          directions_options: { units: 'kilometers', narrative: false },
-                        };
-                        if (optionen) anfrage.costing_options = optionen;
-                        if (spur) anfrage.trace_options = spur;
-                        const res = await hass.callWS({ type: 'call_service', domain: 'rest_command', service: 'valhalla_trace', service_data: { anfrage: JSON.stringify(anfrage) }, return_response: true });
-                        const a = res && res.response;
-                        if (!a || a.status !== 200 || !a.content || !a.content.trip) throw new Error('HTTP ' + (a ? a.status : '?'));
-                        // Weitere Teilstuecke bei Unterbrechungen stehen unter alternates
-                        const teile = [a.content.trip].concat((a.content.alternates || []).map((x) => x.trip));
-                        return {
-                          linien: teile.map((t) => t.legs.reduce((acc, leg) => acc.concat(sp.dec(leg.shape)), [])).filter((l) => l.length > 1),
-                          km: teile.reduce((s, t) => s + t.summary.length, 0),
-                          // Fahrzeit laut Valhalla (Profil, nicht die Zeitstempel der Punkte), s
-                          zeit: teile.reduce((s, t) => s + t.summary.time, 0),
-                        };
-                      };
-                      // Hoechstens n Auftraege gleichzeitig (ein Tag kann viele Abschnitte haben)
-                      const gedrosselt = async (auftraege, n) => {
-                        const erg = new Array(auftraege.length);
-                        let next = 0;
-                        const arbeiter = async () => { while (next < auftraege.length) { const k = next++; erg[k] = await auftraege[k](); } };
-                        await Promise.all(Array.from({ length: Math.min(n, auftraege.length) }, arbeiter));
-                        return erg;
-                      };
-                      const schluessel = (pkt) => pkt.length + '|' + pkt[0].t + '|' + pkt[pkt.length - 1].t;
-                      // Fortbewegung je Abschnitt, daraus das Profil fuer Valhalla. Mit "auto"
-                      // fehlten auf Fusspfaden Linien oder liefen als Gerade bzw. Umweg daneben
-                      // (Simulation Spaziergang 16.11.2026: 64 bzw. 68 % des Wegs abgedeckt, mit
-                      // "pedestrian" 100 %). Reihenfolge:
-                      //   1. Tempo ab 40 km/h, oder ab 25 km/h ohne Rad: Auto (Sensoren hinken nach)
-                      //   2. Aktivitaetssensor des Handys (activity_entity der Karte), wenn er im
-                      //      Abschnitt mindestens 30 % der Zeit eine Fortbewegung meldet:
-                      //      Gehen/Laufen -> Fuss, Rad -> Rad, Auto/Fahrzeug -> Auto
-                      //   3. sonst Tempo: ab 15 km/h Auto, darunter Fuss
-                      // Sicher (Anker) sind Abschnitte nach 1. oder 2. und dichte Gruppen ab
-                      // 3 Punkten mit mindestens 2 km/h. Unsichere Abschnitte dazwischen erben die
-                      // Art der Anker davor und danach, wenn diese gleich sind (oder nur einer
-                      // existiert) und der unsichere Lauf hoechstens 15 min in Bewegung ist
-                      // (Abschnitte ab 50 m). A1 hatte mitten in der Fahrt 838 m in 301 s
-                      // (10 km/h) zwischen zwei Einzelpunkten; ein laengerer Spaziergang zwischen
-                      // zwei Fahrten bleibt dagegen zu Fuss.
-                      // Tempo allein reicht nicht: Autofahrten hatten Luecken mit 4-11 km/h (A1)
-                      // und 0 km/h an Halten (B2). Der Sensor meldete beim iPhone 26 Std
-                      // "Unknown" gegen 1,8 Std Gehen/Auto, beim S25 ein Fahrzeug nur 47 s
-                      // (Recorder 14.-16.11.2026), deshalb nur als Vorrang, wenn er etwas meldet.
-                      const ARTEN = { walking: 'fuss', running: 'fuss', on_foot: 'fuss', cycling: 'rad', on_bicycle: 'rad', automotive: 'auto', in_vehicle: 'auto' };
-                      const PROFIL = { fuss: 'pedestrian', rad: 'bicycle', auto: 'auto' };
-                      sp.aktivitaet = (rows) => rows.map((r) => ({ art: ARTEN[String(r.s).toLowerCase()] || null, t: r.lu }));
-                      // Rueckgabe { art, sicher }: sicher = nach Tempo ab 25 km/h oder nach Sensor
-                      sp.art = (akt, t0, t1, kmh) => {
-                        if (kmh >= 40) return { art: 'auto', sicher: true };
-                        const dauer = { fuss: 0, rad: 0, auto: 0 };
-                        const ende = Math.max(t1, t0 + 1);
-                        (akt || []).forEach((a, i) => {
-                          if (!a.art) return;
-                          const bis = i + 1 < akt.length ? akt[i + 1].t : Infinity;
-                          const ueber = Math.min(bis, ende) - Math.max(a.t, t0);
-                          if (ueber > 0) dauer[a.art] += ueber;
-                        });
-                        const [art, d] = Object.entries(dauer).sort((x, y) => y[1] - x[1])[0];
-                        if (kmh >= 25 && art !== 'rad') return { art: 'auto', sicher: true };
-                        if (d >= 0.3 * (ende - t0)) return { art, sicher: true };
-                        return { art: kmh >= 15 ? 'auto' : 'fuss', sicher: false };
-                      };
-                      const kmh = (a, b) => (b.t > a.t ? meter(a, b) / (b.t - a.t) * 3.6 : 0);
-                      const median = (w) => { const v = w.slice().sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : 0; };
-                      // Dichte Gruppen einzeln einrasten (durchgezogen), jede Luecke ueber 2 min
-                      // einzeln als kuerzester Weg zwischen ihren Endpunkten (gestrichelt). Ein
-                      // Auftrag fuer die ganze Fahrt erzwaenge Wenden auf der Strasse; Valhalla legte
-                      // dann einen Bogen um den Block (Testfahrt 15.11.2026). Ergebnis je Punktfolge
-                      // zwischengespeichert, solange die Seite offen ist.
-                      sp.rechne = async (hass, pkt, akt) => {
-                        const gr = [];
-                        pkt.forEach((x, i) => { if (i === 0 || x.t - pkt[i - 1].t > LUECKE) gr.push([x]); else gr[gr.length - 1].push(x); });
-                        // Abschnitte in Zeitfolge: dichte Gruppe (fest), dann Luecke bis zur naechsten
-                        const auftraege = [];
-                        gr.forEach((g, i) => {
-                          const a0 = g[0], a1 = g[g.length - 1];
-                          if (g.length > 1) {
-                            const v = median(g.slice(1).map((x, k) => kmh(g[k], x)));
-                            const r = sp.art(akt, a0.t, a1.t, v);
-                            auftraege.push({ fest: true, pts: g, r, anker: r.sicher || (g.length >= 3 && v >= 2), dauer: a1.t - a0.t, weg: meter(a0, a1) });
+                          ab.forEach((x, i) => { x.bis = i + 1 < ab.length ? ab[i + 1].von : Infinity; });
+                          const ausreisser = (x) => ['unknown', 'unavailable'].includes(x.s) || x.bis - x.von < 120
+                            || (x.s !== 'home' && x.genau < 2);
+                          let i = ab.length - 1;
+                          const jetzt = ab[i].s;
+                          // Rueckwaerts: Ausreisser zwischen zwei Abschnitten des aktuellen Zustands ueberspringen
+                          for (let k = i - 1; k >= 0; k--) {
+                            if (!ausreisser(ab[k])) break;
+                            if (k - 1 >= 0 && ab[k - 1].s === jetzt) { i = k - 1; k = i; continue; }
+                            if (k - 1 < 0) break;
                           }
-                          if (i < gr.length - 1) {
-                            const b = gr[i + 1][0];
-                            const r = sp.art(akt, a1.t, b.t, kmh(a1, b));
-                            auftraege.push({ fest: false, pts: [a1, b], r, anker: r.sicher, dauer: b.t - a1.t, weg: meter(a1, b) });
-                          }
-                        });
-                        for (let i = 0; i < auftraege.length;) {
-                          if (auftraege[i].anker) { auftraege[i].art = auftraege[i].r.art; i++; continue; }
-                          let j = i;
-                          while (j < auftraege.length && !auftraege[j].anker) j++;
-                          const lauf = auftraege.slice(i, j);
-                          const bewegt = lauf.filter((x) => x.weg >= 50).reduce((sum, x) => sum + x.dauer, 0);
-                          const nb = [auftraege[i - 1], auftraege[j]].filter(Boolean).map((x) => x.r.art);
-                          const erben = bewegt <= 900 && nb.length && nb.every((x) => x === nb[0]);
-                          lauf.forEach((x) => { x.art = erben ? nb[0] : x.r.art; });
-                          i = j;
+                          return ab[i].von;
+                        };
+                        kp.lade = async (hass, eid) => {
+                          const ende = new Date(), start = new Date(ende.getTime() - 48 * 3600e3);
+                          const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
+                          return kp.beginn(h[eid] || []);
+                        };
+                        window.__nachtblauKopf = kp;
+                      }
+                      const kp = window.__nachtblauKopf;
+                      let seitT = e ? Date.parse(e.last_changed) : NaN;
+                      if (e) {
+                        const c = kp.cache[e.entity_id];
+                        if (!c || c.lc !== e.last_changed) {
+                          const karte = this, hh = this._hass || hass, eintrag = { lc: e.last_changed, t: null };
+                          kp.cache[e.entity_id] = eintrag;
+                          kp.lade(hh, e.entity_id).then((t) => {
+                            // Nur frueher als der letzte Wechsel uebernehmen; beginnt der Abschnitt am
+                            // Anfang der 48 h, gilt der letzte Wechsel
+                            if (t && t * 1000 < seitT - 1000) { eintrag.t = t * 1000; if (karte.requestUpdate) karte.requestUpdate(); }
+                          }).catch(() => {});
+                        } else if (c.t) {
+                          seitT = c.t;
                         }
-                        const k = schluessel(pkt) + '|' + auftraege.map((a) => a.art[0]).join('');
-                        if (sp.cache[k]) return sp.cache[k];
-                        // Luecke mit dem Auto: unbefestigte Wege ausschliessen. Zwischen nur zwei
-                        // Punkten nimmt das Map-Matching den kuerzesten Weg und dafuer auch
-                        // Feldwege; Fahrt 16.11.2026: 1,6 km Luftlinie, 2,04 km davon 1,37 km
-                        // Schotter-Feldweg statt der Landstrasse; mit exclude_unpaved 2,32 km ohne
-                        // Feldweg, Routenplanung (route) 2,34 km. 35 Luecken der Testfahrten A1-B4 (als Auto):
-                        // nur A2 (dasselbe Muster, 1,37 km Feldweg) und eine um 0,03 km anders.
-                        // Gemessene Gruppen bleiben ohne die Option: Dort zeigen die Punkte, wo
-                        // gefahren wurde.
-                        const LUECKE_AUTO = { auto: { exclude_unpaved: true } };
-                        // Luecke: breakage_distance (Server 10 000 m, in meili.customizable
-                        // freigegeben) auf das Dreifache der Luftlinie, mindestens 10 000 m. Fahrt
-                        // 18.11.2026: 10,06 km Luftlinie in 301 s auf der Autobahn, Valhalla
-                        // "Exceeded breakage distance for all pairs: 10000 meters", Karte zeigte
-                        // dort die Gerade; mit 30 000 m 10,42 km ueber die Autobahn.
-                        const spurOpt = (a) => (a.fest ? null : { breakage_distance: Math.max(10000, Math.round(3 * a.weg)) });
-                        const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null, spurOpt(a))
-                          .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, zeit: r.zeit, ok: true }))
-                          .catch(() => ({
-                            fest: a.fest, art: a.art, ok: false,
-                            linien: [a.pts.map((x) => [x.lat, x.lon])],
-                            km: a.pts.slice(1).reduce((s, x, i) => s + meter(a.pts[i], x) / 1000, 0),
-                          }))), 4);
-                        const teil = (fest) => erg.filter((e) => e.fest === fest);
-                        const s = {
-                          fest: teil(true).flatMap((e) => e.linien),
-                          geschaetzt: teil(false).flatMap((e) => e.linien),
-                          kmFest: teil(true).reduce((x, e) => x + e.km, 0),
-                          kmGeschaetzt: teil(false).reduce((x, e) => x + e.km, 0),
-                          fehler: erg.filter((e) => !e.ok).length,
-                          auftraege: erg.length,
-                          kmArt: ['fuss', 'rad', 'auto'].reduce((o, a) => Object.assign(o, { [a]: erg.filter((e) => e.art === a).reduce((x, e) => x + e.km, 0) }), {}),
-                          // Abfahrt: Beginnt der Weg mit einer Luecke, ist der erste Punkt die letzte
-                          // Meldung am Ausgangsort; im Stand meldet das iPhone nichts. Dann gilt
-                          // naechster Punkt minus Fahrzeit der Luecke, nie vor dem ersten Punkt.
-                          // 17.11.2026: letzte Meldung 12:21:37, naechste 12:33:44 in 0,51 km
-                          // (Fahrzeit 44 s) -> Abfahrt 12:33 statt 12:21; 13:08:20 -> 13:13:59 in
-                          // 0,67 km (83 s) -> 13:12 statt 13:08. Aktivitaetssensor: Auto ab 12:33:44
-                          // bzw. 13:14:00.
-                          abfahrt: !auftraege[0].fest && erg[0].ok && typeof erg[0].zeit === 'number'
-                            ? Math.max(auftraege[0].pts[0].t, Math.round(auftraege[0].pts[1].t - erg[0].zeit))
-                            : pkt[0].t,
-                        };
-                        // Fehlgeschlagene Auftraege nicht merken, die naechste Runde versucht es neu
-                        if (!s.fehler) sp.cache[k] = s;
-                        return s;
-                      };
-                      const fc = (linien) => ({ type: 'FeatureCollection', features: linien.map((l) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l.map((p) => [p[1], p[0]]) } })) });
-                      const pc = (pkt) => ({ type: 'FeatureCollection', features: pkt.map((x) => ({ type: 'Feature', properties: { t: x.t }, geometry: { type: 'Point', coordinates: [x.lon, x.lat] } })) });
-                      const uhr = (t) => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                      const dauer = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m} Min` : `${Math.floor(m / 60)} Std ${String(m % 60).padStart(2, '0')} Min`; };
-                      const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
-                      // Ueberwiegende Art einer Strecke (nach km) und Zusatz "zu Fuss"/"mit dem Rad"
-                      const hauptArt = (s) => Object.entries(s.kmArt).sort((x, y) => y[1] - x[1])[0][0];
-                      const ART_TXT = { fuss: 'zu Fuß', rad: 'mit dem Rad' };
-                      const artZusatz = (s) => {
-                        const ges = s.kmFest + s.kmGeschaetzt, haupt = hauptArt(s);
-                        // Nebenart erst ab 0,5 km: Standzeiten mit GPS-Zittern ergaben bei B2 0,13 km
-                        const neben = ['fuss', 'rad'].filter((a) => a !== haupt && s.kmArt[a] >= 0.5);
-                        const t = [];
-                        if (haupt !== 'auto' && s.kmArt[haupt] >= 0.95 * ges) return ART_TXT[haupt];
-                        if (haupt !== 'auto') t.push(`${kmTxt(s.kmArt[haupt])} ${ART_TXT[haupt]}`);
-                        neben.forEach((a) => t.push(`${kmTxt(s.kmArt[a])} ${ART_TXT[a]}`));
-                        return t.length ? 'davon ' + t.join(', ') : '';
-                      };
-                      // Karte: das Element ha-map der eingebauten Karten-Karte. Es hat keine
-                      // offizielle Schnittstelle fuer eigene Linien; die Spur kommt als eigene
-                      // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine
-                      // (_addCustomSource, _addCustomLayer, _setCustomSourceData). Sie sammeln die
-                      // Ebenen und setzen sie nach einem Stilwechsel (hell/dunkel) wieder ein.
-                      // Schilder und Uhrzeit nutzen Marker aus derselben MapLibre-Instanz
-                      // (_maplibre.Marker). Fehlen sie (Frontend-Update, Geraet ohne
-                      // WebGL2), zeichnet ha-map die Spur als eigene Pfade, ohne Schilder; die
-                      // Tagesliste bleibt.
-                      sp.karte = async (kasten, eid) => {
-                        if (kasten.__spur) return kasten.__spur;
-                        if (!customElements.get('ha-map')) {
-                          const helfer = await window.loadCardHelpers();
-                          helfer.createCardElement({ type: 'map', entities: [eid] });
-                          await Promise.race([customElements.whenDefined('ha-map'), new Promise((_, nein) => setTimeout(() => nein(new Error('Karte nicht geladen')), 8000))]);
-                        }
-                        const m = document.createElement('ha-map');
-                        m.style.cssText = 'display:block;width:100%;height:100%;';
-                        m.entities = [{ entity_id: eid, color: BLAU }];
-                        m.themeMode = 'auto';
-                        m.zoom = 14;
-                        kasten.innerHTML = '';
-                        kasten.appendChild(m);
-                        let eng = null;
-                        for (let i = 0; i < 60; i++) { eng = m._engine; if (eng && eng._map) break; await new Promise((ok) => setTimeout(ok, 200)); }
-                        kasten.__spur = { m, eng, ebenen: false, schilder: [], stand: '', vektor: !!(eng && eng._map && eng._addCustomSource && eng._setCustomSourceData) };
-                        return kasten.__spur;
-                      };
-                      sp.passe = (st, alle) => {
-                        if (!st.vektor || !alle.length) return;
-                        const la = alle.map((p) => p[0]), lo = alle.map((p) => p[1]);
-                        st.eng._map.fitBounds([[Math.min(...lo), Math.min(...la)], [Math.max(...lo), Math.max(...la)]], { padding: 40, maxZoom: 16, animate: false });
-                      };
-                      // Antippen: naechster Messpunkt im Umkreis von 14 px zeigt seine Uhrzeit.
-                      // Eigenes Schild als Marker statt MapLibre-Popup: Dessen Kasten gestaltet
-                      // ha-map grau; die Uhrzeit hatte darauf 2,15:1 Kontrast, der Kasten zur
-                      // dunklen Karte 1,58:1 (Bildschirmfoto iPhone, 15.11.2026). Hier: Flaeche
-                      // #222b3c, Text #f2f5f8 (12,98:1), Rand Blau. Auf dunkler Karte trennt der
-                      // blaue Rand (5,95:1 zur gemessenen Kartenflaeche), auf heller die Flaeche
-                      // (12,37:1 zu hellem Land).
-                      // Der Ring markiert den angetippten Punkt, Blau mit dunklem Aussenrand.
-                      const zeitSchild = (st) => {
-                        const { eng } = st;
-                        if (!eng._maplibre || !eng._maplibre.Marker) return;
-                        const el = document.createElement('div');
-                        el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 13px ${SCHRIFT};font-variant-numeric:tabular-nums;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));`;
-                        el.innerHTML = `<span data-zeit style="padding:4px 9px;border-radius:8px;background:${FLAECHE};border:1.5px solid ${BLAU};color:${HELL};line-height:1.2;white-space:nowrap;"></span>`
-                          + `<span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid ${BLAU};"></span>`
-                          + `<span style="width:16px;height:16px;margin-top:2px;border-radius:50%;border:2.5px solid ${BLAU};background:rgba(127,179,213,0.3);box-shadow:0 0 0 1.5px ${GRUND};box-sizing:border-box;"></span>`;
-                        // anchor bottom + 8 px: Mitte des Rings (16 px) liegt auf dem Punkt
-                        const schild = new eng._maplibre.Marker({ element: el, anchor: 'bottom', offset: [0, 8] });
-                        let an = false;
-                        st.zeitAus = () => { if (an) { schild.remove(); an = false; } };
-                        eng._map.on('click', (ev) => {
-                          if (!eng._map.getLayer('ha-map-spur-punkte')) return;
-                          const { x, y } = ev.point;
-                          const f = eng._map.queryRenderedFeatures([[x - 14, y - 14], [x + 14, y + 14]], { layers: ['ha-map-spur-punkte'] });
-                          if (!f.length) { st.zeitAus(); return; }
-                          const nah = f.map((g) => { const p = eng._map.project(g.geometry.coordinates); return { g, d: (p.x - x) ** 2 + (p.y - y) ** 2 }; }).sort((a, b) => a.d - b.d)[0].g;
-                          el.querySelector('[data-zeit]').textContent = uhr(nah.properties.t);
-                          schild.setLngLat(nah.geometry.coordinates);
-                          if (!an) { schild.addTo(eng._map); an = true; }
-                        });
-                      };
-                      // Schilder in der Naehe (HALT_M) zu einem zusammenfassen, Texte mit " · "
-                      const buendle = (liste) => {
-                        const out = [];
-                        liste.forEach((x) => {
-                          const da = out.find((o) => o.halt === x.halt && meter(o, x) <= HALT_M);
-                          if (da) da.text += ' · ' + x.text; else out.push({ ...x });
-                        });
-                        return out;
-                      };
-                      sp.zeichne = (st, fest, gesch, pkt, schilder) => {
-                        const { m, eng } = st;
-                        if (st.zeitAus) st.zeitAus();
-                        st.schilder.forEach((x) => x.remove());
-                        st.schilder = [];
-                        if (st.vektor) {
-                          const daten = { 'ha-map-spur-geschaetzt': fc(gesch), 'ha-map-spur-fest': fc(fest), 'ha-map-spur-punkte': pc(pkt) };
-                          if (!st.ebenen) {
-                            Object.entries(daten).forEach(([id, d]) => eng._addCustomSource(id, d));
-                            eng._addCustomLayer({ id: 'ha-map-spur-geschaetzt', type: 'line', source: 'ha-map-spur-geschaetzt', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.4, 1.4] } });
-                            eng._addCustomLayer({ id: 'ha-map-spur-fest', type: 'line', source: 'ha-map-spur-fest', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 4 } });
-                            eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 3, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
-                            // Punkte ueber die Beschriftung: ha-map legt eigene Ebenen unter die
-                            // Ortsnamen, auch nach jedem Stilwechsel (hell/dunkel) wieder. Am
-                            // 17.11.2026 lagen beide Meldungen unterwegs mitten in Orten und
-                            // verschwanden unter deren Namen. Linien bleiben darunter, damit die
-                            // Namen lesbar bleiben. styledata kommt auch nach dem Verschieben; die
-                            // Pruefung "schon oben" beendet das.
-                            const heben = () => {
-                              const map = eng._map;
-                              try {
-                                if (!map.getLayer('ha-map-spur-punkte')) return;
-                                const ids = map.getLayersOrder ? map.getLayersOrder() : (map.getStyle() || { layers: [] }).layers.map((l) => l.id);
-                                if (ids[ids.length - 1] !== 'ha-map-spur-punkte') map.moveLayer('ha-map-spur-punkte');
-                              } catch (e) { /* Stil laedt noch: naechstes styledata */ }
-                            };
-                            heben();
-                            eng._map.on('styledata', heben);
-                            zeitSchild(st);
-                            st.ebenen = true;
-                          } else {
-                            Object.entries(daten).forEach(([id, d]) => eng._setCustomSourceData(id, d));
+                      }
+                      const seit = !unbekannt && !isNaN(seitT) ? ' seit ' + uhr(seitT) : '';
+                      const posT = e ? Date.parse(e.last_updated) : NaN;
+                      const min = isNaN(posT) ? null : Math.max(0, Math.floor((Date.now() - posT) / 60000));
+                      const alter = min === null ? '' : (min < 1 ? 'gerade eben' : (min < 60 ? `vor ${min} Min` : 'um ' + uhr(posT)));
+                      const zeile2 = weg && alter ? `Letzte Position ${alter}` : '';
+                      const zweiZeilen = 'overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;';
+                      return `
+                        <div style="display:flex;align-items:center;gap:12px;min-width:0;text-align:left;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                          <div style="width:42px;height:42px;flex:none;border-radius:13px;display:grid;place-items:center;color:${farbe};background:color-mix(in srgb, ${farbe} 16%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);">
+                            <ha-icon icon="mdi:map-marker-path" style="--mdc-icon-size:22px;--ha-icon-display:block;width:22px;height:22px;display:block;margin:0;"></ha-icon>
+                          </div>
+                          <div style="min-width:0;display:grid;gap:2px;">
+                            <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">${home ? 'Letzte Strecke' : 'Strecke seit Aufbruch'}</span>
+                            <span style="display:flex;align-items:center;gap:7px;min-width:0;font-size:15.5px;font-weight:700;line-height:1.2;color:${text};">
+                              <span style="width:7px;height:7px;flex:none;border-radius:50%;background:${farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${farbe} 18%, transparent);"></span>
+                              <span style="min-width:0;${zweiZeilen}">${status}${seit}</span>
+                            </span>
+                            ${zeile2 ? `<span style="font-size:12.5px;line-height:1.25;color:${sek};">${zeile2}</span>` : ''}
+                          </div>
+                        </div>`;
+                    ]]]]
+              # Strecke: laufende bzw. letzte Abwesenheit, auf Strassen eingerastet
+              # (Valhalla ueber rest_command.valhalla_trace, bewegungsspur-konfig.yaml).
+              # Erklaerung im Kopfkommentar der Datei, Abschnitt "Bewegungsspur".
+              - type: custom:button-card
+                entity: '[[[ return entity.entity_id; ]]]'
+                # tag_fuer der Personenkarte, beim Tippen ausgewertet (siehe oben)
+                variables:
+                  tag_fuer: '[[[ return variables.tag_fuer || "eigene"; ]]]'
+                  # Aktivitaetssensor des Handys fuer die Wahl Fuss/Rad/Auto
+                  aktivitaet: '[[[ return variables.activity_entity || ""; ]]]'
+                  # Places-Praefix: Ortsnamen fuer Aufenthalte ohne Zone (Tagesliste)
+                  places: '[[[ return variables.places_prefix || ""; ]]]'
+                show_name: false
+                show_state: false
+                show_icon: false
+                show_label: false
+                tap_action:
+                  action: none
+                hold_action:
+                  action: none
+                styles:
+                  card:
+                    - padding: 0 4px 4px
+                    - background: none
+                    - border: none
+                    - box-shadow: none
+                    - cursor: default
+                  grid:
+                    - grid-template-areas: '"spur"'
+                  custom_fields:
+                    spur:
+                      - width: 100%
+                      - min-width: 0
+                custom_fields:
+                  spur: |
+                    [[[[
+                      // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
+                      const VERSION = 14;
+                      if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
+                        const sp = { version: VERSION, cache: {} };
+                        const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
+                        const GENAU = 50;      // m: ungenauere Punkte (Netzortung) fallen weg
+                        const FENSTER = 48;    // h Historie (deckt Letzte Strecke, Heute und 24 Std)
+                        const HALT_S = 600;    // s: Aufenthalt ab 10 Min ...
+                        const HALT_M = 150;    // m: ... im Umkreis von 150 m
+                        const BLAU = '#7fb3d5', VIOLETT = '#b399d4', GRUEN = '#a6d49e', PUNKT = '#b4c0cf';
+                        const GRUND = '#10151d', FLAECHE = '#222b3c', HELL = '#f2f5f8', GRAU = '#8794a5';
+                        // Kartenhoehe: quadratisch, hoechstens so hoch, dass das Popup ohne Scrollen
+                        // passt. Abzug = alles ausser der Karte (iPhone 17 Pro gemessen: 288 px bis
+                        // zur Karte inkl. 62 px Statusleiste, darunter ~24 px Rand) ohne Safe Area,
+                        // die env() je Geraet abzieht; im Tagesprofil zusaetzlich Liste (104 px),
+                        // Abstand und Umschalter.
+                        const SICHER = 'env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)';
+                        const HOCH_LETZTE = `calc(100vh - 260px - ${SICHER})`;
+                        const HOCH_TAG = `calc(100vh - 390px - ${SICHER})`;
+                        sp.hochLetzte = HOCH_LETZTE;
+                        const SCHRIFT = "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
+                        sp.esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        // Polyline mit Genauigkeit 6 (Valhalla)
+                        sp.dec = (s) => {
+                          let i = 0, lat = 0, lon = 0; const out = [];
+                          while (i < s.length) {
+                            for (let k = 0; k < 2; k++) {
+                              let sh = 0, res = 0, b;
+                              do { b = s.charCodeAt(i++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
+                              const d = (res & 1) ? ~(res >> 1) : (res >> 1);
+                              if (k === 0) lat += d; else lon += d;
+                            }
+                            out.push([lat / 1e6, lon / 1e6]);
                           }
-                          if (eng._maplibre && eng._maplibre.Marker) {
-                            buendle(schilder).forEach((x) => {
-                              const el = document.createElement('div');
-                              el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 11px ${SCHRIFT};font-variant-numeric:tabular-nums;`;
-                              el.innerHTML = x.halt
-                                ? `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;padding:3px 7px;border-radius:7px;background:${FLAECHE};border:1px solid rgba(179,153,212,0.45);color:${HELL};white-space:nowrap;">${sp.esc(x.text)}</span><span style="width:12px;height:12px;margin-top:3px;border-radius:50%;background:${GRUND};border:2.5px solid ${VIOLETT};box-sizing:border-box;"></span>`
-                                : `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;margin-top:6px;padding:2px 6px;border-radius:6px;background:${FLAECHE};border:1px solid rgba(127,179,213,0.45);color:${BLAU};white-space:nowrap;">${sp.esc(x.text)}</span>`;
-                              st.schilder.push(new eng._maplibre.Marker({ element: el, anchor: x.halt ? 'bottom' : 'top' }).setLngLat([x.lon, x.lat]).addTo(eng._map));
+                          return out;
+                        };
+                        const meter = (a, b) => {
+                          const r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lon - a.lon) * r;
+                          const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+                          return 12742000 * Math.asin(Math.sqrt(h));
+                        };
+                        const weg = (s) => s !== 'home' && s !== 'unknown' && s !== 'unavailable';
+                        const genau = (x) => x.a && typeof x.a.latitude === 'number' && typeof x.a.longitude === 'number' && (x.a.gps_accuracy ?? 999) <= GENAU;
+                        // Zeilen der Historie (person.*) -> {s, a, t}; eine Zeile ohne Attribute erbt die der vorigen
+                        sp.zeilen = (rows) => {
+                          let attr = null;
+                          return rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
+                        };
+                        // Genaue Punkte; mehrere Meldungen innerhalb einer Sekunde: die genaueste;
+                        // gleiche Position nur einmal
+                        sp.punkte = (z) => {
+                          const p = z.filter(genau)
+                            .map((x) => ({ lat: x.a.latitude, lon: x.a.longitude, acc: x.a.gps_accuracy ?? 999, t: x.t, s: x.s }))
+                            .sort((a, b) => a.t - b.t);
+                          const out = [];
+                          p.forEach((x) => {
+                            const l = out[out.length - 1];
+                            if (l && x.t - l.t < 1) { if (x.acc < l.acc) out[out.length - 1] = x; return; }
+                            if (l && l.lat === x.lat && l.lon === x.lon) return;
+                            out.push(x);
+                          });
+                          return out;
+                        };
+                        // Abwesenheiten als [Anfang, Ende] (Indizes der Zeilen), die juengste zuerst.
+                        // Zonen ausser Zuhause zaehlen als abwesend.
+                        const spannen = (z) => {
+                          const out = [];
+                          for (let i = z.length - 1; i >= 0; i--) {
+                            if (!weg(z[i].s)) continue;
+                            let anf = i;
+                            while (anf > 0 && weg(z[anf - 1].s)) anf--;
+                            out.push([anf, i]);
+                            i = anf;
+                          }
+                          return out;
+                        };
+                        // Eine abgeschlossene Abwesenheit ohne mindestens 2 genaue Punkte unterwegs
+                        // ist ein Ausreisser: Am 15.11.2026 sprang person.* fuer 25 s auf not_home,
+                        // mit einer Position 2 km entfernt (Genauigkeit 100 m, source = die Person
+                        // selbst); ohne die Regel zeigte das Popup diese 0 km statt der Fahrt davor.
+                        const echt = (z, [anf, ende]) => z.slice(anf, ende + 1).filter(genau).length >= 2;
+                        // Punkte einer Abwesenheit, dazu je ein Punkt davor und danach (Abfahrt,
+                        // Ankunft): der naechste genaue Punkt zu Hause innerhalb RAND, ohne eine
+                        // andere Abwesenheit zu ueberspringen. Nur die direkte Nachbarzeile reichte
+                        // nicht: Am 16.11.2026 war die letzte Zeile zu Hause 64 m ungenau, die Spur
+                        // begann 80 m vom Haus entfernt auf der Strasse; 6 s davor lag ein Punkt mit
+                        // 5 m. 300 s reichten auch nicht: Am 18.11.2026 (Fussweg 190 m, 20 min an
+                        // einer Stelle) lag die letzte Meldung zu Hause 15 min vor dem Aufbruch und
+                        // die erste nach der Rueckkehr 5:52 min nach der letzten unterwegs; Hin- und
+                        // Rueckweg fehlten. Zu Hause meldet das iPhone etwa alle 15 min. Die
+                        // Abfahrt schaetzt sp.rechne, einen Aufenthalt am Haus verhindert sp.tag.
+                        const RAND = 1800; // s
+                        const nachbar = (z, i, schritt, t) => {
+                          for (let k = i; k >= 0 && k < z.length && Math.abs(z[k].t - t) <= RAND; k += schritt) {
+                            if (weg(z[k].s)) break;
+                            if (z[k].s === 'home' && genau(z[k])) return k;
+                          }
+                          return -1;
+                        };
+                        const spannPunkte = (z, [anf, ende]) => {
+                          const v = nachbar(z, anf - 1, -1, z[anf].t), n = nachbar(z, ende + 1, 1, z[ende].t);
+                          return sp.punkte(z.slice(v >= 0 ? v : anf, (n >= 0 ? n : ende) + 1));
+                        };
+                        // Letzte Strecke: laufende oder juengste echte Abwesenheit
+                        sp.abwesenheit = (z) => {
+                          const wahl = spannen(z).find((s, k) => (k === 0 && s[1] === z.length - 1) || echt(z, s));
+                          if (!wahl) return { pkt: [], laufend: false };
+                          return { pkt: spannPunkte(z, wahl), laufend: wahl[1] === z.length - 1 };
+                        };
+                        // Aufenthalte in einer Punktfolge: Punkte, die mindestens HALT_S innerhalb
+                        // HALT_M um den ersten bleiben, oder eine Meldeluecke von mindestens HALT_S
+                        // mit hoechstens 2 x HALT_M Ortswechsel (iOS meldet im Stand bis zu 30 min
+                        // nichts). Name: die Zone, in der die Person dabei stand, sonst leer.
+                        sp.halte = (pkt) => {
+                          const out = [];
+                          let i = 0;
+                          while (i < pkt.length) {
+                            let j = i;
+                            while (j + 1 < pkt.length && meter(pkt[i], pkt[j + 1]) <= HALT_M) j++;
+                            if (j > i && pkt[j].t - pkt[i].t >= HALT_S) { out.push([i, j]); i = j + 1; }
+                            else if (i + 1 < pkt.length && pkt[i + 1].t - pkt[i].t >= HALT_S && meter(pkt[i], pkt[i + 1]) <= 2 * HALT_M) { out.push([i, i + 1]); i += 2; }
+                            else i++;
+                          }
+                          return out.map(([i, j]) => {
+                            const teil = pkt.slice(i, j + 1);
+                            const zone = teil.map((x) => x.s).find((s) => s && weg(s) && s !== 'not_home');
+                            return { i, j, von: pkt[i].t, bis: pkt[j].t, lat: teil.reduce((s, x) => s + x.lat, 0) / teil.length, lon: teil.reduce((s, x) => s + x.lon, 0) / teil.length, name: zone || '' };
+                          });
+                        };
+                        // Ortsnamen fuer Aufenthalte ohne Zone, aus der Integration Places
+                        // (OpenStreetMap): Sensoren <places_prefix>_place_name und _place_type. Places
+                        // fragt bei jeder neuen Position ab und schreibt beide Sensoren zugleich; der
+                        // Verlauf speichert nur Aenderungen, deshalb gilt je Zeitpunkt der letzte
+                        // Wert beider Sensoren. Strassen (Typ motorway bis footway) nennen keinen Ort
+                        // und fallen weg. Haltestellen heissen in OpenStreetMap oft "Ort, Name": Bei
+                        // ihnen faellt der Ort vor dem ersten Komma weg (18.11.2026: Places nannte fuer
+                        // eine Halle nur die gleichnamige Bushaltestelle davor).
+                        const KEIN_ORT = new Set(['', 'unknown', 'unavailable', 'none', 'null']);
+                        const STRASSE = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'road', 'track', 'pedestrian', 'footway', 'path', 'cycleway', 'bridleway', 'steps', 'busway']);
+                        const HALTESTELLE = new Set(['bus_stop', 'tram_stop', 'stop_position', 'platform']);
+                        sp.orte = (namen, typen) => {
+                          const ev = namen.map((r) => ({ t: r.lu, name: r.s })).concat(typen.map((r) => ({ t: r.lu, typ: r.s }))).sort((a, b) => a.t - b.t);
+                          const out = [];
+                          let name = '', typ = '';
+                          ev.forEach((e) => {
+                            if ('name' in e) name = String(e.name ?? ''); else typ = String(e.typ ?? '');
+                            const letzte = out[out.length - 1];
+                            // beide Sensoren derselben Abfrage liegen Millisekunden auseinander
+                            if (letzte && e.t - letzte.t < 2) { letzte.name = name; letzte.typ = typ; } else out.push({ t: e.t, name, typ });
+                          });
+                          return out;
+                        };
+                        // Name, der waehrend des Aufenthalts am laengsten galt. Es zaehlen nur
+                        // Abfragen ab 2 min vor Beginn: Ein Wert von davor stammt von der Anfahrt.
+                        sp.ortName = (orte, von, bis) => {
+                          const dauer = new Map();
+                          orte.forEach((o, k) => {
+                            if (o.t < von - 120 || o.t > bis) return;
+                            if (KEIN_ORT.has(o.name.trim().toLowerCase()) || STRASSE.has(o.typ)) return;
+                            const ende = Math.min(bis, k + 1 < orte.length ? orte[k + 1].t : bis);
+                            const name = HALTESTELLE.has(o.typ) && o.name.includes(', ') ? o.name.slice(o.name.indexOf(', ') + 2) : o.name;
+                            dauer.set(name.trim(), (dauer.get(name.trim()) || 0) + Math.max(0, ende - Math.max(von, o.t)));
+                          });
+                          let best = '', max = -1;
+                          dauer.forEach((d, n) => { if (d > max) { best = n; max = d; } });
+                          return best;
+                        };
+                        // Tag: alle echten Abwesenheiten, die nach "start" enden, zerlegt in Fahrten
+                        // (zwischen Zuhause und Aufenthalten) und Aufenthalte. Punkte vor "start"
+                        // fallen weg.
+                        sp.tag = (z, start) => {
+                          const fahrten = [], halte = [];
+                          let laufend = false;
+                          spannen(z).reverse().forEach((s) => {
+                            const offen = s[1] === z.length - 1;
+                            if (z[s[1]].t < start && !offen) return;
+                            if (!offen && !echt(z, s)) return;
+                            laufend = laufend || offen;
+                            const pkt = spannPunkte(z, s).filter((x) => x.t >= start);
+                            if (pkt.length < 2) return;
+                            let von = 0;
+                            // Punkte zu Hause am Anfang und Ende (aus spannPunkte) gehoeren zu keinem
+                            // Aufenthalt: Mit der Meldung 15 min vor dem Aufbruch entstand sonst ein
+                            // Aufenthalt "am Haus" (18.11.2026).
+                            const a0 = pkt[0].s === 'home' ? 1 : 0;
+                            const a1 = pkt[pkt.length - 1].s === 'home' ? pkt.length - 1 : pkt.length;
+                            sp.halte(pkt.slice(a0, a1)).map((h) => ({ ...h, i: h.i + a0, j: h.j + a0 })).forEach((h) => {
+                              if (h.i > von) fahrten.push({ pkt: pkt.slice(von, h.i + 1), nachHalt: von > 0 });
+                              halte.push(h);
+                              von = h.j;
                             });
+                            if (von < pkt.length - 1) fahrten.push({ pkt: pkt.slice(von), nachHalt: von > 0, heim: !offen });
+                          });
+                          return { fahrten, halte, laufend };
+                        };
+                        sp.valhalla = async (hass, pts, profil, optionen, spur) => {
+                          const anfrage = {
+                            shape: pts.map((x) => ({ lat: +x.lat.toFixed(6), lon: +x.lon.toFixed(6), time: Math.round(x.t) })),
+                            costing: profil || 'auto', shape_match: 'map_snap',
+                            directions_options: { units: 'kilometers', narrative: false },
+                          };
+                          if (optionen) anfrage.costing_options = optionen;
+                          if (spur) anfrage.trace_options = spur;
+                          const res = await hass.callWS({ type: 'call_service', domain: 'rest_command', service: 'valhalla_trace', service_data: { anfrage: JSON.stringify(anfrage) }, return_response: true });
+                          const a = res && res.response;
+                          if (!a || a.status !== 200 || !a.content || !a.content.trip) throw new Error('HTTP ' + (a ? a.status : '?'));
+                          // Weitere Teilstuecke bei Unterbrechungen stehen unter alternates
+                          const teile = [a.content.trip].concat((a.content.alternates || []).map((x) => x.trip));
+                          return {
+                            linien: teile.map((t) => t.legs.reduce((acc, leg) => acc.concat(sp.dec(leg.shape)), [])).filter((l) => l.length > 1),
+                            km: teile.reduce((s, t) => s + t.summary.length, 0),
+                            // Fahrzeit laut Valhalla (Profil, nicht die Zeitstempel der Punkte), s
+                            zeit: teile.reduce((s, t) => s + t.summary.time, 0),
+                          };
+                        };
+                        // Hoechstens n Auftraege gleichzeitig (ein Tag kann viele Abschnitte haben)
+                        const gedrosselt = async (auftraege, n) => {
+                          const erg = new Array(auftraege.length);
+                          let next = 0;
+                          const arbeiter = async () => { while (next < auftraege.length) { const k = next++; erg[k] = await auftraege[k](); } };
+                          await Promise.all(Array.from({ length: Math.min(n, auftraege.length) }, arbeiter));
+                          return erg;
+                        };
+                        const schluessel = (pkt) => pkt.length + '|' + pkt[0].t + '|' + pkt[pkt.length - 1].t;
+                        // Fortbewegung je Abschnitt, daraus das Profil fuer Valhalla. Mit "auto"
+                        // fehlten auf Fusspfaden Linien oder liefen als Gerade bzw. Umweg daneben
+                        // (Simulation Spaziergang 16.11.2026: 64 bzw. 68 % des Wegs abgedeckt, mit
+                        // "pedestrian" 100 %). Reihenfolge:
+                        //   1. Tempo ab 40 km/h, oder ab 25 km/h ohne Rad: Auto (Sensoren hinken nach)
+                        //   2. Aktivitaetssensor des Handys (activity_entity der Karte), wenn er im
+                        //      Abschnitt mindestens 30 % der Zeit eine Fortbewegung meldet:
+                        //      Gehen/Laufen -> Fuss, Rad -> Rad, Auto/Fahrzeug -> Auto
+                        //   3. sonst Tempo: ab 15 km/h Auto, darunter Fuss
+                        // Sicher (Anker) sind Abschnitte nach 1. oder 2. und dichte Gruppen ab
+                        // 3 Punkten mit mindestens 2 km/h. Unsichere Abschnitte dazwischen erben die
+                        // Art der Anker davor und danach, wenn diese gleich sind (oder nur einer
+                        // existiert) und der unsichere Lauf hoechstens 15 min in Bewegung ist
+                        // (Abschnitte ab 50 m). A1 hatte mitten in der Fahrt 838 m in 301 s
+                        // (10 km/h) zwischen zwei Einzelpunkten; ein laengerer Spaziergang zwischen
+                        // zwei Fahrten bleibt dagegen zu Fuss.
+                        // Tempo allein reicht nicht: Autofahrten hatten Luecken mit 4-11 km/h (A1)
+                        // und 0 km/h an Halten (B2). Der Sensor meldete beim iPhone 26 Std
+                        // "Unknown" gegen 1,8 Std Gehen/Auto, beim S25 ein Fahrzeug nur 47 s
+                        // (Recorder 14.-16.11.2026), deshalb nur als Vorrang, wenn er etwas meldet.
+                        const ARTEN = { walking: 'fuss', running: 'fuss', on_foot: 'fuss', cycling: 'rad', on_bicycle: 'rad', automotive: 'auto', in_vehicle: 'auto' };
+                        const PROFIL = { fuss: 'pedestrian', rad: 'bicycle', auto: 'auto' };
+                        sp.aktivitaet = (rows) => rows.map((r) => ({ art: ARTEN[String(r.s).toLowerCase()] || null, t: r.lu }));
+                        // Rueckgabe { art, sicher }: sicher = nach Tempo ab 25 km/h oder nach Sensor
+                        sp.art = (akt, t0, t1, kmh) => {
+                          if (kmh >= 40) return { art: 'auto', sicher: true };
+                          const dauer = { fuss: 0, rad: 0, auto: 0 };
+                          const ende = Math.max(t1, t0 + 1);
+                          (akt || []).forEach((a, i) => {
+                            if (!a.art) return;
+                            const bis = i + 1 < akt.length ? akt[i + 1].t : Infinity;
+                            const ueber = Math.min(bis, ende) - Math.max(a.t, t0);
+                            if (ueber > 0) dauer[a.art] += ueber;
+                          });
+                          const [art, d] = Object.entries(dauer).sort((x, y) => y[1] - x[1])[0];
+                          if (kmh >= 25 && art !== 'rad') return { art: 'auto', sicher: true };
+                          if (d >= 0.3 * (ende - t0)) return { art, sicher: true };
+                          return { art: kmh >= 15 ? 'auto' : 'fuss', sicher: false };
+                        };
+                        const kmh = (a, b) => (b.t > a.t ? meter(a, b) / (b.t - a.t) * 3.6 : 0);
+                        const median = (w) => { const v = w.slice().sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : 0; };
+                        // Dichte Gruppen einzeln einrasten (durchgezogen), jede Luecke ueber 2 min
+                        // einzeln als kuerzester Weg zwischen ihren Endpunkten (gestrichelt). Ein
+                        // Auftrag fuer die ganze Fahrt erzwaenge Wenden auf der Strasse; Valhalla legte
+                        // dann einen Bogen um den Block (Testfahrt 15.11.2026). Ergebnis je Punktfolge
+                        // zwischengespeichert, solange die Seite offen ist.
+                        sp.rechne = async (hass, pkt, akt) => {
+                          const gr = [];
+                          pkt.forEach((x, i) => { if (i === 0 || x.t - pkt[i - 1].t > LUECKE) gr.push([x]); else gr[gr.length - 1].push(x); });
+                          // Abschnitte in Zeitfolge: dichte Gruppe (fest), dann Luecke bis zur naechsten
+                          const auftraege = [];
+                          gr.forEach((g, i) => {
+                            const a0 = g[0], a1 = g[g.length - 1];
+                            if (g.length > 1) {
+                              const v = median(g.slice(1).map((x, k) => kmh(g[k], x)));
+                              const r = sp.art(akt, a0.t, a1.t, v);
+                              auftraege.push({ fest: true, pts: g, r, anker: r.sicher || (g.length >= 3 && v >= 2), dauer: a1.t - a0.t, weg: meter(a0, a1) });
+                            }
+                            if (i < gr.length - 1) {
+                              const b = gr[i + 1][0];
+                              const r = sp.art(akt, a1.t, b.t, kmh(a1, b));
+                              auftraege.push({ fest: false, pts: [a1, b], r, anker: r.sicher, dauer: b.t - a1.t, weg: meter(a1, b) });
+                            }
+                          });
+                          for (let i = 0; i < auftraege.length;) {
+                            if (auftraege[i].anker) { auftraege[i].art = auftraege[i].r.art; i++; continue; }
+                            let j = i;
+                            while (j < auftraege.length && !auftraege[j].anker) j++;
+                            const lauf = auftraege.slice(i, j);
+                            const bewegt = lauf.filter((x) => x.weg >= 50).reduce((sum, x) => sum + x.dauer, 0);
+                            const nb = [auftraege[i - 1], auftraege[j]].filter(Boolean).map((x) => x.r.art);
+                            const erben = bewegt <= 900 && nb.length && nb.every((x) => x === nb[0]);
+                            lauf.forEach((x) => { x.art = erben ? nb[0] : x.r.art; });
+                            i = j;
                           }
-                          return;
-                        }
-                        m.paths = fest.concat(gesch).map((l) => ({ points: l.map((p) => ({ point: p, timestamp: new Date() })), color: BLAU }));
-                        m.autoFit = true;
-                      };
-                      const strich = (gestrichelt) => `<svg viewBox="0 0 18 6" style="width:18px;height:6px;flex:none;"><line x1="1" y1="3" x2="17" y2="3" stroke="var(--nachtblau-blau, ${BLAU})" stroke-width="${gestrichelt ? 2.4 : 3.2}" stroke-linecap="${gestrichelt ? 'butt' : 'round'}"${gestrichelt ? ' stroke-dasharray="3.4 3"' : ''}/></svg>`;
-                      const legende = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;">
-                          <span style="display:inline-flex;align-items:center;gap:6px;">${strich(false)}gemessen</span>
-                          <span style="display:inline-flex;align-items:center;gap:6px;">${strich(true)}geschätzt, Lücke über 2 Min</span></div>`;
-                      const hinweis = (fehler, gesamt) => fehler ? `<div style="color:var(--nachtblau-amber, #e6b566);">Einrasten bei ${fehler} von ${gesamt} Abschnitten fehlgeschlagen, dort ungefilterte Linie.</div>` : '';
-                      // Reiter "Letzte Strecke"
-                      sp.letzte = async (hass, st, z, ui) => {
-                        const a = sp.abwesenheit(z);
-                        ui.liste.style.display = 'none';
-                        if (a.pkt.length < 2) {
-                          if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
-                          ui.info.innerHTML = a.laufend ? 'Seit dem Aufbruch noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`;
-                          return a.laufend;
-                        }
-                        if (!st.stand.startsWith('letzte')) ui.info.innerHTML = 'Strecke wird eingerastet …';
-                        const s = await sp.rechne(hass, a.pkt, ui.akt);
-                        // Neu zeichnen und einpassen nur bei neuen Punkten, sonst bleibt der Ausschnitt
-                        const stand = 'letzte|' + schluessel(a.pkt);
-                        if (st.stand !== stand) {
-                          sp.zeichne(st, s.fest, s.geschaetzt, a.pkt, []);
-                          sp.passe(st, s.fest.flat().concat(s.geschaetzt.flat(), a.pkt.map((x) => [x.lat, x.lon])));
-                          st.stand = stand;
-                        }
-                        const zusatz = artZusatz(s);
-                        const teile = [kmTxt(s.kmFest + s.kmGeschaetzt) + (zusatz && !zusatz.startsWith('davon') ? ' ' + zusatz : '')];
-                        if (zusatz.startsWith('davon')) teile.push(zusatz);
-                        if (s.kmGeschaetzt >= 0.05) teile.push(`${zusatz.startsWith('davon') ? '' : 'davon '}${kmTxt(s.kmGeschaetzt)} geschätzt`);
-                        teile.push(`${a.pkt.length} Punkte`);
-                        ui.info.innerHTML = `<div>${teile.join(' · ')}</div>${legende}${hinweis(s.fehler, s.auftraege)}`;
-                        return a.laufend;
-                      };
-                      // Reiter "Tagesprofil": alle Fahrten seit Mitternacht bzw. der letzten
-                      // 24 Stunden; Schilder an Aufenthalten (von-bis) und am Beginn jeder Fahrt
-                      // ab Zuhause; darunter die Tagesliste
-                      sp.tagesansicht = async (hass, st, z, ui) => {
-                        const mitternacht = new Date(); mitternacht.setHours(0, 0, 0, 0);
-                        const start = ui.zeitraum === '24' ? Date.now() / 1000 - 86400 : mitternacht.getTime() / 1000;
-                        const tg = sp.tag(z, start);
-                        const umschalter = [['heute', 'Heute'], ['24', '24 Std']].map(([k, t]) => `<button type="button" data-zeitraum="${k}" style="font:600 11.5px ${SCHRIFT};padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.08);cursor:pointer;background:${k === ui.zeitraum ? FLAECHE : 'transparent'};color:${k === ui.zeitraum ? HELL : GRAU};">${t}</button>`).join('');
-                        const kopf = (text) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="min-width:0;">${text}</span><span style="display:inline-flex;gap:4px;flex:none;">${umschalter}</span></div>`;
-                        if (!tg.fahrten.length) {
-                          if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
-                          ui.info.innerHTML = kopf(ui.zeitraum === '24' ? 'Keine Wege in den letzten 24 Stunden.' : 'Heute noch keine Wege.');
+                          const k = schluessel(pkt) + '|' + auftraege.map((a) => a.art[0]).join('');
+                          if (sp.cache[k]) return sp.cache[k];
+                          // Luecke mit dem Auto: unbefestigte Wege ausschliessen. Zwischen nur zwei
+                          // Punkten nimmt das Map-Matching den kuerzesten Weg und dafuer auch
+                          // Feldwege; Fahrt 16.11.2026: 1,6 km Luftlinie, 2,04 km davon 1,37 km
+                          // Schotter-Feldweg statt der Landstrasse; mit exclude_unpaved 2,32 km ohne
+                          // Feldweg, Routenplanung (route) 2,34 km. 35 Luecken der Testfahrten A1-B4 (als Auto):
+                          // nur A2 (dasselbe Muster, 1,37 km Feldweg) und eine um 0,03 km anders.
+                          // Gemessene Gruppen bleiben ohne die Option: Dort zeigen die Punkte, wo
+                          // gefahren wurde.
+                          const LUECKE_AUTO = { auto: { exclude_unpaved: true } };
+                          // Luecke: breakage_distance (Server 10 000 m, in meili.customizable
+                          // freigegeben) auf das Dreifache der Luftlinie, mindestens 10 000 m. Fahrt
+                          // 18.11.2026: 10,06 km Luftlinie in 301 s auf der Autobahn, Valhalla
+                          // "Exceeded breakage distance for all pairs: 10000 meters", Karte zeigte
+                          // dort die Gerade; mit 30 000 m 10,42 km ueber die Autobahn.
+                          const spurOpt = (a) => (a.fest ? null : { breakage_distance: Math.max(10000, Math.round(3 * a.weg)) });
+                          const erg = await gedrosselt(auftraege.map((a) => () => sp.valhalla(hass, a.pts, PROFIL[a.art], !a.fest && a.art === 'auto' ? LUECKE_AUTO : null, spurOpt(a))
+                            .then((r) => ({ fest: a.fest, art: a.art, linien: r.linien, km: r.km, zeit: r.zeit, ok: true }))
+                            .catch(() => ({
+                              fest: a.fest, art: a.art, ok: false,
+                              linien: [a.pts.map((x) => [x.lat, x.lon])],
+                              km: a.pts.slice(1).reduce((s, x, i) => s + meter(a.pts[i], x) / 1000, 0),
+                            }))), 4);
+                          const teil = (fest) => erg.filter((e) => e.fest === fest);
+                          const s = {
+                            fest: teil(true).flatMap((e) => e.linien),
+                            geschaetzt: teil(false).flatMap((e) => e.linien),
+                            kmFest: teil(true).reduce((x, e) => x + e.km, 0),
+                            kmGeschaetzt: teil(false).reduce((x, e) => x + e.km, 0),
+                            fehler: erg.filter((e) => !e.ok).length,
+                            auftraege: erg.length,
+                            kmArt: ['fuss', 'rad', 'auto'].reduce((o, a) => Object.assign(o, { [a]: erg.filter((e) => e.art === a).reduce((x, e) => x + e.km, 0) }), {}),
+                            // Abfahrt: Beginnt der Weg mit einer Luecke, ist der erste Punkt die letzte
+                            // Meldung am Ausgangsort; im Stand meldet das iPhone nichts. Dann gilt
+                            // naechster Punkt minus Fahrzeit der Luecke, nie vor dem ersten Punkt.
+                            // 17.11.2026: letzte Meldung 12:21:37, naechste 12:33:44 in 0,51 km
+                            // (Fahrzeit 44 s) -> Abfahrt 12:33 statt 12:21; 13:08:20 -> 13:13:59 in
+                            // 0,67 km (83 s) -> 13:12 statt 13:08. Aktivitaetssensor: Auto ab 12:33:44
+                            // bzw. 13:14:00.
+                            abfahrt: !auftraege[0].fest && erg[0].ok && typeof erg[0].zeit === 'number'
+                              ? Math.max(auftraege[0].pts[0].t, Math.round(auftraege[0].pts[1].t - erg[0].zeit))
+                              : pkt[0].t,
+                          };
+                          // Fehlgeschlagene Auftraege nicht merken, die naechste Runde versucht es neu
+                          if (!s.fehler) sp.cache[k] = s;
+                          return s;
+                        };
+                        const fc = (linien) => ({ type: 'FeatureCollection', features: linien.map((l) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l.map((p) => [p[1], p[0]]) } })) });
+                        const pc = (pkt) => ({ type: 'FeatureCollection', features: pkt.map((x) => ({ type: 'Feature', properties: { t: x.t }, geometry: { type: 'Point', coordinates: [x.lon, x.lat] } })) });
+                        const uhr = (t) => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        const dauer = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m} Min` : `${Math.floor(m / 60)} Std ${String(m % 60).padStart(2, '0')} Min`; };
+                        const kmTxt = (k) => k.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+                        // Ueberwiegende Art einer Strecke (nach km) und Zusatz "zu Fuss"/"mit dem Rad"
+                        const hauptArt = (s) => Object.entries(s.kmArt).sort((x, y) => y[1] - x[1])[0][0];
+                        const ART_TXT = { fuss: 'zu Fuß', rad: 'mit dem Rad' };
+                        const artZusatz = (s) => {
+                          const ges = s.kmFest + s.kmGeschaetzt, haupt = hauptArt(s);
+                          // Nebenart erst ab 0,5 km: Standzeiten mit GPS-Zittern ergaben bei B2 0,13 km
+                          const neben = ['fuss', 'rad'].filter((a) => a !== haupt && s.kmArt[a] >= 0.5);
+                          const t = [];
+                          if (haupt !== 'auto' && s.kmArt[haupt] >= 0.95 * ges) return ART_TXT[haupt];
+                          if (haupt !== 'auto') t.push(`${kmTxt(s.kmArt[haupt])} ${ART_TXT[haupt]}`);
+                          neben.forEach((a) => t.push(`${kmTxt(s.kmArt[a])} ${ART_TXT[a]}`));
+                          return t.length ? 'davon ' + t.join(', ') : '';
+                        };
+                        // Karte: das Element ha-map der eingebauten Karten-Karte. Es hat keine
+                        // offizielle Schnittstelle fuer eigene Linien; die Spur kommt als eigene
+                        // Ebene in die Vektorkarte (MapLibre) ueber die internen Methoden der Engine
+                        // (_addCustomSource, _addCustomLayer, _setCustomSourceData). Sie sammeln die
+                        // Ebenen und setzen sie nach einem Stilwechsel (hell/dunkel) wieder ein.
+                        // Schilder und Uhrzeit nutzen Marker aus derselben MapLibre-Instanz
+                        // (_maplibre.Marker). Fehlen sie (Frontend-Update, Geraet ohne
+                        // WebGL2), zeichnet ha-map die Spur als eigene Pfade, ohne Schilder; die
+                        // Tagesliste bleibt.
+                        sp.karte = async (kasten, eid) => {
+                          if (kasten.__spur) return kasten.__spur;
+                          if (!customElements.get('ha-map')) {
+                            const helfer = await window.loadCardHelpers();
+                            helfer.createCardElement({ type: 'map', entities: [eid] });
+                            await Promise.race([customElements.whenDefined('ha-map'), new Promise((_, nein) => setTimeout(() => nein(new Error('Karte nicht geladen')), 8000))]);
+                          }
+                          const m = document.createElement('ha-map');
+                          m.style.cssText = 'display:block;width:100%;height:100%;';
+                          m.entities = [{ entity_id: eid, color: BLAU }];
+                          m.themeMode = 'auto';
+                          m.zoom = 14;
+                          kasten.innerHTML = '';
+                          kasten.appendChild(m);
+                          let eng = null;
+                          for (let i = 0; i < 60; i++) { eng = m._engine; if (eng && eng._map) break; await new Promise((ok) => setTimeout(ok, 200)); }
+                          kasten.__spur = { m, eng, ebenen: false, schilder: [], stand: '', vektor: !!(eng && eng._map && eng._addCustomSource && eng._setCustomSourceData) };
+                          return kasten.__spur;
+                        };
+                        sp.passe = (st, alle) => {
+                          if (!st.vektor || !alle.length) return;
+                          const la = alle.map((p) => p[0]), lo = alle.map((p) => p[1]);
+                          st.eng._map.fitBounds([[Math.min(...lo), Math.min(...la)], [Math.max(...lo), Math.max(...la)]], { padding: 40, maxZoom: 16, animate: false });
+                        };
+                        // Antippen: naechster Messpunkt im Umkreis von 14 px zeigt seine Uhrzeit.
+                        // Eigenes Schild als Marker statt MapLibre-Popup: Dessen Kasten gestaltet
+                        // ha-map grau; die Uhrzeit hatte darauf 2,15:1 Kontrast, der Kasten zur
+                        // dunklen Karte 1,58:1 (Bildschirmfoto iPhone, 15.11.2026). Hier: Flaeche
+                        // #222b3c, Text #f2f5f8 (12,98:1), Rand Blau. Auf dunkler Karte trennt der
+                        // blaue Rand (5,95:1 zur gemessenen Kartenflaeche), auf heller die Flaeche
+                        // (12,37:1 zu hellem Land).
+                        // Der Ring markiert den angetippten Punkt, Blau mit dunklem Aussenrand.
+                        const zeitSchild = (st) => {
+                          const { eng } = st;
+                          if (!eng._maplibre || !eng._maplibre.Marker) return;
+                          const el = document.createElement('div');
+                          el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 13px ${SCHRIFT};font-variant-numeric:tabular-nums;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));`;
+                          el.innerHTML = `<span data-zeit style="padding:4px 9px;border-radius:8px;background:${FLAECHE};border:1.5px solid ${BLAU};color:${HELL};line-height:1.2;white-space:nowrap;"></span>`
+                            + `<span style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid ${BLAU};"></span>`
+                            + `<span style="width:16px;height:16px;margin-top:2px;border-radius:50%;border:2.5px solid ${BLAU};background:rgba(127,179,213,0.3);box-shadow:0 0 0 1.5px ${GRUND};box-sizing:border-box;"></span>`;
+                          // anchor bottom + 8 px: Mitte des Rings (16 px) liegt auf dem Punkt
+                          const schild = new eng._maplibre.Marker({ element: el, anchor: 'bottom', offset: [0, 8] });
+                          let an = false;
+                          st.zeitAus = () => { if (an) { schild.remove(); an = false; } };
+                          eng._map.on('click', (ev) => {
+                            if (!eng._map.getLayer('ha-map-spur-punkte')) return;
+                            const { x, y } = ev.point;
+                            const f = eng._map.queryRenderedFeatures([[x - 14, y - 14], [x + 14, y + 14]], { layers: ['ha-map-spur-punkte'] });
+                            if (!f.length) { st.zeitAus(); return; }
+                            const nah = f.map((g) => { const p = eng._map.project(g.geometry.coordinates); return { g, d: (p.x - x) ** 2 + (p.y - y) ** 2 }; }).sort((a, b) => a.d - b.d)[0].g;
+                            el.querySelector('[data-zeit]').textContent = uhr(nah.properties.t);
+                            schild.setLngLat(nah.geometry.coordinates);
+                            if (!an) { schild.addTo(eng._map); an = true; }
+                          });
+                        };
+                        // Schilder in der Naehe (HALT_M) zu einem zusammenfassen, Texte mit " · "
+                        const buendle = (liste) => {
+                          const out = [];
+                          liste.forEach((x) => {
+                            const da = out.find((o) => o.halt === x.halt && meter(o, x) <= HALT_M);
+                            if (da) da.text += ' · ' + x.text; else out.push({ ...x });
+                          });
+                          return out;
+                        };
+                        sp.zeichne = (st, fest, gesch, pkt, schilder) => {
+                          const { m, eng } = st;
+                          if (st.zeitAus) st.zeitAus();
+                          st.schilder.forEach((x) => x.remove());
+                          st.schilder = [];
+                          if (st.vektor) {
+                            const daten = { 'ha-map-spur-geschaetzt': fc(gesch), 'ha-map-spur-fest': fc(fest), 'ha-map-spur-punkte': pc(pkt) };
+                            if (!st.ebenen) {
+                              Object.entries(daten).forEach(([id, d]) => eng._addCustomSource(id, d));
+                              eng._addCustomLayer({ id: 'ha-map-spur-geschaetzt', type: 'line', source: 'ha-map-spur-geschaetzt', layout: { 'line-cap': 'butt', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [1.4, 1.4] } });
+                              eng._addCustomLayer({ id: 'ha-map-spur-fest', type: 'line', source: 'ha-map-spur-fest', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BLAU, 'line-width': 4 } });
+                              eng._addCustomLayer({ id: 'ha-map-spur-punkte', type: 'circle', source: 'ha-map-spur-punkte', paint: { 'circle-radius': 3, 'circle-color': PUNKT, 'circle-stroke-width': 1, 'circle-stroke-color': GRUND } });
+                              // Punkte ueber die Beschriftung: ha-map legt eigene Ebenen unter die
+                              // Ortsnamen, auch nach jedem Stilwechsel (hell/dunkel) wieder. Am
+                              // 17.11.2026 lagen beide Meldungen unterwegs mitten in Orten und
+                              // verschwanden unter deren Namen. Linien bleiben darunter, damit die
+                              // Namen lesbar bleiben. styledata kommt auch nach dem Verschieben; die
+                              // Pruefung "schon oben" beendet das.
+                              const heben = () => {
+                                const map = eng._map;
+                                try {
+                                  if (!map.getLayer('ha-map-spur-punkte')) return;
+                                  const ids = map.getLayersOrder ? map.getLayersOrder() : (map.getStyle() || { layers: [] }).layers.map((l) => l.id);
+                                  if (ids[ids.length - 1] !== 'ha-map-spur-punkte') map.moveLayer('ha-map-spur-punkte');
+                                } catch (e) { /* Stil laedt noch: naechstes styledata */ }
+                              };
+                              heben();
+                              eng._map.on('styledata', heben);
+                              zeitSchild(st);
+                              st.ebenen = true;
+                            } else {
+                              Object.entries(daten).forEach(([id, d]) => eng._setCustomSourceData(id, d));
+                            }
+                            if (eng._maplibre && eng._maplibre.Marker) {
+                              buendle(schilder).forEach((x) => {
+                                const el = document.createElement('div');
+                                el.style.cssText = `display:flex;flex-direction:column;align-items:center;pointer-events:none;font:600 11px ${SCHRIFT};font-variant-numeric:tabular-nums;`;
+                                el.innerHTML = x.halt
+                                  ? `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;padding:3px 7px;border-radius:7px;background:${FLAECHE};border:1px solid rgba(179,153,212,0.45);color:${HELL};white-space:nowrap;">${sp.esc(x.text)}</span><span style="width:12px;height:12px;margin-top:3px;border-radius:50%;background:${GRUND};border:2.5px solid ${VIOLETT};box-sizing:border-box;"></span>`
+                                  : `<span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;margin-top:6px;padding:2px 6px;border-radius:6px;background:${FLAECHE};border:1px solid rgba(127,179,213,0.45);color:${BLAU};white-space:nowrap;">${sp.esc(x.text)}</span>`;
+                                st.schilder.push(new eng._maplibre.Marker({ element: el, anchor: x.halt ? 'bottom' : 'top' }).setLngLat([x.lon, x.lat]).addTo(eng._map));
+                              });
+                            }
+                            return;
+                          }
+                          m.paths = fest.concat(gesch).map((l) => ({ points: l.map((p) => ({ point: p, timestamp: new Date() })), color: BLAU }));
+                          m.autoFit = true;
+                        };
+                        const strich = (gestrichelt) => `<svg viewBox="0 0 18 6" style="width:18px;height:6px;flex:none;"><line x1="1" y1="3" x2="17" y2="3" stroke="var(--nachtblau-blau, ${BLAU})" stroke-width="${gestrichelt ? 2.4 : 3.2}" stroke-linecap="${gestrichelt ? 'butt' : 'round'}"${gestrichelt ? ' stroke-dasharray="3.4 3"' : ''}/></svg>`;
+                        const legende = `<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px;">
+                            <span style="display:inline-flex;align-items:center;gap:6px;">${strich(false)}gemessen</span>
+                            <span style="display:inline-flex;align-items:center;gap:6px;">${strich(true)}geschätzt, Lücke über 2 Min</span></div>`;
+                        const hinweis = (fehler, gesamt) => fehler ? `<div style="color:var(--nachtblau-amber, #e6b566);">Einrasten bei ${fehler} von ${gesamt} Abschnitten fehlgeschlagen, dort ungefilterte Linie.</div>` : '';
+                        // Reiter "Letzte Strecke"
+                        sp.letzte = async (hass, st, z, ui) => {
+                          const a = sp.abwesenheit(z);
                           ui.liste.style.display = 'none';
+                          if (a.pkt.length < 2) {
+                            if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
+                            ui.info.innerHTML = a.laufend ? 'Seit dem Aufbruch noch keine genauen Punkte.' : `Keine Strecke in den letzten ${FENSTER} Stunden.`;
+                            return a.laufend;
+                          }
+                          if (!st.stand.startsWith('letzte')) ui.info.innerHTML = 'Strecke wird eingerastet …';
+                          const s = await sp.rechne(hass, a.pkt, ui.akt);
+                          // Neu zeichnen und einpassen nur bei neuen Punkten, sonst bleibt der Ausschnitt
+                          const stand = 'letzte|' + schluessel(a.pkt);
+                          if (st.stand !== stand) {
+                            sp.zeichne(st, s.fest, s.geschaetzt, a.pkt, []);
+                            sp.passe(st, s.fest.flat().concat(s.geschaetzt.flat(), a.pkt.map((x) => [x.lat, x.lon])));
+                            st.stand = stand;
+                          }
+                          const zusatz = artZusatz(s);
+                          const teile = [kmTxt(s.kmFest + s.kmGeschaetzt) + (zusatz && !zusatz.startsWith('davon') ? ' ' + zusatz : '')];
+                          if (zusatz.startsWith('davon')) teile.push(zusatz);
+                          if (s.kmGeschaetzt >= 0.05) teile.push(`${zusatz.startsWith('davon') ? '' : 'davon '}${kmTxt(s.kmGeschaetzt)} geschätzt`);
+                          teile.push(`${a.pkt.length} Punkte`);
+                          ui.info.innerHTML = `<div>${teile.join(' · ')}</div>${legende}${hinweis(s.fehler, s.auftraege)}`;
+                          return a.laufend;
+                        };
+                        // Reiter "Tagesprofil": alle Fahrten seit Mitternacht bzw. der letzten
+                        // 24 Stunden; Schilder an Aufenthalten (von-bis) und am Beginn jeder Fahrt
+                        // ab Zuhause; darunter die Tagesliste
+                        sp.tagesansicht = async (hass, st, z, ui) => {
+                          const mitternacht = new Date(); mitternacht.setHours(0, 0, 0, 0);
+                          const start = ui.zeitraum === '24' ? Date.now() / 1000 - 86400 : mitternacht.getTime() / 1000;
+                          const tg = sp.tag(z, start);
+                          const umschalter = [['heute', 'Heute'], ['24', '24 Std']].map(([k, t]) => `<button type="button" data-zeitraum="${k}" style="font:600 11.5px ${SCHRIFT};padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.08);cursor:pointer;background:${k === ui.zeitraum ? FLAECHE : 'transparent'};color:${k === ui.zeitraum ? HELL : GRAU};">${t}</button>`).join('');
+                          const kopf = (text) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="min-width:0;">${text}</span><span style="display:inline-flex;gap:4px;flex:none;">${umschalter}</span></div>`;
+                          if (!tg.fahrten.length) {
+                            if (st.stand !== 'leer') { sp.zeichne(st, [], [], [], []); st.m.autoFit = true; st.stand = 'leer'; }
+                            ui.info.innerHTML = kopf(ui.zeitraum === '24' ? 'Keine Wege in den letzten 24 Stunden.' : 'Heute noch keine Wege.');
+                            ui.liste.style.display = 'none';
+                            return tg.laufend;
+                          }
+                          if (!st.stand.startsWith('tag')) ui.info.innerHTML = kopf('Wege werden eingerastet …');
+                          const erg = [];
+                          for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt, ui.akt));
+                          const fest = erg.flatMap((s) => s.fest), gesch = erg.flatMap((s) => s.geschaetzt);
+                          const pkt = tg.fahrten.flatMap((f) => f.pkt);
+                          // Abfahrt je Weg (sp.rechne); ein Aufenthalt endet mit der Abfahrt danach
+                          const abfahrt = tg.fahrten.map((f, k) => erg[k].abfahrt ?? f.pkt[0].t);
+                          const halte = tg.halte.map((h) => {
+                            const k = tg.fahrten.findIndex((f) => f.nachHalt && f.pkt[0].t === h.bis);
+                            return k >= 0 ? { ...h, bis: abfahrt[k] } : h;
+                          }).map((h) => ({ ...h, ort: h.name ? '' : sp.ortName(ui.orte || [], h.von, h.bis) }));
+                          const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
+                          if (st.stand !== stand) {
+                            const schilder = halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
+                              .concat(tg.fahrten.map((f, k) => ({ f, k })).filter(({ f }) => !f.nachHalt).map(({ f, k }) => ({ halt: false, lat: f.pkt[0].lat, lon: f.pkt[0].lon, text: `ab ${uhr(abfahrt[k])}` })));
+                            sp.zeichne(st, fest, gesch, pkt, schilder);
+                            sp.passe(st, fest.flat().concat(gesch.flat(), pkt.map((x) => [x.lat, x.lon])));
+                            st.stand = stand;
+                          }
+                          // Tagesliste nach Uhrzeit; Antippen eines Eintrags zeigt ihn auf der Karte.
+                          // Wege tragen das Symbol ihrer Art (wie sp.art sie bestimmt). Ankunft zuhause
+                          // und Aufenthalte in einer Zone das Icon der Zone (Attribut icon der
+                          // zone.*-Entitaet, Aufenthalt ueber den Zonennamen), sonst ein Punkt.
+                          // GLYPHE: Abstand der Glyphenmitte von (12, 12) im 24er-Raster (getBBox der
+                          // Pfade aus @mdi/js 7.4.47: Auto 12/13, Fuss 12,5/11,1, Rad 12/11,6, Haus,
+                          // Haus mit Herz und Koffer je 12/11,5, Teddy 12/12), ausgeglichen ueber 0,4
+                          // (DESIGN.md, Icons). Andere Zonen-Icons ohne Ausgleich.
+                          const SYMBOL = { auto: 'mdi:car', fuss: 'mdi:walk', rad: 'mdi:bike' };
+                          const GLYPHE = { 'mdi:car': [0, 1], 'mdi:walk': [0.5, -0.9], 'mdi:home': [0, -0.5], 'mdi:home-heart': [0, -0.5], 'mdi:briefcase': [0, -0.5] };
+                          const zonen = Object.values((hass && hass.states) || {}).filter((x) => x.entity_id.startsWith('zone.'));
+                          const zonenIcon = (name) => { const zo = name && zonen.find((x) => x.attributes.friendly_name === name); return (zo && zo.attributes.icon) || null; };
+                          const heimIcon = ((hass && hass.states && hass.states['zone.home']) || { attributes: {} }).attributes.icon || null;
+                          const zeichen = (e) => {
+                            if (!e.icon) return `<span style="width:9px;height:9px;border-radius:50%;justify-self:center;background:${e.farbe};"></span>`;
+                            const [gx, gy] = GLYPHE[e.icon] || [0, 0];
+                            return `<ha-icon icon="${e.icon}" style="--mdc-icon-size:16px;--ha-icon-display:block;width:16px;height:16px;margin:0;display:block;color:${e.farbe};transform:translate(${-gx * 16 / 24}px, ${-gy * 16 / 24}px);"></ha-icon>`;
+                          };
+                          const eintraege = [];
+                          tg.fahrten.forEach((f, k) => {
+                            const ende = f.pkt[f.pkt.length - 1];
+                            const art = hauptArt(erg[k]);
+                            const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
+                            eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                            if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
+                          });
+                          halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || h.ort || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
+                          eintraege.sort((a, b) => a.t - b.t);
+                          ui.eintraege = eintraege;
+                          ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 16px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
+                              <b style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--nachtblau-text, ${HELL});">${uhr(e.t)}</b>${zeichen(e)}
+                              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--nachtblau-text, ${HELL});">${sp.esc(e.text)}</span><span style="font-variant-numeric:tabular-nums;">${e.wert}</span></div>`).join('');
+                          ui.liste.style.display = 'flex';
+                          const km = erg.reduce((s, x) => s + x.kmFest + x.kmGeschaetzt, 0);
+                          const fehler = erg.reduce((s, x) => s + x.fehler, 0), gesamt = erg.reduce((s, x) => s + x.auftraege, 0);
+                          const n = tg.fahrten.length, h = tg.halte.length;
+                          const nurAuto = erg.every((x) => hauptArt(x) === 'auto');
+                          const teile = [kmTxt(km), nurAuto ? `${n} ${n === 1 ? 'Fahrt' : 'Fahrten'}` : `${n} ${n === 1 ? 'Weg' : 'Wege'}`];
+                          if (h) teile.push(`${h} ${h === 1 ? 'Halt' : 'Halte'}`);
+                          ui.info.innerHTML = kopf(teile.join(' · ')) + legende + hinweis(fehler, gesamt);
                           return tg.laufend;
-                        }
-                        if (!st.stand.startsWith('tag')) ui.info.innerHTML = kopf('Wege werden eingerastet …');
-                        const erg = [];
-                        for (const f of tg.fahrten) erg.push(await sp.rechne(hass, f.pkt, ui.akt));
-                        const fest = erg.flatMap((s) => s.fest), gesch = erg.flatMap((s) => s.geschaetzt);
-                        const pkt = tg.fahrten.flatMap((f) => f.pkt);
-                        // Abfahrt je Weg (sp.rechne); ein Aufenthalt endet mit der Abfahrt danach
-                        const abfahrt = tg.fahrten.map((f, k) => erg[k].abfahrt ?? f.pkt[0].t);
-                        const halte = tg.halte.map((h) => {
-                          const k = tg.fahrten.findIndex((f) => f.nachHalt && f.pkt[0].t === h.bis);
-                          return k >= 0 ? { ...h, bis: abfahrt[k] } : h;
-                        }).map((h) => ({ ...h, ort: h.name ? '' : sp.ortName(ui.orte || [], h.von, h.bis) }));
-                        const stand = 'tag|' + ui.zeitraum + '|' + tg.fahrten.map((f) => schluessel(f.pkt)).join(',');
-                        if (st.stand !== stand) {
-                          const schilder = halte.map((h) => ({ halt: true, lat: h.lat, lon: h.lon, text: `${h.name ? h.name + ' ' : ''}${uhr(h.von)}–${uhr(h.bis)}` }))
-                            .concat(tg.fahrten.map((f, k) => ({ f, k })).filter(({ f }) => !f.nachHalt).map(({ f, k }) => ({ halt: false, lat: f.pkt[0].lat, lon: f.pkt[0].lon, text: `ab ${uhr(abfahrt[k])}` })));
-                          sp.zeichne(st, fest, gesch, pkt, schilder);
-                          sp.passe(st, fest.flat().concat(gesch.flat(), pkt.map((x) => [x.lat, x.lon])));
-                          st.stand = stand;
-                        }
-                        // Tagesliste nach Uhrzeit; Antippen eines Eintrags zeigt ihn auf der Karte.
-                        // Wege tragen das Symbol ihrer Art (wie sp.art sie bestimmt). Ankunft zuhause
-                        // und Aufenthalte in einer Zone das Icon der Zone (Attribut icon der
-                        // zone.*-Entitaet, Aufenthalt ueber den Zonennamen), sonst ein Punkt.
-                        // GLYPHE: Abstand der Glyphenmitte von (12, 12) im 24er-Raster (getBBox der
-                        // Pfade aus @mdi/js 7.4.47: Auto 12/13, Fuss 12,5/11,1, Rad 12/11,6, Haus,
-                        // Haus mit Herz und Koffer je 12/11,5, Teddy 12/12), ausgeglichen ueber 0,4
-                        // (DESIGN.md, Icons). Andere Zonen-Icons ohne Ausgleich.
-                        const SYMBOL = { auto: 'mdi:car', fuss: 'mdi:walk', rad: 'mdi:bike' };
-                        const GLYPHE = { 'mdi:car': [0, 1], 'mdi:walk': [0.5, -0.9], 'mdi:home': [0, -0.5], 'mdi:home-heart': [0, -0.5], 'mdi:briefcase': [0, -0.5] };
-                        const zonen = Object.values((hass && hass.states) || {}).filter((x) => x.entity_id.startsWith('zone.'));
-                        const zonenIcon = (name) => { const zo = name && zonen.find((x) => x.attributes.friendly_name === name); return (zo && zo.attributes.icon) || null; };
-                        const heimIcon = ((hass && hass.states && hass.states['zone.home']) || { attributes: {} }).attributes.icon || null;
-                        const zeichen = (e) => {
-                          if (!e.icon) return `<span style="width:9px;height:9px;border-radius:50%;justify-self:center;background:${e.farbe};"></span>`;
-                          const [gx, gy] = GLYPHE[e.icon] || [0, 0];
-                          return `<ha-icon icon="${e.icon}" style="--mdc-icon-size:16px;--ha-icon-display:block;width:16px;height:16px;margin:0;display:block;color:${e.farbe};transform:translate(${-gx * 16 / 24}px, ${-gy * 16 / 24}px);"></ha-icon>`;
                         };
-                        const eintraege = [];
-                        tg.fahrten.forEach((f, k) => {
-                          const ende = f.pkt[f.pkt.length - 1];
-                          const art = hauptArt(erg[k]);
-                          const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
-                          eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
-                          if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
-                        });
-                        halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || h.ort || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
-                        eintraege.sort((a, b) => a.t - b.t);
-                        ui.eintraege = eintraege;
-                        ui.liste.innerHTML = eintraege.map((e, k) => `<div data-eintrag="${k}" style="display:grid;grid-template-columns:40px 16px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 9px;border-radius:10px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.06);cursor:pointer;">
-                            <b style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--nachtblau-text, ${HELL});">${uhr(e.t)}</b>${zeichen(e)}
-                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--nachtblau-text, ${HELL});">${sp.esc(e.text)}</span><span style="font-variant-numeric:tabular-nums;">${e.wert}</span></div>`).join('');
-                        ui.liste.style.display = 'flex';
-                        const km = erg.reduce((s, x) => s + x.kmFest + x.kmGeschaetzt, 0);
-                        const fehler = erg.reduce((s, x) => s + x.fehler, 0), gesamt = erg.reduce((s, x) => s + x.auftraege, 0);
-                        const n = tg.fahrten.length, h = tg.halte.length;
-                        const nurAuto = erg.every((x) => hauptArt(x) === 'auto');
-                        const teile = [kmTxt(km), nurAuto ? `${n} ${n === 1 ? 'Fahrt' : 'Fahrten'}` : `${n} ${n === 1 ? 'Weg' : 'Wege'}`];
-                        if (h) teile.push(`${h} ${h === 1 ? 'Halt' : 'Halte'}`);
-                        ui.info.innerHTML = kopf(teile.join(' · ')) + legende + hinweis(fehler, gesamt);
-                        return tg.laufend;
-                      };
-                      sp.zeige = async (hass, st, ui) => {
-                        const tag = ui.modus === 'tag';
-                        ui.kasten.style.maxHeight = tag ? HOCH_TAG : HOCH_LETZTE;
-                        ui.reiter.querySelectorAll('[data-modus]').forEach((b) => {
-                          const an = b.dataset.modus === ui.modus;
-                          b.style.background = an ? FLAECHE : 'transparent';
-                          b.style.color = an ? HELL : GRAU;
-                        });
-                        return tag ? sp.tagesansicht(hass, st, ui.z, ui) : sp.letzte(hass, st, ui.z, ui);
-                      };
-                      // Eine Runde: Historie laden, aktuellen Reiter zeichnen. Rueckgabe: unterwegs?
-                      sp.lauf = async (hass, eid, ui) => {
-                        try {
-                          const ende = new Date(), start = new Date(ende.getTime() - FENSTER * 3600e3);
-                          const ortIds = ui.ortPfx ? [ui.ortPfx + '_place_name', ui.ortPfx + '_place_type'].filter((x) => hass.states[x]) : [];
-                          const ids = (ui.aktEid && hass.states[ui.aktEid] ? [eid, ui.aktEid] : [eid]).concat(ortIds);
-                          const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: ids, minimal_response: false, no_attributes: false, significant_changes_only: false });
-                          ui.z = sp.zeilen(h[eid] || []);
-                          ui.akt = ui.aktEid ? sp.aktivitaet(h[ui.aktEid] || []) : [];
-                          ui.orte = ortIds.length === 2 ? sp.orte(h[ortIds[0]] || [], h[ortIds[1]] || []) : [];
-                          const st = await sp.karte(ui.kasten, eid);
-                          return await sp.zeige(hass, st, ui);
-                        } catch (e) {
-                          ui.info.innerHTML = `<span style="color:var(--nachtblau-amber, #e6b566);">Strecke nicht verfügbar: ${sp.esc(e && e.message ? e.message : e)}</span>`;
-                          return false;
-                        }
-                      };
-                      // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist.
-                      // Den Reiter "Tagesprofil" sieht nur die Person selbst (user_id der Person =
-                      // angemeldeter Benutzer), mit tag_fuer: alle jeder.
-                      sp.start = (karte, eid, h0, tagFuer, aktEid, ortPfx) => {
-                        const r = karte.shadowRoot;
-                        const q = (s) => r && r.querySelector(s);
-                        const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], akt: [], aktEid, ortPfx, orte: [], eintraege: [] };
-                        const wurzel = q('[data-spur]');
-                        if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter || !wurzel) return;
-                        // button-card (7.0.1, src/action-handler.ts) ruft auf seiner ha-card bei
-                        // touchend preventDefault. Der Browser erzeugt dann fuer den Finger keinen
-                        // click: Reiter, Umschalter, Liste und das Antippen der Karte reagierten auf
-                        // iPhone und Android nicht, mit der Maus schon. touchend endet deshalb hier;
-                        // die Karte (MapLibre) hat es vorher schon bekommen.
-                        wurzel.addEventListener('touchend', (ev) => ev.stopPropagation());
-                        const hass = () => karte._hass || h0;
-                        const person = hass().states[eid];
-                        const ich = hass().user;
-                        if (tagFuer === 'alle' || (person && ich && person.attributes.user_id === ich.id)) ui.reiter.style.display = 'flex';
-                        let belegt = false;
-                        const runde = async () => {
-                          if (!ui.kasten.isConnected) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; return; }
-                          if (belegt) return;
-                          belegt = true;
-                          const laufend = await sp.lauf(hass(), eid, ui);
-                          belegt = false;
-                          if (!laufend) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; }
-                          else if (!karte.__spurTakt) karte.__spurTakt = setInterval(runde, 60000);
+                        sp.zeige = async (hass, st, ui) => {
+                          const tag = ui.modus === 'tag';
+                          ui.kasten.style.maxHeight = tag ? HOCH_TAG : HOCH_LETZTE;
+                          ui.reiter.querySelectorAll('[data-modus]').forEach((b) => {
+                            const an = b.dataset.modus === ui.modus;
+                            b.style.background = an ? FLAECHE : 'transparent';
+                            b.style.color = an ? HELL : GRAU;
+                          });
+                          return tag ? sp.tagesansicht(hass, st, ui.z, ui) : sp.letzte(hass, st, ui.z, ui);
                         };
-                        const wechsel = async () => {
-                          if (belegt || !ui.kasten.__spur || !ui.z.length) return;
-                          belegt = true;
-                          try { await sp.zeige(hass(), ui.kasten.__spur, ui); } finally { belegt = false; }
+                        // Eine Runde: Historie laden, aktuellen Reiter zeichnen. Rueckgabe: unterwegs?
+                        sp.lauf = async (hass, eid, ui) => {
+                          try {
+                            const ende = new Date(), start = new Date(ende.getTime() - FENSTER * 3600e3);
+                            const ortIds = ui.ortPfx ? [ui.ortPfx + '_place_name', ui.ortPfx + '_place_type'].filter((x) => hass.states[x]) : [];
+                            const ids = (ui.aktEid && hass.states[ui.aktEid] ? [eid, ui.aktEid] : [eid]).concat(ortIds);
+                            const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: ids, minimal_response: false, no_attributes: false, significant_changes_only: false });
+                            ui.z = sp.zeilen(h[eid] || []);
+                            ui.akt = ui.aktEid ? sp.aktivitaet(h[ui.aktEid] || []) : [];
+                            ui.orte = ortIds.length === 2 ? sp.orte(h[ortIds[0]] || [], h[ortIds[1]] || []) : [];
+                            const st = await sp.karte(ui.kasten, eid);
+                            return await sp.zeige(hass, st, ui);
+                          } catch (e) {
+                            ui.info.innerHTML = `<span style="color:var(--nachtblau-amber, #e6b566);">Strecke nicht verfügbar: ${sp.esc(e && e.message ? e.message : e)}</span>`;
+                            return false;
+                          }
                         };
-                        ui.reiter.addEventListener('click', (ev) => {
-                          const b = ev.target.closest('[data-modus]');
-                          if (b && b.dataset.modus !== ui.modus) { ui.modus = b.dataset.modus; wechsel(); }
-                        });
-                        ui.info.addEventListener('click', (ev) => {
-                          const b = ev.target.closest('[data-zeitraum]');
-                          if (b && b.dataset.zeitraum !== ui.zeitraum) { ui.zeitraum = b.dataset.zeitraum; wechsel(); }
-                        });
-                        ui.liste.addEventListener('click', (ev) => {
-                          const e = ev.target.closest('[data-eintrag]');
-                          const st = ui.kasten.__spur;
-                          if (!e || !st || !st.vektor) return;
-                          const box = ui.eintraege[+e.dataset.eintrag].box;
-                          if (box.length === 1) st.eng._map.jumpTo({ center: [box[0][1], box[0][0]], zoom: 16 });
-                          else sp.passe(st, box);
-                        });
-                        runde();
-                      };
-                      window.__nachtblauSpur = sp;
-                    }
-                    const sp = window.__nachtblauSpur;
-                    if (!this.__spurGestartet) {
-                      this.__spurGestartet = true;
-                      const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene', aktEid = variables.aktivitaet || '', ortPfx = variables.places || '';
-                      setTimeout(() => sp.start(karte, eid, h0, tagFuer, aktEid, ortPfx), 50);
-                    }
-                    const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
-                    return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-                      <div data-spur-reiter style="display:none;gap:4px;padding:3px;border-radius:12px;background:#10151d;">${knopf('letzte', 'Letzte Strecke')}${knopf('tag', 'Tagesprofil')}</div>
-                      <div data-spur-info style="min-height:16px;font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Strecke wird geladen …</div>
-                      <div data-spur-karte style="width:100%;aspect-ratio:1 / 1;max-height:${sp.hochLetzte};border-radius:14px;overflow:hidden;background:#10151d;"></div>
-                      <div data-spur-liste style="display:none;flex-direction:column;gap:5px;max-height:104px;overflow-y:auto;font-size:12.5px;color:var(--nachtblau-text-sekundaer, #8794a5);"></div>
-                    </div>`;
-                  ]]]]
+                        // Start je Popup-Karte; unterwegs jede Minute neu, solange das Popup offen ist.
+                        // Den Reiter "Tagesprofil" sieht nur die Person selbst (user_id der Person =
+                        // angemeldeter Benutzer), mit tag_fuer: alle jeder.
+                        sp.start = (karte, eid, h0, tagFuer, aktEid, ortPfx) => {
+                          const r = karte.shadowRoot;
+                          const q = (s) => r && r.querySelector(s);
+                          const ui = { kasten: q('[data-spur-karte]'), info: q('[data-spur-info]'), liste: q('[data-spur-liste]'), reiter: q('[data-spur-reiter]'), modus: 'letzte', zeitraum: 'heute', z: [], akt: [], aktEid, ortPfx, orte: [], eintraege: [] };
+                          const wurzel = q('[data-spur]');
+                          if (!ui.kasten || !ui.info || !ui.liste || !ui.reiter || !wurzel) return;
+                          // button-card (7.0.1, src/action-handler.ts) ruft auf seiner ha-card bei
+                          // touchend preventDefault. Der Browser erzeugt dann fuer den Finger keinen
+                          // click: Reiter, Umschalter, Liste und das Antippen der Karte reagierten auf
+                          // iPhone und Android nicht, mit der Maus schon. touchend endet deshalb hier;
+                          // die Karte (MapLibre) hat es vorher schon bekommen.
+                          wurzel.addEventListener('touchend', (ev) => ev.stopPropagation());
+                          const hass = () => karte._hass || h0;
+                          const person = hass().states[eid];
+                          const ich = hass().user;
+                          if (tagFuer === 'alle' || (person && ich && person.attributes.user_id === ich.id)) ui.reiter.style.display = 'flex';
+                          let belegt = false;
+                          const runde = async () => {
+                            if (!ui.kasten.isConnected) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; return; }
+                            if (belegt) return;
+                            belegt = true;
+                            const laufend = await sp.lauf(hass(), eid, ui);
+                            belegt = false;
+                            if (!laufend) { clearInterval(karte.__spurTakt); karte.__spurTakt = null; }
+                            else if (!karte.__spurTakt) karte.__spurTakt = setInterval(runde, 60000);
+                          };
+                          const wechsel = async () => {
+                            if (belegt || !ui.kasten.__spur || !ui.z.length) return;
+                            belegt = true;
+                            try { await sp.zeige(hass(), ui.kasten.__spur, ui); } finally { belegt = false; }
+                          };
+                          ui.reiter.addEventListener('click', (ev) => {
+                            const b = ev.target.closest('[data-modus]');
+                            if (b && b.dataset.modus !== ui.modus) { ui.modus = b.dataset.modus; wechsel(); }
+                          });
+                          ui.info.addEventListener('click', (ev) => {
+                            const b = ev.target.closest('[data-zeitraum]');
+                            if (b && b.dataset.zeitraum !== ui.zeitraum) { ui.zeitraum = b.dataset.zeitraum; wechsel(); }
+                          });
+                          ui.liste.addEventListener('click', (ev) => {
+                            const e = ev.target.closest('[data-eintrag]');
+                            const st = ui.kasten.__spur;
+                            if (!e || !st || !st.vektor) return;
+                            const box = ui.eintraege[+e.dataset.eintrag].box;
+                            if (box.length === 1) st.eng._map.jumpTo({ center: [box[0][1], box[0][0]], zoom: 16 });
+                            else sp.passe(st, box);
+                          });
+                          runde();
+                        };
+                        window.__nachtblauSpur = sp;
+                      }
+                      const sp = window.__nachtblauSpur;
+                      if (!this.__spurGestartet) {
+                        this.__spurGestartet = true;
+                        const karte = this, eid = entity.entity_id, h0 = hass, tagFuer = variables.tag_fuer || 'eigene', aktEid = variables.aktivitaet || '', ortPfx = variables.places || '';
+                        setTimeout(() => sp.start(karte, eid, h0, tagFuer, aktEid, ortPfx), 50);
+                      }
+                      const knopf = (modus, text) => `<button type="button" data-modus="${modus}" style="flex:1;font:600 12.5px -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;padding:7px 4px;border:0;border-radius:9px;cursor:pointer;background:${modus === 'letzte' ? '#222b3c' : 'transparent'};color:${modus === 'letzte' ? '#f2f5f8' : '#8794a5'};">${text}</button>`;
+                      return `<div data-spur style="display:flex;flex-direction:column;gap:8px;text-align:left;white-space:normal;pointer-events:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                        <div data-spur-reiter style="display:none;gap:4px;padding:3px;border-radius:12px;background:#10151d;">${knopf('letzte', 'Letzte Strecke')}${knopf('tag', 'Tagesprofil')}</div>
+                        <div data-spur-info style="min-height:16px;font-size:12.5px;line-height:1.35;color:var(--nachtblau-text-sekundaer, #8794a5);">Strecke wird geladen …</div>
+                        <div data-spur-karte style="width:100%;aspect-ratio:1 / 1;max-height:${sp.hochLetzte};border-radius:14px;overflow:hidden;background:#10151d;"></div>
+                        <div data-spur-liste style="display:none;flex-direction:column;gap:5px;max-height:104px;overflow-y:auto;font-size:12.5px;color:var(--nachtblau-text-sekundaer, #8794a5);"></div>
+                      </div>`;
+                    ]]]]
     hold_action:
       action: more-info
     show_name: false

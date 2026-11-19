@@ -149,220 +149,221 @@ button_card_templates:
     hold_action:
       action: none
     tap_action:
-      action: perform-action
-      perform_action: browser_mod.popup
-      data:
-        title: Tankstellen
-        # Oberflaeche, Breite und Seitenabstand wie im DWD-Popup
-        # (warnlage-templates.yaml, Erklaerung dort)
-        style: |
-          --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
-          --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
-          --primary-background-color: var(--nachtblau-seite, #171d29);
-          --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
-          --primary-text-color: var(--nachtblau-text, #f2f5f8);
-          --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
-          --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
-          --popup-min-width: min(100vw, 720px);
-          --popup-max-width: min(100vw, 720px);
-        content:
-          type: vertical-stack
-          cards:
-            # ---- Preise jetzt: alle Sorten, guenstigster je Spalte gruen ----
-            - type: custom:button-card
-              template: nachtblau_tankstellen
-              tap_action:
-                action: none
-              show_name: false
-              show_state: false
-              show_icon: false
-              show_label: false
-              styles:
-                # Breiten-Fesseln wie im Pollen-Popup: sonst sizet button-card
-                # auf max-content und der Text bricht nicht um
-                card:
-                  - padding: 0
-                  - border: none
-                  - box-shadow: none
-                  - background: none
-                  - width: 100%
-                  - max-width: 100%
-                  - box-sizing: border-box
-                grid:
-                  - grid-template-areas: '"body"'
-                  - grid-template-columns: minmax(0, 1fr)
-                  - width: 100%
-                  - max-width: 100%
-                  - min-width: 0
-                custom_fields:
-                  body:
+      action: fire-dom-event
+      browser_mod:
+        service: browser_mod.popup
+        data:
+          title: Tankstellen
+          # Oberflaeche, Breite und Seitenabstand wie im DWD-Popup
+          # (warnlage-templates.yaml, Erklaerung dort)
+          style: |
+            --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+            --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+            --primary-background-color: var(--nachtblau-seite, #171d29);
+            --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+            --primary-text-color: var(--nachtblau-text, #f2f5f8);
+            --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+            --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+            --popup-min-width: min(100vw, 720px);
+            --popup-max-width: min(100vw, 720px);
+          content:
+            type: vertical-stack
+            cards:
+              # ---- Preise jetzt: alle Sorten, guenstigster je Spalte gruen ----
+              - type: custom:button-card
+                template: nachtblau_tankstellen
+                tap_action:
+                  action: none
+                show_name: false
+                show_state: false
+                show_icon: false
+                show_label: false
+                styles:
+                  # Breiten-Fesseln wie im Pollen-Popup: sonst sizet button-card
+                  # auf max-content und der Text bricht nicht um
+                  card:
+                    - padding: 0
+                    - border: none
+                    - box-shadow: none
+                    - background: none
+                    - width: 100%
+                    - max-width: 100%
+                    - box-sizing: border-box
+                  grid:
+                    - grid-template-areas: '"body"'
+                    - grid-template-columns: minmax(0, 1fr)
                     - width: 100%
                     - max-width: 100%
                     - min-width: 0
-                    - overflow: hidden
-                    - white-space: normal
-              custom_fields:
-                body: |
-                  [[[
-                    const tk = variables.tk, ts = variables.tankstellen || [];
-                    const value = 'var(--nachtblau-text, #f2f5f8)';
-                    const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
-                    const label = 'var(--nachtblau-label, #b4c0cf)';
-                    const line  = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
-                    const panel = 'linear-gradient(180deg, var(--nachtblau-flaeche-erhoeht, #222b3c) 0%, var(--nachtblau-huelle-unten, #171d29) 100%)';
-                    const green = 'var(--nachtblau-gruen, #a6d49e)';
-                    const esc = (s) => String(s === null || s === undefined ? '' : s)
-                      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    // Breite wie im DWD-Popup (2 x 8 px Kartenrand von browser_mod)
-                    const widthCap = 'width:94vw;width:min(704px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;white-space:normal;';
-                    const SORTEN = [['diesel', 'Diesel'], ['super', 'Super'], ['e10', 'E10']];
-                    // Bester Preis je Sorte, nur geoeffnete Tankstellen
-                    const best = {};
-                    SORTEN.forEach(([k]) => { const b = tk.bester(tk.liste(states, ts, k)); best[k] = b ? b.p : NaN; });
-                    // Zeilen in der Reihenfolge des Diesel-Preises
-                    const reihe = tk.liste(states, ts, 'diesel').map((e) => ts.find((t) => t.name === e.name));
-                    const th = (t, links) => `<th style="font-size:11.5px;font-weight:600;color:${label};text-align:${links ? 'left' : 'right'};padding:4px ${links ? '6px 4px 0' : '0 4px 6px'};">${t}</th>`;
-                    const zeile = (t) => {
-                      const zu = tk.offen(states, t.status) === false;
-                      const zellen = SORTEN.map(([k]) => {
-                        const p = tk.preis(states, t[k]);
-                        const top = !zu && Number.isFinite(p) && p === best[k];
-                        return `<td style="padding:7px 0 7px 6px;text-align:right;border-top:1px solid ${line};font-variant-numeric:tabular-nums;white-space:nowrap;color:${top ? green : (zu ? muted : value)};font-weight:${top ? 700 : 500};">${tk.fmt(p)}</td>`;
-                      }).join('');
-                      return `<tr><td style="padding:7px 6px 7px 0;border-top:1px solid ${line};color:${zu ? muted : value};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%;">${esc(t.name)}${zu ? `<span style="font-weight:500;color:${muted};"> · geschlossen</span>` : ''}</td>${zellen}</tr>`;
-                    };
-                    return `
-                      <div style="background:${panel};border:1px solid ${line};border-radius:16px;padding:12px 14px;${widthCap}text-align:left;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
-                        <div style="font-size:12px;font-weight:700;color:${label};margin-bottom:4px;">Preise jetzt, €/l</div>
-                        <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
-                          <thead><tr>${th('Tankstelle', true)}${SORTEN.map(([, n]) => th(n, false)).join('')}</tr></thead>
-                          <tbody>${reihe.map(zeile).join('')}</tbody>
-                        </table>
-                        <div style="font-size:11.5px;color:${muted};line-height:1.45;margin-top:8px;">Grün: günstigster Preis je Sorte unter den geöffneten Tankstellen · Quelle: Tankerkönig</div>
-                      </div>`;
-                  ]]]
-            # ---- Diesel der letzten 24 Stunden ----
-            - type: custom:apexcharts-card
-              graph_span: 24h
-              header:
-                show: true
-                title: Diesel, letzte 24 Stunden
-                show_states: false
-              apex_config:
-                chart:
-                  background: transparent
-                  fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
-                  foreColor: '#8794a5'
-                  height: 190
-                  toolbar:
-                    show: false
-                  zoom:
-                    enabled: false
-                dataLabels:
-                  enabled: false
-                grid:
-                  borderColor: rgba(255,255,255,0.06)
-                  strokeDashArray: 3
-                legend:
+                  custom_fields:
+                    body:
+                      - width: 100%
+                      - max-width: 100%
+                      - min-width: 0
+                      - overflow: hidden
+                      - white-space: normal
+                custom_fields:
+                  body: |
+                    [[[
+                      const tk = variables.tk, ts = variables.tankstellen || [];
+                      const value = 'var(--nachtblau-text, #f2f5f8)';
+                      const muted = 'var(--nachtblau-text-sekundaer, #8794a5)';
+                      const label = 'var(--nachtblau-label, #b4c0cf)';
+                      const line  = 'var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))';
+                      const panel = 'linear-gradient(180deg, var(--nachtblau-flaeche-erhoeht, #222b3c) 0%, var(--nachtblau-huelle-unten, #171d29) 100%)';
+                      const green = 'var(--nachtblau-gruen, #a6d49e)';
+                      const esc = (s) => String(s === null || s === undefined ? '' : s)
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                      // Breite wie im DWD-Popup (2 x 8 px Kartenrand von browser_mod)
+                      const widthCap = 'width:94vw;width:min(704px, 100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));max-width:100%;box-sizing:border-box;white-space:normal;';
+                      const SORTEN = [['diesel', 'Diesel'], ['super', 'Super'], ['e10', 'E10']];
+                      // Bester Preis je Sorte, nur geoeffnete Tankstellen
+                      const best = {};
+                      SORTEN.forEach(([k]) => { const b = tk.bester(tk.liste(states, ts, k)); best[k] = b ? b.p : NaN; });
+                      // Zeilen in der Reihenfolge des Diesel-Preises
+                      const reihe = tk.liste(states, ts, 'diesel').map((e) => ts.find((t) => t.name === e.name));
+                      const th = (t, links) => `<th style="font-size:11.5px;font-weight:600;color:${label};text-align:${links ? 'left' : 'right'};padding:4px ${links ? '6px 4px 0' : '0 4px 6px'};">${t}</th>`;
+                      const zeile = (t) => {
+                        const zu = tk.offen(states, t.status) === false;
+                        const zellen = SORTEN.map(([k]) => {
+                          const p = tk.preis(states, t[k]);
+                          const top = !zu && Number.isFinite(p) && p === best[k];
+                          return `<td style="padding:7px 0 7px 6px;text-align:right;border-top:1px solid ${line};font-variant-numeric:tabular-nums;white-space:nowrap;color:${top ? green : (zu ? muted : value)};font-weight:${top ? 700 : 500};">${tk.fmt(p)}</td>`;
+                        }).join('');
+                        return `<tr><td style="padding:7px 6px 7px 0;border-top:1px solid ${line};color:${zu ? muted : value};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;width:100%;">${esc(t.name)}${zu ? `<span style="font-weight:500;color:${muted};"> · geschlossen</span>` : ''}</td>${zellen}</tr>`;
+                      };
+                      return `
+                        <div style="background:${panel};border:1px solid ${line};border-radius:16px;padding:12px 14px;${widthCap}text-align:left;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;">
+                          <div style="font-size:12px;font-weight:700;color:${label};margin-bottom:4px;">Preise jetzt, €/l</div>
+                          <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+                            <thead><tr>${th('Tankstelle', true)}${SORTEN.map(([, n]) => th(n, false)).join('')}</tr></thead>
+                            <tbody>${reihe.map(zeile).join('')}</tbody>
+                          </table>
+                          <div style="font-size:11.5px;color:${muted};line-height:1.45;margin-top:8px;">Grün: günstigster Preis je Sorte unter den geöffneten Tankstellen · Quelle: Tankerkönig</div>
+                        </div>`;
+                    ]]]
+              # ---- Diesel der letzten 24 Stunden ----
+              - type: custom:apexcharts-card
+                graph_span: 24h
+                header:
                   show: true
-                  fontSize: 11px
-                  labels:
-                    colors: '#8794a5'
-                  markers:
-                    size: 5
-                    strokeWidth: 0
-                stroke:
-                  width: 2
-                tooltip:
-                  theme: dark
-                  x:
-                    format: HH:mm
-                xaxis:
-                  labels:
-                    format: HH:mm
-                # 12 Uhr: heute, vor 12 Uhr gestern (siehe Kopf)
-                annotations:
+                  title: Diesel, letzte 24 Stunden
+                  show_states: false
+                apex_config:
+                  chart:
+                    background: transparent
+                    fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+                    foreColor: '#8794a5'
+                    height: 190
+                    toolbar:
+                      show: false
+                    zoom:
+                      enabled: false
+                  dataLabels:
+                    enabled: false
+                  grid:
+                    borderColor: rgba(255,255,255,0.06)
+                    strokeDashArray: 3
+                  legend:
+                    show: true
+                    fontSize: 11px
+                    labels:
+                      colors: '#8794a5'
+                    markers:
+                      size: 5
+                      strokeWidth: 0
+                  stroke:
+                    width: 2
+                  tooltip:
+                    theme: dark
+                    x:
+                      format: HH:mm
                   xaxis:
-                    - x: 'EVAL:(() => { const d = new Date(); d.setHours(12, 0, 0, 0); if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime(); })()'
-                      borderColor: '#8794a5'
-                      strokeDashArray: 4
-                      label:
-                        text: 12 Uhr
-                        borderWidth: 0
-                        orientation: horizontal
-                        style:
-                          background: transparent
-                          color: '#8794a5'
-                          fontSize: 11px
-              card_mod:
-                style: |
-                  ha-card {
-                    background: linear-gradient(180deg, var(--nachtblau-flaeche-erhoeht, #222b3c) 0%, var(--nachtblau-huelle-unten, #171d29) 100%) !important;
-                    border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
-                    border-radius: 16px !important;
-                    box-shadow: none !important;
-                  }
-                  /* apexcharts-card 2.2.3 hat kein .card-header: Kopf ist #header, Titel #header__title */
-                  #header { padding: 10px 12px 0 !important; }
-                  #header__title { font-size: 12px !important; font-weight: 700 !important; color: var(--nachtblau-label, #b4c0cf) !important; }
-                  /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
-                  .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
-                  /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
-                     Serien nach Index, Legende nach rel = Index + 1 */
-                  .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --tk-c: var(--nachtblau-blau, #7fb3d5); }
-                  .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --tk-c: var(--nachtblau-violett, #b399d4); }
-                  .apexcharts-series[data\:realIndex="2"], .apexcharts-legend-series[rel="3"] { --tk-c: var(--nachtblau-tuerkis, #7fd0d5); }
-                  .apexcharts-series[data\:realIndex="3"], .apexcharts-legend-series[rel="4"] { --tk-c: var(--nachtblau-limette, #bdd27f); }
-                  .apexcharts-line { stroke: var(--tk-c); }
-                  .apexcharts-marker { fill: var(--tk-c); }
-                  .apexcharts-legend-marker { background: var(--tk-c) !important; color: var(--tk-c) !important; }
-                  .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
-                  .apexcharts-legend-text { color: var(--nachtblau-text-sekundaer, #8794a5) !important; }
-                  .apexcharts-gridline { stroke: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
-                  /* 12-Uhr-Linie und ihre Beschriftung im Sekundaer-Grau des Modus */
-                  .apexcharts-xaxis-annotations line { stroke: var(--nachtblau-text-sekundaer, #8794a5); }
-                  .apexcharts-xaxis-annotations text { fill: var(--nachtblau-text-sekundaer, #8794a5); }
-                  /* Tooltips folgen dem Modus wie Popups (erhoehte Flaeche); ApexCharts faerbt sie sonst fest dunkel (tooltip.theme) */
-                  .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; color: var(--nachtblau-text, #f2f5f8) !important; border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
-                  .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important; }
-                  .apexcharts-tooltip-title { background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
-                  .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
-                  .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
-                  .apexcharts-xaxistooltip-top::before { border-top-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
-                  .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
-                  /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
-                  .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
-                  .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-violett, #b399d4) !important; }
-                  .apexcharts-tooltip-series-group-2 .apexcharts-tooltip-marker { color: var(--nachtblau-tuerkis, #7fd0d5) !important; }
-                  .apexcharts-tooltip-series-group-3 .apexcharts-tooltip-marker { color: var(--nachtblau-limette, #bdd27f) !important; }
-              yaxis:
-                - decimals: 2
-                  apex_config:
-                    forceNiceScale: true
-                    tickAmount: 4
-              # Gleiche Sensoren und Namen wie in nachtblau_tankstellen oben
-              series:
-                - entity: sensor.tankstelle_1_diesel
-                  name: Tankstelle 1
-                  color: '#7fb3d5'
-                  curve: stepline
-                  float_precision: 3
-                  unit: €/l
-                - entity: sensor.tankstelle_2_diesel
-                  name: Tankstelle 2
-                  color: '#b399d4'
-                  curve: stepline
-                  float_precision: 3
-                  unit: €/l
-                - entity: sensor.tankstelle_3_diesel
-                  name: Tankstelle 3
-                  color: '#7fd0d5'
-                  curve: stepline
-                  float_precision: 3
-                  unit: €/l
-                - entity: sensor.tankstelle_4_diesel
-                  name: Tankstelle 4
-                  color: '#bdd27f'
-                  curve: stepline
-                  float_precision: 3
-                  unit: €/l
+                    labels:
+                      format: HH:mm
+                  # 12 Uhr: heute, vor 12 Uhr gestern (siehe Kopf)
+                  annotations:
+                    xaxis:
+                      - x: 'EVAL:(() => { const d = new Date(); d.setHours(12, 0, 0, 0); if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime(); })()'
+                        borderColor: '#8794a5'
+                        strokeDashArray: 4
+                        label:
+                          text: 12 Uhr
+                          borderWidth: 0
+                          orientation: horizontal
+                          style:
+                            background: transparent
+                            color: '#8794a5'
+                            fontSize: 11px
+                card_mod:
+                  style: |
+                    ha-card {
+                      background: linear-gradient(180deg, var(--nachtblau-flaeche-erhoeht, #222b3c) 0%, var(--nachtblau-huelle-unten, #171d29) 100%) !important;
+                      border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+                      border-radius: 16px !important;
+                      box-shadow: none !important;
+                    }
+                    /* apexcharts-card 2.2.3 hat kein .card-header: Kopf ist #header, Titel #header__title */
+                    #header { padding: 10px 12px 0 !important; }
+                    #header__title { font-size: 12px !important; font-weight: 700 !important; color: var(--nachtblau-label, #b4c0cf) !important; }
+                    /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
+                    .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+                    /* Farben je Modus (apexcharts-card zeichnet beim Wechsel nicht neu):
+                       Serien nach Index, Legende nach rel = Index + 1 */
+                    .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --tk-c: var(--nachtblau-blau, #7fb3d5); }
+                    .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --tk-c: var(--nachtblau-violett, #b399d4); }
+                    .apexcharts-series[data\:realIndex="2"], .apexcharts-legend-series[rel="3"] { --tk-c: var(--nachtblau-tuerkis, #7fd0d5); }
+                    .apexcharts-series[data\:realIndex="3"], .apexcharts-legend-series[rel="4"] { --tk-c: var(--nachtblau-limette, #bdd27f); }
+                    .apexcharts-line { stroke: var(--tk-c); }
+                    .apexcharts-marker { fill: var(--tk-c); }
+                    .apexcharts-legend-marker { background: var(--tk-c) !important; color: var(--tk-c) !important; }
+                    .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
+                    .apexcharts-legend-text { color: var(--nachtblau-text-sekundaer, #8794a5) !important; }
+                    .apexcharts-gridline { stroke: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
+                    /* 12-Uhr-Linie und ihre Beschriftung im Sekundaer-Grau des Modus */
+                    .apexcharts-xaxis-annotations line { stroke: var(--nachtblau-text-sekundaer, #8794a5); }
+                    .apexcharts-xaxis-annotations text { fill: var(--nachtblau-text-sekundaer, #8794a5); }
+                    /* Tooltips folgen dem Modus wie Popups (erhoehte Flaeche); ApexCharts faerbt sie sonst fest dunkel (tooltip.theme) */
+                    .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; color: var(--nachtblau-text, #f2f5f8) !important; border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+                    .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important; }
+                    .apexcharts-tooltip-title { background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+                    .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+                    .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+                    .apexcharts-xaxistooltip-top::before { border-top-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+                    .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+                    /* Punkt im Tooltip: Serienfarbe des Modus statt der dunklen aus series */
+                    .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
+                    .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-violett, #b399d4) !important; }
+                    .apexcharts-tooltip-series-group-2 .apexcharts-tooltip-marker { color: var(--nachtblau-tuerkis, #7fd0d5) !important; }
+                    .apexcharts-tooltip-series-group-3 .apexcharts-tooltip-marker { color: var(--nachtblau-limette, #bdd27f) !important; }
+                yaxis:
+                  - decimals: 2
+                    apex_config:
+                      forceNiceScale: true
+                      tickAmount: 4
+                # Gleiche Sensoren und Namen wie in nachtblau_tankstellen oben
+                series:
+                  - entity: sensor.tankstelle_1_diesel
+                    name: Tankstelle 1
+                    color: '#7fb3d5'
+                    curve: stepline
+                    float_precision: 3
+                    unit: €/l
+                  - entity: sensor.tankstelle_2_diesel
+                    name: Tankstelle 2
+                    color: '#b399d4'
+                    curve: stepline
+                    float_precision: 3
+                    unit: €/l
+                  - entity: sensor.tankstelle_3_diesel
+                    name: Tankstelle 3
+                    color: '#7fd0d5'
+                    curve: stepline
+                    float_precision: 3
+                    unit: €/l
+                  - entity: sensor.tankstelle_4_diesel
+                    name: Tankstelle 4
+                    color: '#bdd27f'
+                    curve: stepline
+                    float_precision: 3
+                    unit: €/l
