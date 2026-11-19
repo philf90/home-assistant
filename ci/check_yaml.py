@@ -17,6 +17,11 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
    "service_data". Die alte Form laeuft weiter (button-card und HA-Frontend
    setzen sie in denselben Zweig um), ist aber nur noch Rueckwaertskompatibilitaet.
    Geprueft wird auch ein per Template berechneter action-Wert.
+6. browser_mod-Dienste aus einer Karte als Browser-Aufruf: "action:
+   fire-dom-event" mit "browser_mod: {service, data}". Als Dienstaufruf
+   (perform-action) ohne browser_id/user_id ist es ein Server-Aufruf, und
+   browser_mod fuehrt ihn auf allen registrierten, gerade verbundenen Browsern
+   aus (Popup erscheint auf jedem offenen Geraet, nicht nur dem tippenden).
 
 Aufruf: python ci/check_yaml.py [datei ...]
 Ohne Argumente werden alle Lovelace-YAMLs geprueft (Art "lovelace" aus
@@ -181,6 +186,22 @@ def check_file(path: Path, known_cards: set[str]) -> list[str]:
             errors.append(
                 f"{path.name}: 'service_data' in einer Aktion (unter '{node_path or 'root'}') -- "
                 "heisst jetzt 'data'"
+            )
+
+        dienst = value.get("perform_action") or value.get("service")
+        daten = value.get("data") if isinstance(value.get("data"), dict) else {}
+        if (
+            isinstance(action, str)
+            and ("perform-action" in action or "call-service" in action)
+            and isinstance(dienst, str)
+            and dienst.startswith("browser_mod.")
+            and "browser_id" not in daten
+            and "user_id" not in daten
+        ):
+            errors.append(
+                f"{path.name}: '{dienst}' als Dienstaufruf ohne browser_id (unter "
+                f"'{node_path or 'root'}') -- geht an alle registrierten Browser; "
+                "action: fire-dom-event mit browser_mod: {service, data} verwenden"
             )
 
         triggers = value.get("triggers_update")
