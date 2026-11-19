@@ -144,7 +144,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
-| [`garten-karte.yaml`](garten/garten-karte.yaml) | karte | Garten – Pool, Bewaesserung, Maehroboter | button-card, card-mod | `notify.mobile_app_iphone`, `*_seriennr`, `*_mac` | aktiv |
+| [`garten-karte.yaml`](garten/garten-karte.yaml) | karte | Garten – Pool, Bewaesserung, Maehroboter | button-card, card-mod | `notify.mobile_app_iphone`, `*_mac` | aktiv |
 | [`pflanzen-templates.yaml`](garten/pflanzen-templates.yaml) | templates | Pflanzen – Decluttering-Template nachtblau_pflanze | apexcharts-card, button-card, card-mod | – | aktiv |
 | [`pflanzen-view.yaml`](garten/pflanzen-view.yaml) | view | Pflanzen – komplette Ansicht | button-card, decluttering-card | `ieee_adresse` | aktiv |
 | [`pflanzen-flower-karte.yaml`](garten/archiv/pflanzen-flower-karte.yaml) | karte | Pflanzen mit flower-card | card-mod, flower-card | `ieee_adresse` | archiv, ersetzt durch `pflanzen-view.yaml` |
