@@ -1,0 +1,128 @@
+# ============================================================================
+# Batterien – Karte fuer die System-View
+# ----------------------------------------------------------------------------
+# Art:           karte
+# Bereich:       sonstiges
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     nachtblau_batterien (batterien-templates.yaml)
+# Einfuegen:     Karte hinzufuegen -> Manuell (System-View, eigener Abschnitt
+#                neben dem HA-Status)
+# Platzhalter:   keine
+# ============================================================================
+# Karte "Batterien": Kopf mit Stand, Zaehler je Stufe (kritisch, erhoeht,
+# Hinweis), Listen Wechseln, Beobachten und Zuletzt gewechselt (die letzten
+# drei, ab dem zweiten Wechsel eines Geraets mit Haltedauer), Fusszeile mit
+# Pruefrhythmus, "in Ordnung" und ausgenommenen Geraeten. Immer sichtbar.
+#
+# Antippen oeffnet das Popup "Batterie-Meldungen" mit den Einstellungen.
+# Darin native Kacheln statt eigener Schalter, damit Tippen auf dem Handy
+# ohne Umweg funktioniert:
+#   Sofort melden            input_boolean.batterie_sofort (Schalter)
+#   Wochenuebersicht         input_boolean.batterie_woche (Schalter)
+#   Uhrzeit                  input_datetime.batterie_meldezeit (Antippen)
+#   Stufe 1 bis 3            input_number.batterie_stufe_1..3 (Tasten - +)
+#   Senden an                input_select.batterie_kanal (drei Tasten)
+#   Ausgenommen              Liste aus Registry und Label (Template)
+#
+# Voraussetzung: custom:button-card und browser_mod (HACS), sensor.batterien
+# und die Helfer aus batterien-konfig.yaml, Template nachtblau_batterien.
+type: custom:button-card
+template: nachtblau_batterien
+variables:
+  modus: karte
+styles:
+  card:
+    - padding: 16px 18px
+    - border-radius: 22px
+    - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+    - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+    - box-shadow: '0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))'
+    - overflow: hidden
+tap_action:
+  action: call-service
+  service: browser_mod.popup
+  service_data:
+    title: Batterie-Meldungen
+    style: |
+      --ha-card-background: var(--nachtblau-huelle-oben, #1b2231);
+      --card-background-color: var(--nachtblau-huelle-oben, #1b2231);
+      --primary-background-color: var(--nachtblau-seite, #171d29);
+      --secondary-background-color: var(--nachtblau-huelle-oben, #1b2231);
+      --primary-text-color: var(--nachtblau-text, #f2f5f8);
+      --secondary-text-color: var(--nachtblau-text-sekundaer, #8794a5);
+      --mdc-dialog-scrim-color: rgba(0,0,0,0.62);
+      --popup-min-width: min(100vw, 480px);
+      --popup-max-width: min(100vw, 480px);
+    content:
+      type: vertical-stack
+      cards:
+        - type: tile
+          entity: input_boolean.batterie_sofort
+          name: Sofort melden
+          icon: mdi:bell-ring-outline
+          features_position: inline
+          features:
+            - type: toggle
+        - type: tile
+          entity: input_boolean.batterie_woche
+          name: Wochenübersicht samstags
+          icon: mdi:calendar-week
+          features_position: inline
+          features:
+            - type: toggle
+        - type: tile
+          entity: input_datetime.batterie_meldezeit
+          name: Uhrzeit für Erinnerungen
+          icon: mdi:clock-outline
+        - type: tile
+          entity: input_number.batterie_stufe_1
+          name: Stufe 1 · Hinweis
+          icon: mdi:battery-30
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        - type: tile
+          entity: input_number.batterie_stufe_2
+          name: Stufe 2 · erhöht
+          icon: mdi:battery-20
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        - type: tile
+          entity: input_number.batterie_stufe_3
+          name: Stufe 3 · kritisch
+          icon: mdi:battery-10
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        - type: tile
+          entity: input_select.batterie_kanal
+          name: Senden an
+          icon: mdi:send-outline
+          hide_state: true
+          features_position: bottom
+          features:
+            - type: select-options
+              style: buttons
+        - type: custom:button-card
+          template: nachtblau_batterien
+          variables:
+            modus: ausgenommen
+          tap_action:
+            action: none
+          styles:
+            card:
+              - padding: 0
+              - border: none
+              - box-shadow: none
+              - background: none
+              - width: 100%
+              - max-width: 100%
+              - box-sizing: border-box

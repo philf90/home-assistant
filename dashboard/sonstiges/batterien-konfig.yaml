@@ -1,0 +1,531 @@
+# ============================================================================
+# Batterien – Meldung in drei Stufen (Helfer, Sensor, Skripte, Automation)
+# ----------------------------------------------------------------------------
+# Art:           konfig
+# Bereich:       sonstiges
+# Status:        aktiv
+# Einfuegen:     configuration.yaml unter homeassistant: packages:
+#                (oder Helfer, Skripte und Automation einzeln in der UI)
+# Platzhalter:   notify.mobile_app_iphone, telegram_eintrag
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Meldet schwache Batterien aller Geraete in drei Stufen. Umgesetzt am
+# 19.11.2026 nach dem Entwurf "Batterie-Meldung" (Freigabe 19.11.); loest das
+# Blueprint "Low battery level detection & notification" (vgelot) ab, das
+# jeden Tag um 10:00 dieselbe Liste schickte, die Solarbank bei ihrem
+# Mindestladestand mitmeldete und nicht erreichbare Geraete nicht erkannte.
+#
+# Stufen (Grenzen einschliesslich, Helfer input_number.batterie_stufe_1..3):
+#   1 Hinweis   30 % und darunter                           einmal melden
+#   2 erhoeht   20 % und darunter, Batteriesensor "an"      einmal melden
+#               (Homematic meldet nur an/aus)
+#   3 kritisch  10 % und darunter, 24 h nicht erreichbar     sofort, danach
+#                                                           taeglich
+# Eine erreichte Stufe gilt bis zum Ende des Falls: Ein Ruecksprung ueber die
+# Grenze und ein erneutes Fallen loesen nichts aus (Hochbeet rechts 15.11.:
+# 28 -> 17 -> 20,5 -> 20 %). Wird eine Stufe uebersprungen, kommt eine Meldung
+# fuer die tiefere. Ein Fall endet ab Stufe 1 + 10 (40 %), bei einem Anstieg um
+# 30 Punkte, wenn der Batteriesensor wieder "aus" ist oder das Geraet wieder
+# erreichbar ist. Als Wechsel ("Zuletzt gewechselt") zaehlt nur ein klarer
+# Sprung (30 Punkte, ohne Vorwert ab 80 %) oder ein Batteriesensor, der auf
+# "aus" geht; eine Erholung ohne Wechsel endet still (Erdbeeren 15.-18.11.:
+# 47 -> 36,5 -> 43 %).
+#
+# Inhalt:
+#   Helfer             Stufen 1-3, Sofort melden, Wochenuebersicht, Meldezeit
+#                      (09:00), Kanal (Telegram | iPhone | Beide). Werte nach
+#                      dem ersten Laden einmal setzen: 30/20/10, an, an, 09:00
+#                      (ohne initial, damit ein Neustart nichts zuruecksetzt).
+#   sensor.batterien   triggerbasierter Template-Sensor, prueft alle 15 min,
+#                      bei Aenderung einer Stufe und auf das Ereignis
+#                      batterien_pruefen. Zustand: Zahl der offenen Faelle.
+#                      Attribute: faelle (id, name, bereich, stufe, stufe_seit,
+#                      art niedrig|schwach|weg, wert, tiefst, seit),
+#                      beobachten, weg_seit, gewechselt (letzte 10), stoerung,
+#                      hoechste_stufe, ueberwacht, ausgenommen. YAML ist noetig:
+#                      Template-Helfer aus der UI koennen keine Ausloeser und
+#                      keine Attribute. Zustand und Attribute triggerbasierter
+#                      Sensoren stellt Home Assistant nach einem Neustart
+#                      wieder her. Kein Attribut "geprueft um": es wuerde alle
+#                      15 min eine neue Attributzeile im Recorder schreiben.
+#   Skripte            "Batterien: senden" (Kanal nach Helfer; Telegram als
+#                      reiner Text, iPhone passiv ohne Ton) und
+#                      "Batterien: Fall melden" (Text je Stufe).
+#   Automation         "Batterien: Meldungen": neuer Fall oder hoehere Stufe
+#                      08-21 Uhr sofort, nachts erreichte um 08:00; zur
+#                      Meldezeit taeglich eine Erinnerung fuer alle kritischen
+#                      Geraete (ab dem Tag nach Erreichen), samstags statt dessen
+#                      die Wochenuebersicht. Kein Vorzustand (Neustart, Neuladen)
+#                      -> keine Meldung.
+#
+# Ausgenommen: Integrationen mobile_app und browser_mod (auch verwaiste
+# Eintraege, erkannt ueber die Geraetekennung) und alles mit dem Label
+# keine_batteriemeldung an Geraet oder Sensor. Das Label legt man in der UI an
+# (Einstellungen -> Bereiche, Labels & Zonen -> Labels) und setzt es am Geraet;
+# Labels gibt es nicht in YAML.
+#
+# Nicht erreichbar: Der Zeitpunkt steht in weg_seit und uebersteht Neustarts
+# (die Instanz startete in 10,5 Tagen 38-mal neu; for: und last_changed
+# beginnen bei jedem Neustart von vorn). Faellt mehr als die Haelfte aller
+# Entitaeten einer Integration gleichzeitig aus (Zentrale, Bridge, Start),
+# gilt das als Stoerung: weg_seit bleibt dann stehen, es entsteht kein Fall.
+#
+# Zum Testen nimmt die Vorlage jetzt_test, stufen_test, zustand_test,
+# alt_faelle, alt_weg und alt_gew an (Entwicklerwerkzeuge -> Template); im
+# Betrieb sind sie nicht gesetzt.
+#
+# Anzeige: batterien-hinweis-karte.yaml (Home), batterien-karte.yaml
+# (System-View), Template nachtblau_batterien (batterien-templates.yaml).
+#
+# Voraussetzung: Telegram-Bot-Integration und Companion-App (iPhone) fuer den
+# Versand; Batteriesensoren mit device_class battery.
+
+# ---------- Helfer ----------
+input_number:
+  batterie_stufe_1:
+    name: Batterie Stufe 1
+    min: 15
+    max: 50
+    step: 5
+    mode: slider
+    unit_of_measurement: '%'
+    icon: mdi:battery-30
+  batterie_stufe_2:
+    name: Batterie Stufe 2
+    min: 10
+    max: 40
+    step: 5
+    mode: slider
+    unit_of_measurement: '%'
+    icon: mdi:battery-20
+  batterie_stufe_3:
+    name: Batterie Stufe 3
+    min: 5
+    max: 30
+    step: 5
+    mode: slider
+    unit_of_measurement: '%'
+    icon: mdi:battery-10
+input_boolean:
+  batterie_sofort:
+    name: Batterie sofort
+    icon: mdi:bell-ring-outline
+  batterie_woche:
+    name: Batterie Woche
+    icon: mdi:calendar-week
+input_datetime:
+  batterie_meldezeit:
+    name: Batterie Meldezeit
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+input_select:
+  batterie_kanal:
+    name: Batterie Kanal
+    options:
+    - Telegram
+    - iPhone
+    - Beide
+    icon: mdi:send-outline
+
+# ---------- Sensor ----------
+template:
+- triggers:
+  - trigger: time_pattern
+    minutes: /15
+  - trigger: state
+    entity_id:
+    - input_number.batterie_stufe_1
+    - input_number.batterie_stufe_2
+    - input_number.batterie_stufe_3
+  - trigger: event
+    event_type: batterien_pruefen
+  variables:
+    erg: |-
+      {#- Batterien: eine Pruefung aller Batteriesensoren (Vorlage fuer sensor.batterien).
+          Zum Testen koennen jetzt_test, stufen_test, zustand_test, alt_faelle, alt_weg und alt_gew uebergeben werden;
+          im Betrieb kommen die Vorwerte aus den Attributen von sensor.batterien. -#}
+      {%- set jetzt = (jetzt_test | as_datetime) if jetzt_test is defined else now() -%}
+      {%- set jetzt_s = jetzt.replace(microsecond=0).isoformat() -%}
+      {%- set roh = (stufen_test if stufen_test is defined else
+                     [states('input_number.batterie_stufe_1') | float(30),
+                      states('input_number.batterie_stufe_2') | float(20),
+                      states('input_number.batterie_stufe_3') | float(10)]) | sort(reverse=true) -%}
+      {%- set s1 = roh[0] -%}{%- set s2 = roh[1] -%}{%- set s3 = roh[2] -%}
+      {%- set af = alt_faelle if alt_faelle is defined else (state_attr('sensor.batterien', 'faelle') or []) -%}
+      {%- set aw = alt_weg if alt_weg is defined else (state_attr('sensor.batterien', 'weg_seit') or {}) -%}
+      {%- set ag = alt_gew if alt_gew is defined else (state_attr('sensor.batterien', 'gewechselt') or []) -%}
+      {#- Ausnahmen: Integrationen, die man selbst laedt, und das Label -#}
+      {%- set lab_dev = label_devices('keine_batteriemeldung') -%}
+      {%- set aus = integration_entities('mobile_app') + integration_entities('browser_mod')
+                    + label_entities('keine_batteriemeldung') -%}
+      {%- set alle = (states.sensor | selectattr('attributes.device_class', 'defined')
+                       | selectattr('attributes.device_class', 'eq', 'battery') | list)
+                   + (states.binary_sensor | selectattr('attributes.device_class', 'defined')
+                       | selectattr('attributes.device_class', 'eq', 'battery') | list) -%}
+      {%- set ns = namespace(ent=[], aus_dev=[]) -%}
+      {%- for s in alle -%}
+        {%- set did = device_id(s.entity_id) -%}
+        {%- set ids = device_attr(did, 'identifiers') if did else none -%}
+        {%- set integ = ((ids | list | first) | first) if ids else '' -%}
+        {%- if s.entity_id in aus or integ in ['mobile_app', 'browser_mod'] or (did and did in lab_dev) -%}
+          {%- set ns.aus_dev = ns.aus_dev + [did or s.entity_id] -%}
+        {%- else -%}
+          {%- set st = zustand_test[s.entity_id] if (zustand_test is defined and s.entity_id in zustand_test) else s.state -%}
+          {%- set ns.ent = ns.ent + [{'e': s.entity_id, 'd': did or s.entity_id,
+                                      'bin': s.domain == 'binary_sensor', 'st': st}] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {#- Nicht verfuegbar: Stoerung, wenn mehr als die Haelfte der Integration ausfaellt -#}
+      {%- set weg_ents = ns.ent | selectattr('st', 'in', ['unavailable', 'unknown']) | list -%}
+      {%- set nsi = namespace(integ=[], stoer=[], paare=[]) -%}
+      {%- for w in weg_ents -%}
+        {%- set ids = device_attr(w.d, 'identifiers') -%}
+        {%- set i = ((ids | list | first) | first) if ids else 'ohne' -%}
+        {%- set nsi.integ = nsi.integ + [(w.e, i)] -%}
+      {%- endfor -%}
+      {%- for i in nsi.integ | map(attribute=1) | unique | reject('eq', 'ohne') -%}
+        {%- set ie = integration_entities(i) -%}
+        {%- set n_weg = ie | select('is_state', ['unavailable', 'unknown']) | list | count -%}
+        {%- if ie | count > 0 and n_weg / (ie | count) > 0.5 -%}
+          {%- set nsi.stoer = nsi.stoer + [i] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- for p in nsi.integ -%}
+        {%- if p[1] in nsi.stoer -%}
+          {%- if p[0] in aw -%}{%- set nsi.paare = nsi.paare + [(p[0], aw[p[0]])] -%}{%- endif -%}
+        {%- else -%}
+          {%- set nsi.paare = nsi.paare + [(p[0], aw.get(p[0], jetzt_s))] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set weg = dict(nsi.paare) -%}
+      {#- Je Geraet eine Zeile -#}
+      {%- set nf = namespace(faelle=[], beob=[], gew=[]) -%}
+      {%- for d in ns.ent | map(attribute='d') | unique -%}
+        {%- set ents = ns.ent | selectattr('d', 'eq', d) | list -%}
+        {%- set name = device_attr(d, 'name_by_user') or device_attr(d, 'name') or state_attr(ents[0].e, 'friendly_name') -%}
+        {%- set bereich = area_name(d) or area_name(ents[0].e) or '' -%}
+        {%- set werte = ents | rejectattr('bin') | map(attribute='st') | select('is_number') | map('float') | list -%}
+        {%- set v = (werte | min) if werte else none -%}
+        {%- set bin_an = ents | selectattr('bin') | selectattr('st', 'eq', 'on') | list | count > 0 -%}
+        {%- set erreichbar = ents | rejectattr('st', 'in', ['unavailable', 'unknown']) | list | count > 0 -%}
+        {%- set nw = namespace(n=0) -%}
+        {%- for x in ents -%}
+          {%- if x.e in weg and (jetzt - as_datetime(weg[x.e])).total_seconds() >= 86400 -%}
+            {%- set nw.n = nw.n + 1 -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- set weg_lang = nw.n > 0 and nw.n == ents | count -%}
+        {%- set stufe_jetzt = 3 if weg_lang
+              else 3 if (v is not none and v <= s3)
+              else 2 if ((v is not none and v <= s2) or bin_an)
+              else 1 if (v is not none and v <= s1)
+              else 0 -%}
+        {%- set art = 'weg' if weg_lang
+              else 'niedrig' if (v is not none and v <= s1)
+              else 'schwach' if bin_an
+              else none -%}
+        {%- set c = af | selectattr('id', 'eq', d) | first | default(none) -%}
+        {%- if c -%}
+          {%- set schliessen = (not weg_lang) and erreichbar and (
+                ((v is not none) and (not bin_an) and (v >= s1 + 10 or (c.wert is number and v - c.wert >= 30)))
+                or ((v is none) and (not bin_an))) -%}
+          {%- if schliessen -%}
+            {#- Als Wechsel zaehlt nur ein klarer Sprung, sonst endet der Fall still (Erholung, Funkausfall) -#}
+            {%- set vw = c.tiefst if c.tiefst is number else c.wert -%}
+            {%- if (v is none) or (vw is number and v - vw >= 30) or (vw is not number and v >= 80) -%}
+              {%- set vorher = ag | selectattr('id', 'eq', d) | first | default(none) -%}
+              {%- set nf.gew = nf.gew + [{'id': d, 'name': name, 'am': jetzt_s,
+                    'vorher': vw, 'nachher': v,
+                    'hielt_tage': ((jetzt - as_datetime(vorher.am)).days) if vorher else none}] -%}
+            {%- endif -%}
+          {%- else -%}
+            {%- set stufe = [c.stufe | int(1), stufe_jetzt] | max -%}
+            {%- set tiefst = ([c.tiefst, v] | select('is_number') | list | min) if ([c.tiefst, v] | select('is_number') | list) else none -%}
+            {%- set nf.faelle = nf.faelle + [{'id': d, 'name': name, 'bereich': bereich,
+                  'stufe': stufe,
+                  'stufe_seit': c.stufe_seit if stufe == (c.stufe | int(1)) else jetzt_s,
+                  'art': art if art else ('niedrig' if (c.art == 'weg' and v is not none) else ('schwach' if c.art == 'weg' else c.art)),
+                  'wert': v if v is not none else c.wert,
+                  'tiefst': tiefst,
+                  'seit': c.seit}] -%}
+          {%- endif -%}
+        {%- elif stufe_jetzt >= 1 -%}
+          {%- set nf.faelle = nf.faelle + [{'id': d, 'name': name, 'bereich': bereich,
+                'stufe': stufe_jetzt, 'stufe_seit': jetzt_s, 'art': art,
+                'wert': v, 'tiefst': v, 'seit': jetzt_s}] -%}
+        {%- elif v is not none and s1 < v < s1 + 10 -%}
+          {%- set nf.beob = nf.beob + [{'id': d, 'name': name, 'bereich': bereich, 'wert': v}] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set faelle = nf.faelle | sort(attribute='name') | sort(attribute='stufe', reverse=true) -%}
+      {{ {'faelle': faelle,
+          'beobachten': nf.beob | sort(attribute='wert'),
+          'weg_seit': weg,
+          'gewechselt': (nf.gew + ag)[:10],
+          'stoerung': nsi.stoer,
+          'hoechste_stufe': (faelle | map(attribute='stufe') | max) if faelle else 0,
+          'ueberwacht': ns.ent | map(attribute='d') | unique | list | count,
+          'ausgenommen': ns.aus_dev | unique | list | count} }}
+  sensor:
+  - name: Batterien
+    unique_id: batterien
+    icon: mdi:battery-alert-variant-outline
+    state: '{{ erg.faelle | count }}'
+    attributes:
+      faelle: '{{ erg.faelle }}'
+      beobachten: '{{ erg.beobachten }}'
+      weg_seit: '{{ erg.weg_seit }}'
+      gewechselt: '{{ erg.gewechselt }}'
+      stoerung: '{{ erg.stoerung }}'
+      hoechste_stufe: '{{ erg.hoechste_stufe }}'
+      ueberwacht: '{{ erg.ueberwacht }}'
+      ausgenommen: '{{ erg.ausgenommen }}'
+
+# ---------- Skripte ----------
+script:
+  batterien_senden:
+    alias: 'Batterien: senden'
+    description: 'Sendet eine Batterie-Meldung über den Kanal aus input_select.batterie_kanal: Telegram
+      (auch, wenn der Helfer keinen gültigen Wert hat), iPhone ohne Ton (passiv) oder beide. Aufgerufen
+      von „Batterien: Fall melden“ und „Batterien: Meldungen“.'
+    fields:
+      text:
+        description: Inhalt der Meldung
+        name: Text
+        required: true
+        selector:
+          text:
+            multiline: true
+      titel:
+        description: Erste Zeile der Meldung
+        name: Titel
+        required: true
+        selector:
+          text: {}
+    icon: mdi:send-outline
+    max: 20
+    mode: queued
+    sequence:
+    - parallel:
+      - if:
+        - condition: not
+          conditions:
+          - condition: state
+            entity_id: input_select.batterie_kanal
+            state: iPhone
+        then:
+        - action: telegram_bot.send_message
+          continue_on_error: true
+          data:
+            config_entry_id: telegram_eintrag
+            message: |-
+              {{ titel }}
+              {{ text }}
+            parse_mode: plain_text
+      - if:
+        - condition: state
+          entity_id: input_select.batterie_kanal
+          state:
+          - iPhone
+          - Beide
+        then:
+        - action: notify.mobile_app_iphone
+          continue_on_error: true
+          data:
+            data:
+              push:
+                interruption-level: passive
+            message: '{{ text }}'
+            title: '{{ titel }}'
+  batterien_fall_melden:
+    alias: 'Batterien: Fall melden'
+    description: 'Baut die Meldung für einen Fall aus sensor.batterien (Stufe 1 Hinweis, 2 erhöht, 3 kritisch
+      oder nicht erreichbar) und sendet sie über „Batterien: senden“. Die nächste Grenze und die Uhrzeit
+      der Erinnerung kommen aus den Helfern.'
+    fields:
+      fall:
+        description: Ein Eintrag aus dem Attribut faelle von sensor.batterien
+        name: Fall
+        required: true
+        selector:
+          object: {}
+    icon: mdi:battery-alert-variant-outline
+    max: 20
+    mode: queued
+    sequence:
+    - variables:
+        text: |-
+          {%- set f = fall -%}
+          {%- set w = (f.wert | float(0) | round(1) | string).replace('.0', '').replace('.', ',') if f.wert is number else none -%}
+          {%- set s2 = states('input_number.batterie_stufe_2') | int(20) -%}
+          {%- set s3 = states('input_number.batterie_stufe_3') | int(10) -%}
+          {%- set zeit = states('input_datetime.batterie_meldezeit')[:5] -%}
+          {%- if f.art == 'weg' -%}Seit 24 h keine Meldung{{ ', letzter Wert ' ~ w ~ ' %' if w else '' }}. Die Batterie ist vermutlich leer. Stufe 3: Ab morgen jeden Tag um {{ zeit }} eine Erinnerung, bis das Gerät wieder meldet.
+          {%- elif f.art == 'schwach' and f.stufe | int == 2 -%}Das Gerät meldet „Batterie schwach“. Stufe 2 von 3.
+          {%- elif f.stufe | int == 3 -%}{{ w }} %, Stufe 3 von 3. Ab morgen jeden Tag um {{ zeit }} eine Erinnerung, bis die Batterie gewechselt ist.
+          {%- elif f.stufe | int == 2 -%}{{ w }} %, Stufe 2 von 3. Nächste Meldung bei {{ s3 }} %, ab dann täglich.
+          {%- else -%}{{ w }} %, Stufe 1 von 3. Nächste Meldung bei {{ s2 }} %.{%- endif -%}
+        titel: |-
+          {%- set f = fall -%}
+          {%- set n = f.name ~ ((' · ' ~ f.bereich) if f.bereich and (f.bereich | lower) not in (f.name | lower) else '') -%}
+          {%- if f.art == 'weg' -%}Nicht erreichbar: {{ n }}
+          {%- elif f.stufe | int == 3 -%}Batterie kritisch: {{ n }}
+          {%- elif f.stufe | int == 2 -%}Batterie sehr schwach: {{ n }}
+          {%- else -%}Batterie schwach: {{ n }}{%- endif -%}
+    - action: script.batterien_senden
+      data:
+        text: '{{ text }}'
+        titel: '{{ titel }}'
+
+# ---------- Automation ----------
+automation:
+- id: batterien_meldungen
+  alias: 'Batterien: Meldungen'
+  description: 'Meldet Batterien in drei Stufen aus sensor.batterien (Paket batterien-konfig.yaml): Stufe
+    1 Hinweis, 2 erhöht, 3 kritisch (Grenzen in input_number.batterie_stufe_1..3, einschließlich). Jede
+    Stufe einmal, sobald ein Gerät sie zum ersten Mal erreicht; zwischen 21 und 8 Uhr erreichte Stufen
+    kommen um 08:00. Ab Stufe 3 täglich zur Meldezeit eine Erinnerung für alle kritischen Geräte (ab dem
+    Tag nach Erreichen). Samstags zur Meldezeit statt der Erinnerung die Wochenübersicht. Schalter: input_boolean.batterie_sofort
+    (Stufen und Erinnerung), input_boolean.batterie_woche. Versand über script.batterien_senden (Kanal
+    aus input_select.batterie_kanal). Nach einem Neustart oder Neuladen des Sensors (kein Vorzustand)
+    wird nichts gemeldet.'
+  triggers:
+  - attribute: faelle
+    entity_id: sensor.batterien
+    id: faelle
+    trigger: state
+  - at: 08:00:00
+    id: morgens
+    trigger: time
+  - at: input_datetime.batterie_meldezeit
+    id: meldezeit
+    trigger: time
+  conditions: []
+  actions:
+  - choose:
+    - alias: Neuer Fall oder höhere Stufe, tagsüber sofort
+      conditions:
+      - condition: trigger
+        id: faelle
+      - condition: state
+        entity_id: input_boolean.batterie_sofort
+        state: 'on'
+      - after: 08:00:00
+        before: '21:00:00'
+        condition: time
+      - condition: template
+        value_template: '{{ trigger.from_state is not none and trigger.from_state.state not in [''unknown'',
+          ''unavailable''] }}'
+      sequence:
+      - variables:
+          neu: |-
+            {%- set alt = trigger.from_state.attributes.faelle | default([], true) -%}
+            {%- set ns = namespace(l=[]) -%}
+            {%- for f in trigger.to_state.attributes.faelle | default([], true) -%}
+              {%- set a = alt | selectattr('id', 'eq', f.id) | first | default(none) -%}
+              {%- if a is none or (f.stufe | int(0)) > (a.stufe | int(0)) -%}{%- set ns.l = ns.l + [f] -%}{%- endif -%}
+            {%- endfor -%}
+            {{ ns.l }}
+      - repeat:
+          for_each: '{{ neu }}'
+          sequence:
+          - action: script.batterien_fall_melden
+            data:
+              fall: '{{ repeat.item }}'
+    - alias: Nachts erreichte Stufen um 08:00
+      conditions:
+      - condition: trigger
+        id: morgens
+      - condition: state
+        entity_id: input_boolean.batterie_sofort
+        state: 'on'
+      sequence:
+      - variables:
+          nacht: |-
+            {%- set von = today_at('21:00') - timedelta(days=1) -%}
+            {%- set bis = today_at('08:00') -%}
+            {%- set ns = namespace(l=[]) -%}
+            {%- for f in faelle if f.stufe_seit is defined and von <= as_datetime(f.stufe_seit) < bis -%}{%- set ns.l = ns.l + [f] -%}{%- endfor -%}
+            {{ ns.l }}
+      - repeat:
+          for_each: '{{ nacht }}'
+          sequence:
+          - action: script.batterien_fall_melden
+            data:
+              fall: '{{ repeat.item }}'
+    - alias: 'Samstags zur Meldezeit: Wochenübersicht'
+      conditions:
+      - condition: trigger
+        id: meldezeit
+      - condition: time
+        weekday: sat
+      - condition: state
+        entity_id: input_boolean.batterie_woche
+        state: 'on'
+      sequence:
+      - variables:
+          woche: |-
+            {%- set beob = state_attr('sensor.batterien', 'beobachten') | default([], true) -%}
+            {%- set gew = state_attr('sensor.batterien', 'gewechselt') | default([], true) -%}
+            {%- set stoerung = state_attr('sensor.batterien', 'stoerung') | default([], true) -%}
+            {%- macro zahl(w) -%}{{ (w | float(0) | round(1) | string).replace('.0', '').replace('.', ',') }}{%- endmacro -%}
+            {%- macro zeile(x) -%}• {{ x.name }}: {% if x.art == 'weg' %}nicht erreichbar{% elif x.wert is not number %}meldet „schwach“{% else %}{{ zahl(x.wert) }} %{% endif %}, seit {{ as_datetime(x.stufe_seit).strftime('%d.%m.') }}{%- endmacro -%}
+            {%- set grenze = now() - timedelta(days=7) -%}
+            {%- set ng = namespace(l=[]) -%}
+            {%- for x in gew if x.am is defined and as_datetime(x.am) >= grenze -%}{%- set ng.l = ng.l + [x] -%}{%- endfor -%}
+            {%- set z = namespace(t=[]) -%}
+            {%- if faelle or beob or ng.l -%}
+              {%- for st, wort in [(3, 'Kritisch'), (2, 'Erhöht'), (1, 'Hinweis')] -%}
+                {%- set l = faelle | selectattr('stufe', 'eq', st) | list -%}
+                {%- if l -%}
+                  {%- set z.t = z.t + [wort ~ ' (' ~ (l | count) ~ ')'] -%}
+                  {%- for x in l -%}{%- set z.t = z.t + [zeile(x)] -%}{%- endfor -%}
+                {%- else -%}{%- set z.t = z.t + [wort ~ ': keine'] -%}{%- endif -%}
+              {%- endfor -%}
+              {%- if beob -%}
+                {%- set z.t = z.t + ['Beobachten (' ~ (beob | count) ~ ')'] -%}
+                {%- for x in beob -%}{%- set z.t = z.t + ['• ' ~ x.name ~ ': ' ~ zahl(x.wert) ~ ' %'] -%}{%- endfor -%}
+              {%- else -%}{%- set z.t = z.t + ['Beobachten: keine'] -%}{%- endif -%}
+              {%- if ng.l -%}
+                {%- set z.t = z.t + ['Gewechselt (' ~ (ng.l | count) ~ ')'] -%}
+                {%- for x in ng.l -%}{%- set z.t = z.t + ['• ' ~ x.name ~ ' am ' ~ as_datetime(x.am).strftime('%d.%m.') ~ ((', hielt ' ~ x.hielt_tage ~ ' Tage') if x.hielt_tage is number else '')] -%}{%- endfor -%}
+              {%- else -%}{%- set z.t = z.t + ['Gewechselt: keine'] -%}{%- endif -%}
+              {%- if stoerung -%}{%- set z.t = z.t + ['Gestört: ' ~ (stoerung | join(', '))] -%}{%- endif -%}
+              {%- set z.t = z.t + [(state_attr('sensor.batterien', 'ueberwacht') | string) ~ ' Geräte überwacht, ' ~ (state_attr('sensor.batterien', 'ausgenommen') | string) ~ ' ausgenommen'] -%}
+            {%- endif -%}
+            {{ z.t | join('\n') }}
+      - condition: template
+        value_template: '{{ woche | length > 0 }}'
+      - action: script.batterien_senden
+        data:
+          text: '{{ woche }}'
+          titel: Batterien – Wochenübersicht
+    - alias: 'Zur Meldezeit: Erinnerung für kritische Geräte'
+      conditions:
+      - condition: trigger
+        id: meldezeit
+      - condition: state
+        entity_id: input_boolean.batterie_sofort
+        state: 'on'
+      sequence:
+      - variables:
+          kritisch: |-
+            {%- set ns = namespace(l=[]) -%}
+            {%- for x in faelle if (x.stufe | int(0)) == 3 and x.stufe_seit is defined and as_datetime(x.stufe_seit) < today_at('00:00') -%}{%- set ns.l = ns.l + [x] -%}{%- endfor -%}
+            {{ ns.l }}
+      - condition: template
+        value_template: '{{ kritisch | count > 0 }}'
+      - action: script.batterien_senden
+        data:
+          text: |-
+            {%- macro zahl(w) -%}{{ (w | float(0) | round(1) | string).replace('.0', '').replace('.', ',') }}{%- endmacro -%}
+            {%- for x in kritisch -%}• {{ x.name }}: {{ 'nicht erreichbar' if x.art == 'weg' else zahl(x.wert) ~ ' %' }}, kritisch seit {{ as_datetime(x.stufe_seit).strftime('%d.%m.') }}
+            {% endfor -%}
+            Erinnerung jeden Tag um {{ zeit }}, bis gewechselt.
+          titel: Batterie kritisch ({{ kritisch | count }})
+  max: 10
+  mode: queued
+  variables:
+    faelle: '{{ state_attr(''sensor.batterien'', ''faelle'') | default([], true) }}'
+    zeit: '{{ states(''input_datetime.batterie_meldezeit'')[:5] }}'
