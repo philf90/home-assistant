@@ -20,12 +20,28 @@
 #   input_text.fussball_meldung_stand     Merker der Automation (JSON:
 #                                         e Event-ID, l Liga, a Anstoss,
 #                                         z Status, m hoechste gemeldete ID)
+#   sensor.fussball_takt                  Template-Sensor: zeigt im
+#                                         Spielfenster (5 min vor bis 4 h
+#                                         nach Anstoss, bis Abpfiff) die
+#                                         Uhrzeit HH:MM, sonst "aus"
 #   script.fussball_meldungen_auswerten   holt die Spieldetails, meldet neue
-#                                         Ereignisse, gibt den Stand zurueck
+#                                         Ereignisse, gibt den Stand zurueck,
+#                                         schreibt jede Meldung ins Logbuch
 #   automation "Fussball: Meldungen"      sucht stuendlich (xx:05:30) und beim
 #                                         Start das Spiel des Tages und ruft
-#                                         von 5 min vor bis 4 h nach Anstoss
-#                                         jede Minute das Skript auf
+#                                         bei jeder Aenderung von
+#                                         sensor.fussball_takt das Skript auf
+#
+# Warum ein Takt-Sensor statt "jede Minute": Ein time_pattern /1 loeste
+# 1.440-mal am Tag aus, fast immer ohne Spiel, und jeder Lauf belegte einen
+# der 5 Traces der Automation; die stuendliche Suche war nach 5 Minuten aus
+# den Traces verdraengt. Der Sensor aendert sich nur im Spielfenster jede
+# Minute (Template mit now() wird zu jeder Minute neu berechnet), ausserhalb
+# steht er auf "aus". Gefundene Spiele, geaenderte Anstosszeiten und jede
+# gesendete Meldung stehen im Logbuch: Es liegt in der Datenbank und
+# uebersteht Neustarts, Traces nicht zuverlaessig (Home Assistant laedt die
+# gespeicherten Traces erst, wenn jemand einen oeffnet, und ueberschreibt sie
+# sonst beim naechsten Herunterfahren).
 #
 # Anpassen:
 #   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter, siehe oben)
@@ -56,7 +72,9 @@
 # Helfer bzw. Automationen & Szenen), diese vorher loeschen. Sonst
 # kollidieren Helfer und Skript, und die Automation laeuft zweimal (die
 # UI-Fassung hat eine andere id), jede Meldung kaeme doppelt.
-# Ohne Paket: Helfer in der UI anlegen (Namen und Icons wie unten), dann
+# Ohne Paket: Helfer in der UI anlegen (Namen und Icons wie unten; den
+# Takt-Sensor unter Helfer -> Template -> Template-Sensor mit dem Namen
+# "Fussball Takt" und dem Zustands-Template unten), dann
 # Skript und Automation einzeln einfuegen (Neues Skript bzw. Neue
 # Automation -> Drei-Punkte-Menue -> In YAML bearbeiten). Einzufuegen ist
 # beim Skript alles unter "fussball_meldungen_auswerten:", bei der
@@ -88,10 +106,18 @@ input_text:
     icon: mdi:database-clock-outline
     max: 255
 
+template:
+- sensor:
+  - name: Fussball Takt
+    unique_id: fussball_takt
+    icon: mdi:timer-outline
+    state: >-
+      {% set r = states('input_text.fussball_meldung_stand') %}{% set s = r | from_json if r[:1] == '{' else {} %}{% set a = s.a | default(0) | int(0) %}{% set t = now().timestamp() | int %}{% if s.e is defined and s.z | default('') != 'post' and a - 300 <= t <= a + 14400 %}{{ now().strftime('%H:%M') }}{% else %}aus{% endif %}
+
 script:
   fussball_meldungen_auswerten:
     alias: 'Fussball: Meldungen auswerten'
-    description: 'Fussball-View, Meldungen zum Lieblingsverein: holt die ESPN-Spieldetails (rest_command.espn_fussball, Paket fussball-espn-konfig.yaml) eines Spiels und erzeugt Meldungen fuer alle Ereignisse mit einer ID ueber stand.m, je nach Schalter input_boolean.fussball_meldung_*. Anpfiff/Abpfiff aus dem Spielstatus (pre/in/post). Gelb-Rot = Rot (93) nach Gelb (94) desselben Spielers; verschossener Elfmeter 113, gehalten 174 in derselben Minute; Eigentor 97 traegt den beguenstigten Verein. Abpfiff mit n. V. (STATUS_FINAL_AET) bzw. i. E. und shootoutScore (STATUS_FINAL_PEN); bei liga ger.dfb_pokal nennt der Anpfiff den Wettbewerb. Mit senden: false nur Rueckgabe (Test). Gibt den neuen Stand zurueck; gespeichert wird er von der Automation.'
+    description: 'Fussball-View, Meldungen zum Lieblingsverein: holt die ESPN-Spieldetails (rest_command.espn_fussball, Paket fussball-espn-konfig.yaml) eines Spiels und erzeugt Meldungen fuer alle Ereignisse mit einer ID ueber stand.m, je nach Schalter input_boolean.fussball_meldung_*. Anpfiff/Abpfiff aus dem Spielstatus (pre/in/post). Gelb-Rot = Rot (93) nach Gelb (94) desselben Spielers; verschossener Elfmeter 113, gehalten 174 in derselben Minute; Eigentor 97 traegt den beguenstigten Verein. Abpfiff mit n. V. (STATUS_FINAL_AET) bzw. i. E. und shootoutScore (STATUS_FINAL_PEN); bei liga ger.dfb_pokal nennt der Anpfiff den Wettbewerb. Mit senden: false nur Rueckgabe (Test). Gibt den neuen Stand zurueck; gespeichert wird er von der Automation. Jede gesendete Meldung steht zusaetzlich im Logbuch, das anders als die Traces Neustarts uebersteht (seit 20.11.2026).'
     mode: queued
     max: 3
     fields:
@@ -211,6 +237,13 @@ script:
                 url: /dashboard-home/fussball
               message: '{{ repeat.item.text }}'
               title: '{{ repeat.item.titel }}'
+          - action: logbook.log
+            continue_on_error: true
+            data:
+              name: Fußball
+              entity_id: script.fussball_meldungen_auswerten
+              message: '{{ repeat.item.titel }}: {{ repeat.item.text }}'
+            note: Dauerhaftes Protokoll der gesendeten Meldung.
     - variables:
         antwort: '{{ {''stand'': dict(stand, z=zust, m=[max_id, m_alt] | max), ''zustand'': zust, ''meldungen'': meldungen} }}'
     - response_variable: antwort
@@ -221,7 +254,7 @@ script:
 automation:
 - id: fussball_meldungen
   alias: 'Fussball: Meldungen'
-  description: 'Fussball-View, Meldungen zum Lieblingsverein (ESPN-Team-ID in variables.verein, 1. FC Kaiserslautern = 130; ESPN-Ligapfade in variables.ligen, mit DFB-Pokal ger.dfb_pokal). Stuendlich (xx:05:30) und beim Start: Spiel des Tages ueber rest_command.espn_fussball (scoreboard?dates=JJJJMMTT, UTC) suchen und in input_text.fussball_meldung_stand merken (e Event-ID, l Liga, a Anstoss, z Status, m hoechste gemeldete Ereignis-ID; m -1 = mitten im Spiel gefunden, Rueckstand nicht melden). Von 5 min vor bis 4 h nach Anstoss jede Minute script.fussball_meldungen_auswerten aufrufen (meldet neue Ereignisse je nach input_boolean.fussball_meldung_*) und den Stand speichern; nach Abpfiff (z post) Ruhe. Ausserhalb dieser Zeiten loest die Automation nicht aus.'
+  description: 'Fussball-View, Meldungen zum Lieblingsverein (ESPN-Team-ID in variables.verein, 1. FC Kaiserslautern = 130; ESPN-Ligapfade in variables.ligen, mit DFB-Pokal ger.dfb_pokal). Stuendlich (xx:05:30) und beim Start: Spiel des Tages ueber rest_command.espn_fussball (scoreboard?dates=JJJJMMTT, UTC) suchen und in input_text.fussball_meldung_stand merken (e Event-ID, l Liga, a Anstoss, z Status, m hoechste gemeldete Ereignis-ID; m -1 = mitten im Spiel gefunden, Rueckstand nicht melden). Takt: sensor.fussball_takt (Template-Helfer) zaehlt von 5 min vor bis 4 h nach Anstoss jede Minute weiter, solange das Spiel nicht beendet ist (z post); jede Aenderung ruft script.fussball_meldungen_auswerten auf (meldet neue Ereignisse je nach input_boolean.fussball_meldung_*) und speichert den Stand. Ausserhalb steht der Sensor auf aus, die Automation laeuft dann nur zur stuendlichen Suche (bis 20.11.2026 jede Minute: 1.440 Laeufe und Traces am Tag, die die Suche aus den Traces verdraengten). Gefundene Spiele und geaenderte Anstosszeiten stehen im Logbuch, das anders als die Traces Neustarts uebersteht.'
   mode: single
   max_exceeded: silent
   variables:
@@ -237,9 +270,14 @@ automation:
   - event: start
     id: suche
     trigger: homeassistant
-  - id: takt
-    minutes: /1
-    trigger: time_pattern
+  - trigger: state
+    entity_id: sensor.fussball_takt
+    not_to:
+    - aus
+    - unavailable
+    - unknown
+    id: takt
+    note: Der Sensor zaehlt nur im Spielfenster jede Minute weiter; ausserhalb steht er auf aus und loest nichts aus.
   conditions:
   - condition: or
     conditions:
@@ -258,12 +296,6 @@ automation:
     - condition: state
       entity_id: input_boolean.fussball_meldung_platzverweis
       state: 'on'
-  - condition: or
-    conditions:
-    - condition: trigger
-      id: suche
-    - condition: template
-      value_template: '{% set r = states(''input_text.fussball_meldung_stand'') %}{% set s = r | from_json if r[:1] == ''{'' else {} %}{% set t = now().timestamp() | int %}{{ s.e is defined and s.z | default('''') != ''post'' and t >= (s.a | int(0)) - 300 and t <= (s.a | int(0)) + 14400 }}'
   actions:
   - variables:
       st: '{% set r = states(''input_text.fussball_meldung_stand'') %}{{ r | from_json if r[:1] == ''{'' else {} }}'
@@ -277,6 +309,10 @@ automation:
       - repeat:
           for_each: '{{ ligen }}'
           sequence:
+          - variables:
+              sb:
+                status: 0
+            note: Zuruecksetzen; schlaegt ein Aufruf fehl, bliebe sonst die Antwort der vorigen Liga stehen und wuerde mit der falschen Liga ausgewertet.
           - action: rest_command.espn_fussball
             continue_on_error: true
             data:
@@ -294,6 +330,12 @@ automation:
               value: '{{ dict(fund, m=(0 if fund.z == ''pre'' else -1)) | to_json }}'
             target:
               entity_id: input_text.fussball_meldung_stand
+          - action: logbook.log
+            continue_on_error: true
+            data:
+              name: Fußball
+              entity_id: automation.fussball_meldungen
+              message: 'Spiel des Tages gefunden: Event {{ fund.e }} ({{ fund.l }}), Anstoß {{ fund.a | timestamp_custom(''%d.%m. %H:%M'') }}, Status {{ fund.z }}'
         - conditions:
           - condition: template
             value_template: '{{ fund.e is defined and fund.a != st.a | default(0) }}'
@@ -303,6 +345,12 @@ automation:
               value: '{{ dict(st, a=fund.a) | to_json }}'
             target:
               entity_id: input_text.fussball_meldung_stand
+          - action: logbook.log
+            continue_on_error: true
+            data:
+              name: Fußball
+              entity_id: automation.fussball_meldungen
+              message: 'Anstoß geändert: Event {{ fund.e }}, neu {{ fund.a | timestamp_custom(''%d.%m. %H:%M'') }}'
     default:
     - action: script.fussball_meldungen_auswerten
       continue_on_error: true
