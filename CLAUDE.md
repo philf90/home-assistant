@@ -36,6 +36,15 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
   "Dateikopf". `Karten`, `Templates` und `Platzhalter` beim Aendern
   mitpflegen; `ci/check_kopf.py` vergleicht sie mit dem Inhalt.
 
+## Routen
+
+- Jedes Sprungziel der Navigation und jeder View hat eine Klasse in
+  `design/routen.yaml`: `admin` (Rolle, `hidden: '[[[ return !user.is_admin; ]]]'`),
+  `person` (Benutzer-IDs, `condition: user`) oder `alle` (keine Bedingung).
+  Neue Ziele zuerst dort eintragen; das gilt auch fuer Aenderungen direkt in
+  der Instanz. Regeln: `CONTRIBUTING.md`, Abschnitt "Routen und Sichtbarkeit";
+  `ci/check_routen.py` prueft das Repo, mit `--json` auch einen Instanzabzug.
+
 ## Pruefungen
 
 Regeln fuer neue und geaenderte Dateien: `CONTRIBUTING.md`. Vor einem Push die

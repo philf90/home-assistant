@@ -46,6 +46,44 @@ pre-commit install
 - Fassungen in `archiv/` bekommen nur noch Änderungen, die alle Dateien
   betreffen (Palette, Anonymisierung, CI-Fehler), keine neuen Funktionen.
 
+## Routen und Sichtbarkeit
+
+Jedes Sprungziel der Navigation und jeder View hat genau eine Klasse in
+[`design/routen.yaml`](design/routen.yaml). Als Sprungziel zählen
+`navigation_path` (auch über `variables.pfad`), die `url` einer Route der
+navbar-card und ein `url_path`, der mit `/` beginnt; dazu Dienstaufrufe, für
+die Home Assistant Adminrechte verlangt (Abschnitt `dienste`, z. B.
+`homeassistant.restart`).
+
+| Klasse | Wofür | Navigation (Kachel, Route) | View |
+|---|---|---|---|
+| `admin` | Wartung, oder Home Assistant verlangt für das Ziel selbst Adminrechte | `hidden: '[[[ return !user.is_admin; ]]]'` | `visible` mit den `admin_konten` |
+| `person` | persönliche Inhalte einzelner Konten | `conditional` oder `visibility` mit `condition: user` und genau den `konten` | `visible` mit denselben `konten` |
+| `alle` | jedes angemeldete Konto | keine Bedingung nach Benutzer oder Rolle | kein `visible` |
+
+- **Neue Route:** zuerst in `design/routen.yaml` eintragen (Klasse, Grund, bei
+  `person` die Konten), dann verwenden. `ci/check_routen.py` meldet
+  Sprungziele und Views ohne Klasse und solche, deren Bedingung nicht zur
+  Klasse passt.
+- **Warum zwei Mechanismen:** Home Assistant kennt für Views und Karten nur
+  Bedingungen nach Benutzer-ID (`visible`, `condition: user`), keine nach
+  Rolle. Die Rolle steht nur in JS-Templates zur Verfügung (`user.is_admin`
+  in button-card und navbar-card). Deshalb steht bei `admin` an Views die
+  Liste der Admin-Konten; kommt ein Admin-Konto dazu, wird es in
+  `admin_konten` und an den Views ergänzt.
+- **Ausblenden ist keine Sicherheit:** `visible` blendet nur den Tab aus, über
+  die URL öffnet sich der View trotzdem. Normale Benutzer dürfen in Home
+  Assistant alle Entitäten lesen und schalten. Echte Grenzen setzt nur Home
+  Assistant selbst (Admin-Dienste, Einstellungen, Speichern von Dashboards).
+  Die Klassen sorgen dafür, dass niemand Ziele angeboten bekommt, die nicht
+  für ihn gedacht sind oder für ihn nicht funktionieren.
+- **Gruppen im Menü:** Ein Raster (`type: grid`) hat kein `hidden`. Eine Gruppe
+  der Klasse `admin` blendet deshalb Überschrift und jede Kachel einzeln aus;
+  das leere Raster bleibt stehen (Abstand siehe `navbar-karte.yaml`).
+- **Instanz prüfen:** Einen Abzug eines Dashboards (JSON) lokal mit
+  `python ci/check_routen.py --json <abzug> --dashboard <url_path> --konto
+  benutzer_id_1=<id>` prüfen. Abzug und echte IDs nie committen.
+
 ## Auf beiden Handys prüfen
 
 Für jede neue oder geänderte Karte und View, nach den Regeln in
@@ -93,6 +131,8 @@ Personenbezug, auch nicht in Commit-Nachrichten, PR-Texten und Kommentaren.
   `ci/check_persoenlich.py` gegen eine eigene Sperrliste in
   `lokal/sperrliste.txt` (ein Begriff pro Zeile, nicht im Repo).
 - Ob die Entitäten in einer Instanz existieren.
+- Ob die **Klasse einer Route** die richtige ist (`design/routen.yaml`);
+  geprüft wird nur, dass die Bedingungen zur eingetragenen Klasse passen.
 - Wie eine Karte bei 360 und 402 px **aussieht**. `ci/check_mobil.py` prüft
   nur einzelne Regeln aus „Bildschirmbreiten“; der Rest ist der Blick auf
   beide Breiten (siehe oben).
