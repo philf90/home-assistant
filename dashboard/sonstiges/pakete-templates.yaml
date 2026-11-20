@@ -92,8 +92,12 @@
 # Paketzeile (pk.zeile): rechts vom Logo oben der Dienst, dahinter der
 # Absender, falls bekannt (eine Zeile, notfalls gekuerzt, pk.zeilenTitel;
 # ganz steht er aufgeklappt), darunter die ganze Sendungsnummer (lange
-# Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter). Kacheln, Hero und Achtung-Liste nennen die Sendung weiter
-# kurz (pk.name, Absender oder die letzten sechs Zeichen der Nummer).
+# Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter).
+# Kacheln, Hero und Achtung-Liste nennen die Sendung weiter kurz (pk.name,
+# Absender oder die letzten sechs Zeichen der Nummer). Aufgeklappt
+# verbindet eine Linie die Punkte des Verlaufs (pk.verlaufLinie): vom
+# aktiven Schritt (oben, Sendung noch nicht zugestellt) zum Schritt darunter
+# gestrichelt in der Statusfarbe, sonst durchgezogen.
 #
 # Formular: Eingabe und Dienst-Auswahl leben nur im Popup-DOM, abgeschickt
 # wird ueber script.paket_hinzufuegen (pakete-konfig.yaml). Der Dienst wird
@@ -141,7 +145,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 9, vorher = window.__nachtblauPakete;
+          const VERSION = 10, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -456,11 +460,22 @@ button_card_templates:
           };
 
           // ---------- Paketzeile ----------
+          // Linie im Verlauf vom Punkt eines Eintrags zum Punkt darunter (2 px,
+          // mittig unter dem 7-px-Punkt, je 2 px Abstand zu beiden Punkten).
+          // Neuester Eintrag oben: Ist die Sendung noch unterwegs, ist er der
+          // aktive Schritt, und die Linie zu ihm ist gestrichelt in seiner
+          // Statusfarbe (4 px Strich, 3 px Luecke wie in fussball-templates.yaml).
+          // Zwischen abgeschlossenen Schritten und bei zugestellten Sendungen
+          // durchgezogen in "Zustand aus". Unter dem untersten Eintrag keine.
+          pk.verlaufLinie = (i, n, offen, farbe) => i >= n - 1 ? ''
+            : `<span style="position:absolute;left:2.5px;top:14px;bottom:-3px;width:2px;border-radius:1px;background:${i === 0 && offen ? `repeating-linear-gradient(180deg, ${farbe} 0 4px, transparent 4px 7px)` : 'var(--nachtblau-aus, #3a4453)'};"></span>`;
           pk.zeile = p => {
             const k = pk.schluessel(p), d = pk.dienst(p), auf = pk.offen.has(k), kj = pk.esc(JSON.stringify(k));
             const code = String(p.barcode || ''), foto = pk.foto(p);
-            const verlauf = Array.isArray(p.history) && p.history.length
-              ? p.history.slice().reverse().slice(0, 8).map((h, i) => `<div style="position:relative;padding:0 0 9px 16px;">
+            const eintraege = Array.isArray(p.history) ? p.history.slice().reverse().slice(0, 8) : [];
+            const verlauf = eintraege.length
+              ? eintraege.map((h, i) => `<div style="position:relative;padding:0 0 9px 16px;">
+                  ${pk.verlaufLinie(i, eintraege.length, pk.gruppe(p) !== 'zugestellt', pk.status(p.status).farbe)}
                   <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? pk.status(p.status).farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
                   <div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;">${pk.esc(pk.wann(zeit(h.timestamp)))}</div>
                   <div style="font-size:12.5px;color:${LABEL};">${pk.esc(h.raw_status || pk.status(h.status).text)}</div></div>`).join('')
