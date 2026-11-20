@@ -81,8 +81,13 @@
 # (Schrift #3a2c12 7,2:1), Abholbereit Koralle-Orange getoent und immer mit
 # Text, Zugestellt Gruen getoent, Problem und Ruecksendung Rot gefuellt
 # (Schrift #3d1512 5,6:1), Angekuendigt und Unbekannt Sekundaertext ohne
-# Toenung. Bereichsfarbe Blau (More-Menue "Zuhause"). Die Paketdienste
-# tragen ein neutrales Kuerzel; ihre Markenfarben stehen nicht in der Palette.
+# Toenung. Bereichsfarbe Blau (More-Menue "Zuhause").
+#
+# Logos: Jede Paketzeile zeigt in der 40-px-Kachel das Markenbild der
+# Integration (pk.logoKachel), dasselbe, das Home Assistant unter "Geraete &
+# Dienste" zeigt. Es ist ein Bild, kein Farbwert der Karte; die Palette gilt
+# fuer die Karte drumherum (wie beim Fahrzeugbild der Auto-Karte). Ohne Logo
+# (Token oder Bild fehlt, fremder Dienst) bleibt das neutrale Kuerzel.
 #
 # Formular: Eingabe und Dienst-Auswahl leben nur im Popup-DOM, abgeschickt
 # wird ueber script.paket_hinzufuegen (pakete-konfig.yaml). Der Dienst wird
@@ -130,7 +135,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 7, vorher = window.__nachtblauPakete;
+          const VERSION = 8, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -188,12 +193,14 @@ button_card_templates:
 
           // ---------- Paketdienste und Status ----------
           const DIENSTE = [
-            { re: /dhl/i, kurz: 'DHL', name: 'DHL' },
-            { re: /dpd/i, kurz: 'DPD', name: 'DPD' },
-            { re: /hermes/i, kurz: 'HER', name: 'Hermes' },
-            { re: /gls/i, kurz: 'GLS', name: 'GLS', domain: 'gls' },
-            { re: /ups/i, kurz: 'UPS', name: 'UPS', domain: 'ups' },
-            { re: /amazon/i, kurz: 'AMZ', name: 'Amazon' },
+            // logo: Integration, deren Markenbild Home Assistant ausliefert
+            // (pk.logoKachel); domain: Integration fuer "Nicht mehr verfolgen"
+            { re: /dhl/i, kurz: 'DHL', name: 'DHL', logo: 'dhl' },
+            { re: /dpd/i, kurz: 'DPD', name: 'DPD', logo: 'dpd' },
+            { re: /hermes/i, kurz: 'HER', name: 'Hermes', logo: 'hermes' },
+            { re: /gls/i, kurz: 'GLS', name: 'GLS', domain: 'gls', logo: 'gls' },
+            { re: /ups/i, kurz: 'UPS', name: 'UPS', domain: 'ups', logo: 'ups' },
+            { re: /amazon/i, kurz: 'AMZ', name: 'Amazon', logo: 'amazon_orders' },
           ];
           pk.dienst = p => DIENSTE.find(d => d.re.test(p.carrier || '')) || { kurz: String(p.carrier || '?').slice(0, 3).toUpperCase(), name: p.carrier || 'Paket' };
           const STATUS = {
@@ -354,6 +361,55 @@ button_card_templates:
           pk.tippAttr = js => `role="button" tabindex="0" onpointerdown="event.stopPropagation()" ontouchstart="window.__nachtblauPakete.tipp(event)" ontouchend="window.__nachtblauPakete.tipp(event,()=>{${js}})" onclick="window.__nachtblauPakete.tipp(event,()=>{${js}})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();${js}}"`;
           pk.knopf = (text, js, farbe) => `<span ${pk.tippAttr(js)} style="${F}display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:11px;cursor:pointer;white-space:nowrap;flex:none;${farbe ? `color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);` : `color:${LABEL};background:${NK};border:1px solid ${UKR};`}">${text}</span>`;
 
+          // ---------- Logos der Paketdienste ----------
+          // Markenbild der Integration, wie HA es unter "Geraete & Dienste" zeigt
+          // (components/brands): /api/brands/integration/<domain>/icon@2x.png,
+          // ohne @2x faellt HA auf icon.png zurueck. Fuer <img> braucht es
+          // ?token=, geholt per WebSocket brands/access_token (ohne Adminrechte).
+          // HA erneuert ihn alle 30 Minuten und nimmt die letzten zwei an; die
+          // Karte holt nach 25 Minuten einen neuen. Bis das Logo da ist und wenn
+          // es nicht laedt, bleibt das Kuerzel darunter sichtbar.
+          const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+          pk.brandsToken = () => {
+            const b = pk._brands;
+            return b && Date.now() - b.zeit < 25 * 60e3 ? b.token : null;
+          };
+          pk.brandsTokenHolen = () => {
+            if (pk.brandsToken()) return Promise.resolve(pk.brandsToken());
+            if (!pk._brandsLaeuft) {
+              pk._brandsLaeuft = (pk.hass && pk.hass.callWS ? pk.hass.callWS({ type: 'brands/access_token' }) : Promise.reject(new Error('kein hass')))
+                .then(r => { pk._brands = { token: r.token, zeit: Date.now() }; return r.token; })
+                .catch(() => null)
+                .finally(() => { pk._brandsLaeuft = null; });
+            }
+            return pk._brandsLaeuft;
+          };
+          pk.logoUrl = (domain, token) => `/api/brands/integration/${domain}/icon@2x.png?token=${encodeURIComponent(token)}`;
+          // Platzhalter geladen: Token holen und das echte Bild setzen;
+          // echtes Bild geladen: einblenden
+          pk.logoGeladen = el => {
+            if (el.dataset.pkEcht !== '1') {
+              pk.brandsTokenHolen().then(tok => { if (!tok) return pk.logoFehler(el); el.dataset.pkEcht = '1'; el.src = pk.logoUrl(el.dataset.pkLogo, tok); });
+              return;
+            }
+            el.style.opacity = '1';
+          };
+          // Fehler mit echtem Bild: einmal mit frischem Token, danach Kuerzel
+          pk.logoFehler = el => {
+            if (el.dataset.pkEcht === '1' && el.dataset.pkNeu !== '1') {
+              el.dataset.pkNeu = '1'; pk._brands = null;
+              pk.brandsTokenHolen().then(tok => { if (tok) el.src = pk.logoUrl(el.dataset.pkLogo, tok); else el.remove(); });
+              return;
+            }
+            el.remove();
+          };
+          pk.logoKachel = d => {
+            const kurz = `<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${LABEL};">${pk.esc(d.kurz)}</span>`;
+            const tok = d.logo ? pk.brandsToken() : null;
+            const bild = d.logo ? `<img data-pk-logo="${pk.esc(d.logo)}" ${tok ? 'data-pk-echt="1"' : ''} src="${tok ? pk.logoUrl(d.logo, tok) : PIXEL}" alt="" onload="window.__nachtblauPakete.logoGeladen(this)" onerror="window.__nachtblauPakete.logoFehler(this)" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.15s;">` : '';
+            return `<span style="position:relative;width:40px;height:40px;border-radius:12px;overflow:hidden;display:block;background:${NK};border:1px solid ${UKR};">${kurz}${bild}</span>`;
+          };
+
           // Aufklappen ohne neues Rendern; pk.offen haelt den Zustand
           pk.umschalten = (el, k) => {
             const p = el.closest('[data-pk-paket]');
@@ -404,7 +460,7 @@ button_card_templates:
             ].join('');
             return `<div data-pk-paket style="background:${UK};border:1px solid ${UKR};border-radius:13px;">
                 <div ${pk.tippAttr(`window.__nachtblauPakete.umschalten(this,${kj})`)} aria-expanded="${auf}" style="display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;">
-                  <span style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${LABEL};background:${NK};border:1px solid ${UKR};">${pk.esc(d.kurz)}</span>
+                  ${pk.logoKachel(d)}
                   <span style="min-width:0;">
                     <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.esc(pk.name(p))}</span>
                     <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
@@ -524,7 +580,8 @@ button_card_templates:
 
           // ---------- Meldungen (Schalter) ----------
           // Wie sicherheit-templates.yaml: sh.pille, sh.schalter, Kopf der Abschnitte
-          pk.pille = (c, t) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+          // Eigener Name: pk.pille ist die Status-Pille der Paketzeilen (oben)
+          pk.anzahlPille = (c, t) => `<span style="${F}display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
           pk.schalter = (eid, titel, text) => {
             const an = pk.z(eid) === 'on', js = `window.__nachtblauPakete.dienstAufruf('input_boolean','toggle',{entity_id:'${eid}'})`;
             return `<div role="switch" tabindex="0" aria-checked="${an}" ${pk.tippAttr(js)} style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 2px;cursor:pointer;border-top:1px solid ${RAND};">
@@ -543,7 +600,7 @@ button_card_templates:
                 ${pk.kachel('mdi:bell-ring-outline', BLAU, 44, 13, 23)}
                 <div style="min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${TEXT};">Meldungen</div>
                 <div style="font-size:12.5px;line-height:1.35;color:${SEK};">Push aufs iPhone</div></div>
-                ${pk.pille(n ? BLAU : SEK, `${n} von ${CFG.meldungen.length} an`)}</div>`;
+                ${pk.anzahlPille(n ? BLAU : SEK, `${n} von ${CFG.meldungen.length} an`)}</div>`;
             const zeilen = CFG.meldungen.map(([e, t, x]) => pk.s(e) ? pk.schalter(e, t, x) : pk.hinweisText(`${pk.esc(e)} fehlt (Helfer aus pakete-konfig.yaml anlegen)`)).join('');
             return pk.block(kopf + `<div style="display:flex;flex-direction:column;">${zeilen}</div>`);
           };
