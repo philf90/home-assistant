@@ -9,8 +9,8 @@
 # Platzhalter:   sensor.iphone_*, notify.mobile_app_iphone
 #                (vor dem Einfuegen ersetzen, siehe README.md)
 # ============================================================================
-# Fuenf Meldungen aufs Handy, ihre Schalter und die gemeinsame Zaehlung der
-# Erholungs-Signale zu den Apple-Health-Werten der Gesundheit-View
+# Fuenf Meldungen aufs Handy, ihre Schalter, die Merker fuer "von heute" und
+# die gemeinsame Zaehlung der Erholungs-Signale zu den Apple-Health-Werten der Gesundheit-View
 # (gesundheit-view.yaml). Schwellen und Begruendung stehen dort im Kopf,
 # Abschnitt "EIGENES NORMAL", und hier unter "Erholung abweichende Werte".
 #
@@ -29,8 +29,9 @@
 #     die Fruehwarnung. sensor.erholung_abweichende_werte nennt die
 #     auffaelligen Werte ("Ruhepuls, Schlaf" oder "keine"),
 #     sensor.erholung_signale zaehlt sie (0-5). Fuenf Signale:
-#       Ruhepuls       >= Normal + 3 bpm, erst ab 20 Uhr und nur mit Update
-#                      von heute (Apple rechnet ihn bis zum Abend neu)
+#       Ruhepuls       >= Normal + 3 bpm, erst ab 20 Uhr und nur mit neuem
+#                      Wert von heute (Apple rechnet ihn bis zum Abend neu;
+#                      "von heute" ueber input_datetime.ruhepuls_stand)
 #       HRV 24 h       <= Normal - 5 ms
 #       Atemfrequenz   >= Normal + 2/min, nur wenn die Nacht heute ankam
 #       SpO2-Minimum   <= 90 % in den letzten 24 h
@@ -75,6 +76,25 @@
 #     Anwesenheit (21.-30.10. um 19:00 immer zu Hause).
 #     Apple Health liefert die Schritte verzoegert: Ist ein Spaziergang um
 #     19:00 noch nicht uebertragen, kann die Meldung trotzdem kommen.
+#     Schritte und Trainingsminuten zaehlen nur, wenn input_datetime.
+#     schritte_stand bzw. training_stand von heute ist (siehe naechster
+#     Eintrag), sonst steht noch der Vortag im Sensor.
+#   automation "Gesundheit: Stand von Schritten, Training und Ruhepuls
+#   merken"
+#     Merkt bei jeder echten Wertaenderung von Schritten, Trainingsminuten
+#     und Ruhepuls den Zeitpunkt in input_datetime.schritte_stand,
+#     training_stand bzw. ruhepuls_stand. Bewegungs-Erinnerung und
+#     "Erholung abweichende Werte" fragen diese Merker statt last_updated:
+#     Ein Neustart schreibt den wiederhergestellten Vortagswert mit neuem
+#     last_updated (20.11.2026 07:52 und 08:01: Schritte 245, Training 1,
+#     Ruhepuls 66 unveraendert). Nur Wechsel zwischen echten Werten (nicht
+#     aus/nach unavailable/unknown, nicht ohne Vorzustand beim Start).
+#     Getrennt von "Stand von VO2max und Gewicht merken"
+#     (gesundheit-view.yaml), weil die Schritte rund 40-mal am Tag wechseln
+#     (10.-20.11.2026: 382 Wechsel) und dort sonst die Traces verdraengen.
+#     Grenzfall wie vorher: Ist der erste Wert des Tags gleich dem
+#     Vortagswert, gibt es keinen Wechsel und der Wert zaehlt nicht als
+#     "von heute" (bei Schritten praktisch nie, beim Ruhepuls moeglich).
 #   automation "Gesundheit: Wochenbericht"
 #     Sonntags 20:10 eine leise Nachricht: diese Woche Mo 00:00 bis So 20:00
 #     gegen dieselbe Spanne der Vorwoche (beide enden zur selben Uhrzeit,
@@ -135,7 +155,12 @@
 #   Direkt aus der Companion App: sensor.iphone_health_steps,
 #   sensor.iphone_exercise_time (beide setzen erst mit dem ersten Wert des
 #   neuen Tags zurueck; die Bewegungs-Erinnerung wertet sie nur mit einem
-#   Update von heute).
+#   neuen Wert von heute) und sensor.iphone_resting_heart_rate.
+#   Merker (input_datetime:, siehe unten): schritte_stand, training_stand,
+#   ruhepuls_stand; ohne Paket als Helfer "Datum und Uhrzeit" mit denselben
+#   Namen anlegen. Neu angelegt steht ein Merker auf heute 00:00 und zaehlt
+#   damit schon als "von heute": einmal input_datetime.set_datetime mit
+#   timestamp: 0 aufrufen (oder mit dem letzten echten Wechsel des Sensors).
 #   Neu in diesem Paket: sensor.erholung_abweichende_werte und
 #   sensor.erholung_signale (template:, siehe oben); die Gesundheit-View
 #   liest sie fuer die Erholungs-Ampel. Dazu die sechs Schalter
@@ -188,9 +213,9 @@ template:
       {%- set ns = namespace(s=[]) -%}
       {%- set rhr = states(P ~ 'resting_heart_rate') | float(none) -%}
       {%- set rhr_n = states(P ~ 'ruhepuls_normal_7_tage') | float(none) -%}
-      {%- set rhr_e = states[P ~ 'resting_heart_rate'] -%}
-      {%- if rhr is not none and rhr_n is not none and rhr_e is not none
-            and (rhr_e.last_updated | as_local).date() == heute
+      {%- set rhr_ts = state_attr('input_datetime.ruhepuls_stand', 'timestamp') -%}
+      {%- if rhr is not none and rhr_n is not none and rhr_ts is not none
+            and (rhr_ts | as_datetime | as_local).date() == heute
             and now().hour >= 20 and rhr - rhr_n >= 3 -%}
         {%- set ns.s = ns.s + ['Ruhepuls'] -%}
       {%- endif -%}
@@ -244,6 +269,26 @@ input_boolean:
   gesundheit_meldung_datenhinweise:
     name: Gesundheit Meldung Datenhinweise
     icon: mdi:watch-variant
+
+input_datetime:
+  # Merker fuer "von heute" (Automation "Gesundheit: Stand von Schritten,
+  # Training und Ruhepuls merken"). Neu angelegt stehen sie auf heute 00:00:
+  # einmal input_datetime.set_datetime mit timestamp: 0 aufrufen.
+  schritte_stand:
+    name: Schritte Stand
+    icon: mdi:walk
+    has_date: true
+    has_time: true
+  training_stand:
+    name: Training Stand
+    icon: mdi:timer-outline
+    has_date: true
+    has_time: true
+  ruhepuls_stand:
+    name: Ruhepuls Stand
+    icon: mdi:heart-pulse
+    has_date: true
+    has_time: true
 
 automation:
 - id: gesundheit_morgen_briefing
@@ -360,7 +405,7 @@ automation:
 
 - id: gesundheit_bewegungs_erinnerung
   alias: 'Gesundheit: Bewegungs-Erinnerung'
-  description: 'Täglich 19:00 erinnern, wenn die Schritte von heute unter 40 % des Schrittziels liegen und noch keine 30 Trainingsminuten erfasst sind. Nennt eine kleine Aufgabe statt der Lücke zum Ziel. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  description: 'Täglich 19:00 erinnern, wenn die Schritte von heute unter 40 % des Schrittziels liegen und noch keine 30 Trainingsminuten erfasst sind. Nennt eine kleine Aufgabe statt der Lücke zum Ziel. "Von heute" über die Merker aus "Stand von Schritten, Training und Ruhepuls merken", nicht über last_updated (Neustarts setzen ihn neu). Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
   mode: single
   triggers:
   - trigger: time
@@ -368,11 +413,11 @@ automation:
     note: Um 19:00 kommen im Median nur noch 670 Schritte dazu (Oktober 2026), es bleibt aber Zeit für einen Spaziergang.
   variables:
     schritte: >-
-      {%- set s = states.sensor.iphone_health_steps -%}
-      {{ s.state | int(-1) if s is not none and (s.last_updated | as_local).date() == now().date() else -1 }}
+      {%- set st = state_attr('input_datetime.schritte_stand', 'timestamp') -%}
+      {{ states('sensor.iphone_health_steps') | int(-1) if st is not none and (st | as_datetime | as_local).date() == now().date() else -1 }}
     training: >-
-      {%- set e = states.sensor.iphone_exercise_time -%}
-      {{ e.state | int(0) if e is not none and (e.last_updated | as_local).date() == now().date() else 0 }}
+      {%- set st = state_attr('input_datetime.training_stand', 'timestamp') -%}
+      {{ states('sensor.iphone_exercise_time') | int(0) if st is not none and (st | as_datetime | as_local).date() == now().date() else 0 }}
     schwelle: "{{ (states('input_number.ziel_schritte') | float(7500) * 0.4) | round(0) | int }}"
   conditions:
   - condition: state
@@ -383,10 +428,10 @@ automation:
     note: 'Schalter in der Karte Meldungen der Gesundheit-View: Hauptschalter und Bewegungs-Erinnerung.'
   - condition: template
     value_template: '{{ 0 <= schritte < schwelle }}'
-    note: 'Unter 40 % des Schrittziels. -1 = kein Update von heute: dann steht noch der Vortag im Sensor, keine Meldung.'
+    note: 'Unter 40 % des Schrittziels. -1 = heute noch kein neuer Wert (input_datetime.schritte_stand nicht von heute): dann steht noch der Vortag im Sensor, keine Meldung.'
   - condition: template
     value_template: '{{ training < 30 }}'
-    note: Rad oder Schwimmen zählen als Training, aber kaum als Schritte. Trainingsminuten nur mit Update von heute.
+    note: Rad oder Schwimmen zählen als Training, aber kaum als Schritte. Trainingsminuten nur mit neuem Wert von heute (input_datetime.training_stand).
   actions:
   - action: notify.mobile_app_iphone
     continue_on_error: true
@@ -397,6 +442,74 @@ automation:
         group: gesundheit
         url: /dashboard-home/gesundheit
         clickAction: /dashboard-home/gesundheit
+
+- id: gesundheit_stand_schritte_training_ruhepuls
+  alias: 'Gesundheit: Stand von Schritten, Training und Ruhepuls merken'
+  description: 'Bewegungs-Erinnerung und Erholung abweichende Werte fragen, ob Schritte, Trainingsminuten und Ruhepuls von heute sind. last_updated taugt dafür nicht: Ein Neustart schreibt den Vortagswert mit neuem Zeitstempel (20.11.2026 07:52 und 08:01). Bei einer echten Wertänderung den Zeitpunkt in input_datetime.schritte_stand, input_datetime.training_stand bzw. input_datetime.ruhepuls_stand merken. Getrennt von "Stand von VO2max und Gewicht merken", weil die Schritte rund 40-mal am Tag wechseln. Repo: dashboard/personen/gesundheit-meldungen-konfig.yaml.'
+  mode: queued
+  max: 10
+  triggers:
+  - trigger: state
+    entity_id: sensor.iphone_health_steps
+    not_from:
+    - unavailable
+    - unknown
+    not_to:
+    - unavailable
+    - unknown
+    id: schritte
+    note: Nur Wechsel zwischen echten Werten; Rückkehr aus unavailable/unknown und Attributänderungen zählen nicht.
+  - trigger: state
+    entity_id: sensor.iphone_exercise_time
+    not_from:
+    - unavailable
+    - unknown
+    not_to:
+    - unavailable
+    - unknown
+    id: training
+  - trigger: state
+    entity_id: sensor.iphone_resting_heart_rate
+    not_from:
+    - unavailable
+    - unknown
+    not_to:
+    - unavailable
+    - unknown
+    id: ruhepuls
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.from_state is not none }}'
+    note: Beim Start schreibt HA den wiederhergestellten Wert ohne Vorzustand. Am 20.11.2026 geschah das vor dem Scharfschalten der Automationen; die Bedingung hält auch ohne diese Reihenfolge.
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: schritte
+      sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.schritte_stand
+        data:
+          timestamp: '{{ as_timestamp(trigger.to_state.last_changed) }}'
+    - conditions:
+      - condition: trigger
+        id: training
+      sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.training_stand
+        data:
+          timestamp: '{{ as_timestamp(trigger.to_state.last_changed) }}'
+    - conditions:
+      - condition: trigger
+        id: ruhepuls
+      sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ruhepuls_stand
+        data:
+          timestamp: '{{ as_timestamp(trigger.to_state.last_changed) }}'
 
 - id: gesundheit_wochenbericht
   alias: 'Gesundheit: Wochenbericht'
