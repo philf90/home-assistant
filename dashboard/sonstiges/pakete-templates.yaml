@@ -89,6 +89,12 @@
 # fuer die Karte drumherum (wie beim Fahrzeugbild der Auto-Karte). Ohne Logo
 # (Token oder Bild fehlt, fremder Dienst) bleibt das neutrale Kuerzel.
 #
+# Paketzeile (pk.zeile): rechts vom Logo oben der Dienst, dahinter der
+# Absender, falls bekannt (eine Zeile, notfalls gekuerzt, pk.zeilenTitel;
+# ganz steht er aufgeklappt), darunter die ganze Sendungsnummer (lange
+# Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter). Kacheln, Hero und Achtung-Liste nennen die Sendung weiter
+# kurz (pk.name, Absender oder die letzten sechs Zeichen der Nummer).
+#
 # Formular: Eingabe und Dienst-Auswahl leben nur im Popup-DOM, abgeschickt
 # wird ueber script.paket_hinzufuegen (pakete-konfig.yaml). Der Dienst wird
 # aus der Nummer vorgeschlagen (Muster aus den READMEs: 1Z... UPS; JJD, 3S,
@@ -135,7 +141,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 8, vorher = window.__nachtblauPakete;
+          const VERSION = 9, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -300,6 +306,13 @@ button_card_templates:
           pk.fotoGross = (el, id) => el.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: id } }));
           pk.fotoFehler = el => { el.style.display = 'none'; const n = el.nextElementSibling; if (n) n.style.display = 'block'; };
           pk.name = p => p.sender || `${pk.dienst(p).name} …${String(p.barcode || '').slice(-6)}`;
+          // Paketzeile der View: oben in einer Zeile der Dienst, dahinter der
+          // Absender (falls bekannt, duenner, notfalls mit "…" gekuerzt; ganz
+          // steht er aufgeklappt), darunter die ganze Sendungsnummer. Bei 360 px
+          // passen neben "In Zustellung" 20 Ziffern in eine Zeile; laengere
+          // Nummern (Formular bis 40 Zeichen) brechen um statt abgeschnitten
+          // zu werden.
+          pk.zeilenTitel = p => `${pk.esc(pk.dienst(p).name)}${p.sender ? `<span style="font-weight:400;color:${LABEL};"> · ${pk.esc(p.sender)}</span>` : ''}`;
           pk.unter = p => {
             const g = pk.gruppe(p), fe = pk.fenster(p);
             if (g === 'zugestellt') { const t = zeit(p.delivered_at); return (t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
@@ -462,7 +475,8 @@ button_card_templates:
                 <div ${pk.tippAttr(`window.__nachtblauPakete.umschalten(this,${kj})`)} aria-expanded="${auf}" style="display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;">
                   ${pk.logoKachel(d)}
                   <span style="min-width:0;">
-                    <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.esc(pk.name(p))}</span>
+                    <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.zeilenTitel(p)}</span>
+                    ${code ? `<span style="display:block;font-size:11.5px;line-height:1.3;color:${LABEL};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(code)}</span>` : ''}
                     <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
                   </span>
                   ${pk.pille(p.status)}
@@ -470,7 +484,7 @@ button_card_templates:
                 <div data-pk-verlauf style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:6px;padding:2px 12px 12px 60px;">
                   ${foto ? `<img data-pk-foto="${pk.esc(foto)}" ${auf ? `src="${pk.esc(pk.fotoUrl(foto))}"` : ''} alt="Zustellfoto von Amazon" onerror="window.__nachtblauPakete.fotoFehler(this)" ${pk.tippAttr(`window.__nachtblauPakete.fotoGross(this,${pk.esc(JSON.stringify(foto))})`)} style="display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid ${UKR};background:${NK};cursor:pointer;">
                   <div style="display:none;font-size:12px;color:${SEK};">Foto konnte nicht geladen werden. Zum Neuladen zu- und wieder aufklappen.</div>` : ''}
-                  ${code ? `<div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(d.name)} · ${pk.esc(code)}</div>` : ''}
+                  ${p.sender ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Absender: ${pk.esc(p.sender)}</div>` : ''}
                   <div>${verlauf}</div>
                   ${knoepfe ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${knoepfe}</div>` : ''}
                 </div>
