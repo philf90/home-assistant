@@ -12,6 +12,10 @@
 #
 #   input_boolean.docker_meldung_absturz
 #       Schalter "Push bei Absturz oder OOM" in der Karte Ereignisse.
+#   input_datetime.docker_agent_getrennt_seit,
+#   input_datetime.docker_arcane_nicht_erreichbar_seit
+#       Merker fuer "Docker: Agent getrennt melden": Beginn eines gemeldeten
+#       Ausfalls, Zeitstempel 0 = keiner gemeldet.
 #   automation "Docker: Ereignisse ins Logbuch"
 #       Schreibt die Ereignisse der Arcane-Integration mit deutschem Text ins
 #       Logbuch, angehaengt an binary_sensor.local_docker_online. Die Karte
@@ -94,15 +98,31 @@
 #       daneben "Agent letzter Kontakt", der in der Meldung steht. Kuerzere
 #       Trennungen (Neustart des Agenten) bleiben still, ebenso eine in
 #       Arcane deaktivierte oder in den Optionen abgewaehlte Umgebung (nur
-#       deren Sensor unavailable) und ein Neustart von Home Assistant. Fuer
-#       einen weiteren Agenten die beiden Ausloeser um dessen Online-Sensor
-#       ergaenzen und den Kontakt-Sensor in der Meldung anpassen.
+#       deren Sensor unavailable). Fuer einen weiteren Agenten zwei
+#       Ausloeser, einen Merker (input_datetime) und den Kontakt-Sensor in der
+#       Meldung ergaenzen.
+#       Merker: Ein gemeldeter Ausfall steht mit seinem Beginn in
+#       input_datetime.docker_agent_getrennt_seit bzw.
+#       input_datetime.docker_arcane_nicht_erreichbar_seit, Zeitstempel 0 =
+#       nichts gemeldet. Vorher (bis 20.11.2026) meldete ein Neustart von HA
+#       mitten in einer Trennung sie nach 5 Minuten ein zweites Mal
+#       (unavailable -> off), "wieder verbunden" fehlte nach off ->
+#       unavailable -> on, und die Dauer zaehlte ab dem Neustart, weil HA
+#       last_changed beim Start neu setzt; unter 5 Minuten kam dann gar keine
+#       Meldung. Jetzt meldet "getrennt" nur ohne gemerkten Ausfall,
+#       "wieder verbunden" reagiert auf jeden Wechsel nach "an", aber nur mit
+#       gemerktem Ausfall, und die Dauer zaehlt ab dem Merker.
+#       Die Logbuch-Eintraege haengen an binary_sensor.local_docker_online,
+#       weil die Karte Ereignisse nur diese Entitaet zeigt (vorher hingen die
+#       Agent-Eintraege an binary_sensor.docker_02_online und waren dort
+#       unsichtbar).
 #       Dazu "Arcane nicht erreichbar": Antwortet Arcane selbst nicht (Host
 #       oder Container weg), sind alle Docker-Entitaeten unavailable, auch
 #       binary_sensor.local_docker_online. Ist der laenger als 5 Minuten
 #       unavailable, kommt eine Meldung, und nach so einem Ausfall eine
 #       zweite, wenn Arcane wieder antwortet. Der Sensor von docker-02 meldet
-#       dabei nichts, weil seine Ausloeser nur auf "aus" reagieren. Eine in
+#       dabei nichts: Er ist unavailable statt aus, und bei seiner Rueckkehr
+#       ist keine Trennung gemerkt. Eine in
 #       Home Assistant abgeschaltete Arcane-Integration meldet sich hier
 #       ebenfalls als "nicht erreichbar".
 #   script.docker_alle_updates_installieren
@@ -191,6 +211,21 @@ input_text:
     name: Docker 02 Aufräumen Status
     icon: mdi:broom
     max: 100
+
+# Beginn eines gemeldeten Ausfalls fuer "Docker: Agent getrennt melden";
+# Zeitstempel 0 (1970) = nichts gemeldet. Nach dem Anlegen einmal auf 0 setzen
+# (input_datetime.set_datetime mit timestamp: 0), sonst gilt das Anlegedatum.
+input_datetime:
+  docker_agent_getrennt_seit:
+    name: Docker Agent getrennt seit
+    icon: mdi:lan-disconnect
+    has_date: true
+    has_time: true
+  docker_arcane_nicht_erreichbar_seit:
+    name: Docker Arcane nicht erreichbar seit
+    icon: mdi:server-network-off
+    has_date: true
+    has_time: true
 
 automation:
   - id: docker_ereignisse_ins_logbuch
@@ -430,10 +465,13 @@ automation:
     alias: "Docker: Agent getrennt melden"
     description: >-
       Push und Logbuch, wenn der Arcane-Agent von docker-02 laenger als
-      5 Minuten getrennt ist, und wenn er danach wieder verbunden ist.
-      Ebenso, wenn Arcane selbst laenger als 5 Minuten nicht erreichbar ist
-      (Online-Sensor von docker-01 unavailable), und wenn es danach wieder
-      antwortet.
+      5 Minuten getrennt ist, und wenn er danach wieder verbunden ist (mit der
+      Dauer). Ebenso, wenn Arcane selbst laenger als 5 Minuten nicht
+      erreichbar ist (Online-Sensor von docker-01 unavailable), und wenn es
+      danach wieder antwortet. Ein gemeldeter Ausfall steht mit seinem Beginn
+      in input_datetime.docker_agent_getrennt_seit bzw.
+      input_datetime.docker_arcane_nicht_erreichbar_seit (0 = nichts
+      gemeldet).
     mode: queued
     max: 10
     triggers:
@@ -443,9 +481,10 @@ automation:
         for:
           minutes: 5
         id: getrennt
+      # Ohne from: auch off -> unavailable -> on (Neustart von HA oder Arcane
+      # dazwischen). Ob eine Trennung gemeldet war, sagt der Merker.
       - trigger: state
         entity_id: binary_sensor.docker_02_online
-        from: "off"
         to: "on"
         id: wieder_da
       # Arcane antwortet nicht: alle Entitaeten unavailable. Nur der Sensor
@@ -459,7 +498,6 @@ automation:
         id: arcane_weg
       - trigger: state
         entity_id: binary_sensor.local_docker_online
-        from: unavailable
         to: "on"
         id: arcane_wieder_da
     actions:
@@ -469,6 +507,12 @@ automation:
           - conditions:
               - condition: trigger
                 id: getrennt
+              # Noch nicht gemeldet. Nach einem Neustart mitten in einer
+              # gemeldeten Trennung steht hier ihr Beginn: keine zweite Meldung.
+              - condition: numeric_state
+                entity_id: input_datetime.docker_agent_getrennt_seit
+                attribute: timestamp
+                below: 1
             sequence:
               - variables:
                   text: >-
@@ -477,6 +521,11 @@ automation:
                     Uhr nicht verbunden{% if k not in ['unknown', 'unavailable'] %}
                     · letzter Kontakt {{ as_local(as_datetime(k)).strftime('%H:%M') }}
                     Uhr{% endif %}
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.docker_agent_getrennt_seit
+                data:
+                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - action: notify.mobile_app_iphone
                 data:
                   title: "Docker: Agent getrennt"
@@ -485,27 +534,27 @@ automation:
                     url: /dashboard-home/docker
                     clickAction: /dashboard-home/docker
                     group: docker
+              # Logbuch an den Sensor, den die Ereignisse-Karte zeigt
               - action: logbook.log
                 data:
                   name: Agent
                   message: "getrennt · {{ text }} · {{ umgebung }}"
-                  entity_id: binary_sensor.docker_02_online
+                  entity_id: binary_sensor.local_docker_online
           - conditions:
               - condition: trigger
                 id: wieder_da
-              # Nur nach einer gemeldeten Trennung (mindestens 5 Minuten);
-              # fuer die Dauer zwischen zwei Zustaenden gibt es keine
-              # eingebaute Bedingung.
-              - condition: template
-                value_template: >-
-                  {{ (trigger.to_state.last_changed
-                      - trigger.from_state.last_changed).total_seconds() >= 300 }}
+              # Nur nach einer gemeldeten Trennung
+              - condition: numeric_state
+                entity_id: input_datetime.docker_agent_getrennt_seit
+                attribute: timestamp
+                above: 0
             sequence:
+              # Dauer ab dem gemerkten Beginn; last_changed setzt ein Neustart neu
               - variables:
                   dauer: >-
-                    {{ ((trigger.to_state.last_changed
-                         - trigger.from_state.last_changed).total_seconds() / 60)
-                       | round(0) | int }}
+                    {{ ((now().timestamp()
+                         - state_attr('input_datetime.docker_agent_getrennt_seit', 'timestamp') | float(0))
+                        / 60) | round(0) | int }}
               - action: notify.mobile_app_iphone
                 data:
                   title: "Docker: Agent wieder verbunden"
@@ -518,15 +567,29 @@ automation:
                 data:
                   name: Agent
                   message: "wieder verbunden nach {{ dauer }} Min. · {{ umgebung }}"
-                  entity_id: binary_sensor.docker_02_online
+                  entity_id: binary_sensor.local_docker_online
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.docker_agent_getrennt_seit
+                data:
+                  timestamp: 0
           - conditions:
               - condition: trigger
                 id: arcane_weg
+              - condition: numeric_state
+                entity_id: input_datetime.docker_arcane_nicht_erreichbar_seit
+                attribute: timestamp
+                below: 1
             sequence:
               - variables:
                   text: >-
                     seit {{ as_local(trigger.to_state.last_changed).strftime('%H:%M') }}
                     Uhr keine Antwort von Arcane · alle Docker-Entitäten nicht verfügbar
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.docker_arcane_nicht_erreichbar_seit
+                data:
+                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - action: notify.mobile_app_iphone
                 data:
                   title: "Docker: Arcane nicht erreichbar"
@@ -543,18 +606,16 @@ automation:
           - conditions:
               - condition: trigger
                 id: arcane_wieder_da
-              # Nach einem Neustart von Home Assistant zaehlt die Dauer erst
-              # ab dem Start, dann bleibt es still.
-              - condition: template
-                value_template: >-
-                  {{ (trigger.to_state.last_changed
-                      - trigger.from_state.last_changed).total_seconds() >= 300 }}
+              - condition: numeric_state
+                entity_id: input_datetime.docker_arcane_nicht_erreichbar_seit
+                attribute: timestamp
+                above: 0
             sequence:
               - variables:
                   dauer: >-
-                    {{ ((trigger.to_state.last_changed
-                         - trigger.from_state.last_changed).total_seconds() / 60)
-                       | round(0) | int }}
+                    {{ ((now().timestamp()
+                         - state_attr('input_datetime.docker_arcane_nicht_erreichbar_seit', 'timestamp') | float(0))
+                        / 60) | round(0) | int }}
               - action: notify.mobile_app_iphone
                 data:
                   title: "Docker: Arcane wieder erreichbar"
@@ -568,6 +629,11 @@ automation:
                   name: Arcane
                   message: "wieder erreichbar nach {{ dauer }} Min. · {{ umgebung }}"
                   entity_id: binary_sensor.local_docker_online
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.docker_arcane_nicht_erreichbar_seit
+                data:
+                  timestamp: 0
 
 script:
   docker_alle_updates_installieren:
