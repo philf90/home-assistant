@@ -1,0 +1,85 @@
+# Routen und Sichtbarkeit -- die verbindliche Liste.
+#
+# Jedes Sprungziel der Navigation und jeder View hat genau eine Klasse. Regeln,
+# Begruendung und Grenzen: CONTRIBUTING.md, Abschnitt "Routen und
+# Sichtbarkeit". ci/check_routen.py prueft die Dateien unter dashboard/ gegen
+# diese Liste, mit --json auch einen Abzug eines Dashboards aus der Instanz.
+#
+# Als Sprungziel zaehlt: navigation_path einer navigate-Aktion (auch ueber
+# variables.pfad), url einer Route der navbar-card und url_path einer
+# url-Aktion, die mit "/" beginnt. Sprungmarken auf derselben Seite ("#...")
+# zaehlen nicht. Ein View zaehlt mit seinem path.
+#
+# Klassen:
+#   admin   Wartung, oder Home Assistant verlangt fuer das Ziel selbst
+#           Adminrechte. Navigation: hidden: '[[[ return !user.is_admin; ]]]'
+#           an der Kachel oder Route (button-card, navbar-card). View: visible
+#           mit genau den admin_konten (visible kennt keine Rolle).
+#   person  Persoenliche Inhalte einzelner Konten. Navigation: conditional
+#           oder visibility mit condition: user und genau den konten. View:
+#           visible mit denselben konten.
+#   alle    Jedes angemeldete Konto. Navigation und View ohne Bedingung nach
+#           Benutzer oder Rolle.
+#
+# Neue Route: zuerst hier eintragen (klasse, grund; bei person auch konten),
+# dann verwenden. Ein Schluessel mit "/*" am Ende gilt fuer alle Pfade
+# darunter. Konten nur als Platzhalter aus design/platzhalter.yaml.
+
+admin_konten: [benutzer_id_1]
+
+routen:
+  # Dashboard "Home"
+  /dashboard-home/home: {klasse: alle, grund: Startseite}
+  /dashboard-home/licht-fenster: {klasse: alle, grund: Licht und Fenster im Alltag}
+  /dashboard-home/energie: {klasse: alle, grund: Verbrauch und Erzeugung des Haushalts}
+  /dashboard-home/heizung: {klasse: alle, grund: Heizung im Alltag}
+  /dashboard-home/hausgerate: {klasse: alle, grund: Hausgeraete im Alltag}
+  /dashboard-home/kamera: {klasse: alle, grund: Kameras des Hauses}
+  /dashboard-home/wetter: {klasse: alle, grund: Wetter und Warnlage}
+  /dashboard-home/garten: {klasse: alle, grund: Garten und Bewaesserung}
+  /dashboard-home/pflanzen: {klasse: alle, grund: Pflanzen}
+  /dashboard-home/auto: {klasse: alle, grund: Fahrzeuge des Haushalts}
+  /dashboard-home/sicherheit: {klasse: alle, grund: Sicherheit des Hauses}
+  /dashboard-home/pakete: {klasse: alle, grund: Paketverfolgung}
+  /dashboard-home/fussball: {klasse: alle, grund: Freizeit}
+  /dashboard-home/fluege: {klasse: alle, grund: Freizeit}
+  /dashboard-home/homematic-ip:
+    klasse: admin
+    grund: Zustand und Wartung der Homematic-Anlage (Funk, Batterien, Firmware, Anlernmodus)
+  /dashboard-home/netzwerk: {klasse: admin, grund: Netzwerktechnik}
+  /dashboard-home/docker: {klasse: admin, grund: Container und Hosts}
+  /dashboard-home/system: {klasse: admin, grund: Zustand von Home Assistant}
+  /dashboard-home/test: {klasse: admin, grund: Testflaeche}
+  /dashboard-home/gesundheit:
+    klasse: person
+    konten: [benutzer_id_1]
+    grund: Gesundheitsdaten eines Kontos
+
+  # Dashboard "Gaming"
+  /dashboard-gaming: {klasse: alle, grund: Freizeit}
+  /dashboard-gaming/bf6: {klasse: alle, grund: Freizeit}
+  /dashboard-gaming/wow: {klasse: alle, grund: Freizeit}
+
+  # Seiten von Home Assistant und Apps (Add-ons)
+  /config/*:
+    klasse: admin
+    grund: >-
+      Das Panel "config" ist mit require_admin registriert
+      (core: homeassistant/components/config/__init__.py)
+  /45df7312_zigbee2mqtt/ingress:
+    klasse: admin
+    grund: Zigbee2MQTT-Oberflaeche zum Anlernen und Verwalten der Geraete
+
+# Aktionen ohne Ziel, fuer die Home Assistant Adminrechte verlangt: Ohne sie
+# schlaegt der Aufruf mit "Unauthorized" fehl. Die Kachel braucht dieselbe
+# Bedingung wie eine Route der Klasse admin. Quelle: core,
+# homeassistant/components/homeassistant/services.py (async_register_admin_service).
+dienste:
+  homeassistant.restart: {klasse: admin}
+  homeassistant.stop: {klasse: admin}
+  homeassistant.check_config: {klasse: admin}
+  homeassistant.reload_core_config: {klasse: admin}
+  homeassistant.reload_all: {klasse: admin}
+  homeassistant.reload_config_entry: {klasse: admin}
+  homeassistant.reload_custom_templates: {klasse: admin}
+  homeassistant.set_location: {klasse: admin}
