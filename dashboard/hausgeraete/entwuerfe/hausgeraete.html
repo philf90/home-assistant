@@ -388,9 +388,10 @@ Platzhalter:   notify.mobile_app_iphone
         <p>Macht dasselbe wie dein Handgriff, aber nur, wenn die Maschine sicher aus ist. Die Messwerte geben die Grenze vor: ausgeschaltet misst die Shelly konstant 0,0 W. In der Startverzögerung und im Zustand „Fertig“ springt sie etwa jede Minute für einige Sekunden auf 1,0–1,6 W (gemessen am 10.10. ab 20:09 und am 11.10. 08:01–08:11). „30 Minuten unter 0,5 W“ trifft also nur die ausgeschaltete Maschine, ein programmierter Start geht nicht verloren.</p>
         <ul>
           <li>„Aus“ prüft der Hilfssensor <code>binary_sensor.waschmaschine_ausgeschaltet</code> (Schwellwert-Helfer: Shelly-Leistung unter 0,5 W), der seit 30 min an sein muss. Ohne Vorlagen-Bedingungen, nur mit Zustands-Bedingungen.</li>
-          <li>Ausschalten, 60 s warten, wieder einschalten. Startet Home Assistant genau in diesen 60 s neu, bleibt die Steckdose aus; dagegen hilft „Automatisch einschalten nach 60 s“ in den Shelly-Einstellungen.</li>
-          <li>Höchstens ein Versuch pro 6 Stunden (die Automation wartet danach 6 h, Modus „single“), mit Nachricht ans iPhone. Hilft der Neustart nicht, steht das in der Nachricht.</li>
-          <li>Drei Auslöser: 15 min getrennt („off“), 15 min nicht verfügbar, oder 30 min ausgeschaltet. Der dritte holt den Neustart nach, wenn die Trennung während eines Programms begann.</li>
+          <li>Ausschalten, 60 s warten, wieder einschalten. Startet Home Assistant genau in diesen 60 s neu, bricht der Lauf ab und die Steckdose bliebe aus. Seit 20.11. schaltet „Hausgeräte: Home Connect überwachen“ sie nach dem Start wieder ein (Kasten unten).</li>
+          <li>Höchstens ein Versuch pro 6 Stunden, mit Nachricht ans iPhone. Hilft der Neustart nicht, steht das in der Nachricht. Die Sperre ist seit 20.11. eine Bedingung auf den vorigen Lauf (<code>last_triggered</code>) und übersteht Neustarts; vorher war es ein <code>delay</code> von 6 h, den jeder Neustart von Home Assistant beendete.</li>
+          <li>Zwei Auslöser: 15 min getrennt („off“) oder 30 min ausgeschaltet. Der zweite holt den Neustart nach, wenn die Trennung während eines Programms begann. „Nicht verfügbar“ löst seit 20.11. nicht mehr aus: Das meldet die Integration, nicht das Gerät, und ein Neustart des Geräts hilft dann nicht.</li>
+          <li>Nur wenn ein anderes Home-Connect-Gerät verbunden ist (Geschirrspüler oder Trockner). Sind alle getrennt, liegt es an der Cloud oder der Integration; das meldet „Hausgeräte: Home Connect überwachen“ nach 1 h.</li>
           <li>Für den Trockner gibt es eine eigene Automation „Trockner: Home Connect neu verbinden“, siehe Kasten unten. Eigene Automation, damit die 6-Stunden-Sperre des einen Geräts das andere nicht blockiert.</li>
         </ul>
       </div>
@@ -409,8 +410,8 @@ Platzhalter:   notify.mobile_app_iphone
     </div>
 
     <div class="code-head">
-      <p class="note">Automation „Waschmaschine: Home Connect neu verbinden“, so in der Instanz angelegt. <code>notify.mobile_app_iphone</code> ist der Platzhalter aus dem README.</p>
-      <button class="btn" type="button" id="copy-auto">YAML kopieren</button>
+      <p class="note">Automation „Waschmaschine: Home Connect neu verbinden“, so in der Instanz angelegt (Stand 20.11.). <code>notify.mobile_app_iphone</code> ist der Platzhalter aus dem README.</p>
+      <button class="btn" type="button" data-copy="auto-yaml">YAML kopieren</button>
     </div>
 <pre id="auto-yaml">alias: "Waschmaschine: Home Connect neu verbinden"
 mode: single
@@ -420,26 +421,16 @@ triggers:
     entity_id: binary_sensor.waschmaschine_konnektivitat
     to: "off"
     for: { minutes: 15 }
-  - trigger: state
-    entity_id: binary_sensor.waschmaschine_konnektivitat
-    to: unavailable
-    for: { minutes: 15 }
   <span class="c"># holt den Neustart nach, wenn die Trennung waehrend eines Programms begann</span>
   - trigger: state
     entity_id: binary_sensor.waschmaschine_ausgeschaltet
     to: "on"
     for: { minutes: 30 }
 conditions:
-  - condition: or
-    conditions:
-      - condition: state
-        entity_id: binary_sensor.waschmaschine_konnektivitat
-        state: "off"
-        for: { minutes: 15 }
-      - condition: state
-        entity_id: binary_sensor.waschmaschine_konnektivitat
-        state: unavailable
-        for: { minutes: 15 }
+  - condition: state
+    entity_id: binary_sensor.waschmaschine_konnektivitat
+    state: "off"
+    for: { minutes: 15 }
   <span class="c"># Schwellwert-Helfer: Shelly-Leistung unter 0,5 W. 30 min schliessen die</span>
   <span class="c"># Startverzoegerung und "Fertig" aus, dort pendelt die Leistung zwischen 0 und 1,6 W.</span>
   - condition: state
@@ -449,6 +440,22 @@ conditions:
   - condition: state
     entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
     state: "on"
+  <span class="c"># nur wenn Home Connect selbst erreichbar ist (ein anderes Geraet verbunden);</span>
+  <span class="c"># bei einem Ausfall von Cloud oder Integration hilft ein Neustart des Geraets nicht</span>
+  - condition: or
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.geschirrspuler_konnektivitat
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.trockner_konnektivitat
+        state: "on"
+  <span class="c"># Sperre: hoechstens ein Versuch pro 6 Stunden. last_triggered ist der vorige</span>
+  <span class="c"># Lauf und uebersteht Neustarts von Home Assistant, ein delay nicht.</span>
+  - condition: template
+    value_template: &gt;-
+      {{ this.attributes.last_triggered is none
+         or now() - as_datetime(this.attributes.last_triggered) &gt; timedelta(hours=6) }}
 actions:
   - action: switch.turn_off
     target:
@@ -468,10 +475,185 @@ actions:
       title: Waschmaschine
       message: &gt;-
         {{ 'Home Connect nach Neustart wieder verbunden.' if wait.trigger
-           else 'Neustart ausgeführt, Home Connect nach 10 min noch getrennt.' }}
-  <span class="c"># Sperre: hoechstens ein Versuch pro 6 Stunden</span>
-  - delay: { hours: 6 }</pre>
-    <p class="note">Dazu angelegt: Schwellwert-Helfer „Waschmaschine ausgeschaltet“ (<code>binary_sensor.waschmaschine_ausgeschaltet</code>, Quelle Shelly-Leistung, untere Grenze 0,5 W, Hysterese 0). Optional in der Shelly-Oberfläche „Automatisch einschalten nach 60 s“ setzen, als Absicherung gegen einen Neustart von Home Assistant während der Pause.</p>
+           else 'Neustart ausgeführt, Home Connect nach 10 min noch getrennt.' }}</pre>
+    <p class="note">Dazu angelegt: Schwellwert-Helfer „Waschmaschine ausgeschaltet“ (<code>binary_sensor.waschmaschine_ausgeschaltet</code>, Quelle Shelly-Leistung, untere Grenze 0,5 W, Hysterese 0).</p>
+
+    <div class="finding">
+      <b>Überwachung: Ausfall von Home Connect und Neustart von Home Assistant</b>
+      <p>Angelegt am 20.11.: Die Automation „Hausgeräte: Home Connect überwachen“ übernimmt, was die beiden Neustart-Automationen allein nicht können.</p>
+      <ul>
+        <li><b>Ausfall:</b> Die Gruppe „Home Connect erreichbar“ ist an, solange eines der drei Hausgeräte verbunden ist. Ist seit 1 h keines verbunden, kommt eine Nachricht, und der Merker „Home Connect Ausfall gemeldet“ verhindert Wiederholungen. Die Neustarts der Steckdosen setzen in dieser Zeit von selbst aus, weil sie ein anderes verbundenes Gerät verlangen. Kommt die Verbindung zurück, kommt die Entwarnung.</li>
+        <li><b>Abgebrochener Neustart:</b> Ist nach einem Start von Home Assistant die Steckdose von Waschmaschine oder Trockner aus und lief deren Neustart-Automation in den letzten 60 min, schaltet sie die Steckdose wieder ein. 60 statt 15 min, damit auch ein langer Neustart (Update) abgedeckt ist. Andere Automationen, Skripte oder Szenen schalten die beiden Steckdosen nicht.</li>
+        <li><b>Start-Abgleich:</b> Zustandswechsel während des Starts lösen nichts aus. Deshalb gleicht der Start-Zweig den Merker mit der Gruppe ab: Kam die Verbindung während des Neustarts zurück, geht der Merker aus (sonst bliebe die Meldung beim nächsten Ausfall aus). Ist sie seit dem Start weg, meldet er den Ausfall 1 h nach dem Start.</li>
+        <li><b>Auslöser „Ausfall“:</b> <code>from: "on"</code> ohne <code>to</code>. Die Stunde zählt dann ab dem Verlassen von „an“; Wechsel zwischen „aus“, „nicht verfügbar“ und „unbekannt“ setzen sie nicht zurück (core: <code>homeassistant/components/homeassistant/triggers/state.py</code>, <code>_check_same_state</code>). Die Gruppe ist erst „nicht verfügbar“, wenn alle drei Sensoren es sind (core: <code>homeassistant/components/group/binary_sensor.py</code>).</li>
+      </ul>
+    </div>
+
+    <div class="code-head">
+      <p class="note">Automation „Hausgeräte: Home Connect überwachen“, so in der Instanz angelegt. Dazu: Gruppe (Binärsensor) „Home Connect erreichbar“ (<code>binary_sensor.home_connect_erreichbar</code>, die drei Konnektivitäts-Sensoren, „Alle Entitäten“ aus) und Schalter „Home Connect Ausfall gemeldet“ (<code>input_boolean.home_connect_ausfall_gemeldet</code>).</p>
+      <button class="btn" type="button" data-copy="watch-yaml">YAML kopieren</button>
+    </div>
+<pre id="watch-yaml">alias: "Hausgeräte: Home Connect überwachen"
+<span class="c"># parallel: das Warten nach dem Start haelt andere Laeufe nicht auf</span>
+mode: parallel
+max: 10
+triggers:
+  - trigger: homeassistant
+    event: start
+    id: start
+  <span class="c"># from ohne to: die Stunde zaehlt ab dem Verlassen von on, Wechsel zwischen</span>
+  <span class="c"># off, unavailable und unknown setzen sie nicht zurueck</span>
+  - trigger: state
+    entity_id: binary_sensor.home_connect_erreichbar
+    from: "on"
+    for: { hours: 1 }
+    id: ausfall
+  - trigger: state
+    entity_id: binary_sensor.home_connect_erreichbar
+    to: "on"
+    id: zurueck
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: ausfall
+          - condition: state
+            entity_id: input_boolean.home_connect_ausfall_gemeldet
+            state: "off"
+        sequence:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.home_connect_ausfall_gemeldet
+          - action: notify.mobile_app_iphone
+            data:
+              title: Home Connect nicht erreichbar
+              message: &gt;-
+                Seit mindestens 1 h ist keines der drei Hausgeräte verbunden.
+                Das liegt an der Home Connect Cloud oder der Integration, nicht
+                an den Geräten. Steckdosen-Neustarts sind ausgesetzt, bis wieder
+                ein Gerät verbunden ist.
+              data: { group: hausgeraete, url: /dashboard-home/hausgerate }
+      - conditions:
+          - condition: trigger
+            id: zurueck
+          - condition: state
+            entity_id: input_boolean.home_connect_ausfall_gemeldet
+            state: "on"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.home_connect_ausfall_gemeldet
+          - action: notify.mobile_app_iphone
+            data:
+              title: Home Connect wieder erreichbar
+              message: &gt;-
+                Mindestens ein Hausgerät ist wieder verbunden.
+                Steckdosen-Neustarts sind wieder aktiv.
+              data: { group: hausgeraete, url: /dashboard-home/hausgerate }
+      - conditions:
+          - condition: trigger
+            id: start
+        sequence:
+          <span class="c"># Shelly und Home Connect brauchen nach dem Start einen Moment</span>
+          - delay: { minutes: 1 }
+          <span class="c"># Neustart der Waschmaschine abgebrochen: Steckdose wieder an</span>
+          - if:
+              - condition: state
+                entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
+                state: "off"
+              - condition: template
+                value_template: &gt;-
+                  {{ state_attr('automation.waschmaschine_home_connect_neu_verbinden', 'last_triggered') is not none
+                     and now() - as_datetime(state_attr('automation.waschmaschine_home_connect_neu_verbinden', 'last_triggered')) &lt; timedelta(minutes=60) }}
+            then:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.shelly_plugs_gen3_waschmaschine_switch_0
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Waschmaschine
+                  message: &gt;-
+                    Steckdose war nach dem HA-Neustart aus: Der Home-Connect-Neustart
+                    wurde unterbrochen. Steckdose wieder eingeschaltet.
+                  data: { group: hausgeraete, url: /dashboard-home/hausgerate }
+          <span class="c"># dasselbe fuer den Trockner</span>
+          - if:
+              - condition: state
+                entity_id: switch.shelly_plugs_gen3_trockner_switch_0
+                state: "off"
+              - condition: template
+                value_template: &gt;-
+                  {{ state_attr('automation.trockner_home_connect_neu_verbinden', 'last_triggered') is not none
+                     and now() - as_datetime(state_attr('automation.trockner_home_connect_neu_verbinden', 'last_triggered')) &lt; timedelta(minutes=60) }}
+            then:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.shelly_plugs_gen3_trockner_switch_0
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Trockner
+                  message: &gt;-
+                    Steckdose war nach dem HA-Neustart aus: Der Home-Connect-Neustart
+                    wurde unterbrochen. Steckdose wieder eingeschaltet.
+                  data: { group: hausgeraete, url: /dashboard-home/hausgerate }
+          <span class="c"># Rueckkehr waehrend des Starts verpasst: Merker zuruecksetzen</span>
+          - if:
+              - condition: state
+                entity_id: input_boolean.home_connect_ausfall_gemeldet
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.home_connect_erreichbar
+                state: "on"
+            then:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.home_connect_ausfall_gemeldet
+              - action: notify.mobile_app_iphone
+                data:
+                  title: Home Connect wieder erreichbar
+                  message: &gt;-
+                    Mindestens ein Hausgerät ist wieder verbunden.
+                    Steckdosen-Neustarts sind wieder aktiv.
+                  data: { group: hausgeraete, url: /dashboard-home/hausgerate }
+          <span class="c"># Ausfall ueber den Start hinweg: Der Ausloeser "ausfall" kommt dann nie,</span>
+          <span class="c"># also bis 1 h nach dem Start warten (1 min Pause + 59 min)</span>
+          - if:
+              - condition: state
+                entity_id: input_boolean.home_connect_ausfall_gemeldet
+                state: "off"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.home_connect_erreichbar
+                    state: "on"
+            then:
+              - wait_template: "{{ is_state('binary_sensor.home_connect_erreichbar', 'on') }}"
+                timeout: { minutes: 59 }
+                continue_on_timeout: true
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.home_connect_ausfall_gemeldet
+                    state: "off"
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: binary_sensor.home_connect_erreichbar
+                        state: "on"
+                then:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.home_connect_ausfall_gemeldet
+                  - action: notify.mobile_app_iphone
+                    data:
+                      title: Home Connect nicht erreichbar
+                      message: &gt;-
+                        Seit mindestens 1 h ist keines der drei Hausgeräte verbunden.
+                        Das liegt an der Home Connect Cloud oder der Integration, nicht
+                        an den Geräten. Steckdosen-Neustarts sind ausgesetzt, bis wieder
+                        ein Gerät verbunden ist.
+                      data: { group: hausgeraete, url: /dashboard-home/hausgerate }</pre>
+    <p class="note">Shelly-Einstellungen der beiden Steckdosen: „Einschalten, wenn mit Strom versorgt“ (Zustand nach dem Einschalten der Versorgung: an) bleibt an. Sie wirkt nur, wenn der Stecker selbst Strom bekommt, etwa nach einem Stromausfall, nicht bei einem Neustart von Home Assistant: Dabei behält der Stecker Strom, nur sein Ausgang ist aus. Gegen den abgebrochenen Neustart hilft die Überwachung oben. Als zweite Absicherung im Stecker selbst gibt es „Automatisch einschalten“ (Auto on) mit Verzögerung, z. B. 120 s; sie greift auch, wenn Home Assistant abstürzt oder den Stecker nicht erreicht, schaltet aber jedes absichtliche Ausschalten nach der Verzögerung wieder ein.</p>
 
     <div class="finding">
       <b>Trockner: gleiche Automation, 60 statt 30 Minuten</b>
@@ -480,6 +662,7 @@ actions:
         <li>Ausgeschaltet misst die Shelly auch beim Trockner konstant 0,0 W (z. B. am 12.10. ab 09:54).</li>
         <li>Im Zustand „Fertig“ springt die Leistung aber unregelmäßig auf 1,0–1,3 W, am 11.10. mit Pausen von bis zu etwa 25–35 Minuten. 30 Minuten hätten einen fertigen, nur ruhenden Trockner treffen können; deshalb verlangt die Automation 60 Minuten unter 0,5 W.</li>
         <li>Wie sich die Leistung beim Trockner während eines programmierten späteren Starts verhält, ist nicht belegt: In den 10 Tagen kam keiner vor. Bei der Waschmaschine springt sie dabei etwa jede Minute.</li>
+        <li>Seit 20.11. wie die Waschmaschine umgebaut: Sperre über <code>last_triggered</code>, kein Auslöser auf „nicht verfügbar“, und ein anderes Gerät muss verbunden sein (Geschirrspüler oder Waschmaschine).</li>
       </ul>
     </div>
 
@@ -665,15 +848,16 @@ actions:
   tl.innerHTML = html;
 
   // ---------------- Kopieren ----------------
-  const copyBtn = document.getElementById('copy-auto');
-  copyBtn.addEventListener('click', () => {
-    const text = document.getElementById('auto-yaml').innerText;
-    const done = () => { copyBtn.textContent = 'Kopiert'; setTimeout(() => { copyBtn.textContent = 'YAML kopieren'; }, 1600); };
-    const fallback = () => {
-      const r = document.createRange(); r.selectNodeContents(document.getElementById('auto-yaml'));
-      const s = getSelection(); s.removeAllRanges(); s.addRange(r); copyBtn.textContent = 'Markiert – Strg+C';
-    };
-    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  document.querySelectorAll('button[data-copy]').forEach((btn) => {
+    const pre = document.getElementById(btn.dataset.copy);
+    btn.addEventListener('click', () => {
+      const done = () => { btn.textContent = 'Kopiert'; setTimeout(() => { btn.textContent = 'YAML kopieren'; }, 1600); };
+      const fallback = () => {
+        const r = document.createRange(); r.selectNodeContents(pre);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Markiert – Strg+C';
+      };
+      try { navigator.clipboard.writeText(pre.innerText).then(done, fallback); } catch (e) { fallback(); }
+    });
   });
 
   // ---------------- Vorschau ----------------
