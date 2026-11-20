@@ -41,9 +41,6 @@ button_card_templates:
     show_state: false
     show_icon: false
     show_label: false
-    triggers_update:
-      - sensor.batterien
-      - input_number.batterie_stufe_1
     variables:
       # hinweis | karte | liste | ausgenommen
       modus: karte
@@ -129,14 +126,20 @@ button_card_templates:
           if (M === 'ausgenommen') {
             const E = hass.entities || {}, D = hass.devices || {};
             const auto = new Map(), lab = new Map();
-            for (const [id, s] of Object.entries(states)) {
+            // Erst ueber die Registry vorfiltern, dann gezielt lesen: button-card v7 verfolgt
+            // jeden gelesenen Zustand; ein Durchlauf ueber alle Zustaende hiesse alle Entitaeten.
+            for (const id of Object.keys(states)) {
               if (!(id.startsWith('sensor.') || id.startsWith('binary_sensor.'))) continue;
-              if (!s.attributes || s.attributes.device_class !== 'battery') continue;
               const e = E[id] || {}, d = e.device_id ? D[e.device_id] : null;
+              const istAuto = ['mobile_app', 'browser_mod'].includes(e.platform);
+              const istLabel = (e.labels || []).includes(variables.label) || (d && (d.labels || []).includes(variables.label));
+              if (!istAuto && !istLabel) continue;
+              const s = states[id];
+              if (!s || !s.attributes || s.attributes.device_class !== 'battery') continue;
               const name = d ? (d.name_by_user || d.name) : (s.attributes.friendly_name || id);
               const key = e.device_id || id;
-              if (['mobile_app', 'browser_mod'].includes(e.platform)) auto.set(key, name);
-              else if ((e.labels || []).includes(variables.label) || (d && (d.labels || []).includes(variables.label))) lab.set(key, name);
+              if (istAuto) auto.set(key, name);
+              else lab.set(key, name);
             }
             const namen = [...lab.values()].sort((a, b) => a.localeCompare(b, 'de')).map(esc).join(', ');
             return `

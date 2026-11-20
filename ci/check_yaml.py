@@ -9,8 +9,8 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
    ueberschreiben den ersten Wert kommentarlos, der Fehler ist unsichtbar.
 3. Jeder "type: custom:..."-Wert steht in ci/known_cards.txt. Faengt Tippfehler
    im Kartennamen, die Lovelace nur als "Custom element doesn't exist" meldet.
-4. Entity-IDs unter "entity:" und "triggers_update:" sehen wie "domain.objekt"
-   aus (klein geschrieben, keine Leerzeichen). Werte mit Templates oder
+4. Entity-IDs unter "entity:" sehen wie "domain.objekt" aus (klein
+   geschrieben, keine Leerzeichen). Werte mit Templates oder
    Decluttering-Variablen ("[[name]]") werden uebersprungen.
 5. Aktionen in der aktuellen Schreibweise: "action: perform-action" mit
    "perform_action" und "data" statt "action: call-service" mit "service" und
@@ -22,6 +22,14 @@ Geprueft wird, was im Dashboard sonst still fehlschlaegt:
    (perform-action) ohne browser_id/user_id ist es ein Server-Aufruf, und
    browser_mod fuehrt ihn auf allen registrierten, gerade verbundenen Browsern
    aus (Popup erscheint auf jedem offenen Geraet, nicht nur dem tippenden).
+7. Keine button-card-Optionen, die es seit Version 7.0.0 nicht mehr gibt:
+   "triggers_update" ist wirkungslos (neu gezeichnet wird, wenn sich eine per
+   states[...] gelesene Entitaet aendert; einen Takt liefert ein gelesenes
+   states['sensor.time']), "spin" heisst jetzt "rotate".
+8. Kein Durchlauf ueber alle Zustaende mit Object.values/Object.entries in
+   JS-Templates (states, hass.states): button-card v7 verfolgt jeden
+   gelesenen Zustand, die Karte zeichnete dann bei jeder Aenderung im Haus
+   neu. Stattdessen Object.keys(...) filtern und gezielt states[id] lesen.
 
 Aufruf: python ci/check_yaml.py [datei ...]
 Ohne Argumente werden alle Lovelace-YAMLs geprueft (Art "lovelace" aus
@@ -54,6 +62,18 @@ HA_TAGS = (
 )
 
 ENTITY_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
+
+# Durchlauf ueber alle Zustaende (Regel 8): states, hass.states, x.hass.states.
+ALLE_ZUSTAENDE_RE = re.compile(
+    r"Object\.(?:values|entries)\(\s*(?:[A-Za-z_$][\w$]*\.)*(?:hass\.)?states\s*\)"
+)
+# Seit button-card 7.0.0 entfallene Optionen (Regel 7).
+BC7_ENTFALLEN = {
+    "triggers_update": "wirkungslos seit button-card 7.0.0 -- neu gezeichnet wird, "
+    "wenn sich eine per states[...] gelesene Entitaet aendert; fuer einen Takt "
+    "states['sensor.time'] lesen",
+    "spin": "heisst seit button-card 7.0.0 'rotate'",
+}
 
 # Werte, die statt einer festen Entity ein Template liefern -- die kann nur die
 # laufende Instanz aufloesen, deshalb werden sie uebersprungen. "[[" deckt
@@ -204,20 +224,19 @@ def check_file(path: Path, known_cards: set[str]) -> list[str]:
                 "action: fire-dom-event mit browser_mod: {service, data} verwenden"
             )
 
-        triggers = value.get("triggers_update")
-        if isinstance(triggers, str):
-            triggers = [triggers]
-        if isinstance(triggers, list):
-            for trigger in triggers:
-                if not isinstance(trigger, str) or trigger == "all":
-                    continue
-                if any(m in trigger for m in TEMPLATE_MARKERS):
-                    continue
-                if not ENTITY_RE.match(trigger.strip()):
-                    errors.append(
-                        f"{path.name}: 'triggers_update' enthaelt "
-                        f"'{trigger}' -- keine gueltige Entity-ID"
-                    )
+        for schluessel, grund in BC7_ENTFALLEN.items():
+            if schluessel in value:
+                errors.append(
+                    f"{path.name}: '{schluessel}' (unter '{node_path or 'root'}') -- {grund}"
+                )
+
+    for node_path, value in walk(data):
+        if isinstance(value, str) and ALLE_ZUSTAENDE_RE.search(value):
+            errors.append(
+                f"{path.name}: Object.values/entries ueber alle Zustaende "
+                f"(unter '{node_path or 'root'}') -- button-card v7 verfolgt dann "
+                "jede Entitaet; Object.keys(...) filtern und gezielt states[id] lesen"
+            )
 
     return errors
 
