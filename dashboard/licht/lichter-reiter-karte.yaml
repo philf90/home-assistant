@@ -58,8 +58,10 @@
 # mit pointer-events: auto zurueck. touchend- und click-Handler wie in
 # fenster-karte.yaml (button-card unterdrueckt nach touchend den click).
 # Neu gezeichnet wird, wenn sich eine gelesene Entitaet aendert (button-card
-# v7 merkt sich die Zugriffe auf states[...]); die Szenen-Suche liest
-# deshalb hass.states, sonst zeichnete jede Aenderung im Haus die Karte neu.
+# v7 merkt sich die Zugriffe auf states[...], auch ueber hass.states). Die
+# Szenen-Suche filtert deshalb erst die IDs (Object.keys) und liest nur die
+# Szenen; Object.values ueber alle Zustaende laese jede Entitaet, und jede
+# Aenderung im Haus zeichnete die Karte neu.
 #
 # Breite (gebaut fuer 360 px, Inhalt der Huelle 306 px; iPhone 17 Pro 348 px):
 #   Reiter 4 Spalten: (306 - 3 x 6) / 4 = 72 px (iPhone 82,5 px)
@@ -256,7 +258,7 @@ custom_fields:
           if (was === 'szene') {
             const r = L.raeume.find((x) => x.id === d.raum);
             if (!r) return;
-            const sc = Object.values(L.hass.states).find((s) => s.entity_id.startsWith('scene.')
+            const sc = Object.keys(L.hass.states).filter((id) => id.startsWith('scene.')).map((id) => L.hass.states[id]).find((s) => s
               && s.attributes && s.attributes.group_name === r.hue_gruppe && s.attributes.name === d.name);
             if (sc) L.hass.callService('hue', 'activate_scene', { entity_id: sc.entity_id, dynamic: !!sc.attributes.is_dynamic });
             else if (r.szene) L.hass.callService('select', 'select_option', { entity_id: r.szene, option: d.name });
@@ -277,8 +279,8 @@ custom_fields:
         const b = s && s.state === 'on' && s.attributes ? s.attributes.brightness : null;
         return b !== null && b !== undefined ? Math.round(b / 255 * 100) : null;
       };
-      // Szenen nur ueber hass.states lesen (nicht verfolgt, siehe Dateikopf)
-      const alleSzenen = Object.values(hass.states).filter((s) => s.entity_id.startsWith('scene.'));
+      // Szenen: erst die IDs filtern, dann gezielt lesen (siehe Dateikopf)
+      const alleSzenen = Object.keys(hass.states).filter((id) => id.startsWith('scene.')).map((id) => hass.states[id]);
       const raeume = L.raeume.map((r) => {
         const ids = (r.leuchten && r.leuchten.length) ? r.leuchten.map((l) => l.entity) : [r.licht];
         const an = ids.filter((id) => zustand(id) === 'on').length;

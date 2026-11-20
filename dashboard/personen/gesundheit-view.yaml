@@ -245,9 +245,11 @@
 #   30.10. 22:30; Schritte 30.10. 00:00-06:36 noch 3.077 vom 29.10.).
 #   - Ringe, Ziel-Badge, Kacheln und Energie-Badge werten einen Zaehler nur,
 #     wenn sein last_updated von heute ist, sonst als 0.
-#   - sensor.date in triggers_update zeichnet die Karten um Mitternacht neu;
-#     ohne ihn bliebe bei offener Seite der alte Wert bis zum naechsten Update
-#     stehen. Gilt auch fuer "Letzte Nacht" in der Schlaf-Huelle.
+#   - Die Karten lesen am Anfang eines Templates sensor.date; button-card v7
+#     zeichnet sie deshalb um Mitternacht neu. Ohne das bliebe bei offener
+#     Seite der alte Wert bis zum naechsten Update stehen. Gilt auch fuer
+#     "Letzte Nacht" in der Schlaf-Huelle (liest zusaetzlich
+#     input_datetime.schlaf_letzte_nacht).
 #   - Grenzfall: Ist der heutige Wert genau gleich dem gestrigen Endstand,
 #     aendert sich last_updated nicht und die Karte zeigt 0 bis zum naechsten
 #     Wert. Bei Zaehlern ab 0 praktisch nur in den ersten Minuten des Tags.
@@ -428,6 +430,7 @@ sections:
       custom_fields:
         badge: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Zaehlt erreichte Tagesziele. Gruen = alle, Amber = teilweise, gedaempft = keins
             // Tageszaehler zaehlen nur mit Update von heute (TAGESZAEHLER VOM VORTAG im Kopf)
             const v=id=>parseFloat(states[id]?.state);
@@ -481,14 +484,6 @@ sections:
         - border: '1px solid color-mix(in srgb, var(--nachtblau-rot, #f0736a) 24%, transparent)'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_active_energy
-      - sensor.iphone_training_7_tage
-      - sensor.iphone_health_steps
-      - input_number.ziel_aktive_energie
-      - input_number.ziel_training_woche
-      - input_number.ziel_schritte
-      - sensor.date
     - type: custom:button-card
       show_icon: false
       show_name: false
@@ -496,6 +491,7 @@ sections:
       custom_fields:
         rings: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Drei konzentrische Ringe (Bewegung / Training / Schritte) gegen die Ziel-Helfer;
             // Training als Summe der letzten 7 Tage gegen das Wochenziel (TRAINING ALS WOCHENZIEL im Kopf).
             // Strichstaerke 8 und Spur wie die Heizungs-Boegen (dunkel Weiss 0,07).
@@ -545,14 +541,6 @@ sections:
         - grid-template-areas: '"rings"'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_active_energy
-      - sensor.iphone_training_7_tage
-      - sensor.iphone_health_steps
-      - input_number.ziel_aktive_energie
-      - input_number.ziel_training_woche
-      - input_number.ziel_schritte
-      - sensor.date
     - type: grid
       cards:
       - icon: mdi:map-marker-distance
@@ -561,6 +549,7 @@ sections:
         name: Gehen + Laufen
         label: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Distanz, dahinter die Schritte von heute (Sensor ohne Ziel, nur Anzeige).
             // Beide Teile als Flex-Zellen: passt die Zeile nicht, rutschen die Schritte
             // ohne Trennzeichen in eine zweite Zeile (schmale Kachel am Telefon).
@@ -574,9 +563,6 @@ sections:
             const schritte=isNaN(s)?'':`<span style="${klein}white-space:nowrap;">${Math.round(s).toLocaleString('de-DE')} Schritte</span>`;
             return `<span style="display:inline-flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;"><span style="white-space:nowrap;">${n}<span style="${klein}margin-left:3px;">${variables.unit||''}</span></span>${schritte}</span>`;
           ]]]
-        triggers_update:
-        - sensor.iphone_health_steps
-        - sensor.date
         show_icon: true
         show_name: true
         show_label: true
@@ -629,11 +615,10 @@ sections:
       - icon: mdi:stairs-up
         type: custom:button-card
         entity: sensor.iphone_flights_climbed
-        triggers_update:
-        - sensor.date
         name: Stockwerke
         label: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             const e=(typeof entity!=='undefined')?entity:null;
             // Tageszaehler: Wert vom Vortag zaehlt heute als 0 (TAGESZAEHLER VOM VORTAG im Kopf)
             const v=!e?NaN:(new Date(e.last_updated).toDateString()===new Date().toDateString()?parseFloat(e.state):0);
@@ -913,6 +898,7 @@ sections:
       custom_fields:
         bericht: |
           [[[
+            states['sensor.date']; states['input_datetime.schlaf_letzte_nacht']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Wochenbericht: diese Woche gegen dieselbe Spanne der Vorwoche aus der Langzeitstatistik.
             // Rechnung wie in der Automation "Gesundheit: Wochenbericht" (WOCHENBERICHT im Kopf).
             // nicht 'html' nennen: button-card uebergibt dem Template einen Parameter html
@@ -1075,13 +1061,6 @@ sections:
         - grid-template-areas: '"bericht"'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_health_steps
-      - input_datetime.schlaf_letzte_nacht
-      - automation.gesundheit_wochenbericht
-      - input_number.ziel_schritte
-      - input_number.ziel_training_woche
-      - sensor.date
   - type: vertical-stack
     visibility:
     - condition: user
@@ -1122,9 +1101,6 @@ sections:
             if(!a||['keine','unknown','unavailable'].includes(a)) return '';
             return `<span style="display:block;font-size:12px;color:var(--nachtblau-label, #b4c0cf);margin-top:8px;text-align:left;">Auffällig: ${a}</span>`;
           ]]]
-      triggers_update:
-      - sensor.erholung_signale
-      - sensor.erholung_abweichende_werte
       styles:
         icon:
         - width: 23px
@@ -1174,8 +1150,6 @@ sections:
       - icon: mdi:heart
         type: custom:button-card
         entity: sensor.iphone_resting_heart_rate
-        triggers_update:
-        - sensor.iphone_ruhepuls_normal_7_tage
         name: Ruhepuls
         label: |
           [[[
@@ -1249,8 +1223,6 @@ sections:
       - icon: mdi:heart-flash
         type: custom:button-card
         entity: sensor.iphone_hrv_24_stunden
-        triggers_update:
-        - sensor.iphone_hrv_normal_7_tage
         name: HRV 24 h
         label: |
           [[[
@@ -1589,6 +1561,7 @@ sections:
       custom_fields:
         badge: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Nur eine heute angekommene Nacht ist "Letzte Nacht" (siehe NAECHTE OHNE UHR im Kopf)
             const ts=states['input_datetime.schlaf_letzte_nacht']?.attributes?.timestamp;
             const heute=!!ts&&new Date(ts*1000).toDateString()===new Date().toDateString();
@@ -1640,10 +1613,6 @@ sections:
         - border: '1px solid color-mix(in srgb, var(--nachtblau-violett, #b399d4) 24%, transparent)'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_sleep_duration
-      - input_datetime.schlaf_letzte_nacht
-      - sensor.date
     - type: custom:button-card
       show_icon: false
       show_name: false
@@ -1651,6 +1620,7 @@ sections:
       custom_fields:
         seg: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Segmentbalken der letzten Nacht, Breite proportional zur Dauer
             // Ueber 60 min als Stunden + Minuten, sonst nur Minuten. Erst runden, damit nie "1 h 60 min" entsteht.
             const fmt=v=>{ const m=Math.round(v); return m>60?(Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'):(m+' min'); };
@@ -1683,13 +1653,6 @@ sections:
         - grid-template-areas: '"seg"'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_deep_sleep
-      - sensor.iphone_core_sleep
-      - sensor.iphone_rem_sleep
-      - sensor.iphone_awake
-      - input_datetime.schlaf_letzte_nacht
-      - sensor.date
     - type: custom:apexcharts-card
       apex_config:
         chart:
@@ -1861,6 +1824,7 @@ sections:
       custom_fields:
         bilanz: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Naechte mit mindestens 7 h Schlaf in den 7 Tagen des Diagramms (SCHLAFBILANZ im Kopf).
             // Gleiche Erkennung von Naechten ohne Uhr wie im data_generator des Diagramms.
             const ids=['sensor.iphone_sleep_duration','sensor.iphone_deep_sleep','sensor.iphone_core_sleep','sensor.iphone_rem_sleep','sensor.iphone_awake'];
@@ -1924,10 +1888,6 @@ sections:
         - grid-template-areas: '"bilanz"'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_sleep_duration
-      - input_datetime.schlaf_letzte_nacht
-      - sensor.date
   - type: vertical-stack
     visibility:
     - condition: user
@@ -1997,8 +1957,6 @@ sections:
       cards:
       - type: custom:button-card
         entity: sensor.iphone_blutsauerstoff_mittel_24_stunden
-        triggers_update:
-        - sensor.iphone_blutsauerstoff_minimum_24_stunden
         name: Blutsauerstoff
         show_icon: false
         show_name: true
@@ -2062,8 +2020,6 @@ sections:
         - icon: mdi:lungs
           type: custom:button-card
           entity: sensor.iphone_respiratory_rate
-          triggers_update:
-          - sensor.iphone_atemfrequenz_normal_7_tage
           name: Atemfrequenz
           label: |
             [[[
@@ -2134,12 +2090,10 @@ sections:
         - icon: mdi:run
           type: custom:button-card
           entity: sensor.iphone_vo2_max
-          triggers_update:
-          - input_datetime.vo2max_stand
-          - sensor.date
           name: VO2max
           label: |
             [[[
+              states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
               const e=(typeof entity!=='undefined')?entity:null;
               const v=(e&&e.state!==undefined&&e.state!==null)?parseFloat(e.state):NaN;
               const n=isNaN(v)?'–':(v*variables.factor).toLocaleString('de-DE',{minimumFractionDigits:variables.decimals,maximumFractionDigits:variables.decimals});
@@ -2203,11 +2157,10 @@ sections:
         - icon: mdi:run-fast
           type: custom:button-card
           entity: sensor.iphone_exercise_time
-          triggers_update:
-          - sensor.date
           name: Training heute
           label: |
             [[[
+              states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
               const e=(typeof entity!=='undefined')?entity:null;
               // Tageszaehler: Wert vom Vortag zaehlt heute als 0 (TAGESZAEHLER VOM VORTAG im Kopf)
               const v=!e?NaN:(new Date(e.last_updated).toDateString()===new Date().toDateString()?parseFloat(e.state):0);
@@ -2291,6 +2244,7 @@ sections:
       custom_fields:
         badge: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             // Tageszaehler zaehlen nur mit Update von heute (TAGESZAEHLER VOM VORTAG im Kopf)
             const h=id=>{ const s=states[id]; return !s?NaN:(new Date(s.last_updated).toDateString()===new Date().toDateString()?parseFloat(s.state):0); };
             const a=h('sensor.iphone_active_energy'), r=h('sensor.iphone_resting_energy');
@@ -2341,20 +2295,15 @@ sections:
         - border: '1px solid color-mix(in srgb, var(--nachtblau-amber, #e6b566) 24%, transparent)'
       tap_action:
         action: none
-      triggers_update:
-      - sensor.iphone_active_energy
-      - sensor.iphone_resting_energy
-      - sensor.date
     - type: grid
       cards:
       - icon: mdi:sofa
         type: custom:button-card
         entity: sensor.iphone_resting_energy
-        triggers_update:
-        - sensor.date
         name: Ruheenergie
         label: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             const e=(typeof entity!=='undefined')?entity:null;
             // Tageszaehler: Wert vom Vortag zaehlt heute als 0 (TAGESZAEHLER VOM VORTAG im Kopf)
             const v=!e?NaN:(new Date(e.last_updated).toDateString()===new Date().toDateString()?parseFloat(e.state):0);
@@ -2413,11 +2362,10 @@ sections:
       - icon: mdi:fire
         type: custom:button-card
         entity: sensor.iphone_active_energy
-        triggers_update:
-        - sensor.date
         name: Aktive Energie
         label: |
           [[[
+            states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
             const e=(typeof entity!=='undefined')?entity:null;
             // Tageszaehler: Wert vom Vortag zaehlt heute als 0 (TAGESZAEHLER VOM VORTAG im Kopf)
             const v=!e?NaN:(new Date(e.last_updated).toDateString()===new Date().toDateString()?parseFloat(e.state):0);
@@ -2711,6 +2659,7 @@ sections:
         custom_fields:
           list: |
             [[[
+              states['sensor.date']; // Tageswechsel um Mitternacht: button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
               // Listet nur Sensoren mit Wert, damit keine leeren Kacheln entstehen
               const L=[['sensor.iphone_weight','Gewicht','kg',1],['sensor.iphone_body_fat_percentage','Körperfett','%',1],['sensor.iphone_lean_body_mass','Fettfreie Masse','kg',1],['sensor.iphone_height','Größe','cm',0],['sensor.iphone_blood_pressure_systolic','Blutdruck sys.','mmHg',0],['sensor.iphone_blood_pressure_diastolic','Blutdruck dia.','mmHg',0],['sensor.iphone_body_temperature','Körpertemperatur','°C',1],['sensor.iphone_basal_body_temperature','Basaltemperatur','°C',1],['sensor.iphone_blood_glucose','Blutzucker','mg/dL',0],['sensor.iphone_water','Wasser','ml',0]];
               const rows=L.map(([id,n,u,d])=>({id,n,u,v:parseFloat(states[id]?.state),d})).filter(x=>!isNaN(x.v));
@@ -2737,19 +2686,6 @@ sections:
           - grid-template-areas: '"list"'
         tap_action:
           action: none
-        triggers_update:
-        - input_datetime.gewicht_stand
-        - sensor.date
-        - sensor.iphone_weight
-        - sensor.iphone_body_fat_percentage
-        - sensor.iphone_lean_body_mass
-        - sensor.iphone_height
-        - sensor.iphone_blood_pressure_systolic
-        - sensor.iphone_blood_pressure_diastolic
-        - sensor.iphone_body_temperature
-        - sensor.iphone_basal_body_temperature
-        - sensor.iphone_blood_glucose
-        - sensor.iphone_water
   - type: vertical-stack
     visibility:
     - condition: user
@@ -2904,8 +2840,6 @@ sections:
         haptic: light
       hold_action:
         action: none
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
     - type: custom:button-card
       entity: input_boolean.gesundheit_meldung_morgen_briefing
       icon: mdi:weather-sunset-up
@@ -2993,10 +2927,6 @@ sections:
       hold_action:
         action: more-info
         entity: automation.gesundheit_morgen_briefing
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
-      - automation.gesundheit_morgen_briefing
-      - input_boolean.gesundheit_meldung_morgen_briefing
     - type: custom:button-card
       entity: input_boolean.gesundheit_meldung_fruhwarnung
       icon: mdi:heart-pulse
@@ -3084,10 +3014,6 @@ sections:
       hold_action:
         action: more-info
         entity: automation.gesundheit_fruhwarnung_vitalwerte
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
-      - automation.gesundheit_fruhwarnung_vitalwerte
-      - input_boolean.gesundheit_meldung_fruhwarnung
     - type: custom:button-card
       entity: input_boolean.gesundheit_meldung_bewegung
       icon: mdi:walk
@@ -3175,10 +3101,6 @@ sections:
       hold_action:
         action: more-info
         entity: automation.gesundheit_bewegungs_erinnerung
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
-      - automation.gesundheit_bewegungs_erinnerung
-      - input_boolean.gesundheit_meldung_bewegung
     - type: custom:button-card
       entity: input_boolean.gesundheit_meldung_wochenbericht
       icon: mdi:calendar-week
@@ -3266,10 +3188,6 @@ sections:
       hold_action:
         action: more-info
         entity: automation.gesundheit_wochenbericht
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
-      - automation.gesundheit_wochenbericht
-      - input_boolean.gesundheit_meldung_wochenbericht
     - type: custom:button-card
       entity: input_boolean.gesundheit_meldung_datenhinweise
       icon: mdi:watch-variant
@@ -3357,9 +3275,5 @@ sections:
       hold_action:
         action: more-info
         entity: automation.gesundheit_datenhinweis_schlaf
-      triggers_update:
-      - input_boolean.gesundheit_meldungen
-      - automation.gesundheit_datenhinweis_schlaf
-      - input_boolean.gesundheit_meldung_datenhinweise
   - type: custom:decluttering-card
     template: floating_navbar
