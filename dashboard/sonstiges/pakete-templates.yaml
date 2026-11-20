@@ -93,8 +93,9 @@
 # Absender, falls bekannt (eine Zeile, notfalls gekuerzt, pk.zeilenTitel;
 # ganz steht er aufgeklappt), darunter die ganze Sendungsnummer (lange
 # Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter).
-# Die Kacheln der Home-Karte (pk.hero, pk.abholKachel) zeigen die Sendung
-# genauso, links mit dem Logo auf der Flaeche der Kachel; die Achtung-Liste
+# Die Home-Karte zeigt dieselben Zeilen ohne Aufklappen (pk.zeilenKopf),
+# den Zustand traegt dort ein 4-px-Rand links an der Karte (Amber in
+# Zustellung, sonst Koralle abholbereit; pk.kompaktRand). Die Achtung-Liste
 # nennt Dienst, Absender und ganze Nummer (pk.kennung). Aufgeklappt
 # verbindet eine Linie die Punkte des Verlaufs (pk.verlaufLinie): vom
 # aktiven Schritt (oben, Sendung noch nicht zugestellt) zum Schritt darunter
@@ -134,7 +135,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 11, vorher = window.__nachtblauPakete;
+          const VERSION = 12, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -411,13 +412,11 @@ button_card_templates:
             }
             el.remove();
           };
-          // hg, rand, schrift: Flaeche, Rand und Kuerzel; ohne Angabe neutral
-          // (Paketzeile), auf Kacheln in deren Farbe (pk.hero, pk.abholKachel)
-          pk.logoKachel = (d, hg = NK, rand = UKR, schrift = LABEL) => {
-            const kurz = `<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${schrift};">${pk.esc(d.kurz)}</span>`;
+          pk.logoKachel = d => {
+            const kurz = `<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${LABEL};">${pk.esc(d.kurz)}</span>`;
             const tok = d.logo ? pk.brandsToken() : null;
             const bild = d.logo ? `<img data-pk-logo="${pk.esc(d.logo)}" ${tok ? 'data-pk-echt="1"' : ''} src="${tok ? pk.logoUrl(d.logo, tok) : PIXEL}" alt="" onload="window.__nachtblauPakete.logoGeladen(this)" onerror="window.__nachtblauPakete.logoFehler(this)" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.15s;">` : '';
-            return `<span style="position:relative;width:40px;height:40px;border-radius:12px;overflow:hidden;display:block;flex:none;background:${hg};border:1px solid ${rand};">${kurz}${bild}</span>`;
+            return `<span style="position:relative;width:40px;height:40px;border-radius:12px;overflow:hidden;display:block;flex:none;background:${NK};border:1px solid ${UKR};">${kurz}${bild}</span>`;
           };
 
           // Aufklappen ohne neues Rendern; pk.offen haelt den Zustand
@@ -453,6 +452,17 @@ button_card_templates:
           };
 
           // ---------- Paketzeile ----------
+          // Kopf einer Paketzeile: Logo, Dienst (mit Absender), ganze Nummer,
+          // Stand (pk.unter) und rechts die Status-Pille. In der View klappt
+          // er per Tipp auf (pk.zeile), auf Home steht er allein (pk.kompakt).
+          const ZEILE = 'display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;';
+          pk.zeilenKopf = p => `${pk.logoKachel(pk.dienst(p))}
+                  <span style="min-width:0;">
+                    <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.zeilenTitel(p)}</span>
+                    ${pk.nummer(p, LABEL, 11.5)}
+                    <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
+                  </span>
+                  ${pk.pille(p.status)}`;
           // Linie im Verlauf vom Punkt eines Eintrags zum Punkt darunter (2 px,
           // mittig unter dem 7-px-Punkt, je 2 px Abstand zu beiden Punkten).
           // Neuester Eintrag oben: Ist die Sendung noch unterwegs, ist er der
@@ -480,14 +490,8 @@ button_card_templates:
               d.domain && code && pk.gruppe(p) !== 'zugestellt' ? pk.knopf('Nicht mehr verfolgen', `window.__nachtblauPakete.entferne(this,'${d.domain}',${pk.esc(JSON.stringify(code))})`) : '',
             ].join('');
             return `<div data-pk-paket style="background:${UK};border:1px solid ${UKR};border-radius:13px;">
-                <div ${pk.tippAttr(`window.__nachtblauPakete.umschalten(this,${kj})`)} aria-expanded="${auf}" style="display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;">
-                  ${pk.logoKachel(d)}
-                  <span style="min-width:0;">
-                    <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.zeilenTitel(p)}</span>
-                    ${pk.nummer(p, LABEL, 11.5)}
-                    <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
-                  </span>
-                  ${pk.pille(p.status)}
+                <div ${pk.tippAttr(`window.__nachtblauPakete.umschalten(this,${kj})`)} aria-expanded="${auf}" style="${ZEILE}cursor:pointer;">
+                  ${pk.zeilenKopf(p)}
                 </div>
                 <div data-pk-verlauf style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:6px;padding:2px 12px 12px 60px;">
                   ${foto ? `<img data-pk-foto="${pk.esc(foto)}" ${auf ? `src="${pk.esc(pk.fotoUrl(foto))}"` : ''} alt="Zustellfoto von Amazon" onerror="window.__nachtblauPakete.fotoFehler(this)" ${pk.tippAttr(`window.__nachtblauPakete.fotoGross(this,${pk.esc(JSON.stringify(foto))})`)} style="display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid ${UKR};background:${NK};cursor:pointer;">
@@ -517,24 +521,6 @@ button_card_templates:
             const z = g.zugestellt.length;
             return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
           };
-          // Sendung als Kachel: in Zustellung gefuellt (Amber, Schrift #3a2c12 7,2:1),
-          // sonst getoent (heute Amber, spaeter Blau). Links das Logo des
-          // Dienstes (pk.logoKachel) auf der Flaeche der Kachel, rechts wie in
-          // der Paketzeile Dienst (mit Absender), ganze Nummer und Stand.
-          pk.hero = p => {
-            const d = pk.dienst(p), unterwegs = p.status === 'out_for_delivery';
-            const zeile2 = [unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung', pk.stoppText(pk.stopps(p)), pk.fenster(p)].filter(Boolean).join(' · ');
-            const c = pk.gruppe(p) === 'heute' ? AMBER : BLAU, schrift = unterwegs ? '#3a2c12' : TEXT, klein = unterwegs ? '#3a2c12' : LABEL;
-            const logo = unterwegs ? pk.logoKachel(d, 'rgba(58, 44, 18, 0.12)', 'rgba(58, 44, 18, 0.24)', '#3a2c12')
-              : pk.logoKachel(d, `color-mix(in srgb, ${c} 16%, transparent)`, `color-mix(in srgb, ${c} 24%, transparent)`, c);
-            return `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;${unterwegs ? VOLL_AMBER : `background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`}">
-                ${logo}
-                <div style="min-width:0;">
-                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${schrift};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pk.zeilenTitel(p, klein)}</div>
-                  ${pk.nummer(p, klein, 12)}
-                  <div style="font-size:12.5px;line-height:1.35;color:${klein};">${pk.esc(zeile2)}</div>
-                </div></div>`;
-          };
           // Kleine Schrift auf getoenter Flaeche in Label-Grau (DESIGN.md, "Text")
           pk.streifen = (icon, c, titel, text) => `<div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">
               ${pk.kachel(icon, c, 34, 11, 19)}
@@ -553,18 +539,19 @@ button_card_templates:
               <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
 
           // ---------- Karten ----------
-          // Abholbereit als getoente Kachel in Koralle-Orange, Stufe immer als Text
-          // (DESIGN.md); kleine Schrift auf der Toenung in Label-Grau
-          pk.abholKachel = p => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;background:color-mix(in srgb, ${KORALLE} 12%, transparent);border:1px solid color-mix(in srgb, ${KORALLE} 24%, transparent);">
-                ${pk.logoKachel(pk.dienst(p), `color-mix(in srgb, ${KORALLE} 16%, transparent)`, `color-mix(in srgb, ${KORALLE} 24%, transparent)`, KORALLE)}
-                <div style="min-width:0;">
-                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pk.zeilenTitel(p)}</div>
-                  ${pk.nummer(p, LABEL, 12)}
-                  <div style="font-size:12.5px;line-height:1.35;color:${LABEL};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;"><span style="color:${KORALLE};font-weight:700;">Abholbereit</span>${p.pickup_point ? ' · ' + pk.esc(p.pickup_point) : ''}</div>
-                </div></div>`;
-          // Home: Sendungen in Zustellung, dann abholbereite (je hoechstens drei
-          // als Kachel). "Paket vor der Tuer" fehlt bewusst, das zeigt auf Home
-          // schon die Klingel-Karte; Probleme und "+ Sendung" stehen in der View.
+          // Home: Sendungen in Zustellung, dann abholbereite (je hoechstens drei),
+          // als Zeilen wie in der View (pk.zeilenKopf, ohne Aufklappen; ein Tipp
+          // oeffnet die View). Den Zustand traegt der 4-px-Rand links an der
+          // Karte (pk.kompaktRand, pakete_huelle) wie bei den anderen Karten auf
+          // Home, dazu die Status-Pille je Zeile. "Paket vor der Tuer" fehlt
+          // bewusst, das zeigt auf Home schon die Klingel-Karte; Probleme und
+          // "+ Sendung" stehen in der View.
+          pk.kompaktRand = () => {
+            if (pk.fehlt()) return null;
+            const g = pk.gruppen();
+            return pk.inZustellung(g).length ? AMBER : g.abholbereit.length ? KORALLE : null;
+          };
+          const kurzZeile = p => `<div style="background:${UK};border:1px solid ${UKR};border-radius:13px;${ZEILE}">${pk.zeilenKopf(p)}</div>`;
           pk.kompakt = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Pakete', 'Keine Daten', false) + pk.fehltHinweis());
             const g = pk.gruppen(), z = pk.inZustellung(g), a = g.abholbereit;
@@ -575,7 +562,7 @@ button_card_templates:
             if (weitere) teile.push(`${weitere} unterwegs`);
             const mehr = (n, was) => n > 3 ? pk.hinweisText(`und ${n - 3} weitere ${was}, alle in der Pakete-Ansicht`) : '';
             const kacheln = (z.length || a.length)
-              ? z.slice(0, 3).map(pk.hero).join('') + mehr(z.length, 'in Zustellung') + a.slice(0, 3).map(pk.abholKachel).join('') + mehr(a.length, 'abholbereit')
+              ? `<div style="display:flex;flex-direction:column;gap:6px;">${z.slice(0, 3).map(kurzZeile).join('') + a.slice(0, 3).map(kurzZeile).join('')}</div>` + mehr(z.length, 'in Zustellung') + mehr(a.length, 'abholbereit')
               : pk.hinweisText('Gerade ist nichts in Zustellung oder abholbereit.');
             // Ganze Karte oeffnet die View
             return pk.block(`<div ${pk.tippAttr('window.__nachtblauPakete.navigiere()')} aria-label="Pakete-Ansicht öffnen" style="display:flex;flex-direction:column;gap:10px;cursor:pointer;outline-offset:4px;">`
@@ -739,6 +726,16 @@ button_card_templates:
       - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
       - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
       - cursor: default
+      # Statusrand links nur mit variables.mit_rand (pakete_kompakt), wie
+      # Haustuer- und Personenkarten auf Home; muss NACH "border" stehen.
+      # Links 15 px: mit dem 4-px-Rand steht der Inhalt wie bei den anderen.
+      - border-left: |
+          [[[
+            const c = variables.mit_rand ? variables.pk.kompaktRand() : null;
+            return c ? '4px solid ' + c : '1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))';
+          ]]]
+      - padding-left: |
+          [[[ return variables.mit_rand && variables.pk.kompaktRand() ? '15px' : '18px'; ]]]
       grid:
       - grid-template-areas: '"inhalt"'
       - grid-template-columns: minmax(0, 1fr)
@@ -751,6 +748,8 @@ button_card_templates:
   # Navigation zur View laeuft ueber pk.navigiere (Tipp auf den Inhalt).
   pakete_kompakt:
     template: pakete_huelle
+    variables:
+      mit_rand: true
     custom_fields:
       inhalt: |
         [[[ return variables.pk.kompakt(); ]]]
