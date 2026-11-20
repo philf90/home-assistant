@@ -341,10 +341,13 @@ automation:
     # bevor die Bedingungen geprueft werden (in HA getestet). Laut Parcel
     # Aggregator sind beide Felder immer da (Wert oder null); .get() sichert den
     # Fall ab, dass ein Paketdienst sie weglaesst.
+    # name: Absender (falls bekannt) und die ganze Sendungsnummer wie in der
+    # Paketzeile der View, z. B. "Versandhaus · JJD000390007855342"; der
+    # Dienst steht schon im Titel. Ohne beides "Sendung".
     variables:
       ziel: /dashboard-home/pakete
       p: "{{ trigger.event.data }}"
-      name: "{{ trigger.event.data.sender or ('…' ~ (trigger.event.data.barcode | string)[-6:]) }}"
+      name: "{{ [trigger.event.data.get('sender') or '', trigger.event.data.get('barcode') or ''] | map('string') | select | join(' · ') or 'Sendung' }}"
       fenster: >-
         {% set von = trigger.event.data.get('planned_from') | as_datetime(none) %}{% set bis = trigger.event.data.get('planned_to') | as_datetime(none) %}{% if von and bis and (bis - von).total_seconds() < 72000 %}{{ (von | as_local).strftime('%H:%M') }}–{{ (bis | as_local).strftime('%H:%M') }} Uhr{% endif %}
     actions:
@@ -412,7 +415,8 @@ automation:
       - repeat:
           for_each: "{{ neu }}"
           sequence:
-            # Name wie in pakete-templates.yaml: Absender, sonst Nummernende
+            # Name wie in "Pakete: Meldungen": Absender (falls bekannt) und
+            # die ganze Sendungsnummer
             - variables:
                 n: "{{ trigger.to_state.attributes.stopps[repeat.item] }}"
                 name: >-
@@ -420,7 +424,7 @@ automation:
                   {%- for p in (state_attr('sensor.parcel_aggregator_incoming_parcels', 'parcels') or []) if p.get('barcode') and (p.barcode | string | regex_replace('\s', '') | upper) == repeat.item %}
                     {%- set ns.s = p.get('sender') or '' %}
                   {%- endfor %}
-                  {{ ns.s or ('Sendung …' ~ repeat.item[-6:]) }}
+                  {{ [ns.s, repeat.item] | select | join(' · ') }}
             - action: notify.mobile_app_iphone
               data:
                 title: "Fahrer fast da · Amazon"
@@ -456,7 +460,7 @@ automation:
     # alphabetisch und rendert sie in dieser Reihenfolge
     variables:
       foto: "{{ (trigger.event.data.get('raw') or {}).get('delivery_photo_entity_id') or '' }}"
-      name: "{{ trigger.event.data.get('sender') or ('Sendung …' ~ (trigger.event.data.get('barcode') | string)[-6:]) }}"
+      name: "{{ [trigger.event.data.get('sender') or '', trigger.event.data.get('barcode') or ''] | map('string') | select | join(' · ') or 'Sendung' }}"
       ziel: /dashboard-home/pakete
     conditions:
       - condition: state
