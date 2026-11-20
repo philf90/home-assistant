@@ -93,8 +93,9 @@
 # Absender, falls bekannt (eine Zeile, notfalls gekuerzt, pk.zeilenTitel;
 # ganz steht er aufgeklappt), darunter die ganze Sendungsnummer (lange
 # Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter).
-# Kacheln, Hero und Achtung-Liste nennen die Sendung weiter kurz (pk.name,
-# Absender oder die letzten sechs Zeichen der Nummer). Aufgeklappt
+# Die Kacheln der Home-Karte (pk.hero, pk.abholKachel) zeigen die Sendung
+# genauso, links mit dem Logo auf der Flaeche der Kachel; die Achtung-Liste
+# nennt Dienst, Absender und ganze Nummer (pk.kennung). Aufgeklappt
 # verbindet eine Linie die Punkte des Verlaufs (pk.verlaufLinie): vom
 # aktiven Schritt (oben, Sendung noch nicht zugestellt) zum Schritt darunter
 # gestrichelt in der Statusfarbe, sonst durchgezogen.
@@ -133,7 +134,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 10, vorher = window.__nachtblauPakete;
+          const VERSION = 11, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -297,14 +298,16 @@ button_card_templates:
           // Tippen aufs Foto: Infodialog der Bild-Entitaet, dort in voller Groesse
           pk.fotoGross = (el, id) => el.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: id } }));
           pk.fotoFehler = el => { el.style.display = 'none'; const n = el.nextElementSibling; if (n) n.style.display = 'block'; };
-          pk.name = p => p.sender || `${pk.dienst(p).name} …${String(p.barcode || '').slice(-6)}`;
-          // Paketzeile der View: oben in einer Zeile der Dienst, dahinter der
-          // Absender (falls bekannt, duenner, notfalls mit "…" gekuerzt; ganz
-          // steht er aufgeklappt), darunter die ganze Sendungsnummer. Bei 360 px
-          // passen neben "In Zustellung" 20 Ziffern in eine Zeile; laengere
-          // Nummern (Formular bis 40 Zeichen) brechen um statt abgeschnitten
-          // zu werden.
-          pk.zeilenTitel = p => `${pk.esc(pk.dienst(p).name)}${p.sender ? `<span style="font-weight:400;color:${LABEL};"> · ${pk.esc(p.sender)}</span>` : ''}`;
+          // Sendung benennen, in Paketzeile und Kacheln gleich: oben in einer
+          // Zeile der Dienst, dahinter der Absender (falls bekannt, duenner in
+          // Farbe c, notfalls mit "…" gekuerzt; ganz steht er aufgeklappt),
+          // darunter die ganze Sendungsnummer (pk.nummer). Bei 360 px passen
+          // neben "In Zustellung" 20 Ziffern in eine Zeile; laengere Nummern
+          // (Formular bis 40 Zeichen) brechen um statt abgeschnitten zu werden.
+          pk.zeilenTitel = (p, c = LABEL) => `${pk.esc(pk.dienst(p).name)}${p.sender ? `<span style="font-weight:400;color:${c};"> · ${pk.esc(p.sender)}</span>` : ''}`;
+          pk.nummer = (p, c, px) => p.barcode ? `<span style="display:block;font-size:${px}px;line-height:1.3;color:${c};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(String(p.barcode))}</span>` : '';
+          // Fliesstext (Achtung-Liste): Dienst, Absender, Nummer
+          pk.kennung = p => [pk.dienst(p).name, p.sender, p.barcode].filter(Boolean).map(String).join(' · ');
           pk.unter = p => {
             const g = pk.gruppe(p), fe = pk.fenster(p);
             if (g === 'zugestellt') { const t = zeit(p.delivered_at); return (t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
@@ -408,11 +411,13 @@ button_card_templates:
             }
             el.remove();
           };
-          pk.logoKachel = d => {
-            const kurz = `<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${LABEL};">${pk.esc(d.kurz)}</span>`;
+          // hg, rand, schrift: Flaeche, Rand und Kuerzel; ohne Angabe neutral
+          // (Paketzeile), auf Kacheln in deren Farbe (pk.hero, pk.abholKachel)
+          pk.logoKachel = (d, hg = NK, rand = UKR, schrift = LABEL) => {
+            const kurz = `<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:10.5px;font-weight:800;letter-spacing:0.03em;color:${schrift};">${pk.esc(d.kurz)}</span>`;
             const tok = d.logo ? pk.brandsToken() : null;
             const bild = d.logo ? `<img data-pk-logo="${pk.esc(d.logo)}" ${tok ? 'data-pk-echt="1"' : ''} src="${tok ? pk.logoUrl(d.logo, tok) : PIXEL}" alt="" onload="window.__nachtblauPakete.logoGeladen(this)" onerror="window.__nachtblauPakete.logoFehler(this)" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.15s;">` : '';
-            return `<span style="position:relative;width:40px;height:40px;border-radius:12px;overflow:hidden;display:block;background:${NK};border:1px solid ${UKR};">${kurz}${bild}</span>`;
+            return `<span style="position:relative;width:40px;height:40px;border-radius:12px;overflow:hidden;display:block;flex:none;background:${hg};border:1px solid ${rand};">${kurz}${bild}</span>`;
           };
 
           // Aufklappen ohne neues Rendern; pk.offen haelt den Zustand
@@ -479,7 +484,7 @@ button_card_templates:
                   ${pk.logoKachel(d)}
                   <span style="min-width:0;">
                     <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;font-weight:600;line-height:1.25;color:${TEXT};">${pk.zeilenTitel(p)}</span>
-                    ${code ? `<span style="display:block;font-size:11.5px;line-height:1.3;color:${LABEL};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(code)}</span>` : ''}
+                    ${pk.nummer(p, LABEL, 11.5)}
                     <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
                   </span>
                   ${pk.pille(p.status)}
@@ -513,18 +518,21 @@ button_card_templates:
             return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
           };
           // Sendung als Kachel: in Zustellung gefuellt (Amber, Schrift #3a2c12 7,2:1),
-          // sonst getoent (heute Amber, spaeter Blau)
+          // sonst getoent (heute Amber, spaeter Blau). Links das Logo des
+          // Dienstes (pk.logoKachel) auf der Flaeche der Kachel, rechts wie in
+          // der Paketzeile Dienst (mit Absender), ganze Nummer und Stand.
           pk.hero = p => {
             const d = pk.dienst(p), unterwegs = p.status === 'out_for_delivery';
             const zeile2 = [unterwegs ? 'In Zustellung' : pk.gruppe(p) === 'heute' ? 'Kommt heute' : 'Nächste Lieferung', pk.stoppText(pk.stopps(p)), pk.fenster(p)].filter(Boolean).join(' · ');
-            const ic = unterwegs ? 'mdi:truck-delivery' : 'mdi:calendar-clock';
-            const c = pk.gruppe(p) === 'heute' ? AMBER : BLAU;
-            const kachelVoll = `<span style="width:40px;height:40px;border-radius:12px;flex:none;display:grid;place-items:center;background:rgba(58, 44, 18, 0.12);border:1px solid rgba(58, 44, 18, 0.24);">${pk.icon(ic, '#3a2c12', 22)}</span>`;
+            const c = pk.gruppe(p) === 'heute' ? AMBER : BLAU, schrift = unterwegs ? '#3a2c12' : TEXT, klein = unterwegs ? '#3a2c12' : LABEL;
+            const logo = unterwegs ? pk.logoKachel(d, 'rgba(58, 44, 18, 0.12)', 'rgba(58, 44, 18, 0.24)', '#3a2c12')
+              : pk.logoKachel(d, `color-mix(in srgb, ${c} 16%, transparent)`, `color-mix(in srgb, ${c} 24%, transparent)`, c);
             return `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;${unterwegs ? VOLL_AMBER : `background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);`}">
-                ${unterwegs ? kachelVoll : pk.kachel(ic, c, 40, 12, 22)}
+                ${logo}
                 <div style="min-width:0;">
-                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${unterwegs ? '#3a2c12' : TEXT};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${pk.esc(d.name)} · ${pk.esc(pk.name(p))}</div>
-                  <div style="font-size:12.5px;line-height:1.35;color:${unterwegs ? '#3a2c12' : LABEL};">${pk.esc(zeile2)}</div>
+                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${schrift};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pk.zeilenTitel(p, klein)}</div>
+                  ${pk.nummer(p, klein, 12)}
+                  <div style="font-size:12.5px;line-height:1.35;color:${klein};">${pk.esc(zeile2)}</div>
                 </div></div>`;
           };
           // Kleine Schrift auf getoenter Flaeche in Label-Grau (DESIGN.md, "Text")
@@ -539,7 +547,7 @@ button_card_templates:
           };
           pk.achtung = g => g.achtung.map(p => `<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:13px;${VOLL_ROT}">
               <span style="flex:none;">${pk.icon('mdi:alert-circle', '#3d1512', 18)}</span>
-              <span style="font-size:13px;font-weight:600;white-space:normal;">${pk.esc(pk.dienst(p).name)} · ${pk.esc(pk.name(p))}: ${pk.esc(p.raw_status || pk.status(p.status).text)}</span></div>`).join('');
+              <span style="font-size:13px;font-weight:600;white-space:normal;overflow-wrap:anywhere;">${pk.esc(pk.kennung(p))}: ${pk.esc(p.raw_status || pk.status(p.status).text)}</span></div>`).join('');
           pk.zahl = (n, text, c) => `<div style="background:${UK};border:1px solid ${UKR};border-radius:13px;padding:8px 4px;text-align:center;min-width:0;">
               <div style="font-size:20px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;color:${n ? c : SEK};">${n}</div>
               <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
@@ -548,9 +556,10 @@ button_card_templates:
           // Abholbereit als getoente Kachel in Koralle-Orange, Stufe immer als Text
           // (DESIGN.md); kleine Schrift auf der Toenung in Label-Grau
           pk.abholKachel = p => `<div style="display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;padding:11px 13px;border-radius:16px;background:color-mix(in srgb, ${KORALLE} 12%, transparent);border:1px solid color-mix(in srgb, ${KORALLE} 24%, transparent);">
-                ${pk.kachel('mdi:storefront-outline', KORALLE, 40, 12, 22)}
+                ${pk.logoKachel(pk.dienst(p), `color-mix(in srgb, ${KORALLE} 16%, transparent)`, `color-mix(in srgb, ${KORALLE} 24%, transparent)`, KORALLE)}
                 <div style="min-width:0;">
-                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${TEXT};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-wrap:balance;">${pk.esc(pk.dienst(p).name)} · ${pk.esc(pk.name(p))}</div>
+                  <div style="font-size:15px;font-weight:700;line-height:1.25;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pk.zeilenTitel(p)}</div>
+                  ${pk.nummer(p, LABEL, 12)}
                   <div style="font-size:12.5px;line-height:1.35;color:${LABEL};display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;"><span style="color:${KORALLE};font-weight:700;">Abholbereit</span>${p.pickup_point ? ' · ' + pk.esc(p.pickup_point) : ''}</div>
                 </div></div>`;
           // Home: Sendungen in Zustellung, dann abholbereite (je hoechstens drei
