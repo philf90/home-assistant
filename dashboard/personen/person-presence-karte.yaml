@@ -177,6 +177,9 @@
 #     mit Dauer, Ankunft zuhause; Antippen zeigt den Eintrag auf der Karte.
 #     Wege mit Symbol ihrer Art (mdi:car, mdi:walk, mdi:bike), Ankunft zuhause
 #     und Aufenthalte in einer Zone mit dem Icon der Zone, sonst ein Punkt.
+#     Wechselt die Art innerhalb eines Wegs (Auto abgestellt, zu Fuss weiter),
+#     bekommt jeder Teil ab 0,2 km einen Eintrag ("Zu Fuss weiter",
+#     "Weiterfahrt"); Beginn laut Aktivitaetssensor, sonst geschaetzt.
 #     Name eines Aufenthalts: die Zone, sonst der Ortsname aus Places
 #     (<places_prefix>_place_name, Typ aus _place_type), der waehrend des
 #     Aufenthalts am laengsten galt; Strassen zaehlen nicht, bei Haltestellen
@@ -408,7 +411,7 @@ cards:
                   spur: |
                     [[[[
                       // Bibliothek, einmal pro Seite. VERSION bei jeder Aenderung erhoehen.
-                      const VERSION = 15;
+                      const VERSION = 16;
                       if (!window.__nachtblauSpur || window.__nachtblauSpur.version !== VERSION) {
                         const sp = { version: VERSION, cache: {} };
                         const LUECKE = 120;    // s: groessere Abstaende gelten als geschaetzt
@@ -754,6 +757,8 @@ cards:
                             kmGeschaetzt: teil(false).reduce((x, e) => x + e.km, 0),
                             fehler: erg.filter((e) => !e.ok).length,
                             auftraege: erg.length,
+                            // Abschnitte in Zeitfolge mit Art, km und Valhalla-Zeit (Tagesliste)
+                            abschnitte: auftraege.map((a, k) => ({ art: a.art, fest: a.fest, t0: a.pts[0].t, t1: a.pts[a.pts.length - 1].t, km: erg[k].km, zeit: erg[k].zeit })),
                             kmArt: ['fuss', 'rad', 'auto'].reduce((o, a) => Object.assign(o, { [a]: erg.filter((e) => e.art === a).reduce((x, e) => x + e.km, 0) }), {}),
                             // Abfahrt: Beginnt der Weg mit einer Luecke, ist der erste Punkt die letzte
                             // Meldung am Ausgangsort; im Stand meldet das iPhone nichts. Dann gilt
@@ -996,11 +1001,49 @@ cards:
                             return `<ha-icon icon="${e.icon}" style="--mdc-icon-size:16px;--ha-icon-display:block;width:16px;height:16px;margin:0;display:block;color:${e.farbe};transform:translate(${-gx * 16 / 24}px, ${-gy * 16 / 24}px);"></ha-icon>`;
                           };
                           const eintraege = [];
+                          // Ein Weg mit Wechsel der Art (Auto abgestellt, zu Fuss weiter) ergibt je
+                          // Teil einen Eintrag. Teile unter ABSCHNITT_KM gehen im Nachbarteil auf
+                          // (B2: 0,13 km "zu Fuss" aus GPS-Zittern im Stand). Beginn eines spaeteren
+                          // Teils: die erste Meldung dieser Art vom Aktivitaetssensor in seinem ersten
+                          // Abschnitt, sonst bei einer Luecke wie bei der Abfahrt naechster Punkt minus
+                          // Zeit laut Valhalla. 18.11.2026: Sensor Gehen 11:22:08, Auto 11:28:26 (die
+                          // Schaetzung hatte 11:23 und 11:33); 21.11.2026: Auto bis 11:31, Sensor ohne
+                          // Gehen, 0,31 km zu Fuss bis 11:36:58 (220 s) -> "Zu Fuss weiter" 11:33;
+                          // vorher stand nur "Abfahrt 12,9 km" da.
+                          const ABSCHNITT_KM = 0.2;
+                          const LOS = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] };
+                          const teileArt = (s) => {
+                            const t = [];
+                            const fuege = () => { for (let i = 1; i < t.length;) { if (t[i].art === t[i - 1].art) { t[i - 1].km += t[i].km; t[i - 1].bis = t[i].bis; t.splice(i, 1); } else i++; } };
+                            (s.abschnitte || []).forEach((a) => t.push({ art: a.art, km: a.km, a0: a, bis: a.t1 }));
+                            fuege();
+                            for (let n = 0; n < 50 && t.length > 1; n++) {
+                              let i = -1;
+                              t.forEach((x, j) => { if (x.km < ABSCHNITT_KM && (i < 0 || x.km < t[i].km)) i = j; });
+                              if (i < 0) break;
+                              const z = i > 0 ? t[i - 1] : t[1];
+                              z.km += t[i].km;
+                              if (i > 0) z.bis = t[i].bis; else z.a0 = t[0].a0;
+                              t.splice(i, 1);
+                              fuege();
+                            }
+                            return t;
+                          };
                           tg.fahrten.forEach((f, k) => {
                             const ende = f.pkt[f.pkt.length - 1];
-                            const art = hauptArt(erg[k]);
-                            const text = { auto: ['Abfahrt', 'Weiterfahrt'], fuss: ['Zu Fuß los', 'Zu Fuß weiter'], rad: ['Mit dem Rad los', 'Mit dem Rad weiter'] }[art][f.nachHalt ? 1 : 0];
-                            eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text, wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                            const tl = teileArt(erg[k]);
+                            if (tl.length < 2) {
+                              const art = hauptArt(erg[k]);
+                              eintraege.push({ t: abfahrt[k], farbe: BLAU, icon: SYMBOL[art], text: LOS[art][f.nachHalt ? 1 : 0], wert: kmTxt(erg[k].kmFest + erg[k].kmGeschaetzt), box: f.pkt.map((x) => [x.lat, x.lon]).concat(erg[k].fest.flat()) });
+                            } else {
+                              tl.forEach((x, j) => {
+                                const a = x.a0;
+                                const sensor = (ui.akt || []).find((e) => e.art === x.art && e.t >= a.t0 && e.t <= a.t1);
+                                const t = j === 0 ? abfahrt[k] : (sensor ? sensor.t : (!a.fest && typeof a.zeit === 'number' ? Math.max(a.t0, Math.round(a.t1 - a.zeit)) : a.t0));
+                                const box = f.pkt.filter((p) => p.t >= a.t0 && p.t <= x.bis).map((p) => [p.lat, p.lon]);
+                                eintraege.push({ t, farbe: BLAU, icon: SYMBOL[x.art], text: LOS[x.art][j === 0 && !f.nachHalt ? 0 : 1], wert: kmTxt(x.km), box: box.length ? box : f.pkt.map((p) => [p.lat, p.lon]) });
+                              });
+                            }
                             if (f.heim) eintraege.push({ t: ende.t, farbe: GRUEN, icon: heimIcon, text: 'Ankunft zuhause', wert: '', box: [[ende.lat, ende.lon]] });
                           });
                           halte.forEach((h) => eintraege.push({ t: h.von, farbe: VIOLETT, icon: zonenIcon(h.name), text: h.name || h.ort || 'Aufenthalt', wert: dauer(h.bis - h.von), box: [[h.lat, h.lon]] }));
