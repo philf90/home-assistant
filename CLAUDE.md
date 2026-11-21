@@ -45,6 +45,13 @@ Das Repo ist oeffentlich (MIT). Ueberblick: `README.md`.
   der Instanz. Regeln: `CONTRIBUTING.md`, Abschnitt "Routen und Sichtbarkeit";
   `ci/check_routen.py` prueft das Repo, mit `--json` auch einen Instanzabzug.
 
+## Labels
+
+- Labels, Bereiche und Kategorien der Instanz folgen `CONTRIBUTING.md`,
+  Abschnitt "Labels, Bereiche und Kategorien": Bereich = wo, Label = worum
+  (Thema, Geraetetyp, Steuer-Flag), Kategorie = Art. Neue Labels zuerst in
+  `design/labels.yaml` eintragen, dann in der Instanz anlegen.
+
 ## Pruefungen
 
 Regeln fuer neue und geaenderte Dateien: `CONTRIBUTING.md`. Vor einem Push die
