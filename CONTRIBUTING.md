@@ -84,6 +84,53 @@ die Home Assistant Adminrechte verlangt (Abschnitt `dienste`, z. B.
   `python ci/check_routen.py --json <abzug> --dashboard <url_path> --konto
   benutzer_id_1=<id>` prüfen. Abzug und echte IDs nie committen.
 
+## Labels, Bereiche und Kategorien
+
+Gilt für die Instanz, nicht für Dateien im Repo; Karten und Templates, die ein
+Label lesen, verlassen sich darauf. Der Labelsatz steht in
+[`design/labels.yaml`](design/labels.yaml). Home Assistant hat drei
+Ordnungswerkzeuge, jedes beantwortet genau eine Frage:
+
+| Frage | Werkzeug | Gilt für |
+|---|---|---|
+| Wo? | Bereich, Stockwerk | Geräte, Entitäten; Automationen und Szenen, wenn sie genau einen Bereich betreffen |
+| Worum? | Label | Geräte, Entitäten (auch Helfer, Automationen, Skripte, Szenen), Bereiche |
+| Welche Art? | Kategorie | nur die Listen von Automationen, Skripten, Szenen und Helfern |
+
+1. **Ort nie als Label.** Kein „Garten“, „Keller“. Außenbereiche ohne
+   Stockwerk werden ein Stockwerk, dann reicht `floor_id` als Ziel.
+2. **Thema als Label:** fasst zusammen, was über Bereiche oder Integrationen
+   verteilt ist, über alle Objektarten. Der Name ist das Präfix der
+   Automationsnamen (`Bewässerung: Zonen-Timer` → Bewässerung).
+3. **Gerätetyp nur, wenn Home Assistant ihn nicht kennt.** Trennen Domain und
+   Geräteklasse die Menge (Rauchmelder: `device_class: smoke`), kein Label.
+   Trennen sie sie nicht (Fenster: Autos melden auch `window`), Label.
+4. **Kein Label für Hersteller oder Integration.** Das filtert Home Assistant
+   selbst.
+5. **Steuer-Flag nur mit Verbraucher.** Die Beschreibung nennt das Template,
+   die Automation oder Karte, die es liest (Vorbild: `keine_batteriemeldung`).
+6. **Eine Ebene.** Physisches Gerät: Label am Gerät. Entitätslabel nur für
+   Entitäten ohne Gerät (Helfer, Automation, Skript, Szene, Gruppe) oder wenn
+   nur einzelne Entitäten eines Geräts gemeint sind. Ein Ziel `label_id`
+   erfasst die Entitäten gelabelter Geräte, `label_entities()` nicht;
+   Templates lesen deshalb beide Wege:
+   `label_devices(x) | map('device_entities') | sum(start=[]) + label_entities(x)`.
+   Ein bestehendes Entitätslabel erst entfernen, wenn kein Template es mit
+   `label_entities()` liest; auch Template-Sensoren in der Instanz-YAML
+   prüfen, die nicht im Repo liegen.
+7. **Vollständig oder gar nicht.** Ein Label erfasst alle passenden Objekte,
+   sonst übergeht ein Ziel still Geräte. Ein neues Label lohnt sich ab drei
+   Objekten.
+8. **Art als Kategorie.** Automationen: Meldung, Steuerung, Merker, Wartung.
+   Helfer: Meldeschalter, Einstellung, Merker.
+9. **Form:** deutscher Name, Einzahl, Beschreibung Pflicht, Farbe nach Achse
+   (Thema bunt, Gerätetyp `blue-grey`, Flag `grey`). Die `label_id` bleibt
+   bei einer Umbenennung gleich; bekommt ein Label eine neue Bedeutung, ein
+   neues anlegen, umhängen und das alte löschen.
+10. **Register zuerst:** ein neues Label zuerst in `design/labels.yaml`
+    eintragen, dann in der Instanz anlegen. Das gilt auch für Änderungen
+    direkt in der Instanz.
+
 ## Auf beiden Handys prüfen
 
 Für jede neue oder geänderte Karte und View, nach den Regeln in
@@ -131,6 +178,7 @@ Personenbezug, auch nicht in Commit-Nachrichten, PR-Texten und Kommentaren.
   `ci/check_persoenlich.py` gegen eine eigene Sperrliste in
   `lokal/sperrliste.txt` (ein Begriff pro Zeile, nicht im Repo).
 - Ob die Entitäten in einer Instanz existieren.
+- Labels in der Instanz: `design/labels.yaml` liest bisher keine Prüfung.
 - Ob die **Klasse einer Route** die richtige ist (`design/routen.yaml`);
   geprüft wird nur, dass die Bedingungen zur eingetragenen Klasse passen.
 - Wie eine Karte bei 360 und 402 px **aussieht**. `ci/check_mobil.py` prüft
