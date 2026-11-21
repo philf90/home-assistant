@@ -42,6 +42,27 @@
 #   automation "Sicherheit: Meldungen im Wachmodus"
 #       Tuer oder Fenster geoeffnet, Keypad gesperrt. Die Haustuer nicht, wenn
 #       der Door Hub in den 60 s davor einen gewaehrten Zugang gemeldet hat.
+#   input_text.sicherheit_offene_kontakte    Merker: zuletzt sicher bekannte
+#                                            offene Kontakte (Objekt-IDs)
+#   automation "Sicherheit: Oeffnungen nach Unterbrechung melden"
+#       Seit 21.11.2026. door.opened und window.opened ueberspringen Wechsel
+#       aus unavailable/unknown und ohne Vorzustand; eine Oeffnung waehrend
+#       eines Neustarts oder Funkausfalls blieb deshalb ungemeldet (belegt an
+#       der dauerhaft offenen Kellertuer: Neustarts 20.11.2026 07:53 und 08:01
+#       unavailable -> on, 21.11.2026 08:40 ohne Vorzustand -> on, jeweils
+#       ohne Lauf von "Meldungen im Wachmodus"). Die Automation fuehrt den
+#       Merker bei jedem Wechsel nach "auf" oder "zu" nach (Kontakte ohne
+#       Status behalten ihren Eintrag) und meldet im Wachmodus einen Kontakt,
+#       der aus unavailable/unknown oder ohne Vorzustand auf "auf" springt und
+#       im Merker nicht offen war. Nach dem Start von HA wartet sie bis zu
+#       3 Minuten auf alle Kontakte und vergleicht dann alle offenen mit dem
+#       Merker. Gleicher Schalter wie die Oeffnungsmeldung
+#       (input_boolean.sicherheit_meldung_oeffnung). Nicht erkennbar: Oeffnen
+#       und Schliessen ganz innerhalb der Unterbrechung. Die Liste fasst
+#       255 Zeichen (bei diesen 17 Kontakten 13 offene); weitere gelten als
+#       unbekannt und werden im Zweifel gemeldet, nicht verschwiegen. Ohne
+#       Ausnahme fuer einen gewaehrten Zugang an der Haustuer: Ein Zugang
+#       waehrend der Unterbrechung kommt ohnehin nicht an.
 #   automation "Sicherheit: Haustuer-Zugang im Wachmodus"
 #       Zugang am Door Hub (gewaehrt oder verweigert), Haustuer aufgeschlossen
 #       (nicht doppelt, wenn der Door Hub in der Minute davor einen Zugang
@@ -92,9 +113,12 @@
 #   - telegram_eintrag: Config-Entry-ID des Telegram-Bots (Platzhalter)
 #   - Tuer- und Fensterkontakte, Kameras: Listen in den Triggern und in
 #     kontakte; Innentueren, die dauerhaft offen stehen, nicht in kontakte
-#     (sonst stehen sie in jeder Meldung "Wachmodus an")
+#     von "Wachmodus nach Anwesenheit" (sonst stehen sie in jeder Meldung
+#     "Wachmodus an"). "Oeffnungen nach Unterbrechung melden" fuehrt alle
+#     Kontakte aus "Meldungen im Wachmodus" (auch die Innentuer; der Merker
+#     kennt sie als offen)
 #   - namen: eigene Namen fuer Kontakte, deren Anzeigename in Home Assistant
-#     nicht in die Meldung passt (sonst gilt der Anzeigename); in beiden
+#     nicht in die Meldung passt (sonst gilt der Anzeigename); in allen drei
 #     Automationen gleich halten
 #
 # Einbinden als Paket in configuration.yaml:
@@ -136,6 +160,16 @@ input_boolean:
   haustur_abschluss_ausstehend:
     name: Haustür Abschluss ausstehend
     icon: mdi:lock-clock
+
+input_text:
+  # Merker fuer "Sicherheit: Oeffnungen nach Unterbrechung melden". Neu
+  # angelegt ist er leer: einmal mit den gerade offenen Kontakten fuellen
+  # (Objekt-IDs ohne "binary_sensor.", kommagetrennt), sonst meldet der
+  # erste Start im Wachmodus alles Offene, auch dauerhaft offene Innentueren.
+  sicherheit_offene_kontakte:
+    name: Sicherheit offene Kontakte
+    icon: mdi:door-open
+    max: 255
 
 automation:
   - id: sicherheit_wachmodus_nach_anwesenheit
@@ -302,7 +336,10 @@ automation:
       und Schloss: Automation "Sicherheit: Haustuer-Zugang im Wachmodus".
       Die Oeffnung der Haustuer wird nicht gemeldet, wenn der Door Hub in den
       60 s davor einen gewaehrten Zugang gemeldet hat (dann kam bereits
-      "Zugang gewaehrt").
+      "Zugang gewaehrt"). Oeffnungen waehrend eines Neustarts oder
+      Funkausfalls (Wechsel aus nicht verfuegbar/unbekannt, die
+      door.opened/window.opened ueberspringen) meldet "Sicherheit:
+      Oeffnungen nach Unterbrechung melden".
     mode: queued
     max: 20
     variables:
@@ -402,6 +439,193 @@ automation:
                   title: Keypad gesperrt
                   message: "{{ 'Dauerhaft' if 'dauerhaft' in trigger.entity_id else 'Vorübergehend' }} gesperrt nach falschen Codes · {{ now().strftime('%H:%M') }} Uhr"
                   data: *push
+
+  - id: sicherheit_oeffnungen_nach_unterbrechung
+    alias: "Sicherheit: Öffnungen nach Unterbrechung melden"
+    description: >-
+      Ergaenzt "Sicherheit: Meldungen im Wachmodus": Deren Ausloeser
+      Tuer/Fenster geoeffnet ueberspringen Wechsel aus nicht
+      verfuegbar/unbekannt und ohne Vorzustand, eine Oeffnung waehrend eines
+      Neustarts oder Funkausfalls blieb deshalb ungemeldet. Merker
+      input_text.sicherheit_offene_kontakte: die zuletzt sicher bekannten
+      offenen Kontakte (Objekt-IDs, kommagetrennt; Kontakte ohne Status
+      behalten ihren Eintrag). Meldet bei aktivem Wachmodus und
+      eingeschaltetem input_boolean.sicherheit_meldung_oeffnung einen Kontakt,
+      der aus nicht verfuegbar/unbekannt oder ohne Vorzustand auf offen
+      springt und im Merker nicht offen war. Nach dem Start von Home Assistant
+      wartet sie bis zu 3 Minuten auf alle Kontakte und vergleicht dann alle
+      offenen mit dem Merker. Ein Oeffnen und Schliessen ganz innerhalb der
+      Unterbrechung ist nicht erkennbar. Bei mehr als 13 offenen Kontakten
+      passt die Liste nicht mehr in 255 Zeichen; die uebrigen gelten dann als
+      unbekannt und werden im Zweifel gemeldet.
+    mode: queued
+    max: 30
+    trace:
+      stored_traces: 30
+    variables:
+      ziel: /dashboard-home/sicherheit
+      # Alle Kontakte aus "Meldungen im Wachmodus", auch die Innentuer
+      kontakte:
+        - binary_sensor.haustur
+        - binary_sensor.tur_windfang
+        - binary_sensor.tur_keller
+        - binary_sensor.balkontur
+        - binary_sensor.fenster_kuche
+        - binary_sensor.fenster_wohnzimmer_links
+        - binary_sensor.fenster_wohnzimmer_rechts
+        - binary_sensor.fenster_wohnzimmer_hof
+        - binary_sensor.fenster_buro
+        - binary_sensor.fenster_schlafzimmer_links
+        - binary_sensor.fenster_schlafzimmer_rechts
+        - binary_sensor.fenster_schlafzimmer_hof
+        - binary_sensor.fenster_kinderzimmer
+        - binary_sensor.fenster_bad_unten_links
+        - binary_sensor.fenster_bad_unten_rechts
+        - binary_sensor.fenster_windfang
+        - binary_sensor.fenster_garderobe
+      namen:
+        binary_sensor.fenster_kinderzimmer: Kinderzimmer 1
+        binary_sensor.fenster_buro: Kinderzimmer 2
+      # Merker als Liste von Entity-IDs
+      vorher: >-
+        {%- set t = states('input_text.sicherheit_offene_kontakte') -%}
+        {{ [] if t in ['', 'unknown', 'unavailable'] else t.split(',') | map('trim') | reject('eq', '') | map('regex_replace', '^', 'binary_sensor.') | list }}
+    triggers:
+      - trigger: homeassistant
+        event: start
+        id: start
+      # Absichtlich state statt door.opened/window.opened: die ueberspringen
+      # genau diese Wechsel
+      - trigger: state
+        entity_id:
+          - binary_sensor.haustur
+          - binary_sensor.tur_windfang
+          - binary_sensor.tur_keller
+          - binary_sensor.balkontur
+          - binary_sensor.fenster_kuche
+          - binary_sensor.fenster_wohnzimmer_links
+          - binary_sensor.fenster_wohnzimmer_rechts
+          - binary_sensor.fenster_wohnzimmer_hof
+          - binary_sensor.fenster_buro
+          - binary_sensor.fenster_schlafzimmer_links
+          - binary_sensor.fenster_schlafzimmer_rechts
+          - binary_sensor.fenster_schlafzimmer_hof
+          - binary_sensor.fenster_kinderzimmer
+          - binary_sensor.fenster_bad_unten_links
+          - binary_sensor.fenster_bad_unten_rechts
+          - binary_sensor.fenster_windfang
+          - binary_sensor.fenster_garderobe
+        to: "on"
+        not_from: "off"
+        id: unterbrechung
+        note: Offen aus nicht verfügbar, unbekannt oder ohne Vorzustand.
+      - trigger: state
+        entity_id:
+          - binary_sensor.haustur
+          - binary_sensor.tur_windfang
+          - binary_sensor.tur_keller
+          - binary_sensor.balkontur
+          - binary_sensor.fenster_kuche
+          - binary_sensor.fenster_wohnzimmer_links
+          - binary_sensor.fenster_wohnzimmer_rechts
+          - binary_sensor.fenster_wohnzimmer_hof
+          - binary_sensor.fenster_buro
+          - binary_sensor.fenster_schlafzimmer_links
+          - binary_sensor.fenster_schlafzimmer_rechts
+          - binary_sensor.fenster_schlafzimmer_hof
+          - binary_sensor.fenster_kinderzimmer
+          - binary_sensor.fenster_bad_unten_links
+          - binary_sensor.fenster_bad_unten_rechts
+          - binary_sensor.fenster_windfang
+          - binary_sensor.fenster_garderobe
+        from: "off"
+        to: "on"
+        id: auf
+        note: Normales Öffnen, gemeldet von "Meldungen im Wachmodus"; hier nur den Merker nachführen.
+      - trigger: state
+        entity_id:
+          - binary_sensor.haustur
+          - binary_sensor.tur_windfang
+          - binary_sensor.tur_keller
+          - binary_sensor.balkontur
+          - binary_sensor.fenster_kuche
+          - binary_sensor.fenster_wohnzimmer_links
+          - binary_sensor.fenster_wohnzimmer_rechts
+          - binary_sensor.fenster_wohnzimmer_hof
+          - binary_sensor.fenster_buro
+          - binary_sensor.fenster_schlafzimmer_links
+          - binary_sensor.fenster_schlafzimmer_rechts
+          - binary_sensor.fenster_schlafzimmer_hof
+          - binary_sensor.fenster_kinderzimmer
+          - binary_sensor.fenster_bad_unten_links
+          - binary_sensor.fenster_bad_unten_rechts
+          - binary_sensor.fenster_windfang
+          - binary_sensor.fenster_garderobe
+        to: "off"
+        id: zu
+        note: Jedes Schließen, auch aus nicht verfügbar; nur den Merker nachführen.
+    actions:
+      - if:
+          - condition: trigger
+            id: start
+        then:
+          - alias: Bis zu 3 Minuten warten, bis alle Kontakte einen Status haben
+            wait_template: >-
+              {{ kontakte | map('states') | select('in', ['unavailable', 'unknown']) | list | count == 0 }}
+            timeout: "00:03:00"
+            continue_on_timeout: true
+      - variables:
+          neu: >-
+            {%- if trigger.id == 'start' -%}
+            {{ kontakte | select('is_state', 'on') | reject('in', vorher) | list }}
+            {%- elif trigger.id == 'unterbrechung' and trigger.entity_id not in vorher -%}
+            {{ [trigger.entity_id] }}
+            {%- else -%}
+            {{ [] }}
+            {%- endif -%}
+          # Offen = jetzt auf + Eintraege ohne Status; gekuerzt auf 255 Zeichen
+          merker: >-
+            {%- set offen = kontakte | select('is_state', 'on') | list + (vorher | select('in', kontakte) | reject('is_state', ['on', 'off']) | list) -%}
+            {%- set ns = namespace(s='') -%}
+            {%- for e in offen | unique -%}
+            {%- set k = (ns.s ~ ',' ~ e.split('.')[1]) if ns.s else e.split('.')[1] -%}
+            {%- if k | length <= 255 -%}{%- set ns.s = k -%}{%- endif -%}
+            {%- endfor -%}
+            {{ ns.s }}
+      - if:
+          - condition: template
+            value_template: "{{ neu | count > 0 }}"
+          - condition: state
+            entity_id: input_boolean.wachmodus
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.sicherheit_meldung_oeffnung
+            state: "on"
+        then:
+          - action: notify.mobile_app_iphone
+            continue_on_error: true
+            data:
+              title: >-
+                {% set ns = namespace(l=[]) %}{% for e in neu %}{% set ns.l = ns.l + [namen.get(e) or state_attr(e, 'friendly_name') or e] %}{% endfor %}{{ ns.l | join(', ') }} geöffnet
+              message: >-
+                Wachmodus aktiv · geöffnet während einer Unterbrechung
+                ({{ 'Neustart' if trigger.id == 'start' else 'Neustart oder Funkausfall' }})
+                · {{ now().strftime('%H:%M') }} Uhr
+              data:
+                group: sicherheit
+                url: "{{ ziel }}"
+                clickAction: "{{ ziel }}"
+                push:
+                  interruption-level: time-sensitive
+      - if:
+          - condition: template
+            value_template: "{{ merker != states('input_text.sicherheit_offene_kontakte') }}"
+        then:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.sicherheit_offene_kontakte
+            data:
+              value: "{{ merker }}"
 
   - id: sicherheit_hausturzugang_im_wachmodus
     alias: "Sicherheit: Haustür-Zugang im Wachmodus"
