@@ -30,6 +30,23 @@
 #            Linie (Attribut "watts", 15-Minuten-Werte, Summe der Panels),
 #            Ertrag als Flaeche (Mittelwerte der Solarleistung aus der
 #            Langzeitstatistik), heute mit senkrechter Linie und Sonne.
+#   Auswahl  Tippen auf den Verlauf oder waagrecht Ziehen setzt eine Linie mit
+#            Punkten auf beide Kurven und einen Tooltip mit den Werten; erneutes
+#            Tippen auf denselben Punkt oder ein anderer Tag blendet sie aus,
+#            mit der Maus folgt sie dem Zeiger. Gefangen wird auf den Ertrag
+#            (5-Minuten-Mittel, Tooltip nennt das Intervall, z. B.
+#            "10:40-10:45"); jenseits des Ertrags, etwa heute nach jetzt und an
+#            kommenden Tagen, auf die 15-Minuten-Werte der Prognose. Zwischen
+#            diesen ist die Prognose linear interpoliert wie die gezeichnete
+#            Linie. Der Tooltip zeigt die Marken der Legende statt der Namen:
+#            mit Namen braeuchte er 152 px und passte bei 360 px (Flaeche
+#            278 px) um die Mitte auf keine Seite der Linie, so sind es rund
+#            95 px. Senkrecht wischen scrollt weiter (touch-action: pan-y).
+#            Die Auswahl liegt in window.__nachtblauSolarprognose.wahl und
+#            ueberlebt so das Neuzeichnen; Tippen auf den Verlauf oeffnet nicht
+#            mehr das More-Info-Fenster der Sonne, der Rand der Kachel schon.
+#            Der Handler (C.punkt) steht einmal pro Seite in window: aendert
+#            sich sein Code, PUNKT_V um 1 erhoehen.
 #   Kacheln  Sonnenhoehe, Richtung, naechster Unter- oder Aufgang (sun.sun),
 #            darunter Rest heute, morgen und uebermorgen. Gelten immer fuer
 #            jetzt, unabhaengig vom gewaehlten Tag.
@@ -281,6 +298,90 @@ cards:
             svg+=`<circle cx="${xj}" cy="${T}" r="7" style="fill:color-mix(in srgb, var(--nachtblau-sonnengelb, #e6c15a) 18%, transparent)"/><circle cx="${xj}" cy="${T}" r="4" style="fill:var(--nachtblau-sonnengelb, #e6c15a)"/>`;
           }
         }
+        // Punktauswahl: Tippen oder Ziehen zeigt die Werte an der Stelle, siehe Kopfkommentar.
+        const C=window.__nachtblauSolarprognose;
+        if(C.wahl&&C.wahl.tag!==r.tag) C.wahl=null;
+        let dt=Infinity; for(let i=1;i<ist.length;i++) dt=Math.min(dt,ist[i][0]-ist[i-1][0]);
+        if(!isFinite(dt)||dt<=0) dt=300000;
+        const it=iv.map((d)=>d[0]); const iw=new Map(iv);
+        const progAn=(t)=>{
+          if(!pt.length||t<pt[0]||t>pt[pt.length-1]) return NaN;
+          if(prog[t]!==undefined) return prog[t];
+          let i=1; while(pt[i]<t) i++;
+          const a=pt[i-1], b=pt[i]; return prog[a]+(prog[b]-prog[a])*(t-a)/(b-a);
+        };
+        const naechste=(liste,t)=>liste.reduce((best,x)=>best===null||Math.abs(x-t)<Math.abs(best-t)?x:best,null);
+        const fang=(t)=>{
+          let kand=it;
+          if(!it.length) kand=pv;
+          else if(t>it[it.length-1]+dt) kand=pv.filter((x)=>x>it[it.length-1]+dt/2);
+          else if(t<it[0]-dt) kand=pv.filter((x)=>x<it[0]-dt/2);
+          if(!kand.length) kand=it;
+          return naechste(kand,t);
+        };
+        const hm=(t)=>new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+        const wert=(v)=>v===undefined||isNaN(v)?'–':Math.round(v).toLocaleString('de-DE')+' W';
+        const label='var(--nachtblau-label, #b4c0cf)';
+        const marke=(farbe,strich)=>`<i style="display:inline-block;width:14px;flex:none;${strich?'border-top:2px dashed '+farbe:'height:3px;border-radius:2px;background:'+farbe};"></i>`;
+        const zeile=(m,name,v)=>`<div aria-label="${name}" style="display:flex;align-items:center;gap:6px;">${m}<b style="color:var(--nachtblau-text, #f2f5f8);font-weight:700;">${wert(v)}</b></div>`;
+        const auswahl=(t)=>{
+          if(t===null||t===undefined||!imBereich(t)) return null;
+          const xt=X(t); const ew=iw.get(t); const pw=progAn(t);
+          const punkt=(v,farbe)=>`<circle cx="${xt.toFixed(1)}" cy="${Y(v).toFixed(1)}" r="6" style="fill:color-mix(in srgb, ${farbe} 18%, transparent)"/><circle cx="${xt.toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3" style="fill:${farbe}"/>`;
+          let s=`<line x1="${xt.toFixed(1)}" x2="${xt.toFixed(1)}" y1="${T}" y2="${Y(0)}" style="stroke:${label};stroke-width:1"/>`;
+          if(!isNaN(pw)) s+=punkt(pw,blau);
+          if(ew!==undefined) s+=punkt(ew,gelb);
+          const zeit=ew!==undefined?hm(t-dt/2)+'–'+hm(t+dt/2):hm(t);
+          const tip=`<div style="font-weight:700;color:var(--nachtblau-label, #b4c0cf);margin-bottom:2px;">${zeit}</div>`
+            +(r.art!=='zukunft'?zeile(marke(gelb,false),'Ertrag',ew):'')+zeile(marke(blau,true),'Prognose',pw);
+          // Neben der Linie, auf der Seite mit mehr Platz. Schmal gehalten (Marken wie in der Legende statt
+          // Namen, gemessen rund 95 px), damit er bei 360 px (Flaeche 278 px) auch um die Mitte auf eine Seite
+          // passt und die Punkte nie verdeckt; mit Namen waeren es 152 px.
+          const rechts=xt<W/2;
+          const stil=`position:absolute;top:${(T/H*100).toFixed(1)}%;left:calc(${(xt/W*100).toFixed(2)}% ${rechts?'+':'-'} 8px);`
+            +`transform:translateX(${rechts?'0':'-100%'});`
+            +'pointer-events:none;white-space:nowrap;font-size:11.5px;line-height:1.45;font-variant-numeric:tabular-nums;'
+            +'background:var(--nachtblau-flaeche-erhoeht, #222b3c);border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));'
+            +'border-radius:10px;padding:6px 9px;box-shadow:0 8px 20px -10px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7));';
+          return {svg:s,tip,stil};
+        };
+        C.grafik={tag:r.tag,W,
+          zeit:(vx)=>fang(x0+(vx-L)/(W-L-R)*(x1-x0)),
+          zeigen:(el,t)=>{ const a=auswahl(t); const g=el.querySelector('.sp-auswahl'); const tp=el.querySelector('.sp-tip');
+            if(g) g.innerHTML=a?a.svg:''; if(tp){ tp.innerHTML=a?a.tip:''; tp.style.cssText=a?a.stil:'display:none'; } }};
+        const PUNKT_V=1;
+        if(C.punktV!==PUNKT_V){
+          C.punktV=PUNKT_V;
+          C.punkt=(ev,art)=>{
+            const maus=ev.pointerType==='mouse';
+            if(art!=='leave') ev.stopPropagation();
+            if(art==='cancel'){ C.start=null; return; }
+            let el=ev.currentTarget;
+            if(!el||!el.isConnected){ el=null; C.karten.forEach((k)=>{ if(!el&&k.isConnected&&k.shadowRoot) el=k.shadowRoot.querySelector('.sp-kurve'); }); }
+            const g=C.grafik; if(!el||!g){ if(art==='up') C.start=null; return; }
+            if(art==='leave'){ if(maus&&C.wahl){ C.wahl=null; g.zeigen(el,null); } return; }
+            const svg=el.querySelector('svg'); const box=svg?svg.getBoundingClientRect():null;
+            if(!box||!box.width) return;
+            const t=g.zeit((ev.clientX-box.left)/box.width*g.W);
+            const setzen=(z)=>{ if(z===null||(C.wahl&&C.wahl.t===z)) return; C.wahl={tag:g.tag,t:z}; g.zeigen(el,z); };
+            if(maus){ if(art!=='up') setzen(t); return; }
+            // Finger: Tippen waehlt oder blendet aus, waagrecht Ziehen fuehrt, senkrecht scrollt die Seite.
+            if(art==='down'){ C.start={x:ev.clientX,y:ev.clientY,zieht:false}; return; }
+            const s=C.start; if(!s) return;
+            if(art==='move'){
+              const dx=Math.abs(ev.clientX-s.x), dy=Math.abs(ev.clientY-s.y);
+              if(!s.zieht&&dx>6&&dx>dy) s.zieht=true;
+              if(s.zieht) setzen(t);
+              return;
+            }
+            C.start=null;
+            if(s.zieht) return;
+            if(C.wahl&&C.wahl.t===t){ C.wahl=null; g.zeigen(el,null); } else setzen(t);
+          };
+        }
+        const gewaehlt=C.wahl?auswahl(C.wahl.t):null;
+        const P2='window.__nachtblauSolarprognose.punkt';
+        const flaeche=`<div class="sp-kurve" onpointerdown="${P2}(event,'down')" onpointermove="${P2}(event,'move')" onpointerup="${P2}(event,'up')" onpointercancel="${P2}(event,'cancel')" onpointerleave="${P2}(event,'leave')" ontouchend="event.stopPropagation()" onclick="event.stopPropagation()" style="position:relative;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;cursor:crosshair;">`;
         const hat=pv.length>1||iv.length>1;
         const hinweisText=r.laedt?'Lädt …':(r.fehler?'Daten nicht geladen':'Keine Daten für diesen Tag');
         const hinweis=hat?'':`<text x="${(L+W-R)/2}" y="${(T+H-B)/2}" text-anchor="middle" style="fill:${sek};font-size:11px">${hinweisText}</text>`;
@@ -302,7 +403,8 @@ cards:
             <div style="display:flex;justify-content:center;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--nachtblau-text, #f2f5f8);white-space:nowrap;">${titel}${zurueck}</div>
             <div style="font-size:11.5px;color:${sek};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${unter}</div></div>
           ${knopf(r.offset+1,'mdi:chevron-right',r.offset<r.max,'Tag vor')}</div>`;
-        return `${kopf}<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;overflow:visible;">${svg}${hinweis}</svg>${legende}`;
+        return `${kopf}${flaeche}<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;overflow:visible;">${svg}${hinweis}<g class="sp-auswahl" style="pointer-events:none">${gewaehlt?gewaehlt.svg:''}</g></svg>`
+          +`<div class="sp-tip" style="${gewaehlt?gewaehlt.stil:'display:none'}">${gewaehlt?gewaehlt.tip:''}</div></div>${legende}`;
       ]]]
   styles:
     card:
