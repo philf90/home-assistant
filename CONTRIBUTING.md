@@ -115,6 +115,9 @@ Ordnungswerkzeuge, jedes beantwortet genau eine Frage:
    erfasst die Entitäten gelabelter Geräte, `label_entities()` nicht;
    Templates lesen deshalb beide Wege:
    `label_devices(x) | map('device_entities') | sum(start=[]) + label_entities(x)`.
+   Ein bestehendes Entitätslabel erst entfernen, wenn kein Template es mit
+   `label_entities()` liest; auch Template-Sensoren in der Instanz-YAML
+   prüfen, die nicht im Repo liegen.
 7. **Vollständig oder gar nicht.** Ein Label erfasst alle passenden Objekte,
    sonst übergeht ein Ziel still Geräte. Ein neues Label lohnt sich ab drei
    Objekten.
