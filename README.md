@@ -87,15 +87,13 @@ Dazu:
   Repo und wird als Dashboard-Ressource eingebunden, nicht über HACS
   ([Installation](#installation), Schritt 5)
 - **Icon-Sets** für die Navigation sowie einzelne Icons in den Licht-,
-  Garten-, Wetter- und Homematic-Dateien:
+  Garten-, Klima- und Homematic-Dateien:
   - `phu:` aus [Custom brand icons](https://github.com/elax46/custom-brand-icons)
     (HACS, Frontend)
-  - `bi:` (Bootstrap Icons), `fa6-solid:` (Font Awesome 6 Solid) und
-    `flat-ui:` (Flat UI Icons) aus [Iconify](https://iconify.design/) über die
-    Integration [Custom Icons](https://github.com/thomasloven/hass-custom_icons)
-    (HACS). Nach der Einrichtung unter Einstellungen → Geräte & Dienste →
-    Custom Icons → *Konfigurieren* einmal *Download* wählen und die drei Sets
-    aktivieren, dann den Browser neu laden.
+  - `hue:` aus [Hass Hue Icons](https://github.com/arallsopp/hass-hue-icons)
+    (HACS, Frontend)
+
+  Alle übrigen Icons sind `mdi:` und kommen mit Home Assistant.
 - **Home Assistant 2026.7 oder neuer** für `wachmodus-konfig.yaml` (neue
   Trigger und Bedingungen)
 
