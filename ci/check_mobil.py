@@ -42,10 +42,10 @@ from dateien import dateien
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Regel 1, Bestand vor der Regel (Stand 25.10.2026, gesenkt am 19.11.2026):
+# Regel 1, Bestand vor der Regel (Stand 25.10.2026, gesenkt am 19.11. und 22.11.2026):
 # Datei -> Zahl der Icons ohne "--ha-icon-display: block". Darf nur sinken.
 BESTAND: dict[str, int] = {
-    "dashboard/licht/lichter-glow-karte.yaml": 15,
+    "dashboard/licht/lichter-glow-karte.yaml": 14,
     "dashboard/licht/lichter-mushroom-karte.yaml": 1,
     "dashboard/licht/lichter-slider-karte.yaml": 1,
 }
