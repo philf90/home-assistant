@@ -77,6 +77,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`lichter-raum-karte.yaml`](licht/lichter-raum-karte.yaml) | karte | Lichter – Variante Raum-Karten | button-card, card-mod | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-reiter-karte.yaml`](licht/lichter-reiter-karte.yaml) | karte | Lichter – Variante Raum-Reiter | button-card | `*_mac`, `kind_1/kind_2` | aktiv |
 | [`lichter-slider-karte.yaml`](licht/lichter-slider-karte.yaml) | karte | Lichter & Steckdosen – Variante Slider | button-card, card-mod, slider-button-card | `*_mac`, `kind_1/kind_2` | aktiv |
+| [`weihnachten-karte.yaml`](licht/weihnachten-karte.yaml) | karte | Weihnachten – Hauptschalter der Saison | button-card | – | aktiv |
 | [`fenster-lichter-uebersicht-karte.yaml`](licht/archiv/fenster-lichter-uebersicht-karte.yaml) | karte | Fenster & Tueren, Lichter & Steckdosen – grosse Ansicht | bubble-card, button-card, card-mod | `*_mac`, `kind_1/kind_2` | archiv |
 
 ## hausgeraete

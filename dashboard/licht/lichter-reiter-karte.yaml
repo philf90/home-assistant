@@ -13,8 +13,9 @@
 # Lichter im Nachtblau-Stil, eine button-card. Mischform aus Raum-Karten
 # (lichter-raum-karte.yaml) und Raum-Reitern: immer nur ein Raum offen. Die
 # Hoehe richtet sich nach dem gewaehlten Raum, nicht nach der Zahl der Raeume
-# (Pruefstand 360 px: Windfang 292 px, Wohnzimmer 603 px; seit Baum und
-# Fenster 56 px mehr fuer die dritte Chip-Reihe, gemessen in Chromium).
+# (Pruefstand 360 px: Windfang 292 px, Wohnzimmer 603 px in der
+# Weihnachtssaison, 547 px ausserhalb; Baum und Fenster kosten 56 px fuer die
+# dritte Chip-Reihe, gemessen in Chromium).
 # Im Einsatz in der View "Licht & Fenster" seit 10.11.2026.
 #
 # Aufbau:
@@ -71,7 +72,7 @@
 #   Trennstelle (\u00AD) in variables.raeume.
 #
 # Raeume: variables.raeume (id, name, kurz, icon, glyph, licht, hue_gruppe,
-# szene, favoriten, leuchten[entity, name, icon, glyph]).
+# szene, favoriten, leuchten[entity, name, icon, glyph, sichtbar]).
 #   licht      Entitaet fuer Raum-Schalter und "Alle"; ohne leuchten zaehlt
 #              sie selbst als einzige Leuchte (Windfang, Garten)
 #   leuchten   eine Lichtgruppe (Gruppen-Helfer, Attribut entity_id) ist ein
@@ -79,6 +80,9 @@
 #              im Kopf; der Chip zeigt dann "2 von 3 an". Wohnzimmer:
 #              Weihnachtsfenster (3 Stecker). Der Raum-Schalter schaltet nur
 #              die Hue-Leuchten (light.wohnzimmer), nicht Baum und Fenster.
+#   sichtbar   Entitaet, die an sein muss, damit die Leuchte erscheint und
+#              zaehlt (Baum und Fenster: input_boolean.weihnachtssaison, der
+#              Hauptschalter der Saison). Ohne das Feld immer sichtbar.
 #   glyph      Mitte der Glyphe im 24er-Raster relativ zu (12, 12), gemessen
 #              im Frontend (Werte aus lichter-raum-karte.yaml)
 #
@@ -113,8 +117,8 @@ variables:
         - { entity: light.stehlampe_2, name: Couch, icon: 'hue:signe' }
         - { entity: light.lowboard, name: Lowboard, icon: 'hue:gradient-lightstrip' }
         - { entity: light.hue_iris_1, name: Iris, icon: 'hue:iris' }
-        - { entity: light.weihnachtsbeleuchtung_tannenbaum, name: Tannenbaum, icon: 'mdi:pine-tree' }
-        - { entity: light.weihnachtsfenster, name: Fenster, icon: 'mdi:string-lights' }
+        - { entity: light.weihnachtsbeleuchtung_tannenbaum, name: Tannenbaum, icon: 'mdi:pine-tree', sichtbar: input_boolean.weihnachtssaison }
+        - { entity: light.weihnachtsfenster, name: Fenster, icon: 'mdi:string-lights', sichtbar: input_boolean.weihnachtssaison }
     - id: bad
       name: Bad
       kurz: Bad
@@ -291,7 +295,9 @@ custom_fields:
       // Szenen: erst die IDs filtern, dann gezielt lesen (siehe Dateikopf)
       const alleSzenen = Object.keys(hass.states).filter((id) => id.startsWith('scene.')).map((id) => hass.states[id]);
       const raeume = L.raeume.map((r) => {
-        const ids = (r.leuchten && r.leuchten.length) ? r.leuchten.flatMap((l) => mitglieder(l.entity)) : [r.licht];
+        // sichtbar: ausgeblendete Leuchten fehlen auch in den Zahlen (Dateikopf)
+        const leuchten = (r.leuchten || []).filter((l) => !l.sichtbar || zustand(l.sichtbar) === 'on');
+        const ids = leuchten.length ? leuchten.flatMap((l) => mitglieder(l.entity)) : [r.licht];
         const an = ids.filter((id) => zustand(id) === 'on').length;
         const sel = r.szene ? states[r.szene] : null;
         const opts = sel && sel.attributes && Array.isArray(sel.attributes.options) ? sel.attributes.options : [];
@@ -300,7 +306,7 @@ custom_fields:
           const sc = alleSzenen.find((s) => s.attributes && s.attributes.group_name === r.hue_gruppe && s.attributes.name === n);
           return { name: n, dyn: !!(sc && sc.attributes.is_dynamic) };
         });
-        return { ...r, ids, an, anzahl: ids.length, aktiv, favs, alleSzenen: opts.length };
+        return { ...r, leuchten, ids, an, anzahl: ids.length, aktiv, favs, alleSzenen: opts.length };
       });
       if (!raeume.some((r) => r.id === L.raum)) {
         const erster = raeume.find((r) => r.an > 0) || raeume[0];
