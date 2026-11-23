@@ -58,8 +58,9 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 
 | Automation | Auslöser | Bedingung |
 |---|---|---|
-| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00 und Neustart | 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`) |
+| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00 und Neustart | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`) |
 | `automation.weihnachten_beleuchtung_um_22_30_aus` | 22:30 | – |
+| `automation.weihnachten_saison_umschalten` | `input_boolean.weihnachtssaison` an oder aus (nicht aus `unavailable`/`unknown`); Neustart | – (siehe Hauptschalter) |
 
 - **Schwelle** im Helfer `input_number.weihnachten_einschalt_helligkeit`
   (Kategorie Einstellung, 0 bis 500 lx), eingestellt auf **50 lx**. Der
@@ -97,9 +98,52 @@ Mit 10 Minuten Wartezeit schalten 50 lx an klaren Tagen zwischen etwa
 das Licht früher: Am 9.11. lag der Stundenmittelwert 15 bis 16 Uhr bei 45 lx,
 am 16.11. 16 bis 17 Uhr bei 17 lx.
 
+## Hauptschalter
+
+Seit 2026-11-23 schaltet `input_boolean.weihnachtssaison` (Name
+„Weihnachtssaison“, Kategorie Einstellung, Label `weihnachten`, kein
+`initial`) die Saison. Er wird nur von Hand gesetzt; Plan und Entscheidungen
+stehen im Dokument „Plan: Hauptschalter Weihnachtsbeleuchtung“.
+
+| Stelle | Saison an | Saison aus |
+|---|---|---|
+| beide Weihnachts-Automationen | aktiviert | deaktiviert (`automation.turn_off`, `stop_actions: true`) |
+| Baum und Fenster beim Umschalten | an, wenn es zwischen 14:00 und 22:30 dunkel ist | sofort aus |
+| Raum-Reiter-Karte, Wohnzimmer | Schalter Tannenbaum und Fenster sichtbar und gezählt (Feld `sichtbar`) | ausgeblendet, nicht gezählt |
+| `sensor.lichter_an` | zählt die Weihnachtslichter mit | zählt sie nicht |
+
+- **Umschalten:** Die Automation „Weihnachten: Saison umschalten“ (Modus
+  `queued`) zielt per `entity_id` auf die beiden Automationen, nicht per
+  Label, weil sie das Label selbst trägt. Beim Einschalten startet sie die
+  Dämmerungs-Automation mit `skip_condition: false`. Beim Start von Home
+  Assistant gleicht sie nur den Zustand der Automationen ab und schaltet kein
+  Licht.
+- **Sicherheitsbedingung:** Die Dämmerungs-Automation prüft zusätzlich
+  „Saison an“, falls jemand sie von Hand aktiviert. Die 22:30-Automation prüft
+  den Schalter nicht: Wer ausschaltet, prüft nie.
+- **Zählung:** Template-Helfer `sensor.lichter_an` (nur in der Instanz):
+
+  ```jinja
+  {% set weih = label_devices('weihnachten') | map('device_entities') | sum(start=[]) | select('match', '^light\.') | list %}
+  {% set basis = expand('light.alle_lichter') | map(attribute='entity_id') | reject('in', weih) | list %}
+  {% set ids = basis + (weih if is_state('input_boolean.weihnachtssaison', 'on') else []) %}
+  {{ expand(ids) | selectattr('state', 'eq', 'on') | list | count }}
+  ```
+
+  Die vier Lichter bleiben Mitglieder von `light.alle_lichter`: Die
+  Startseiten-Kachel „Licht & Fenster“ schaltet sie in der Saison mit.
+- **Schalter im Dashboard:** `dashboard/licht/weihnachten-karte.yaml`, direkt
+  unter der Lichter-Karte in der View „Licht & Fenster“, für alle Konten, mit
+  Rückfrage.
+- **Nicht umgesetzt:** Schalter nach Datum setzen. Der richtige Moment ist der
+  Auf- und Abbau der Beleuchtung, kein Datum.
+
+Test am 2026-11-23 um 19:51: Saison aus → beide Automationen `off`, Baum und
+Fenster aus, `sensor.lichter_an` von 4 auf 1; Saison an → beide `on`, Baum und
+Fenster an (dunkel, vor 22:30), `sensor.lichter_an` 5. Abgleich beim Start
+durch Handstart der Umschalt-Automation geprüft, ohne Neustart.
+
 ## Noch offen
 
-- Saison: Automationen nach Weihnachten ausschalten oder ein Hauptschalter
-  als Helfer (Kategorie Einstellung).
 - Lichter-Karten: Nur die Raum-Reiter-Karte zeigt Baum und Fenster; die
   anderen Varianten führen ihre Lichter einzeln auf.
