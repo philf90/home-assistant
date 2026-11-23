@@ -29,8 +29,14 @@ Fensterkontakte.
   Typ Licht, mit den drei Fenster-Lichtern, `all: false` (an, sobald eines an
   ist). Bereich Wohnzimmer, Label `weihnachten` an der Gruppen-Entität, wie
   `licht` an `light.alle_lichter`.
+- **Gruppe `light.weihnachtsbeleuchtung`** („Weihnachtsbeleuchtung“): seit
+  2026-11-23, Gruppen-Helfer, Typ Licht, mit allen vier Lichtern direkt (nicht
+  über die Fenster-Gruppe), `all: false`, Bereich Wohnzimmer, Label
+  `weihnachten`, Icon `mdi:pine-tree`. Gedacht für die Sprachsteuerung,
+  Abschnitt „Alexa“; keine Karte zeigt sie.
 - **Alle Lichter:** Die vier Lichter sind Mitglieder von `light.alle_lichter`
-  (jetzt 15); `sensor.lichter_an` zählt sie mit.
+  (jetzt 15); `sensor.lichter_an` zählt sie mit. Die beiden Gruppen sind nicht
+  Mitglied und werden nicht gezählt.
 
 ## Ziele für Automationen
 
@@ -40,7 +46,8 @@ weiteren Labels.
 
 | Ziel | Erfasst |
 |---|---|
-| `label_id: weihnachten` | alle vier Lichter (über die Geräte) und die Gruppe |
+| `label_id: weihnachten` | alle vier Lichter (über die Geräte) und beide Gruppen |
+| Gruppe Weihnachtsbeleuchtung | alle vier Lichter |
 | Gruppe Weihnachtsfenster | die drei Fenster-Lichter |
 | `light.*` des Tannenbaums | nur den Baum |
 
@@ -48,7 +55,7 @@ Automationen heißen `Weihnachten: …`, bekommen Kategorie `Steuerung`, Label
 `weihnachten` und Bereich Wohnzimmer, solange sie nur das Wohnzimmer betreffen.
 
 Templates, die mit `label_devices('weihnachten')` und `label_entities()` zählen
-(Muster aus `CONTRIBUTING.md`, Regel 6), erfassen auch die Gruppe. Wer Lichter
+(Muster aus `CONTRIBUTING.md`, Regel 6), erfassen auch die Gruppen. Wer Lichter
 zählt, nimmt Gruppen mit `entity_id`-Attribut heraus.
 
 ## Automationen
@@ -211,6 +218,25 @@ Test am 2026-11-23 um 19:51: Saison aus → beide Automationen `off`, Baum und
 Fenster aus, `sensor.lichter_an` von 4 auf 1; Saison an → beide `on`, Baum und
 Fenster an (dunkel, vor 22:30), `sensor.lichter_an` 5. Abgleich beim Start
 durch Handstart der Umschalt-Automation geprüft, ohne Neustart.
+
+## Alexa
+
+Seit 2026-11-23 ist nur die Gruppe `light.weihnachtsbeleuchtung` an Alexa
+übergeben (Home Assistant Cloud, Sprachassistenten → Alexa); Alexa übernimmt
+den Namen „Weihnachtsbeleuchtung“. Die vier Lichter und die Fenster-Gruppe
+bleiben für Alexa ausgeschaltet, damit Alexa bei „Weihnachtsbeleuchtung …“
+nicht zwischen Gruppe und „Weihnachtsbeleuchtung Tannenbaum“ usw. wählen muss.
+Für Assist sind alle freigegeben, wie bisher.
+
+- „Alexa, schalte die Weihnachtsbeleuchtung ein/aus“ schaltet alle vier
+  Stecker. Nur an/aus: die Stecker haben keine Helligkeit.
+- Kein eigener Eintrag in `sensor.lichter_an`, `light.alle_lichter` oder der
+  Lichter-Karte. Geprüft am 2026-11-23 nach dem Anlegen: Die Gruppe steht
+  nicht in der Zählliste von `sensor.lichter_an`; der Sensor zählte 5, die
+  vier Weihnachtslichter und ein weiteres eingeschaltetes Licht.
+- Der Hauptschalter sperrt Alexa nicht. Ist die Saison aus und schaltet jemand
+  per Sprache ein, bleibt die Beleuchtung an, bis sie jemand ausschaltet: Die
+  Aus-Automationen sind dann abgeschaltet.
 
 ## Noch offen
 
