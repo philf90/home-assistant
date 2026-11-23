@@ -74,8 +74,8 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 - Der Auslöser übergeht Wechsel, die von `unavailable` ausgehen. Ein
   `unavailable` während der 10 Minuten bricht die Wartezeit ab, und die
   Rückkehr unter die Schwelle zählt nicht als neues Unterschreiten; ohne
-  Rückfall bliebe das Licht dann aus (nachgelesen in HA-Core,
-  `homeassistant/helpers/trigger/entity_trigger.py`, Stand 23.11.2026). Das
+  Rückfall bliebe das Licht dann aus (nachgelesen im Quellcode von HA-Core, Trigger-Helfer
+  `entity_trigger`, Stand 23.11.2026). Das
   Gerät war vom 13. bis 23.11. 39-mal kurz `unavailable` (im Mittel rund
   70 s), am 23.11. viermal zwischen 16:18 und 16:29.
 - **Rückfall:** 20 min nach Sonnenuntergang schaltet die Automation ein, ohne
