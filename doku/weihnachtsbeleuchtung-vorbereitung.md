@@ -53,13 +53,15 @@ zählt, nimmt Gruppen mit `entity_id`-Attribut heraus.
 
 ## Automationen
 
-Seit 2026-11-23, beide mit Kategorie `Steuerung`, Label `weihnachten`,
+Seit 2026-11-23, alle mit Kategorie `Steuerung`, Label `weihnachten`,
 Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 
 | Automation | Auslöser | Bedingung |
 |---|---|---|
-| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00, Neustart und Rückfall 20 min nach Sonnenuntergang (`id: rueckfall`) | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`); beim Rückfall ohne Helligkeit |
-| `automation.weihnachten_beleuchtung_um_22_30_aus` | 22:30 | – |
+| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00, Neustart und Rückfall 20 min nach Sonnenuntergang (`id: rueckfall`) | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`); beim Rückfall und ab 20 min nach Sonnenuntergang ohne Helligkeit |
+| `automation.weihnachten_beleuchtung_um_22_30_aus` | 22:30; Neustart | beim Neustart nur zwischen 22:30 und 06:30 |
+| `automation.weihnachten_beleuchtung_morgens_an` | 06:30; Neustart | Saison an, 06:30 bis 10:00 und vor Sonnenaufgang oder Helligkeit unter `input_number.weihnachten_ausschalt_helligkeit` |
+| `automation.weihnachten_beleuchtung_morgens_aus` | `illuminance.crossed_threshold` über `input_number.weihnachten_ausschalt_helligkeit`, 10 min lang (`id: hell`); Nachholen 60 min nach Sonnenaufgang; spätestens 10:00; Neustart | 06:30 bis 12:00 und Helligkeit über der Schwelle; um 10:00 und danach ohne Helligkeit |
 | `automation.weihnachten_saison_umschalten` | `input_boolean.weihnachtssaison` an oder aus (nicht aus `unavailable`/`unknown`); Neustart | – (siehe Hauptschalter) |
 
 - **Schwelle** im Helfer `input_number.weihnachten_einschalt_helligkeit`
@@ -107,6 +109,63 @@ Mit 10 Minuten Wartezeit schalten 50 lx an klaren Tagen zwischen etwa
 das Licht früher: Am 9.11. lag der Stundenmittelwert 15 bis 16 Uhr bei 45 lx,
 am 16.11. 16 bis 17 Uhr bei 17 lx.
 
+## Morgens
+
+Seit 2026-11-23 geht die Beleuchtung um **06:30** an und nach Sonnenaufgang
+wieder aus, sobald es hell genug ist. Schwelle im Helfer
+`input_number.weihnachten_ausschalt_helligkeit` (Kategorie Einstellung, Einheit
+`lx`), eingestellt auf **50 lx**, wie abends; ein eigener Helfer, damit morgens
+und abends getrennt einstellbar sind.
+
+Erste Zeit, ab der der Wert über 50 lx blieb (Verlauf 18. bis 23.11.,
+Sonnenaufgang gerechnet für den Heimstandort, am 24.11. laut Home Assistant
+07:51):
+
+| Tag | Sonnenaufgang | über 50 lx | Abstand |
+|---|---|---|---|
+| 23.11. | 07:48 | 07:53 | +5 min |
+| 22.11. | 07:47 | 08:13 | +26 min |
+| 21.11. | 07:45 | 07:57 | +12 min |
+| 20.11. | 07:44 | 08:22 | +38 min |
+| 19.11. | 07:42 | 08:34 | +52 min |
+| 18.11. | 07:41 | 07:56 | +15 min |
+
+Mit 10 Minuten Wartezeit geht das Licht also 15 bis 62 Minuten nach
+Sonnenaufgang aus, Ende November etwa zwischen 08:05 und 09:00. Am 19.11.
+(trüb) pendelte der Wert von 08:25 bis 08:40 um 50 lx; die Wartezeit hält
+das Licht an, bis der Wert 10 Minuten darüber bleibt. Mit 100 lx ginge das
+Licht 2 bis 16 Minuten später aus, am 19.11. erst nach 09:00.
+
+- **Nachholen:** 60 min nach Sonnenaufgang prüft die Automation noch einmal
+  die Helligkeit, falls ein kurzes `unavailable` die Wartezeit abgebrochen hat
+  (siehe Automationen). Am 20.11. war der Sensor um 07:52 und 08:01 kurz
+  `unavailable`.
+- **Spätestens 10:00** geht die Beleuchtung aus, ohne die Helligkeit zu
+  prüfen. Mitte bis Ende Dezember geht die Sonne um 08:14 bis 08:21 auf.
+- Die Ausschalt-Automation prüft die Weihnachtssaison nicht: Wer ausschaltet,
+  prüft nie.
+
+## Neustartsicher
+
+Jede der vier Licht-Automationen hat einen Start-Auslöser und holt nach, was
+während eines Neustarts verpasst wurde. Die Bedingungen hängen nicht nur am
+Sensor, weil der beim Start oft noch `unavailable` ist:
+
+| Neustart zwischen | Wirkung |
+|---|---|
+| 06:30 und 10:00 | an, wenn Saison an und vor Sonnenaufgang oder unter der Morgenschwelle |
+| 06:30 und 12:00 | aus, wenn über der Morgenschwelle oder nach 10:00 |
+| 14:00 und 22:30 | an, wenn Saison an und unter der Abendschwelle oder 20 min nach Sonnenuntergang vorbei |
+| 22:30 und 06:30 | aus |
+
+Dazu: Die Helfer haben kein `initial` und behalten ihren Wert; die
+Automationen haben eine `id`, Home Assistant behält damit, ob sie aktiv sind;
+„Weihnachten: Saison umschalten“ gleicht beim Start den Zustand aller vier
+Licht-Automationen an den Hauptschalter an. Eine laufende 10-Minuten-Wartezeit
+geht beim Neustart verloren; der Start-Auslöser fängt das ab. Folge: Ein
+Neustart in diesen Zeitfenstern schaltet auch Licht wieder ein oder aus, das
+von Hand anders geschaltet wurde.
+
 ## Hauptschalter
 
 Seit 2026-11-23 schaltet `input_boolean.weihnachtssaison` (Name
@@ -116,19 +175,20 @@ stehen im Dokument „Plan: Hauptschalter Weihnachtsbeleuchtung“.
 
 | Stelle | Saison an | Saison aus |
 |---|---|---|
-| beide Weihnachts-Automationen | aktiviert | deaktiviert (`automation.turn_off`, `stop_actions: true`) |
-| Baum und Fenster beim Umschalten | an, wenn es zwischen 14:00 und 22:30 dunkel ist | sofort aus |
+| die vier Licht-Automationen (abends an, 22:30 aus, morgens an, morgens aus) | aktiviert | deaktiviert (`automation.turn_off`, `stop_actions: true`) |
+| Baum und Fenster beim Umschalten | an, wenn es zwischen 06:30 und 10:00 oder zwischen 14:00 und 22:30 dunkel ist | sofort aus |
 | Raum-Reiter-Karte, Wohnzimmer | Schalter Tannenbaum und Fenster sichtbar und gezählt (Feld `sichtbar`) | ausgeblendet, nicht gezählt |
 | `sensor.lichter_an` | zählt die Weihnachtslichter mit | zählt sie nicht |
 
 - **Umschalten:** Die Automation „Weihnachten: Saison umschalten“ (Modus
-  `queued`) zielt per `entity_id` auf die beiden Automationen, nicht per
+  `queued`) zielt per `entity_id` auf die vier Licht-Automationen, nicht per
   Label, weil sie das Label selbst trägt. Beim Einschalten startet sie die
-  Dämmerungs-Automation mit `skip_condition: false`. Beim Start von Home
+  Dämmerungs- und die Morgen-Einschalt-Automation mit `skip_condition: false`;
+  deren Bedingungen entscheiden, ob Licht angeht. Beim Start von Home
   Assistant gleicht sie nur den Zustand der Automationen ab und schaltet kein
   Licht.
-- **Sicherheitsbedingung:** Die Dämmerungs-Automation prüft zusätzlich
-  „Saison an“, falls jemand sie von Hand aktiviert. Die 22:30-Automation prüft
+- **Sicherheitsbedingung:** Beide Einschalt-Automationen prüfen zusätzlich
+  „Saison an“, falls jemand sie von Hand aktiviert. Die Ausschalt-Automationen prüfen
   den Schalter nicht: Wer ausschaltet, prüft nie.
 - **Zählung:** Template-Helfer `sensor.lichter_an` (nur in der Instanz):
 
