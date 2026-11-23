@@ -13,7 +13,8 @@
 # Lichter im Nachtblau-Stil, eine button-card. Mischform aus Raum-Karten
 # (lichter-raum-karte.yaml) und Raum-Reitern: immer nur ein Raum offen. Die
 # Hoehe richtet sich nach dem gewaehlten Raum, nicht nach der Zahl der Raeume
-# (Pruefstand 360 px: Windfang 292 px, Wohnzimmer 547 px).
+# (Pruefstand 360 px: Windfang 292 px, Wohnzimmer 603 px; seit Baum und
+# Fenster 56 px mehr fuer die dritte Chip-Reihe, gemessen in Chromium).
 # Im Einsatz in der View "Licht & Fenster" seit 10.11.2026.
 #
 # Aufbau:
@@ -73,6 +74,11 @@
 # szene, favoriten, leuchten[entity, name, icon, glyph]).
 #   licht      Entitaet fuer Raum-Schalter und "Alle"; ohne leuchten zaehlt
 #              sie selbst als einzige Leuchte (Windfang, Garten)
+#   leuchten   eine Lichtgruppe (Gruppen-Helfer, Attribut entity_id) ist ein
+#              Chip, zaehlt aber mit ihren Mitgliedern, wie sensor.lichter_an
+#              im Kopf; der Chip zeigt dann "2 von 3 an". Wohnzimmer:
+#              Weihnachtsfenster (3 Stecker). Der Raum-Schalter schaltet nur
+#              die Hue-Leuchten (light.wohnzimmer), nicht Baum und Fenster.
 #   glyph      Mitte der Glyphe im 24er-Raster relativ zu (12, 12), gemessen
 #              im Frontend (Werte aus lichter-raum-karte.yaml)
 #
@@ -107,6 +113,8 @@ variables:
         - { entity: light.stehlampe_2, name: Couch, icon: 'hue:signe' }
         - { entity: light.lowboard, name: Lowboard, icon: 'hue:gradient-lightstrip' }
         - { entity: light.hue_iris_1, name: Iris, icon: 'hue:iris' }
+        - { entity: light.weihnachtsbeleuchtung_tannenbaum, name: Tannenbaum, icon: 'mdi:pine-tree' }
+        - { entity: light.weihnachtsfenster, name: Fenster, icon: 'mdi:string-lights' }
     - id: bad
       name: Bad
       kurz: Bad
@@ -273,6 +281,8 @@ custom_fields:
       // ---- Zustaende ----
       const zustand = (id) => { const s = states[id]; return s ? s.state : 'unavailable'; };
       const weg = (st) => st === 'unavailable' || st === 'unknown';
+      // Lichtgruppe (Attribut entity_id): zaehlt ihre Mitglieder einzeln wie sensor.lichter_an
+      const mitglieder = (id) => { const s = states[id]; const m = s && s.attributes ? s.attributes.entity_id : null; return Array.isArray(m) && m.length ? m : [id]; };
       const pct = (id) => {
         const s = states[id];
         const b = s && s.state === 'on' && s.attributes ? s.attributes.brightness : null;
@@ -281,7 +291,7 @@ custom_fields:
       // Szenen: erst die IDs filtern, dann gezielt lesen (siehe Dateikopf)
       const alleSzenen = Object.keys(hass.states).filter((id) => id.startsWith('scene.')).map((id) => hass.states[id]);
       const raeume = L.raeume.map((r) => {
-        const ids = (r.leuchten && r.leuchten.length) ? r.leuchten.map((l) => l.entity) : [r.licht];
+        const ids = (r.leuchten && r.leuchten.length) ? r.leuchten.flatMap((l) => mitglieder(l.entity)) : [r.licht];
         const an = ids.filter((id) => zustand(id) === 'on').length;
         const sel = r.szene ? states[r.szene] : null;
         const opts = sel && sel.attributes && Array.isArray(sel.attributes.options) ? sel.attributes.options : [];
@@ -365,7 +375,9 @@ custom_fields:
           const s = zustand(l.entity);
           const lon = s === 'on';
           const lp = pct(l.entity);
-          const ltxt = weg(s) ? 'Nicht verfügbar' : (lon ? (lp !== null ? `${lp} %` : 'An') : 'Aus');
+          const lm = mitglieder(l.entity);
+          const lan = lm.filter((id) => zustand(id) === 'on').length;
+          const ltxt = weg(s) ? 'Nicht verfügbar' : (lon ? (lm.length > 1 ? `${lan}\u00a0von\u00a0${lm.length}\u00a0an` : (lp !== null ? `${lp} %` : 'An')) : 'Aus');
           return `
             <div class="tap" ${klick('schalten', { id: l.entity })} style="min-width:0;display:flex;align-items:center;gap:8px;padding:8px 10px 8px 9px;border-radius:16px;background:${lon ? FUELL : UK};border:1px solid ${lon ? FRAND : UKR};opacity:${weg(s) ? 0.5 : 1};">
               ${ico(l.icon || 'mdi:lightbulb', 18, l.glyph, lon ? AUF_AMBER : SEK)}
