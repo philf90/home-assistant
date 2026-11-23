@@ -7,36 +7,30 @@ Instanz und aus allen Lichter-Karten entfernt, auch aus dem Archiv.
 Stand dieser Notiz: 2026-11-23. Regeln: `CONTRIBUTING.md`, Abschnitt
 „Labels, Bereiche und Kategorien“; Register: `design/labels.yaml`.
 
-## Was schon steht
+## Stand in der Instanz
 
-| Was | Stand |
-|---|---|
-| Bereich | `wohnzimmer` (Erdgeschoss) gibt es. Kein neuer Bereich. |
-| Label `licht` | gibt es; alle vier Stecker bekommen es. |
-| Label `weihnachten` | neu, Thema. Im Register eingetragen und in der Instanz angelegt. Erfasst vorerst nur die vier Stecker, ihre Gruppe und die Automationen. |
-| Kategorie | `Steuerung` für Automationen gibt es. |
+Eingerichtet am 2026-11-23. Alle vier Geräte liegen im Bereich Wohnzimmer und
+tragen am **Gerät** die Labels `licht` und `weihnachten`; die Entitäten selbst
+tragen keine Labels. Nicht `fenster`: das ist der Gerätetyp für
+Fensterkontakte.
 
-Die Gruppe kann erst angelegt werden, wenn die Stecker eingebunden sind: Der
-Gruppen-Helfer nimmt nur vorhandene Entitäten auf.
+| Gerät | Licht (`switch_as_x`) | Schalter (ausgeblendet) |
+|---|---|---|
+| Weihnachtsbeleuchtung Tannenbaum | `light.weihnachtsbeleuchtung_tannenbaum` | `switch.weihnachtsbeleuchtung_tannenbaum` |
+| Weihnachtsbeleuchtung Fenster WZ links | `light.weihnachtsbeleuchtung_fenster_wz_links` | `switch.weihnachtsbeleuchtung_fenster_wz_links` |
+| Weihnachtsbeleuchtung Fenster WZ rechts | `light.weihnachtsbeleuchtung_fenster_wz_rechts` | `switch.weihnachtsbeleuchtung_fenster_wz_rechts` |
+| Weihnachtsbeleuchtung Fenster WZ Hof | `light.weihnachtsbeleuchtung_fenster_wz_hof` | `switch.weihnachtsbeleuchtung_fenster_wz_hof` |
 
-## Wenn die Stecker eingebunden sind
-
-1. **Einbinden** über die Shelly-Integration, Bereich Wohnzimmer. Gerätenamen
-   ohne „Shelly“ und Modell, etwa „Tannenbaum“ und je Fenster ein Name nach
-   seiner Lage.
-2. **Schalter als Licht:** je Stecker den Helfer „Schalter als anderer
-   Entitätstyp“ (`switch_as_x`) mit Typ Licht anlegen, wie bei der Lichterkette
-   im Garten. Der Helfer blendet den Schalter aus; Automationen und Karten
-   nutzen die `light.*`-Entität.
-3. **Labels am Gerät,** nicht an den Entitäten: `licht` und `weihnachten`.
-   Nicht `fenster`; das ist der Gerätetyp für Fensterkontakte.
-4. **Gruppe „Weihnachtsfenster“:** Gruppen-Helfer, Typ Licht, mit den drei
-   Fenster-Lichtern, `all: false` (an, sobald eines an ist). Bereich
-   Wohnzimmer, Label `weihnachten` an der Gruppen-Entität, wie `licht` an
-   `light.alle_lichter`.
-5. **Alle Lichter:** die vier `light.*`-Entitäten in die Gruppe
-   `light.alle_lichter` aufnehmen (Optionen des Gruppen-Helfers). Damit zählt
-   `sensor.lichter_an` sie mit.
+- **Schalter als Licht:** je Stecker ein Helfer „Schalter als anderer
+  Entitätstyp“ mit Typ Licht, wie bei der Lichterkette im Garten. Der Helfer
+  blendet den Schalter aus; Automationen und Karten nutzen die
+  `light.*`-Entität.
+- **Gruppe `light.weihnachtsfenster`** („Weihnachtsfenster“): Gruppen-Helfer,
+  Typ Licht, mit den drei Fenster-Lichtern, `all: false` (an, sobald eines an
+  ist). Bereich Wohnzimmer, Label `weihnachten` an der Gruppen-Entität, wie
+  `licht` an `light.alle_lichter`.
+- **Alle Lichter:** Die vier Lichter sind Mitglieder von `light.alle_lichter`
+  (jetzt 15); `sensor.lichter_an` zählt sie mit.
 
 ## Ziele für Automationen
 
