@@ -58,7 +58,7 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 
 | Automation | Auslöser | Bedingung |
 |---|---|---|
-| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00 und Neustart | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`) |
+| `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00, Neustart und Rückfall 20 min nach Sonnenuntergang (`id: rueckfall`) | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`); beim Rückfall ohne Helligkeit |
 | `automation.weihnachten_beleuchtung_um_22_30_aus` | 22:30 | – |
 | `automation.weihnachten_saison_umschalten` | `input_boolean.weihnachtssaison` an oder aus (nicht aus `unavailable`/`unknown`); Neustart | – (siehe Hauptschalter) |
 
@@ -71,9 +71,18 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
   14:00 oder während eines Neustarts unterschritten wird. Ein Neustart
   zwischen 14:00 und 22:30 schaltet deshalb auch Licht wieder ein, das von
   Hand ausgeschaltet wurde.
-- Der Auslöser übergeht Wechsel, die von `unavailable` ausgehen; der Sensor
-  meldet in der Dämmerung oft für Sekunden `unavailable` (am 23.11. viermal
-  zwischen 16:18 und 16:29).
+- Der Auslöser übergeht Wechsel, die von `unavailable` ausgehen. Ein
+  `unavailable` während der 10 Minuten bricht die Wartezeit ab, und die
+  Rückkehr unter die Schwelle zählt nicht als neues Unterschreiten; ohne
+  Rückfall bliebe das Licht dann aus (nachgelesen im Quellcode von HA-Core, Trigger-Helfer
+  `entity_trigger`, Stand 23.11.2026). Das
+  Gerät war vom 13. bis 23.11. 39-mal kurz `unavailable` (im Mittel rund
+  70 s), am 23.11. viermal zwischen 16:18 und 16:29.
+- **Rückfall:** 20 min nach Sonnenuntergang schaltet die Automation ein, ohne
+  die Helligkeit zu prüfen, damit auch ein gerade ausgefallener Sensor nicht
+  blockiert. Zu diesem Zeitpunkt zeigte der Sensor vom 18. bis 23.11.
+  höchstens 4,2 lx. Wer das Licht davor von Hand ausschaltet, bekommt es zum
+  Rückfall wieder eingeschaltet.
 
 ### Warum 50 lx
 
