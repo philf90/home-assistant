@@ -70,6 +70,7 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 | `automation.weihnachten_beleuchtung_morgens_an` | 06:30; Neustart | Saison an, 06:30 bis 10:00 und vor Sonnenaufgang oder Helligkeit unter `input_number.weihnachten_ausschalt_helligkeit` |
 | `automation.weihnachten_beleuchtung_morgens_aus` | `illuminance.crossed_threshold` über `input_number.weihnachten_ausschalt_helligkeit`, 10 min lang (`id: hell`); Nachholen 60 min nach Sonnenaufgang; spätestens 10:00; Neustart | 06:30 bis 12:00 und Helligkeit über der Schwelle; um 10:00 und danach ohne Helligkeit |
 | `automation.weihnachten_saison_umschalten` | `input_boolean.weihnachtssaison` an oder aus (nicht aus `unavailable`/`unknown`); Neustart | – (siehe Hauptschalter) |
+| `automation.weihnachten_beleuchtung_ausserhalb_der_saison_aus` | eines der vier Lichter wird `on` (Status-Auslöser nur mit `to`); Neustart | Saison aus und mindestens eines der vier Lichter an (siehe Hauptschalter) |
 
 - **Schwelle** im Helfer `input_number.weihnachten_einschalt_helligkeit`
   (Kategorie Einstellung, 0 bis 500 lx), eingestellt auf **50 lx**. Der
@@ -184,6 +185,7 @@ stehen im Dokument „Plan: Hauptschalter Weihnachtsbeleuchtung“.
 |---|---|---|
 | die vier Licht-Automationen (abends an, 22:30 aus, morgens an, morgens aus) | aktiviert | deaktiviert (`automation.turn_off`, `stop_actions: true`) |
 | Baum und Fenster beim Umschalten | an, wenn es zwischen 06:30 und 10:00 oder zwischen 14:00 und 22:30 dunkel ist | sofort aus |
+| Baum und Fenster einschalten (Alexa, Assist, Karte, Shelly-Taste oder -App) | möglich | sofort wieder aus |
 | Raum-Reiter-Karte, Wohnzimmer | Schalter Tannenbaum und Fenster sichtbar und gezählt (Feld `sichtbar`) | ausgeblendet, nicht gezählt |
 | `sensor.lichter_an` | zählt die Weihnachtslichter mit | zählt sie nicht |
 
@@ -211,6 +213,18 @@ stehen im Dokument „Plan: Hauptschalter Weihnachtsbeleuchtung“.
 - **Schalter im Dashboard:** `dashboard/licht/weihnachten-karte.yaml`, direkt
   unter der Lichter-Karte in der View „Licht & Fenster“, für alle Konten, mit
   Rückfrage.
+- **Außerhalb der Saison aus:** Die Automation „Weihnachten: Beleuchtung
+  außerhalb der Saison aus“ bleibt immer aktiv; „Saison umschalten“ fasst sie
+  nicht an. Geht eines der vier Lichter an, während die Saison aus ist,
+  schaltet sie alle Lichter mit Label `weihnachten` aus. Der Status-Auslöser
+  nennt nur `to: on` und kein `from`, damit er auch greift, wenn ein Stecker
+  aus `unavailable` im Zustand an zurückkommt; der Neustart-Auslöser fängt
+  einen Stecker ab, der während des Neustarts angegangen ist. Modus `queued`
+  (max. 10): Schaltet jemand die Gruppe ein, kommen vier Auslöser fast
+  gleichzeitig, und keiner darf verloren gehen. `continue_on_error`, falls ein
+  Stecker gerade nicht erreichbar ist. Folge: Außerhalb der Saison lässt sich
+  die Beleuchtung gar nicht einschalten, auch nicht zum Testen beim Aufbau;
+  dafür zuerst den Hauptschalter einschalten.
 - **Nicht umgesetzt:** Schalter nach Datum setzen. Der richtige Moment ist der
   Auf- und Abbau der Beleuchtung, kein Datum.
 
@@ -218,6 +232,13 @@ Test am 2026-11-23 um 19:51: Saison aus → beide Automationen `off`, Baum und
 Fenster aus, `sensor.lichter_an` von 4 auf 1; Saison an → beide `on`, Baum und
 Fenster an (dunkel, vor 22:30), `sensor.lichter_an` 5. Abgleich beim Start
 durch Handstart der Umschalt-Automation geprüft, ohne Neustart.
+
+Test am 2026-11-23 um 21:41: Saison aus → Lichter aus, die vier
+Licht-Automationen `off`, „außerhalb der Saison aus“ `on`; Gruppe
+`light.weihnachtsbeleuchtung` eingeschaltet (wie per Alexa) → vier Läufe,
+alle vier Stecker nach rund 0,2 s wieder aus; Saison an → Lichter an, alle
+Automationen `on`, die vier neuen Läufe enden an der Bedingung (Saison an).
+Neustart-Auslöser nicht getestet.
 
 ## Alexa
 
@@ -234,9 +255,9 @@ Für Assist sind alle freigegeben, wie bisher.
   Lichter-Karte. Geprüft am 2026-11-23 nach dem Anlegen: Die Gruppe steht
   nicht in der Zählliste von `sensor.lichter_an`; der Sensor zählte 5, die
   vier Weihnachtslichter und ein weiteres eingeschaltetes Licht.
-- Der Hauptschalter sperrt Alexa nicht. Ist die Saison aus und schaltet jemand
-  per Sprache ein, bleibt die Beleuchtung an, bis sie jemand ausschaltet: Die
-  Aus-Automationen sind dann abgeschaltet.
+- Außerhalb der Saison geht die Beleuchtung nach dem Einschalten per Alexa
+  sofort wieder aus (Automation „außerhalb der Saison aus“, Abschnitt
+  Hauptschalter).
 
 ## Noch offen
 
