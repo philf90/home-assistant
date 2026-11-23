@@ -231,8 +231,9 @@ Für Assist sind alle freigegeben, wie bisher.
 - „Alexa, schalte die Weihnachtsbeleuchtung ein/aus“ schaltet alle vier
   Stecker. Nur an/aus: die Stecker haben keine Helligkeit.
 - Kein eigener Eintrag in `sensor.lichter_an`, `light.alle_lichter` oder der
-  Lichter-Karte (geprüft am 2026-11-23: Zählung vorher und nachher 5, die
-  Gruppe steht nicht in der Liste).
+  Lichter-Karte. Geprüft am 2026-11-23 nach dem Anlegen: Die Gruppe steht
+  nicht in der Zählliste von `sensor.lichter_an`; der Sensor zählte 5, die
+  vier Weihnachtslichter und ein weiteres eingeschaltetes Licht.
 - Der Hauptschalter sperrt Alexa nicht. Ist die Saison aus und schaltet jemand
   per Sprache ein, bleibt die Beleuchtung an, bis sie jemand ausschaltet: Die
   Aus-Automationen sind dann abgeschaltet.
