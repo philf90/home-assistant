@@ -2,8 +2,9 @@
 
 Betrifft: vier neue Shelly Plug M Gen3 im Wohnzimmer, einer für den
 Tannenbaum, drei für die Fensterbeleuchtung. Sie ersetzen den Hue Smart Plug
-`light.hue_smart_plug_1` („Tannenbaum“), der schon aus den Lichter-Karten
-entfernt ist.
+`light.hue_smart_plug_1` („Tannenbaum“). Er ist aus der Hue-Bridge, aus der
+Instanz und aus den Lichter-Karten entfernt; nur die Archivfassung
+`fenster-lichter-uebersicht-karte.yaml` nennt ihn noch.
 Stand dieser Notiz: 2026-11-23. Regeln: `CONTRIBUTING.md`, Abschnitt
 „Labels, Bereiche und Kategorien“; Register: `design/labels.yaml`.
 
@@ -37,10 +38,6 @@ Gruppen-Helfer nimmt nur vorhandene Entitäten auf.
 5. **Alle Lichter:** die vier `light.*`-Entitäten in die Gruppe
    `light.alle_lichter` aufnehmen (Optionen des Gruppen-Helfers). Damit zählt
    `sensor.lichter_an` sie mit.
-6. **Alten Hue-Stecker aufräumen:** Das Gerät „Tannenbaum“ (Hue Smart Plug) ist
-   `unavailable` und trägt noch `licht`. Gerät aus der Hue-Bridge und aus Home
-   Assistant entfernen, damit zwei Geräte „Tannenbaum“ im Wohnzimmer nicht
-   verwechselt werden.
 
 ## Ziele für Automationen
 
