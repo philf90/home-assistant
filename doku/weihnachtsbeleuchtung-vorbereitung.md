@@ -3,8 +3,7 @@
 Betrifft: vier neue Shelly Plug M Gen3 im Wohnzimmer, einer für den
 Tannenbaum, drei für die Fensterbeleuchtung. Sie ersetzen den Hue Smart Plug
 `light.hue_smart_plug_1` („Tannenbaum“). Er ist aus der Hue-Bridge, aus der
-Instanz und aus den Lichter-Karten entfernt; nur die Archivfassung
-`fenster-lichter-uebersicht-karte.yaml` nennt ihn noch.
+Instanz und aus allen Lichter-Karten entfernt, auch aus dem Archiv.
 Stand dieser Notiz: 2026-11-23. Regeln: `CONTRIBUTING.md`, Abschnitt
 „Labels, Bereiche und Kategorien“; Register: `design/labels.yaml`.
 
