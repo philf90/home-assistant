@@ -56,6 +56,12 @@
 #   (15 min), zweimal 73 und 102 min. Im Normalbetrieb steht unter den
 #   Warnungen "Zuletzt gemeldet ..." aus input_datetime.dwd_warnung_gemeldet_um;
 #   Startwert 0 heisst "Noch keine Meldung seit der Umstellung".
+# - Seit 24.11.2026 Statusrand links (4 px, wie Haustuer-, Personen- und
+#   Batterie-Karte) in der DWD-Farbe der obersten Warnung, also der mit der
+#   hoechsten Stufe; dieselbe Warnung, die oben steht. Beim DWD-Ausfall
+#   ohne Farbe. Gelesen und sortiert werden die Warnungen dafuer in
+#   variables.warnungen statt im Aufbau, damit Rand und Aufbau dieselbe
+#   Reihenfolge nutzen.
 #
 # Voraussetzung: custom:button-card (HACS), browser_mod (HACS), Templates
 # nachtblau_dwd_popup und nachtblau_warn_fx aus warnlage-templates.yaml. Sensoren der
@@ -98,6 +104,45 @@ card:
   type: custom:button-card
   entity: sensor.warnregion_aktuelle_warnstufe
   template: nachtblau_dwd_popup
+  # Alle Warnungen beider Sensoren in der Reihenfolge der Karte; die erste
+  # bestimmt Icon-Kachel, Pille und seit 24.11.2026 den Statusrand links
+  variables:
+    warnungen: |
+      [[[
+        // Die Integration liefert warning_1, warning_2, ... in der Reihenfolge des
+        // DWD-Servers, ohne Sortierung (dwdwfsapi fragt ohne sortBy an). Seit
+        // 14.11.2026 sortiert die Karte selbst wie die Warnlage-Kachel der
+        // Wetter-View: aktuelle Warnungen nach Stufe (hoechste zuerst), bei gleicher
+        // Stufe nach Beginn; danach die Vorabinformationen ebenso. Bis dahin stand
+        // oben immer warning_1, eine Unwetterwarnung konnte in "+N weitere" stehen.
+        const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+        // Rueckfall ohne gelieferte Farbe: dieselben Werte, die die Integration
+        // sonst liefert (CAP-DWD-Profil 2.1.13, Kap. 3.5), Hitze und UV nach
+        // Ereigniscode; Vorabinformation immer in der CAP-Vorabfarbe
+        const lvlColor = { 1:'#ffeb3b', 2:'#fb8c00', 3:'#e53935', 4:'#880e4f' };
+        const sonderColor = { 246:'#fe68fe', 247:'#cc99ff', 248:'#9e46f8' };
+        const VORAB = '#ff8080';
+        const lesen = (id, vorab) => {
+          const s = states[id], a = s && s.attributes ? s.attributes : {}, n = parseInt(a.warning_count) || 0, out = [];
+          for (let i = 1; i <= n; i++) {
+            const o = (a['warning_' + i] && typeof a['warning_' + i] === 'object') ? a['warning_' + i] : {};
+            const p = (k) => a['warning_' + i + '_' + k];
+            const lv = parseInt((p('level') !== undefined && p('level') !== null) ? p('level') : o.level) || 0;
+            // DWD-Ereigniscode (ii), waehlt Szene und Icon (FROST = 22)
+            const ii = (p('type') !== undefined && p('type') !== null) ? p('type') : o.event_code;
+            const nm = String(p('name') || o.event || p('headline') || 'Wetterwarnung').replace(/^VORABINFORMATION\s+/, '');
+            out.push({ name: nm, ii, level: lv, vorab,
+              color: vorab ? VORAB : (p('color') || o.color || sonderColor[parseInt(ii)] || lvlColor[lv] || '#fb8c00'),
+              // warning_N_start/_end; aeltere Versionen und warning_N-Objekt: *_time
+              start: toDate(p('start') || p('start_time') || o.start_time || o.start),
+              end: toDate(p('end') || p('end_time') || o.end_time || o.end) });
+          }
+          return out;
+        };
+        const ordnen = (x, y) => (y.level - x.level) || ((x.start ? x.start.getTime() : 0) - (y.start ? y.start.getTime() : 0));
+        return lesen('sensor.warnregion_aktuelle_warnstufe', false).sort(ordnen)
+          .concat(lesen('sensor.warnregion_vorwarnstufe', true).sort(ordnen));
+      ]]]
   # Langes Druecken zeigt weiterhin die Roh-Attribute des Sensors
   hold_action:
     action: more-info
@@ -113,6 +158,21 @@ card:
       - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
       - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
       - overflow: hidden
+      # Statusrand links (wie Haustuer-, Personen- und Batterie-Karte, seit
+      # 24.11.2026) in der DWD-Farbe der obersten Warnung: dieselbe Farbe wie
+      # Icon-Kachel und Pille und wie der Rand der Bloecke im Popup. Oben
+      # steht die hoechste aktuelle Stufe, Vorabinformationen erst nach allen
+      # aktuellen Warnungen (Sortierung in variables.warnungen). Beim
+      # DWD-Ausfall (grauer letzter Stand) ohne Farbe, wie die Karte selbst.
+      # Muss NACH "border" stehen, sonst ueberschreibt die Kurzform ihn wieder.
+      - border-left: |
+          [[[
+            const neutral = '1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))';
+            const dwd = states['sensor.warnregion_aktuelle_warnstufe'];
+            if (!dwd || ['unavailable', 'unknown'].includes(dwd.state)) return neutral;
+            const top = (variables.warnungen || [])[0];
+            return top ? '4px solid ' + top.color : neutral;
+          ]]]
     grid:
       - grid-template-areas: '"body"'
     custom_fields:
@@ -167,39 +227,9 @@ card:
         };
 
         // ---------- Alle Warnungen beider Sensoren, sortiert ----------
-        // Die Integration liefert warning_1, warning_2, ... in der Reihenfolge des
-        // DWD-Servers, ohne Sortierung (dwdwfsapi fragt ohne sortBy an). Seit
-        // 14.11.2026 sortiert die Karte selbst wie die Warnlage-Kachel der
-        // Wetter-View: aktuelle Warnungen nach Stufe (hoechste zuerst), bei gleicher
-        // Stufe nach Beginn; danach die Vorabinformationen ebenso. Bis dahin stand
-        // oben immer warning_1, eine Unwetterwarnung konnte in "+N weitere" stehen.
-        const toDate = (v) => { if (v === undefined || v === null || v === '') return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
-        // Rueckfall ohne gelieferte Farbe: dieselben Werte, die die Integration
-        // sonst liefert (CAP-DWD-Profil 2.1.13, Kap. 3.5), Hitze und UV nach
-        // Ereigniscode; Vorabinformation immer in der CAP-Vorabfarbe
-        const lvlColor = { 1:'#ffeb3b', 2:'#fb8c00', 3:'#e53935', 4:'#880e4f' };
-        const sonderColor = { 246:'#fe68fe', 247:'#cc99ff', 248:'#9e46f8' };
-        const VORAB = '#ff8080';
-        const lesen = (id, vorab) => {
-          const s = states[id], a = s && s.attributes ? s.attributes : {}, n = parseInt(a.warning_count) || 0, out = [];
-          for (let i = 1; i <= n; i++) {
-            const o = (a['warning_' + i] && typeof a['warning_' + i] === 'object') ? a['warning_' + i] : {};
-            const p = (k) => a['warning_' + i + '_' + k];
-            const lv = parseInt((p('level') !== undefined && p('level') !== null) ? p('level') : o.level) || 0;
-            // DWD-Ereigniscode (ii), waehlt Szene und Icon (FROST = 22)
-            const ii = (p('type') !== undefined && p('type') !== null) ? p('type') : o.event_code;
-            const nm = String(p('name') || o.event || p('headline') || 'Wetterwarnung').replace(/^VORABINFORMATION\s+/, '');
-            out.push({ name: nm, ii, level: lv, vorab,
-              color: vorab ? VORAB : (p('color') || o.color || sonderColor[parseInt(ii)] || lvlColor[lv] || '#fb8c00'),
-              // warning_N_start/_end; aeltere Versionen und warning_N-Objekt: *_time
-              start: toDate(p('start') || p('start_time') || o.start_time || o.start),
-              end: toDate(p('end') || p('end_time') || o.end_time || o.end) });
-          }
-          return out;
-        };
-        const ordnen = (x, y) => (y.level - x.level) || ((x.start ? x.start.getTime() : 0) - (y.start ? y.start.getTime() : 0));
-        const alle = lesen('sensor.warnregion_aktuelle_warnstufe', false).sort(ordnen)
-          .concat(lesen('sensor.warnregion_vorwarnstufe', true).sort(ordnen));
+        // Gelesen und sortiert in variables.warnungen (oben), damit Statusrand
+        // und Aufbau dieselbe oberste Warnung nehmen.
+        const alle = variables.warnungen || [];
         // ---------- DWD-Abruf ausgefallen: letzten gemeldeten Stand zeigen ----------
         // Seit 17.11.2026. Ohne Abruf fehlen alle Attribute, die Karte waere leer.
         // Die conditional-Karte bleibt dann sichtbar, solange das Gedaechtnis der

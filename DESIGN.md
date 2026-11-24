@@ -363,7 +363,8 @@ An einen Zweck gebunden, nur dort verwenden (Status `sonder` in der Palette):
   `#ff8080`, Stufe 1 `#ffeb3b`, Stufe 2 `#fb8c00`, Stufe 3 `#e53935`,
   Stufe 4 `#880e4f`, dazu die Sonderfarben Starke Hitze `#cc99ff`, Extreme
   Hitze `#9e46f8` und UV `#fe68fe`. Nicht anpassen, nur für DWD-Warnungen
-  (Icon-Kachel, Stufen-Pille, Rand des Popup-Blocks). Die Karten übernehmen
+  (Icon-Kachel, Stufen-Pille, Rand des Popup-Blocks, Statusrand links der
+  Warnkarte auf Home). Die Karten übernehmen
   die gelieferte Farbe und nutzen dieselben Werte als Rückfall, wenn keine
   kommt (Hitze und UV nach Ereigniscode). Bis 14.11.2026 standen hier
   abweichende Werte (`#7c8ba1`, `#f2c500`, `#fb9a12`, `#e6480e`,
@@ -688,6 +689,17 @@ gilt hell über den Schalter:
   Vorabinformation, Stufe 1 und 2 bleiben im Ton (Pille ab 5,41:1, Icon ab
   5,02:1); Stufe 3 `#e53935`: Pillenschrift 3,43 → 13,25:1 in Hell, Icon
   bleibt im Ton (3,30:1); Stufe 4 ist gefüllt (8,64:1, siehe unten).
+- Statusrand links (seit 24.11.2026, 4 px wie Haustür- und Personenkarte):
+  in beiden Modi deckend in der DWD-Farbe der obersten Warnung (höchste
+  aktuelle Stufe, Vorabinformationen erst nach allen aktuellen Warnungen),
+  beim DWD-Ausfall ohne Farbe. Der Rand ist nur Zusatzsignal wie der
+  Abwesend-Rand der Personenkarte; die Stufe steht immer als Text in der
+  Pille. Gerechnet zur Hülle (schwächerer Wert aus Verlauf oben/unten),
+  dunkel / hell: Vorabinformation 6,56 / 2,22 · Stufe 1 13,03 / 1,12 ·
+  Stufe 2 6,71 / 2,17 · Stufe 3 3,76 / 3,87 · Stufe 4 1,68 / 8,65 ·
+  Starke Hitze 7,25 / 2,01 · Extreme Hitze 3,55 / 4,10 · UV 6,54 / 2,23.
+  Schwach sind damit Stufe 4 dunkel und Stufe 1 hell; die Farben bleiben
+  trotzdem die des CAP-Profils, wie im Popup.
 - Kleine Schrift auf Chips im Popup in Label-Grau (dunkel 3,95 → 6,60:1).
 - **Stufe 4** (extremes Unwetter) ist in beiden Modi gefüllt: Kachel und
   Pille deckend in der DWD-Farbe, Icon und Schrift nach Kontrast (bei der
