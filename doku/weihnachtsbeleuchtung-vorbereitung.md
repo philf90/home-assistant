@@ -122,12 +122,37 @@ am 16.11. 16 bis 17 Uhr bei 17 lx.
 Seit 2026-11-23 geht die Beleuchtung um **06:30** an und nach Sonnenaufgang
 wieder aus, sobald es hell genug ist. Schwelle im Helfer
 `input_number.weihnachten_ausschalt_helligkeit` (Kategorie Einstellung, Einheit
-`lx`), eingestellt auf **50 lx**, wie abends; ein eigener Helfer, damit morgens
-und abends getrennt einstellbar sind.
+`lx`), seit 2026-11-24 auf **500 lx** (vorher 50 lx wie abends); ein
+eigener Helfer, damit morgens und abends getrennt einstellbar sind. 500 lx ist
+zugleich das Maximum des Helfers. Für das Einschalten um 06:30 ändert der
+Wert nichts: Die Sonne geht Ende November nach 07:40 auf, „morgens an“ greift
+schon über „vor Sonnenaufgang“, und um 07:30 lag die Helligkeit an allen
+ausgewerteten Tagen unter 1 lx. Der Wert entscheidet also nur, wann das Licht
+ausgeht.
 
-Erste Zeit, ab der der Wert über 50 lx blieb (Verlauf 18. bis 23.11.,
-Sonnenaufgang gerechnet für den Heimstandort, am 24.11. laut Home Assistant
-07:51):
+**Warum 500 lx:** Mit 50 lx ging das Licht kurz nach dem Hellwerden aus
+(am 24.11. um 08:01); gewünscht ist morgens mehr Atmosphäre, auch bei den
+Werten vom 24.11. gegen 08:30 (473 lx). Ab wann der Wert mindestens
+10 Minuten über der Schwelle blieb (5-Minuten-Mittel der Langzeitstatistik,
+Fenster 07:30 bis 10:30; das Licht geht rund 10 Minuten später aus):
+
+| Tag | 50 lx | 200 lx | 300 lx | 500 lx |
+|---|---|---|---|---|
+| 18.11. | 07:55 | 09:00 | 09:35 | 10:15 |
+| 19.11. | 08:35 | 09:20 | 09:25 | 10:20 |
+| 20.11. | 08:20 | 08:40 | 08:50 | 09:10 |
+| 21.11. | 07:55 | 08:15 | 08:20 | 08:55 |
+| 22.11. | 08:15 | 08:45 | 08:55 | 09:40 |
+| 23.11. | 07:55 | 08:20 | 08:40 | 08:50 |
+| 24.11. | 07:55 | 08:10 | 08:15 | nach 08:30 |
+
+Mit 500 lx geht das Licht an klaren Tagen gegen 09:00 bis 09:50 aus; an
+trüben Tagen (18. und 19.11.) erst durch die Obergrenze um 10:00, die bleibt.
+
+Bisher, mit 50 lx: erste Zeit, ab der der Wert über 50 lx blieb (Verlauf
+18. bis 23.11., Sonnenaufgang gerechnet für den Heimstandort, am 24.11. laut
+Home Assistant 07:51):
+
 
 | Tag | Sonnenaufgang | über 50 lx | Abstand |
 |---|---|---|---|
@@ -138,15 +163,16 @@ Sonnenaufgang gerechnet für den Heimstandort, am 24.11. laut Home Assistant
 | 19.11. | 07:42 | 08:34 | +52 min |
 | 18.11. | 07:41 | 07:56 | +15 min |
 
-Mit 10 Minuten Wartezeit geht das Licht also 15 bis 62 Minuten nach
-Sonnenaufgang aus, Ende November etwa zwischen 08:05 und 09:00. Am 19.11.
+Mit 10 Minuten Wartezeit ging das Licht bei 50 lx also 15 bis 62 Minuten
+nach Sonnenaufgang aus, Ende November etwa zwischen 08:05 und 09:00. Am 19.11.
 (trüb) pendelte der Wert von 08:25 bis 08:40 um 50 lx; die Wartezeit hält
 das Licht an, bis der Wert 10 Minuten darüber bleibt. Mit 100 lx ginge das
 Licht 2 bis 16 Minuten später aus, am 19.11. erst nach 09:00.
 
 - **Nachholen:** 60 min nach Sonnenaufgang prüft die Automation noch einmal
   die Helligkeit, falls ein kurzes `unavailable` die Wartezeit abgebrochen hat
-  (siehe Automationen). Am 20.11. war der Sensor um 07:52 und 08:01 kurz
+  (siehe Automationen). Mit 500 lx liegt der Wert dann (rund 08:50) oft noch
+  darunter; dann bleibt das Licht an bis zum Überschreiten oder bis 10:00. Am 20.11. war der Sensor um 07:52 und 08:01 kurz
   `unavailable`.
 - **Spätestens 10:00** geht die Beleuchtung aus, ohne die Helligkeit zu
   prüfen. Mitte bis Ende Dezember geht die Sonne um 08:14 bis 08:21 auf.
