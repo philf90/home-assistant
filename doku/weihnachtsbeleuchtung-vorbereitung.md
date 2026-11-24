@@ -33,7 +33,7 @@ Fensterkontakte.
   2026-11-23, Gruppen-Helfer, Typ Licht, mit allen vier Lichtern direkt (nicht
   über die Fenster-Gruppe), `all: false`, Bereich Wohnzimmer, Label
   `weihnachten`, Icon `mdi:pine-tree`. Gedacht für die Sprachsteuerung,
-  Abschnitt „Alexa“; keine Karte zeigt sie.
+  Abschnitt „Alexa“; keine Karte schaltet sie.
 - **Alle Lichter:** Die vier Lichter sind Mitglieder von `light.alle_lichter`
   (jetzt 15); `sensor.lichter_an` zählt sie mit. Die beiden Gruppen sind nicht
   Mitglied und werden nicht gezählt.
@@ -212,7 +212,8 @@ stehen im Dokument „Plan: Hauptschalter Weihnachtsbeleuchtung“.
   Startseiten-Kachel „Licht & Fenster“ schaltet sie in der Saison mit.
 - **Schalter im Dashboard:** `dashboard/licht/weihnachten-karte.yaml`, direkt
   unter der Lichter-Karte in der View „Licht & Fenster“, für alle Konten, mit
-  Rückfrage.
+  Rückfrage. Seit 2026-11-24 mit Fußzeile zur Alexa-Freigabe (Abschnitt
+  „Alexa“).
 - **Außerhalb der Saison aus:** Die Automation „Weihnachten: Beleuchtung
   außerhalb der Saison aus“ bleibt immer aktiv; „Saison umschalten“ fasst sie
   nicht an. Geht eines der vier Lichter an, während die Saison aus ist,
@@ -258,6 +259,30 @@ Für Assist sind alle freigegeben, wie bisher.
 - Außerhalb der Saison geht die Beleuchtung nach dem Einschalten per Alexa
   sofort wieder aus (Automation „außerhalb der Saison aus“, Abschnitt
   Hauptschalter).
+
+### Freigabe beim Auf- und Abbau von Hand
+
+Der Hauptschalter schaltet die Alexa-Freigabe nicht mit. Beim Abbau die
+Freigabe von „Weihnachtsbeleuchtung“ unter Einstellungen → Sprachassistenten →
+Alexa ausschalten, beim Aufbau wieder einschalten. Die Fußzeile der Karte
+`dashboard/licht/weihnachten-karte.yaml` erinnert daran; den tatsächlichen
+Stand der Freigabe kann sie nicht lesen.
+
+Geprüft am 2026-11-24, warum keine Automation das übernimmt:
+
+- Home Assistant ändert die Freigabe nur über den Websocket-Befehl
+  `homeassistant/expose_entity` (nur für Admins). Es gibt dafür keine Aktion,
+  auch keinen REST-Endpunkt (HA-Core, Quellcode `exposed_entities` und `api`;
+  in der Instanz liefert die Suche nach „expose“ unter allen Aktionen keinen
+  Treffer).
+- Die Zusatzintegration Spook (v5.11.1) bringt `homeassistant.expose_entity`
+  und `homeassistant.unexpose_entity` mit; sie rufen dieselbe interne Funktion
+  auf wie die Einstellungsseite. Eine Änderung meldet Home Assistant Cloud
+  nach 1 s an Amazon (`DeleteReport` bzw. `AddOrUpdateReport`).
+- Nicht umgesetzt: Spook bringt rund 160 weitere Aktionen, Auslöser und
+  Bedingungen, eigene Entitäten und Reparaturmeldungen mit, ist nicht vom
+  Home-Assistant-Projekt unterstützt und hängt an internen Funktionen, die ein
+  Update ändern kann. Für zwei Handgriffe im Jahr lohnt das nicht.
 
 ## Noch offen
 
