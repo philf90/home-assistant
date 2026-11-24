@@ -27,19 +27,27 @@
 #   pakete_meldungen    Schalter je Push-Meldung (Karte "Meldungen")
 #   pakete_popup        Formular "Sendung hinzufuegen" (browser_mod-Popup)
 #
-# Daten (README des Parcel Aggregators, Stand 2.11.0): die Sensoren
+# Daten (README des Parcel Aggregators, Stand 3.0.0): die Sensoren
 #   sensor.parcel_aggregator_incoming_parcels   aktive eingehende Pakete
+#                                               (auch die zur Abholstelle)
 #   sensor.parcel_aggregator_awaiting_pickup    am Abholort
 #   sensor.parcel_aggregator_delivered_parcels  kuerzlich zugestellt (Fenster
 #                                               je Dienst, Amazon 7 Tage)
-# tragen im Attribut "parcels" je Paket: carrier, barcode, sender, status,
-# raw_status, delivered, delivered_at, planned_from, planned_to, pickup,
-# pickup_point, url, history (nur mit Option "Parcel history" je Dienst).
+# tragen im Attribut "parcels" je Paket: carrier, barcode, sender, contents,
+# status, raw_status, delivered, delivered_at, planned_from, planned_to,
+# pickup, pickup_point, url, history (nur mit Option "Parcel history" je
+# Dienst). contents ist der Inhalt (Amazon: Artikelnamen; DHL, DPD, GLS,
+# Hermes, UPS: per track_parcel oder update_contents gesetzt). pickup heisst
+# "geht an eine Abholstelle" und bleibt nach der Abholung wahr; die Gruppen
+# haengen nur am Status. DHL und Hermes nennen die Abholstelle nur mit Namen.
 # Zeitstempel ohne Uhrzeit kommen als 00:00:00 Ortszeit: DPD Deutschland
 # bei delivered_at und im Verlauf, Amazon bei delivered_at ohne
 # Zustell-Ereignis. pk.wann zeigt dann nur den Tag. Ein Liefertag ohne
-# Zeitfenster (DHL, Amazon, DPD) kommt als 00:00 bis 23:59:59 und erscheint
-# als "heute" oder "morgen" ohne Uhrzeit.
+# Zeitfenster kommt als 00:00 bis 23:59:59 und erscheint als "heute" oder
+# "morgen" ohne Uhrzeit; nennt der Dienst nur den Beginn, endet das Fenster
+# um 23:59:59 (Paket-Vertrag aller Dienste seit 23.11.2026) und erscheint
+# als "heute ab 10:00 Uhr". Statustexte laufen durch pk.klartext, weil DHL
+# den Verlauf mit HTML-Link ablegt.
 #
 # Amazon-Stopps: Faehrt Amazons eigene Flotte, nennt Amazon die Stopps bis
 # zur Zustellung (raw.stops_away, README ha-amazon "Stops away", ab 0.9.0).
@@ -90,9 +98,11 @@
 # (Token oder Bild fehlt, fremder Dienst) bleibt das neutrale Kuerzel.
 #
 # Paketzeile (pk.zeile): rechts vom Logo oben der Dienst, dahinter der
-# Absender, falls bekannt (eine Zeile, notfalls gekuerzt, pk.zeilenTitel;
-# ganz steht er aufgeklappt), darunter die ganze Sendungsnummer (lange
-# Nummern brechen um), dann Zeitpunkt, Stopps oder Abholort (pk.unter).
+# Inhalt oder, ohne Inhalt, der Absender (eine Zeile, notfalls gekuerzt,
+# pk.zeilenTitel; aufgeklappt stehen Inhalt, Absender und Abholstelle ganz),
+# darunter die ganze Sendungsnummer (lange Nummern brechen um), dann
+# Zeitpunkt, Stopps oder Abholort, bei Sendungen an eine Abholstelle vorn
+# "zur Abholstelle" (pk.unter).
 # Die Home-Karte zeigt dieselben Zeilen ohne Aufklappen (pk.zeilenKopf),
 # den Zustand traegt dort ein 4-px-Rand links an der Karte (Amber in
 # Zustellung, sonst Koralle abholbereit; pk.kompaktRand). Die Achtung-Liste
@@ -101,8 +111,9 @@
 # aktiven Schritt (oben, Sendung noch nicht zugestellt) zum Schritt darunter
 # gestrichelt in der Statusfarbe, sonst durchgezogen.
 #
-# Formular: Eingabe und Dienst-Auswahl leben nur im Popup-DOM, abgeschickt
-# wird ueber script.paket_hinzufuegen (pakete-konfig.yaml). Der Dienst wird
+# Formular: Eingabe, optionaler Inhalt und Dienst-Auswahl leben nur im
+# Popup-DOM, abgeschickt wird ueber script.paket_hinzufuegen
+# (pakete-konfig.yaml, Inhalt geht als contents an track_parcel). Der Dienst wird
 # aus der Nummer vorgeschlagen (Muster aus den READMEs: 1Z... UPS; JJD, 3S,
 # CR, LX und 10 Ziffern DHL; 14 Ziffern oder H + 19 Ziffern Hermes), bleibt
 # aber waehlbar. DPD fehlt bewusst: ha-dpd hat keine Aktion zum Hinzufuegen,
@@ -135,7 +146,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 12, vorher = window.__nachtblauPakete;
+          const VERSION = 13, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -173,6 +184,17 @@ button_card_templates:
           pk.s = id => pk.hass && pk.hass.states ? pk.hass.states[id] : undefined;
           pk.z = id => { const s = pk.s(id); return s ? s.state : undefined; };
           pk.esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+          // Statustext der Dienste als reiner Text: DHL legt den Verlauf roh ab,
+          // die Meldung "zur Abholung bereit" mit einem HTML-Link auf die
+          // Packstation (<a ...>Packstation 216, Strasse, PLZ Ort</a>). DOMParser
+          // fuehrt nichts aus und laedt nichts; Tags fallen weg, &szlig; & Co.
+          // werden zu Zeichen. Danach wie jeder Text durch pk.esc.
+          pk.klartext = t => {
+            const s = String(t ?? '');
+            if (!/[<&]/.test(s)) return s;
+            try { return (new DOMParser().parseFromString(s, 'text/html').body.textContent || '').replace(/\s+/g, ' ').trim(); } catch (e) { return s.replace(/<[^>]*>/g, ''); }
+          };
+          pk.statusText = p => pk.klartext(p.raw_status) || pk.status(p.status).text;
           pk.fehlt = () => !pk.s(CFG.eingehend);
           const liste = id => { const s = pk.s(id); return s && Array.isArray(s.attributes.parcels) ? s.attributes.parcels : []; };
           const amazon = p => /amazon/i.test(p.carrier || '');
@@ -236,14 +258,22 @@ button_card_templates:
             return d.getHours() || d.getMinutes() || d.getSeconds() || d.getMilliseconds() ? `${pk.tag(t)} ${pk.uhr(t)}` : pk.tag(t);
           };
           // Zeitfenster: "heute 10:15–12:15 Uhr", ganzer Tag nur "morgen",
-          // mehrere Tage "Mi., 12.11. bis Fr., 14.11."
+          // mehrere Tage "Mi., 12.11. bis Fr., 14.11.". Nennt der Dienst nur den
+          // Beginn, laeuft das Fenster seit den Updates vom 23.11.2026 bis
+          // 23:59:59 desselben Tages (Paket-Vertrag aller Dienste): dann "heute
+          // ab 10:00 Uhr" statt "10:00–23:59 Uhr"; ab 00:00 ist es der ganze Tag.
           pk.fenster = p => {
             const von = zeit(p.planned_from), bis = zeit(p.planned_to);
             if (von === null) return '';
-            const ganzerTag = bis !== null && bis - von >= 20 * 3600000;
             if (bis !== null && bis > tagBeginn(von, 1) + 60000) return `${pk.tag(von)} bis ${pk.tag(bis - 60000)}`;
-            if (bis === null || ganzerTag) return pk.tag(von);
-            return `${pk.tag(von)} ${pk.uhr(von)}–${pk.uhr(bis)} Uhr`;
+            if (bis === null) return pk.tag(von);
+            const abMitternacht = von - tagBeginn(von) < 60000, bisTagesende = Math.abs(bis - (tagBeginn(von, 1) - 1000)) < 60000;
+            if (abMitternacht && (bisTagesende || bis - von >= 20 * 3600000)) return pk.tag(von);
+            // Geschuetzte Leerzeichen: "ab 10:00 Uhr" und "10:00–12:00 Uhr" brechen
+            // nicht um, sonst stuende bei 360 px "Uhr" allein in der Zeile
+            if (bisTagesende) return `${pk.tag(von)} ab\u00a0${pk.uhr(von)}\u00a0Uhr`;
+            if (bis - von >= 20 * 3600000) return pk.tag(von);
+            return `${pk.tag(von)} ${pk.uhr(von)}–${pk.uhr(bis)}\u00a0Uhr`;
           };
           pk.istHeute = p => {
             const von = zeit(p.planned_from), bis = zeit(p.planned_to);
@@ -305,7 +335,11 @@ button_card_templates:
           // darunter die ganze Sendungsnummer (pk.nummer). Bei 360 px passen
           // neben "In Zustellung" 20 Ziffern in eine Zeile; laengere Nummern
           // (Formular bis 40 Zeichen) brechen um statt abgeschnitten zu werden.
-          pk.zeilenTitel = (p, c = LABEL) => `${pk.esc(pk.dienst(p).name)}${p.sender ? `<span style="font-weight:400;color:${c};"> · ${pk.esc(p.sender)}</span>` : ''}`;
+          // Hinter dem Dienst der Inhalt (Feld contents, seit den Updates vom
+          // 23.11.2026; Amazon fuellt es mit den Artikelnamen, bei den anderen
+          // per track_parcel/update_contents), sonst der Absender.
+          pk.zusatz = p => String(p.contents || p.sender || '').trim();
+          pk.zeilenTitel = (p, c = LABEL) => `${pk.esc(pk.dienst(p).name)}${pk.zusatz(p) ? `<span style="font-weight:400;color:${c};"> · ${pk.esc(pk.zusatz(p))}</span>` : ''}`;
           pk.nummer = (p, c, px) => p.barcode ? `<span style="display:block;font-size:${px}px;line-height:1.3;color:${c};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(String(p.barcode))}</span>` : '';
           // Fliesstext (Achtung-Liste): Dienst, Absender, Nummer
           pk.kennung = p => [pk.dienst(p).name, p.sender, p.barcode].filter(Boolean).map(String).join(' · ');
@@ -313,16 +347,19 @@ button_card_templates:
             const g = pk.gruppe(p), fe = pk.fenster(p);
             if (g === 'zugestellt') { const t = zeit(p.delivered_at); return (t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
             if (g === 'abholbereit') return p.pickup_point || 'am Abholort';
-            if (g === 'achtung') return p.raw_status || pk.status(p.status).text;
+            if (g === 'achtung') return pk.statusText(p);
+            // Unterwegs zu einer Abholstelle (pickup true, noch nicht dort; wie
+            // der Sensor en_route_to_pickup_point der Dienste)
+            const ziel = p.pickup === true ? 'zur Abholstelle' : '';
             // Mit Stopps ohne "heute" (steht schon im Listentitel). Textbreite bei
             // 360 px: 135 px. "noch 12 Stopps · heute 07:00–13:00 Uhr" fuellt dort
             // mit Roboto zwei Zeilen ganz und braucht mit breiterer Schrift (Inter,
             // 128 px) drei; ohne "heute" bleibt Reserve
             if (g === 'heute') {
               const st = pk.stoppText(pk.stopps(p));
-              return st ? [st, fe.replace(/^heute\s*/, '')].filter(Boolean).join(' · ') : (fe || 'heute');
+              return [ziel, ...(st ? [st, fe.replace(/^heute\s*/, '')] : [fe || 'heute'])].filter(Boolean).join(' · ');
             }
-            return fe ? 'voraussichtlich ' + fe : (p.raw_status || pk.status(p.status).text);
+            return [ziel, fe ? 'voraussichtlich ' + fe : (ziel ? '' : pk.statusText(p))].filter(Boolean).join(' · ');
           };
 
           // ---------- Bausteine ----------
@@ -481,8 +518,8 @@ button_card_templates:
                   ${pk.verlaufLinie(i, eintraege.length, pk.gruppe(p) !== 'zugestellt', pk.status(p.status).farbe)}
                   <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? pk.status(p.status).farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
                   <div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;">${pk.esc(pk.wann(zeit(h.timestamp)))}</div>
-                  <div style="font-size:12.5px;color:${LABEL};">${pk.esc(h.raw_status || pk.status(h.status).text)}</div></div>`).join('')
-              : `<div style="font-size:12.5px;color:${LABEL};">${pk.esc(p.raw_status || pk.status(p.status).text)}</div>
+                  <div style="font-size:12.5px;color:${LABEL};">${pk.esc(pk.statusText(h))}</div></div>`).join('')
+              : `<div style="font-size:12.5px;color:${LABEL};">${pk.esc(pk.statusText(p))}</div>
                  <div style="font-size:12px;color:${SEK};">Verlauf: in der Integration ${pk.esc(d.name)} die Option „Parcel history“ einschalten.</div>`;
             const knoepfe = [
               p.url ? pk.knopf('Beim Dienst öffnen', `window.__nachtblauPakete.oeffneSeite(${pk.esc(JSON.stringify(p.url))})`) : '',
@@ -496,7 +533,9 @@ button_card_templates:
                 <div data-pk-verlauf style="display:${auf ? 'flex' : 'none'};flex-direction:column;gap:6px;padding:2px 12px 12px 60px;">
                   ${foto ? `<img data-pk-foto="${pk.esc(foto)}" ${auf ? `src="${pk.esc(pk.fotoUrl(foto))}"` : ''} alt="Zustellfoto von Amazon" onerror="window.__nachtblauPakete.fotoFehler(this)" ${pk.tippAttr(`window.__nachtblauPakete.fotoGross(this,${pk.esc(JSON.stringify(foto))})`)} style="display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid ${UKR};background:${NK};cursor:pointer;">
                   <div style="display:none;font-size:12px;color:${SEK};">Foto konnte nicht geladen werden. Zum Neuladen zu- und wieder aufklappen.</div>` : ''}
+                  ${p.contents ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Inhalt: ${pk.esc(p.contents)}</div>` : ''}
                   ${p.sender ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Absender: ${pk.esc(p.sender)}</div>` : ''}
+                  ${p.pickup === true && p.pickup_point && pk.gruppe(p) !== 'abholbereit' ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Abholstelle: ${pk.esc(p.pickup_point)}</div>` : ''}
                   <div>${verlauf}</div>
                   ${knoepfe ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${knoepfe}</div>` : ''}
                 </div>
@@ -533,7 +572,7 @@ button_card_templates:
           };
           pk.achtung = g => g.achtung.map(p => `<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:13px;${VOLL_ROT}">
               <span style="flex:none;">${pk.icon('mdi:alert-circle', '#3d1512', 18)}</span>
-              <span style="font-size:13px;font-weight:600;white-space:normal;overflow-wrap:anywhere;">${pk.esc(pk.kennung(p))}: ${pk.esc(p.raw_status || pk.status(p.status).text)}</span></div>`).join('');
+              <span style="font-size:13px;font-weight:600;white-space:normal;overflow-wrap:anywhere;">${pk.esc(pk.kennung(p))}: ${pk.esc(pk.statusText(p))}</span></div>`).join('');
           pk.zahl = (n, text, c) => `<div style="background:${UK};border:1px solid ${UKR};border-radius:13px;padding:8px 4px;text-align:center;min-width:0;">
               <div style="font-size:20px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;color:${n ? c : SEK};">${n}</div>
               <div style="font-size:11px;line-height:1.2;color:${SEK};overflow-wrap:break-word;hyphens:manual;">${text}</div></div>`;
@@ -671,8 +710,9 @@ button_card_templates:
             const root = el.getRootNode(), feld = root.querySelector('input[data-pk-nummer]'), m = root.querySelector('[data-pk-meldung]');
             if (!pk.pruefe(root)) { if (m) { m.style.color = SEK; m.textContent = 'Erst Nummer und Dienst angeben.'; } return; }
             const nummer = feld.value.replace(/\s/g, '').toUpperCase().slice(0, 40), dienst = pk.form.dienst;
+            const inhaltFeld = root.querySelector('input[data-pk-inhalt]'), inhalt = inhaltFeld ? inhaltFeld.value.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
             if (m) { m.style.color = SEK; m.textContent = 'Wird übergeben …'; }
-            pk.dienstAufruf('script', CFG.skript, { nummer, dienst }).then(() => {
+            pk.dienstAufruf('script', CFG.skript, inhalt ? { nummer, dienst, inhalt } : { nummer, dienst }).then(() => {
               if (m) { m.style.color = GRUEN; m.textContent = 'Wird verfolgt. Die Sendung erscheint mit der nächsten Abfrage.'; }
               setTimeout(() => { if (window.browser_mod) window.browser_mod.service('close_popup', {}); }, 1600);
             }).catch(e => { if (m) { m.style.color = ROT; m.textContent = 'Fehler: ' + (e && e.message ? e.message : e); } });
@@ -691,6 +731,13 @@ button_card_templates:
                   onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
                   onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__nachtblauPakete.senden(this)}"
                   style="font:inherit;font-size:16px;font-family:ui-monospace,'SF Mono','Roboto Mono',Menlo,monospace;color:${TEXT};background:var(--nachtblau-flaeche-vertieft, #10151d);width:100%;box-sizing:border-box;border:1px solid ${UKR};border-radius:12px;padding:10px 12px;outline:none;">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <label for="pk-inhalt" style="font-size:12.5px;font-weight:600;color:${LABEL};">Inhalt <span style="font-weight:400;color:${SEK};">(optional)</span></label>
+                <input id="pk-inhalt" data-pk-inhalt type="text" inputmode="text" autocomplete="off" spellcheck="true" enterkeyhint="go" maxlength="120" placeholder="z. B. Winterjacke"
+                  onkeyup="event.stopPropagation()" onkeypress="event.stopPropagation()"
+                  onkeydown="event.stopPropagation();if(event.key==='Enter'){event.preventDefault();window.__nachtblauPakete.senden(this)}"
+                  style="font:inherit;font-size:16px;color:${TEXT};background:var(--nachtblau-flaeche-vertieft, #10151d);width:100%;box-sizing:border-box;border:1px solid ${UKR};border-radius:12px;padding:10px 12px;outline:none;">
               </div>
               <div style="display:flex;flex-direction:column;gap:6px;">
                 <div style="font-size:12.5px;font-weight:600;color:${LABEL};">Paketdienst</div>

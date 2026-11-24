@@ -39,15 +39,18 @@
 #                                fuer das Foto in "Zuletzt zugestellt"
 #   script.paket_hinzufuegen     traegt eine Sendungsnummer bei DHL, Hermes,
 #                                GLS oder UPS ein (Formular "+ Sendung");
-#                                Felder nummer und dienst (dhl, hermes, gls,
-#                                ups)
+#                                Felder nummer, dienst (dhl, hermes, gls,
+#                                ups) und inhalt (optional, geht als
+#                                contents an track_parcel)
 #   automation "Pakete: Meldungen"
 #                                meldet "in Zustellung", "abholbereit" und
 #                                Probleme fuer alle Paketdienste zugleich,
 #                                ueber die Ereignisse des Parcel Aggregators;
 #                                "abholbereit" mit Knopf "Karte und
-#                                Oeffnungszeiten" (Apple Karten), wenn der
-#                                Abholort eine Adresse hat
+#                                Oeffnungszeiten" (Apple Karten), wenn eine
+#                                Adresse mit PLZ bekannt ist (bei DHL aus dem
+#                                Verlauf); alle Meldungen nennen den Inhalt,
+#                                falls bekannt, in einer zweiten Zeile
 #   automation "Pakete: Amazon-Fahrer fast da"
 #                                meldet je Amazon-Sendung einmal, sobald der
 #                                Fahrer nur noch schwelle (3) Stopps oder
@@ -59,13 +62,14 @@
 #                                Meldung; ueber das Ereignis
 #                                amazon_orders_parcel_delivered
 #
-# Aktionen und Felder aus den READMEs der Integrationen (Stand 11/2026):
-#   dhl.track_parcel      tracking_code, direction, config_entry_id (optional)
-#   hermes.track_parcel   tracking_code; wirkt nur auf den Nummern-Hub, nie
-#                         auf das Hermes-Konto
+# Aktionen und Felder aus den READMEs der Integrationen (Stand 23.11.2026,
+# DHL, Hermes, UPS 2.0.0, GLS 2.0.1); contents ist ueberall optional:
+#   dhl.track_parcel      tracking_code, direction, contents, config_entry_id
+#   hermes.track_parcel   tracking_code, contents; wirkt nur auf den
+#                         Nummern-Hub, nie auf das Hermes-Konto
 #   gls.track_parcel      tracking_code, postal_code (optional, waehlt den
-#                         Hub bei mehreren PLZ)
-#   ups.track_parcel      tracking_code
+#                         Hub bei mehreren PLZ), contents
+#   ups.track_parcel      tracking_code, contents
 # DPD hat keine solche Aktion; DPD-Sendungen kommen nur ueber das myDPD-Konto.
 #
 # Einrichtung der Integrationen (je einmal, Einstellungen -> Geraete &
@@ -84,7 +88,8 @@
 #            .../ap/maplanding einfuegen; Uebergabe an Zusteller anlassen
 #   Parcel Aggregator  nichts auszufuellen
 # In jeder Paket-Integration unter "Konfigurieren" die Option "Parcel
-# history" einschalten, sonst zeigt die View keinen Verlauf.
+# history" einschalten, sonst zeigt die View keinen Verlauf (und bei DHL
+# fehlt die Adresse fuer den Kartenknopf).
 #
 # Anpassen:
 #   - notify.mobile_app_iphone: eigenes Geraet (Platzhalter, siehe oben)
@@ -247,30 +252,39 @@ script:
                 value: gls
               - label: UPS
                 value: ups
+      inhalt:
+        name: Inhalt
+        description: >-
+          Optional, was im Paket ist; geht als contents an track_parcel
+          (seit den Updates vom 23.11.2026) und erscheint in der Pakete-View
+        required: false
+        example: Winterjacke
+        selector:
+          text:
+    # daten: tracking_code und, nur wenn ein Inhalt angegeben ist, contents.
+    # Ein leerer Text bliebe sonst als Inhalt stehen.
     sequence:
       - variables:
-          code: "{{ (nummer | string) | replace(' ', '') | upper }}"
+          daten: >-
+            {%- set i = ((inhalt if inhalt is defined and inhalt is string else '') | trim)[:120] %}
+            {{ dict({'tracking_code': (nummer | string) | replace(' ', '') | upper}, **({'contents': i} if i else {})) }}
       - choose:
           - conditions: "{{ dienst == 'dhl' }}"
             sequence:
               - action: dhl.track_parcel
-                data:
-                  tracking_code: "{{ code }}"
+                data: "{{ daten }}"
           - conditions: "{{ dienst == 'hermes' }}"
             sequence:
               - action: hermes.track_parcel
-                data:
-                  tracking_code: "{{ code }}"
+                data: "{{ daten }}"
           - conditions: "{{ dienst == 'gls' }}"
             sequence:
               - action: gls.track_parcel
-                data:
-                  tracking_code: "{{ code }}"
+                data: "{{ daten }}"
           - conditions: "{{ dienst == 'ups' }}"
             sequence:
               - action: ups.track_parcel
-                data:
-                  tracking_code: "{{ code }}"
+                data: "{{ daten }}"
         default:
           - stop: "Unbekannter Paketdienst"
             error: true
@@ -344,34 +358,60 @@ automation:
     # name: Absender (falls bekannt) und die ganze Sendungsnummer wie in der
     # Paketzeile der View, z. B. "Versandhaus · JJD000390007855342"; der
     # Dienst steht schon im Titel. Ohne beides "Sendung".
+    # inhalt: Feld contents (seit den Updates vom 23.11.2026; Amazon:
+    # Artikelnamen), auf 60 Zeichen gekuerzt, als zweite Zeile der Meldung.
+    # fenster: "10:00–12:00 Uhr"; nennt der Dienst nur den Beginn, endet das
+    # Fenster um 23:59:59 desselben Tages (Paket-Vertrag), dann "ab 10:00
+    # Uhr"; ab 00:00 bis 23:59 ist es der ganze Tag und bleibt leer.
     variables:
       ziel: /dashboard-home/pakete
       p: "{{ trigger.event.data }}"
       name: "{{ [trigger.event.data.get('sender') or '', trigger.event.data.get('barcode') or ''] | map('string') | select | join(' · ') or 'Sendung' }}"
+      inhalt: "{{ (trigger.event.data.get('contents') or '') | string | trim | truncate(60, False, '…', 0) }}"
       fenster: >-
-        {% set von = trigger.event.data.get('planned_from') | as_datetime(none) %}{% set bis = trigger.event.data.get('planned_to') | as_datetime(none) %}{% if von and bis and (bis - von).total_seconds() < 72000 %}{{ (von | as_local).strftime('%H:%M') }}–{{ (bis | as_local).strftime('%H:%M') }} Uhr{% endif %}
+        {%- set von = trigger.event.data.get('planned_from') | as_datetime(none) %}
+        {%- set bis = trigger.event.data.get('planned_to') | as_datetime(none) %}
+        {%- if von and bis %}
+          {%- set v = von | as_local %}{% set b = bis | as_local %}
+          {%- if b.date() == v.date() and b.strftime('%H:%M') == '23:59' %}
+            {%- if v.strftime('%H:%M') != '00:00' %}ab {{ v.strftime('%H:%M') }} Uhr{% endif %}
+          {%- elif (bis - von).total_seconds() < 72000 %}{{ v.strftime('%H:%M') }}–{{ b.strftime('%H:%M') }} Uhr{% endif %}
+        {%- endif %}
     actions:
       - action: notify.mobile_app_iphone
         data:
           title: >-
             {{ {'zustellung': 'In Zustellung', 'abholbereit': 'Abholbereit', 'problem': 'Problem mit Sendung'}[trigger.id] }} · {{ p.carrier }}
           message: >-
-            {% if trigger.id == 'zustellung' %}{{ name }} kommt heute{{ ', ' ~ fenster if fenster }}.{% elif trigger.id == 'abholbereit' %}{{ name }} liegt bereit{{ ': ' ~ p.pickup_point if p.pickup_point }}.{% else %}{{ name }}: {{ p.raw_status or p.new_status }}{% endif %}
+            {% if trigger.id == 'zustellung' %}{{ name }} kommt heute{{ ', ' ~ fenster if fenster }}.{% elif trigger.id == 'abholbereit' %}{{ name }} liegt bereit{{ ': ' ~ p.pickup_point if p.pickup_point }}.{% else %}{{ name }}: {{ (p.raw_status or p.new_status) | string | regex_replace('<[^>]*>', '') }}{% endif %}{{ '\nInhalt: ' ~ inhalt if inhalt }}
           data:
             url: "{{ ziel }}"
             clickAction: "{{ ziel }}"
             group: pakete
             # Abholbereit: Knopf "Karte und Oeffnungszeiten". Keine
             # Paket-Integration liefert Oeffnungszeiten; Apple Karten zeigt
-            # sie zur Adresse. Nur wenn pickup_point eine Postleitzahl hat
-            # (DHL und Hermes nennen die Adresse, GLS nur den Namen, DPD, UPS
-            # und Amazon nichts), sonst traefe die Suche womoeglich einen
-            # falschen Ort. "\\b" statt "\b": in Jinja waere \b ein Rueckschritt.
-            # Sonst eine leere Liste, also kein Knopf.
+            # sie zur Adresse. Nur mit Postleitzahl, sonst traefe die Suche
+            # womoeglich einen falschen Ort. Seit den Updates vom 23.11.2026
+            # nennen DHL und Hermes in pickup_point nur noch den Namen (GLS
+            # die Shopnummer, DPD, UPS und Amazon nichts). Die volle Adresse
+            # steht bei DHL noch im Verlauf: die Meldung "zur Abholung bereit"
+            # verlinkt die Packstation als <a ...>Packstation 216, Strasse,
+            # PLZ Ort</a> (Quelltext ha-dhl, _pickup_point_from_events). Also
+            # erst pickup_point, dann der Linktext der neuesten Verlaufszeile
+            # mit Link; braucht bei DHL die Option "Parcel history". Gaengige
+            # HTML-Entities werden ersetzt. "\\b" statt "\b": in Jinja waere
+            # \b ein Rueckschritt. Ohne Adresse eine leere Liste, kein Knopf.
             actions: >-
-              {%- set ort = p.pickup_point if trigger.id == 'abholbereit' else none %}
-              {%- if ort is string and ort | regex_search('\\b\\d{5}\\b') %}
-              {{- [{'action': 'URI', 'title': 'Karte und Öffnungszeiten', 'uri': 'https://maps.apple.com/?q=' ~ (ort | urlencode)}] }}
+              {%- set ns = namespace(ort=none) %}
+              {%- if trigger.id == 'abholbereit' %}
+                {%- if p.pickup_point is string and p.pickup_point | regex_search('\\b\\d{5}\\b') %}{% set ns.ort = p.pickup_point %}{% endif %}
+                {%- for h in (p.history or []) | reverse if ns.ort is none and h.raw_status is string and '<a' in h.raw_status %}
+                  {%- set t = (h.raw_status | regex_findall('<a[^>]*>(.*?)</a>') | first | default('')) | regex_replace('<[^>]*>', '') | replace('&amp;', '&') | replace('&szlig;', 'ß') | replace('&auml;', 'ä') | replace('&ouml;', 'ö') | replace('&uuml;', 'ü') | replace('&Auml;', 'Ä') | replace('&Ouml;', 'Ö') | replace('&Uuml;', 'Ü') | replace('&nbsp;', ' ') %}
+                  {%- if t | regex_search('\\b\\d{5}\\b') %}{% set ns.ort = t | trim %}{% endif %}
+                {%- endfor %}
+              {%- endif %}
+              {%- if ns.ort %}
+              {{- [{'action': 'URI', 'title': 'Karte und Öffnungszeiten', 'uri': 'https://maps.apple.com/?q=' ~ (ns.ort | urlencode)}] }}
               {%- else %}[]{% endif %}
 
   - id: pakete_amazon_stopps
@@ -416,9 +456,15 @@ automation:
           for_each: "{{ neu }}"
           sequence:
             # Name wie in "Pakete: Meldungen": Absender (falls bekannt) und
-            # die ganze Sendungsnummer
+            # die ganze Sendungsnummer; Inhalt wie dort, gekuerzt
             - variables:
                 n: "{{ trigger.to_state.attributes.stopps[repeat.item] }}"
+                inhalt: >-
+                  {%- set ns = namespace(c='') %}
+                  {%- for p in (state_attr('sensor.parcel_aggregator_incoming_parcels', 'parcels') or []) if p.get('barcode') and (p.barcode | string | regex_replace('\s', '') | upper) == repeat.item %}
+                    {%- set ns.c = (p.get('contents') or '') | string | trim %}
+                  {%- endfor %}
+                  {{ ns.c | truncate(60, False, '…', 0) }}
                 name: >-
                   {%- set ns = namespace(s='') %}
                   {%- for p in (state_attr('sensor.parcel_aggregator_incoming_parcels', 'parcels') or []) if p.get('barcode') and (p.barcode | string | regex_replace('\s', '') | upper) == repeat.item %}
@@ -429,7 +475,7 @@ automation:
               data:
                 title: "Fahrer fast da · Amazon"
                 message: >-
-                  {{ name }}: {{ 'du bist der nächste Stopp.' if n == 0 else 'noch 1 Stopp bis zu dir.' if n == 1 else 'noch ' ~ n ~ ' Stopps bis zu dir.' }}
+                  {{ name }}: {{ 'du bist der nächste Stopp.' if n == 0 else 'noch 1 Stopp bis zu dir.' if n == 1 else 'noch ' ~ n ~ ' Stopps bis zu dir.' }}{{ '\nInhalt: ' ~ inhalt if inhalt }}
                 data:
                   url: /dashboard-home/pakete
                   clickAction: /dashboard-home/pakete
@@ -460,6 +506,7 @@ automation:
     # alphabetisch und rendert sie in dieser Reihenfolge
     variables:
       foto: "{{ (trigger.event.data.get('raw') or {}).get('delivery_photo_entity_id') or '' }}"
+      inhalt: "{{ (trigger.event.data.get('contents') or '') | string | trim | truncate(60, False, '…', 0) }}"
       name: "{{ [trigger.event.data.get('sender') or '', trigger.event.data.get('barcode') or ''] | map('string') | select | join(' · ') or 'Sendung' }}"
       ziel: /dashboard-home/pakete
     conditions:
@@ -471,7 +518,7 @@ automation:
       - action: notify.mobile_app_iphone
         data:
           title: "Zugestellt · Amazon"
-          message: "{{ name }} wurde zugestellt."
+          message: "{{ name }} wurde zugestellt.{{ '\nInhalt: ' ~ inhalt if inhalt }}"
           data:
             # Die Companion-App laedt den Pfad mit dem eigenen Konto, kein
             # Token noetig (README ha-amazon "Delivery photo" und deren
