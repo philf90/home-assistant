@@ -68,7 +68,7 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 | `automation.weihnachten_beleuchtung_bei_dammerung_an` | `illuminance.crossed_threshold` auf `sensor.wetterstation_pro_beleuchtungsstarke`, unter der Schwelle, 10 min lang; dazu 14:00, Neustart und Rückfall 20 min nach Sonnenuntergang (`id: rueckfall`) | Saison an, 14:00 bis 22:30 und Helligkeit unter der Schwelle (`illuminance.is_value`); beim Rückfall und ab 20 min nach Sonnenuntergang ohne Helligkeit |
 | `automation.weihnachten_beleuchtung_um_22_30_aus` | 22:30; Neustart | beim Neustart nur zwischen 22:30 und 06:30 |
 | `automation.weihnachten_beleuchtung_morgens_an` | 06:30; Neustart | Saison an, 06:30 bis 10:00 und vor Sonnenaufgang oder Helligkeit unter `input_number.weihnachten_ausschalt_helligkeit` |
-| `automation.weihnachten_beleuchtung_morgens_aus` | `illuminance.crossed_threshold` über `input_number.weihnachten_ausschalt_helligkeit`, 10 min lang (`id: hell`); Nachholen 60 min nach Sonnenaufgang; spätestens 10:00; Neustart | 06:30 bis 12:00 und Helligkeit über der Schwelle; um 10:00 und danach ohne Helligkeit |
+| `automation.weihnachten_beleuchtung_morgens_aus` | `illuminance.crossed_threshold` über `input_number.weihnachten_ausschalt_helligkeit`, 10 min lang (`id: hell`); Nachholen 60 min nach Sonnenaufgang; spätestens 10:00; Neustart | 06:30 bis 10:00 und Helligkeit über der Schwelle; um 10:00 und bis 14:00 ohne Helligkeit; nach einem Neustart zwischen 14:00 und 20 min nach Sonnenuntergang, wenn die Helligkeit über der **Einschalt**-Schwelle liegt |
 | `automation.weihnachten_saison_umschalten` | `input_boolean.weihnachtssaison` an oder aus (nicht aus `unavailable`/`unknown`); Neustart | – (siehe Hauptschalter) |
 | `automation.weihnachten_beleuchtung_ausserhalb_der_saison_aus` | eines der vier Lichter wird `on` (Status-Auslöser nur mit `to`); Neustart | Saison aus und mindestens eines der vier Lichter an (siehe Hauptschalter) |
 
@@ -162,9 +162,12 @@ Sensor, weil der beim Start oft noch `unavailable` ist:
 | Neustart zwischen | Wirkung |
 |---|---|
 | 06:30 und 10:00 | an, wenn Saison an und vor Sonnenaufgang oder unter der Morgenschwelle |
-| 06:30 und 12:00 | aus, wenn über der Morgenschwelle oder nach 10:00 |
+| 06:30 und 10:00 | aus, wenn über der Morgenschwelle |
+| 10:00 und 14:00 | aus |
+| 14:00 und 20 min nach Sonnenuntergang | aus, wenn über der Abendschwelle (seit 2026-11-24, „morgens aus“) |
 | 14:00 und 22:30 | an, wenn Saison an und unter der Abendschwelle oder 20 min nach Sonnenuntergang vorbei |
 | 22:30 und 06:30 | aus |
+| jederzeit, Saison aus | aus, wenn ein Stecker an ist („außerhalb der Saison aus“) |
 
 Dazu: Die Helfer haben kein `initial` und behalten ihren Wert; die
 Automationen haben eine `id`, Home Assistant behält damit, ob sie aktiv sind;
@@ -173,6 +176,31 @@ Licht-Automationen an den Hauptschalter an. Eine laufende 10-Minuten-Wartezeit
 geht beim Neustart verloren; der Start-Auslöser fängt das ab. Folge: Ein
 Neustart in diesen Zeitfenstern schaltet auch Licht wieder ein oder aus, das
 von Hand anders geschaltet wurde.
+
+Lücke bis 2026-11-24: „morgens aus“ schaltete nach einem Neustart nur bis
+12:00 aus, „bei Dämmerung an“ schaltet nur ein. War Home Assistant um 10:00
+nicht erreichbar und kam erst nach 12:00 zurück, blieb die Beleuchtung bis
+22:30 an. Geschlossen über den Start-Auslöser von „morgens aus“: 10:00 bis
+14:00 immer aus, 14:00 bis 20 min nach Sonnenuntergang aus, wenn die
+Helligkeit über der Einschalt-Schwelle liegt. Dieselbe Schwelle und dieselbe
+Sonnengrenze prüft „bei Dämmerung an“ beim Start mit umgekehrtem Ergebnis,
+deshalb schalten die beiden beim Start nie gegeneinander, auch wenn die
+beiden Schwellen später verschieden eingestellt werden. Ist der Sensor beim
+Start `unavailable`, passiert nachmittags nichts.
+
+Geprüft am 2026-11-24:
+
+- Teilbedingungen um 08:28 einzeln ausgewertet: „vor Sonnenuntergang +20 min“
+  und „über der Einschalt-Schwelle“ wahr (409 lx); mit Versatz −10 h falsch,
+  der Versatz wirkt also wie gedacht nach hinten. Der Zweig 14:00 bis
+  Sonnenuntergang lässt sich vor 14:00 nicht als Ganzes testen.
+- Handstart mit Bedingungen um 08:28: Lauf beendet ohne Fehler, Licht war
+  schon aus.
+- Echte Neustarts am Morgen (Starts um 07:29 und 07:44): „morgens an“ lief
+  durch (Licht blieb an), „um 22:30 aus“, „bei Dämmerung an“, „morgens aus“
+  und „außerhalb der Saison aus“ endeten an ihren Bedingungen, „Saison
+  umschalten“ glich ab. Um 08:01 schaltete „morgens aus“ über die Helligkeit
+  aus.
 
 ## Hauptschalter
 
