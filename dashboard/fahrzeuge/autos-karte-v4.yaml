@@ -30,7 +30,9 @@
 #   - Daten aktualisieren: Symbol dreht sich bis zum naechsten Abruf
 #     (hoechstens 3 min), danach kurz ein gruener Haken.
 #   - Fahrzeugbild: unter 4 °C Aussentemperatur heller Rand, funkelnde
-#     Eiskristalle (dreimal) und die Pille "Glaettegefahr · n °C" (card-mod).
+#     Eiskristalle (Schneeflocken-Symbol, dreimal) und die Pille
+#     "Glaettegefahr · n °C" (card-mod). Bis 25.11.2026 waren die Kristalle
+#     nur runde Punkte und lasen sich nicht als Eis.
 #     VW schaltet die Schneeflocke bei etwa +4 °C ein und erst ueber +6 °C
 #     aus; diese Hysterese braucht einen Speicher, den die Karte nicht hat.
 #     Heller Modus: Innenschein und Kristalle in Eis statt Weiss (Deckkraft
@@ -245,9 +247,14 @@ cards:
         card:
           type: picture
           image_entity: image.garage_volkswagen_passat_variant_elegance_20_l_tdi_scr_front_left
-          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Glaette-Hinweis unter 4 °C: Rand (Innenschein der ha-card), Eiskristalle
+          # (::after) und Pille (::before). Die Temperatur steht im Jinja-Teil,
+          # deshalb je Fahrzeug ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Kristalle: mdiSnowflake als Maske (mask-image), damit die Farbe aus
+          # der Theme-Variable kommt; sechs Stueck mit 11-16 px an freien Stellen
+          # neben Pille und Auto (gemessen am Passat-Bild bei 306 und 348 px).
+          # Der Innenschein liegt auf der ha-card, weil die Maske ihn sonst
+          # mit ausschneiden wuerde; er liegt damit unter dem Bild.
           # Zuschnitt nur fuer das VW-Bild (Jinja-if im Stil). Das VW-Bild (16:9)
           # hat breite transparente Raender: Das Auto samt
           # Schatten liegt bei 18,6-81,4 % der Breite und 27,4-78,3 % der Hoehe
@@ -275,17 +282,21 @@ cards:
               {% set t = states('sensor.garage_volkswagen_fin_passat_aussentemperatur') | float(none) %}
               {% if t is none %}{% set t = states('sensor.passat_variant_elegance_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
               {% if t < 4 %}
+              ha-card {
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 28%, transparent)) !important;
+              }
               ha-card::after {
-                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 28%, transparent));
-                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 95%, transparent));
-                background-image:
-                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                content: ""; position: absolute; inset: 0; pointer-events: none;
+                --au-flocke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.5,8.82L6.5,7.69L5.92,5.36L4,5.88L4.47,7.65L2.7,8.12L3.22,10.05L5.55,9.43L7.55,10.56V13.45L5.55,14.58L3.22,13.96L2.7,15.89L4.47,16.36L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.7,20.59L13,18.88V16.62L15.5,15.17L17.5,16.3L18.12,18.63L20,18.12L19.53,16.35L21.3,15.88L20.79,13.95M9.5,10.56L12,9.11L14.5,10.56V13.44L12,14.89L9.5,13.44V10.56Z'/%3E%3C/svg%3E");
+                background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 95%, transparent));
+                -webkit-mask-image: var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke);
+                -webkit-mask-position: 50% 5%, 92% 9%, 2% 48%, 9% 94%, 60% 96%, 97% 70%;
+                -webkit-mask-size: 12px, 16px, 12px, 14px, 11px, 13px;
+                -webkit-mask-repeat: no-repeat;
+                mask-image: var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke);
+                mask-position: 50% 5%, 92% 9%, 2% 48%, 9% 94%, 60% 96%, 97% 70%;
+                mask-size: 12px, 16px, 12px, 14px, 11px, 13px;
+                mask-repeat: no-repeat;
                 opacity: 0.6;
                 animation: au-funkel 2.8s ease-in-out 3;
               }
@@ -1404,9 +1415,14 @@ cards:
         card:
           type: picture
           image_entity: image.garage_volkswagen_touran_highline_20_l_tdi_scr_front_left
-          # Glaette-Hinweis unter 4 °C: Rand, Eiskristalle (::after) und Pille
-          # (::before). Die Temperatur steht im Jinja-Teil, deshalb je Fahrzeug
-          # ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Glaette-Hinweis unter 4 °C: Rand (Innenschein der ha-card), Eiskristalle
+          # (::after) und Pille (::before). Die Temperatur steht im Jinja-Teil,
+          # deshalb je Fahrzeug ein eigener Stil (Anker fuer die Ersatzdatei unten).
+          # Kristalle: mdiSnowflake als Maske (mask-image), damit die Farbe aus
+          # der Theme-Variable kommt; sechs Stueck mit 11-16 px an freien Stellen
+          # neben Pille und Auto (gemessen am Passat-Bild bei 306 und 348 px).
+          # Der Innenschein liegt auf der ha-card, weil die Maske ihn sonst
+          # mit ausschneiden wuerde; er liegt damit unter dem Bild.
           card_mod: &bild_touran
             style: |
               ha-card {
@@ -1427,17 +1443,21 @@ cards:
               {% set t = states('sensor.garage_volkswagen_fin_touran_aussentemperatur') | float(none) %}
               {% if t is none %}{% set t = states('sensor.touran_highline_20_l_tdi_scr_aussentemperatur') | float(99) %}{% endif %}
               {% if t < 4 %}
+              ha-card {
+                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 28%, transparent)) !important;
+              }
               ha-card::after {
-                content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-                box-shadow: inset 0 0 22px color-mix(in srgb, rgba(255, 255, 255, 0.12) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 28%, transparent));
-                --au-kristall: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 95%, transparent));
-                background-image:
-                  radial-gradient(circle at 6% 14%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 90% 10%, var(--au-kristall) 0 2px, transparent 3px),
-                  radial-gradient(circle at 12% 78%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 94% 70%, var(--au-kristall) 0 2px, transparent 3px),
-                  radial-gradient(circle at 50% 6%, var(--au-kristall) 0 1.5px, transparent 2.5px),
-                  radial-gradient(circle at 72% 88%, var(--au-kristall) 0 1.5px, transparent 2.5px);
+                content: ""; position: absolute; inset: 0; pointer-events: none;
+                --au-flocke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.5,8.82L6.5,7.69L5.92,5.36L4,5.88L4.47,7.65L2.7,8.12L3.22,10.05L5.55,9.43L7.55,10.56V13.45L5.55,14.58L3.22,13.96L2.7,15.89L4.47,16.36L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.7,20.59L13,18.88V16.62L15.5,15.17L17.5,16.3L18.12,18.63L20,18.12L19.53,16.35L21.3,15.88L20.79,13.95M9.5,10.56L12,9.11L14.5,10.56V13.44L12,14.89L9.5,13.44V10.56Z'/%3E%3C/svg%3E");
+                background: color-mix(in srgb, rgba(255, 255, 255, 0.5) var(--nachtblau-dunkel-anteil, 100%), color-mix(in srgb, var(--nachtblau-eis, #cfe3f2) 95%, transparent));
+                -webkit-mask-image: var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke);
+                -webkit-mask-position: 50% 5%, 92% 9%, 2% 48%, 9% 94%, 60% 96%, 97% 70%;
+                -webkit-mask-size: 12px, 16px, 12px, 14px, 11px, 13px;
+                -webkit-mask-repeat: no-repeat;
+                mask-image: var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke), var(--au-flocke);
+                mask-position: 50% 5%, 92% 9%, 2% 48%, 9% 94%, 60% 96%, 97% 70%;
+                mask-size: 12px, 16px, 12px, 14px, 11px, 13px;
+                mask-repeat: no-repeat;
                 opacity: 0.6;
                 animation: au-funkel 2.8s ease-in-out 3;
               }
