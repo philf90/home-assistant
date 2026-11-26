@@ -1,0 +1,349 @@
+# ============================================================================
+# PVE – Templates fuer das VM-Popup (Details und Aktionen je VM)
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       technik
+# Status:        aktiv
+# Karten:        bubble-card, button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik", oberste
+#                Ebene unter button_card_templates: und decluttering_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Genutzt von pve-view.yaml. Tippen auf eine Zeile der Karte "Virtuelle
+# Maschinen" setzt den Hash #pve-vm-<id>; Bubble Card oeffnet das Popup dazu.
+# Entwurf: Artefakt "Proxmox Entitaeten-Analyse" (26.11.2026), VM-Popup.
+#
+# Uebersicht:
+#   nachtblau_pve_vm      button-card: Kopf, drei Kennzahlen und Detailzeilen
+#                         einer VM (Gast-Agent, IP, Backup, Snapshots, Anteil
+#                         am Host, Sperre)
+#   nachtblau_pve_aktion  button-card: Aktionsknopf (Icon ueber Text)
+#   pve_vm_popup          decluttering: Popup mit Details und den Aktionen
+#                         Herunterfahren, Neustart, Starten, Snapshot
+#   pve_vm_info_popup     decluttering: Popup nur mit Details (VM 102: dort
+#                         laeuft Home Assistant selbst, Herunterfahren beendet
+#                         die Steuerung, Starten ginge danach nicht mehr)
+#
+# nachtblau_pve_vm sucht die Entitaeten selbst: Geraet "QEMU <name> (<id>)"
+#   bzw. "LXC <name> (<id>)" der Integration proxmoxve_custom, dazu deren
+#   Entitaeten nach translation_key (status_raw, cpu_used, memory_used,
+#   memory_free, disk_used_perc, uptime, guest_agent, ip_address, locked,
+#   snapshots, cpu_of_host, memory_of_host). Fehlt eine, steht "–".
+#   Die Integration rechnet Speicher in GB (10^9 Byte); angezeigt wird GiB wie
+#   in der VM-Konfiguration von PVE.
+#   variables:
+#     vmid      ID der VM (Pflicht)
+#     gast_ram  Sensor mit dem RAM in Prozent, gemessen in der VM (z. B.
+#               System Monitor). PVE zaehlt den Cache als belegt; fuer
+#               VM 102 meldet PVE etwa 95 %, in der VM sind es etwa 30 %.
+#               Leer: Wert von PVE.
+#     pbs       Backup-Zusammenfassung des Datastores (Proxmox Extended
+#               Sensors). Das Attribut last_backups_per_resource liefert die
+#               Zeit je VM als UTC-Text "TT/MM/JJJJ hh:mm:ss".
+#     gelb, rot           RAM-Schwellen in Prozent (85 / 95, wie die Karte)
+#     gelb_h, rot_h       Backup-Alter in Stunden (30 / 168, wie die PBS-View)
+#
+# Aktionen (pve_vm_popup): Buttons der Integration (deaktiviert angelegt, in
+#   der Instanz fuer 7 VMs eingeschaltet, nicht fuer Sprachassistenten
+#   freigegeben). Jede Aktion fragt vor dem Ausfuehren nach (confirmation).
+#   Herunterfahren und Neustart nur bei Status running, Starten nur bei
+#   stopped, Snapshot immer. Alle nur fuer Admins (Klasse admin).
+#   Harte Aktionen (Stopp, Reset) sind bewusst nicht dabei.
+#
+# Voraussetzung: custom:button-card + custom:bubble-card +
+#   custom:decluttering-card (HACS), Integration "Proxmox VE Custom"
+#   (dougiteixeira/proxmoxve, getestet 6.0.6) mit den Sensoren Snapshots,
+#   "CPU used of host" und "Memory used on host" je VM (deaktiviert angelegt),
+#   Integration "Proxmox Extended Sensors" fuer die Backup-Zeiten.
+button_card_templates:
+  nachtblau_pve_vm:
+    variables:
+      vmid: ''
+      gast_ram: ''
+      pbs: sensor.datastore_data01_backup_zusammenfassung
+      gelb: 85
+      rot: 95
+      gelb_h: 30
+      rot_h: 168
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', L = 'var(--nachtblau-label, #b4c0cf)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const id = String(variables.vmid);
+          let dev = null, typ = '', name = '';
+          for (const [did, g] of Object.entries(hass.devices || {})) {
+            const m = /^(QEMU|LXC)\s+(.+?)\s+\((\d+)\)$/.exec(g.name || '');
+            if (m && m[3] === id) { dev = did; typ = m[1]; name = m[2]; break; }
+          }
+          if (!dev) return `<div style="font-size:13px;color:${S};">VM ${id} nicht gefunden</div>`;
+          const e = {};
+          for (const x of Object.values(hass.entities || {})) {
+            if (x.device_id === dev && x.platform === 'proxmoxve_custom' && x.translation_key) e[x.translation_key] = x.entity_id;
+          }
+          const st = (k) => (e[k] ? states[e[k]] : undefined);
+          const zahl = (s) => { const v = s ? parseFloat(s.state) : NaN; return isNaN(v) ? null : v; };
+          const de = (v, d) => (v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }));
+          const gib = (gb) => (gb === null ? null : gb / 1.073741824);
+          const z = (n) => String(n).padStart(2, '0');
+          const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+          states['sensor.time']; // Minutentakt fuer "heute"/"gestern" (button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert)
+          const jetzt = new Date();
+          const tagDiff = (d) => Math.round((new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+          const wann = (d) => {
+            if (!d || isNaN(d)) return '–';
+            const t = tagDiff(d), uhr = z(d.getHours()) + ':' + z(d.getMinutes());
+            return t === 0 ? 'heute ' + uhr : t === 1 ? 'gestern ' + uhr : `${z(d.getDate())}.${z(d.getMonth() + 1)}.${d.getFullYear()}`;
+          };
+          // Kopf
+          const status = st('status_raw') ? st('status_raw').state : 'unbekannt';
+          const laeuft = status === 'running';
+          const text = { running: 'läuft', stopped: 'gestoppt', paused: 'pausiert', suspended: 'angehalten', shutdown: 'fährt herunter' }[status] || status;
+          const bc = laeuft ? G : status === 'stopped' ? S : A;
+          const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${esc(text)}</span>`;
+          const start = st('uptime') ? new Date(st('uptime').state) : null;
+          const seit = laeuft && start && !isNaN(start) ? ` · läuft seit ${start.getDate()}.${start.getMonth() + 1}., ${z(start.getHours())}:${z(start.getMinutes())}` : '';
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:monitor-dashboard" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};">${typ === 'LXC' ? 'Container' : 'VM'} ${id}${seit}</div></div>${badge}</div>`;
+          // Kennzahlen
+          const kachel = (wert, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}</div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          const stufe = (v) => (v === null ? T : v >= variables.rot ? R : v >= variables.gelb ? A : T);
+          const cpuS = st('cpu_used');
+          const vcpu = cpuS && cpuS.attributes ? cpuS.attributes.cpus : null;
+          const benutzt = gib(zahl(st('memory_used'))), frei = gib(zahl(st('memory_free')));
+          const gesamt = benutzt !== null && frei !== null ? benutzt + frei : null;
+          const gast = variables.gast_ram ? zahl(states[variables.gast_ram]) : null;
+          const ramPve = benutzt !== null && gesamt ? (benutzt / gesamt) * 100 : null;
+          const ramKachel = gast !== null
+            ? kachel(de(gast, 1) + '<span style="font-size:11px;font-weight:600;color:' + S + ';"> %</span>', 'RAM in der VM', stufe(gast))
+            : kachel(laeuft && benutzt !== null ? de(benutzt, 1) + '<span style="font-size:11px;font-weight:600;color:' + S + ';"> / ' + de(gesamt, 0) + '</span>' : '–', 'GiB RAM', stufe(laeuft ? ramPve : null));
+          const platte = zahl(st('disk_used_perc'));
+          const kacheln =
+            `<div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:6px;margin-bottom:6px;">` +
+            kachel(laeuft ? de(zahl(cpuS), 1) + '<span style="font-size:11px;font-weight:600;color:' + S + ';"> %</span>' : '–', 'CPU' + (vcpu ? ' · ' + vcpu + ' vCPU' : '')) +
+            ramKachel +
+            kachel(platte === null ? '–' : de(platte, 0) + '<span style="font-size:11px;font-weight:600;color:' + S + ';"> %</span>', 'Platte') +
+            `</div>`;
+          // Detailzeilen
+          const zeile = (k, v, farbe) =>
+            `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 2px;border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));">` +
+            `<span style="flex:none;font-size:13px;color:${S};">${k}</span>` +
+            `<span style="min-width:0;font-size:13.5px;font-weight:500;color:${farbe || L};text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums;">${v}</span></div>`;
+          const zeilen = [];
+          const ag = st('guest_agent');
+          zeilen.push(zeile('Gast-Agent', !e.guest_agent ? 'nicht eingerichtet' : ag && ag.state === 'on' ? 'antwortet' : 'antwortet nicht', !e.guest_agent ? S : ag && ag.state === 'on' ? G : A));
+          const ip = st('ip_address');
+          zeilen.push(zeile('IP-Adresse', ip && ip.state !== 'unknown' && ip.state !== 'unavailable' ? esc(ip.state) : '–'));
+          // Backup aus PBS: UTC-Text "TT/MM/JJJJ hh:mm:ss"
+          const pbs = states[variables.pbs];
+          const je = pbs && pbs.attributes ? pbs.attributes.last_backups_per_resource || {} : {};
+          const roh = je[(typ === 'LXC' ? 'ct/' : 'vm/') + id];
+          const m = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(roh || '');
+          const bk = m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5])) : null;
+          const alter = bk ? (jetzt - bk) / 36e5 : null;
+          zeilen.push(zeile('Letztes Backup', bk ? wann(bk) : 'keins in PBS', alter === null ? A : alter >= variables.rot_h ? R : alter >= variables.gelb_h ? A : G));
+          const sn = st('snapshots');
+          const snN = zahl(sn);
+          let snText = '–';
+          if (snN !== null) {
+            const alt = sn.attributes && sn.attributes.snapshot_oldest ? new Date(sn.attributes.snapshot_oldest) : null;
+            snText = snN === 0 ? 'keine' : snN + (alt && !isNaN(alt) ? ' · ältester ' + wann(alt) : '');
+          }
+          zeilen.push(zeile('Snapshots', snText, snN > 0 ? A : null));
+          const hc = zahl(st('cpu_of_host')), hr = gib(zahl(st('memory_of_host')));
+          zeilen.push(zeile('Anteil am Host', hc === null && hr === null ? '–' : `CPU ${de(hc, 1)} % · RAM ${de(hr, 1)} GiB`));
+          const lk = st('locked');
+          if (lk && lk.state === 'on') zeilen.push(zeile('Gesperrt', 'ja (Lock in PVE)', A));
+          const fuss = gast !== null
+            ? `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">RAM gemessen in der VM. PVE meldet ${de(ramPve, 0)} %, weil es den Cache als belegt zählt.</div>`
+            : '';
+          return kopf + kacheln + zeilen.join('') + fuss;
+        ]]]
+    styles:
+      card:
+        - padding: 16px 18px
+        - border-radius: 22px
+        - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+        - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+        - box-shadow: none
+      grid:
+        - grid-template-areas: '"inhalt"'
+        - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+          - justify-self: stretch
+          - text-align: left
+          - min-width: 0
+
+  # Aktionsknopf: Icon ueber Text, getoent in variables.farbe. Sichtbar je
+  # variables.zeigen: "an" nur bei Status running, "aus" nur bei stopped,
+  # sonst immer; nie fuer Nicht-Admins.
+  nachtblau_pve_aktion:
+    variables:
+      farbe: 'var(--nachtblau-violett, #b399d4)'
+      status: ''
+      zeigen: immer
+    show_icon: true
+    show_name: true
+    show_state: false
+    hidden: |
+      [[[
+        if (!user.is_admin) return true;
+        const s = states[variables.status];
+        const z = s ? s.state : '';
+        if (variables.zeigen === 'an') return z !== 'running';
+        if (variables.zeigen === 'aus') return z !== 'stopped';
+        return false;
+      ]]]
+    hold_action:
+      action: none
+    styles:
+      card:
+        - padding: 10px 4px 9px
+        - border-radius: 14px
+        - background: '[[[ return "color-mix(in srgb, " + variables.farbe + " 14%, transparent)"; ]]]'
+        - border: '[[[ return "1px solid color-mix(in srgb, " + variables.farbe + " 26%, transparent)"; ]]]'
+        - box-shadow: none
+      grid:
+        - grid-template-areas: '"i" "n"'
+        - grid-template-rows: min-content min-content
+        - justify-items: center
+        - row-gap: 4px
+      icon:
+        - --ha-icon-display: block
+        - width: 20px
+        - height: 20px
+        - color: '[[[ return variables.farbe; ]]]'
+      name:
+        - font-size: 12px
+        - font-weight: 600
+        - color: '[[[ return variables.farbe; ]]]'
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+        - max-width: 100%
+
+decluttering_templates:
+  # Popup einer VM mit Details und Aktionen. variables: vmid, name (fuer die
+  # Rueckfrage), status (sensor ..._status), herunterfahren, neustart,
+  # starten, snapshot (button.*), optional gast_ram.
+  pve_vm_popup:
+    default:
+      - gast_ram: ''
+    card:
+      type: custom:bubble-card
+      card_type: pop-up
+      hash: '#pve-vm-[[vmid]]'
+      show_header: false
+      popup_mode: fit-content
+      with_bottom_offset: true
+      bg_opacity: '100'
+      # wie die Pop-ups der Docker-View: !important schlaegt den Inline-Wert von bg_color
+      styles: &popup_stil |
+        .bubble-pop-up {
+          --bubble-pop-up-background-color: color-mix(in srgb, var(--nachtblau-seite, #171d29) var(--nachtblau-dunkel-anteil, 100%), var(--nachtblau-flaeche-erhoeht, #222b3c)) !important;
+          --bubble-pop-up-gap: 10px;
+        }
+      cards:
+        - type: custom:button-card
+          template: nachtblau_pve_vm
+          variables:
+            vmid: '[[vmid]]'
+            gast_ram: '[[gast_ram]]'
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              template: nachtblau_pve_aktion
+              entity: '[[herunterfahren]]'
+              name: Herunterfahren
+              icon: mdi:power
+              variables:
+                status: '[[status]]'
+                zeigen: an
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: '[[herunterfahren]]'
+                confirmation:
+                  text: '[[name]] herunterfahren? Die VM fährt sauber herunter (ACPI bzw. Gast-Agent).'
+            - type: custom:button-card
+              template: nachtblau_pve_aktion
+              entity: '[[neustart]]'
+              name: Neustart
+              icon: mdi:restart
+              variables:
+                status: '[[status]]'
+                zeigen: an
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: '[[neustart]]'
+                confirmation:
+                  text: '[[name]] neu starten?'
+            - type: custom:button-card
+              template: nachtblau_pve_aktion
+              entity: '[[starten]]'
+              name: Starten
+              icon: mdi:play
+              variables:
+                farbe: 'var(--nachtblau-gruen, #a6d49e)'
+                status: '[[status]]'
+                zeigen: aus
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: '[[starten]]'
+                confirmation:
+                  text: '[[name]] starten?'
+            - type: custom:button-card
+              template: nachtblau_pve_aktion
+              entity: '[[snapshot]]'
+              name: Snapshot
+              icon: mdi:camera-outline
+              variables:
+                status: '[[status]]'
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: '[[snapshot]]'
+                confirmation:
+                  text: 'Snapshot von [[name]] anlegen? Er bleibt im Speicher der VM, bis er in PVE gelöscht wird.'
+
+  # Popup nur mit Details (ohne Aktionen). variables: vmid, optional gast_ram.
+  pve_vm_info_popup:
+    default:
+      - gast_ram: ''
+    card:
+      type: custom:bubble-card
+      card_type: pop-up
+      hash: '#pve-vm-[[vmid]]'
+      show_header: false
+      popup_mode: fit-content
+      with_bottom_offset: true
+      bg_opacity: '100'
+      styles: *popup_stil
+      cards:
+        - type: custom:button-card
+          template: nachtblau_pve_vm
+          variables:
+            vmid: '[[vmid]]'
+            gast_ram: '[[gast_ram]]'
