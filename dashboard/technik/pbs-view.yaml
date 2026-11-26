@@ -29,6 +29,14 @@
 # stehen je Karte in variables (server: pbs_1, ds: data01).
 #
 # Hinweise zu den Daten (Stand Integration 5.2.3):
+#   - Groessen: Die Integration rechnet in 1024^3 Byte (sensor/pbs.py), nennt
+#     die Einheit aber "GB". Die Karten schreiben deshalb GiB (Datastore,
+#     letzte Backup-Groesse, GC). Die PVE-View zeigt denselben Speicher in GB
+#     (10^9 Byte): 449,6 GiB = 482,7 GB.
+#   - Logische Datenmenge (vor Deduplizierung) und "ausstehend" kommen aus den
+#     Attributen des GC-Status (index_data_bytes, pending_gb), also vom
+#     letzten GC-Lauf. Ausstehend: Chunks, die die GC schon als frei erkannt
+#     hat, aber erst in einem spaeteren Lauf loescht (Sperrfrist von PBS).
 #   - "Letztes Backup" und die Zeiten je VM liefert die Integration als Text
 #     "TT/MM/JJJJ hh:mm:ss" ohne Zeitzone, aber in verschiedenen Zonen:
 #     "Letztes Backup" in Ortszeit, die Zeiten je VM (Attribut
@@ -179,12 +187,16 @@ sections:
           const badge = `<span style="flex:none;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${stText}</span>`;
           const groesse = zahl(k + 'letzte_backup_grosse');
           const letzt = states[k + 'letztes_backup'];
-          const unter = 'Letztes Backup ' + wann(lesen(letzt ? letzt.state : '')) + (groesse !== null ? ' · ' + de(groesse, 1) + ' GB' : '');
+          const unter = 'Letztes Backup ' + wann(lesen(letzt ? letzt.state : '')) + (groesse !== null ? ' · ' + de(groesse, 1) + ' GiB' : '');
           const kopf =
             `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
             `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:database" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
             `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Datastore ${variables.ds}</div>` +
             `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          // Logische Datenmenge laut letzter GC (index_data_bytes, Byte) -> TiB bzw. GiB
+          const gc = states['sensor.maintenance_' + variables.ds + '_gc_status'];
+          const idx = gc && gc.attributes ? parseFloat(gc.attributes.index_data_bytes) : NaN;
+          const logisch = isNaN(idx) ? '' : '<br>' + (idx >= 1024 ** 4 ? de(idx / 1024 ** 4, 2) + ' TiB' : de(idx / 1024 ** 3, 1) + ' GiB') + ' vor Dedup';
           const U = 2 * Math.PI * 40;
           const anteil = p === null ? 0 : Math.min(100, Math.max(0, p)) / 100;
           const ring =
@@ -192,7 +204,7 @@ sections:
             `<svg viewBox="0 0 96 96" width="96" height="96" style="display:block;"><circle cx="48" cy="48" r="40" fill="none" stroke="var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))" stroke-width="9"/>` +
             `<circle cx="48" cy="48" r="40" fill="none" stroke="${ringFarbe}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(U * anteil).toFixed(1)} ${U.toFixed(1)}" transform="rotate(-90 48 48)"/></svg>` +
             `<div style="min-width:0;"><div style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:${T};">${de(p, 1)} %</div>` +
-            `<div style="font-size:13px;line-height:1.4;color:${S};">${de(zahl(k + 'genutzt'), 1)} von ${de(zahl(k + 'gesamt'), 1)} GB belegt<br>${de(zahl(k + 'frei'), 1)} GB frei</div></div></div>`;
+            `<div style="font-size:13px;line-height:1.4;color:${S};">${de(zahl(k + 'genutzt'), 1)} von ${de(zahl(k + 'gesamt'), 1)} GiB belegt<br>${de(zahl(k + 'frei'), 1)} GiB frei${logisch}</div></div></div>`;
           const summe = states[k + 'backup_zusammenfassung'];
           const snaps = summe && summe.attributes ? summe.attributes.total_snapshots : null;
           const fehl = zahl(k + 'backup_fehler');
@@ -258,11 +270,14 @@ sections:
               const st = e ? e.state : 'unbekannt';
               const a = e && e.attributes ? e.attributes : {};
               const teile = [zeit(a.last_run), dauer(a.duration_sec)];
-              if (id === 'gc_status' && a.removed_size) teile.push(a.removed_size.replace('.', ',') + ' frei');
+              // GC: freigegeben und ausstehend (pending_gb/removed_gb in GiB, siehe Kopf)
+              const gib = (v) => { const n = parseFloat(v); return isNaN(n) ? '' : n.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' GiB'; };
+              if (id === 'gc_status' && gib(a.removed_gb)) teile.push(gib(a.removed_gb) + ' frei');
+              if (id === 'gc_status' && gib(a.pending_gb)) teile.push(gib(a.pending_gb) + ' ausstehend');
               const c = st === 'OK' ? G : /fehl|error|fail/i.test(st) ? R : st === 'unknown' || st === 'unavailable' ? S : A;
               return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:2px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
                 `<div style="min-width:0;"><div style="font-size:14px;font-weight:500;color:${T};">${name}</div>` +
-                `<div style="font-size:12px;color:${S};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${teile.filter(Boolean).join(' · ') || '–'}</div></div>` +
+                `<div style="font-size:12px;line-height:1.35;color:${S};">${teile.filter(Boolean).map((t) => `<span style="white-space:nowrap;">${t}</span>`).join(' · ') || '–'}</div></div>` +
                 `<div style="font-size:13px;font-weight:700;color:${c};white-space:nowrap;">${st}</div></div>`;
             }).join('');
             const la = states[k + 'letzte_aktion'];
