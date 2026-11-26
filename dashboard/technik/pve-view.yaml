@@ -1,0 +1,261 @@
+# ============================================================================
+# PVE – Proxmox VE: Knoten, virtuelle Maschinen, Speicher
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       technik
+# Status:        aktiv
+# Karten:        button-card, decluttering-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                top_navigation_technik (technik-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik" unter
+#                views: oder per !include
+# Platzhalter:   benutzer_id_1/benutzer_id_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Erste View des Dashboards "Technik" (dashboard-technik), Route
+# /dashboard-technik/pve, Klasse admin (design/routen.yaml). Entwurf:
+# Artefakt "Technik-Dashboard" (26.11.2026).
+#
+# Sections-View; auf dem Handy untereinander, breit bis zu drei Spalten.
+#   Section 1  Top-Navigation · Knoten
+#   Section 2  Virtuelle Maschinen
+#   Section 3  Speicher
+#   Section 4  schwebende Navbar (floating_navbar, 1:1 wie im Home-Dashboard)
+#
+# Jede Karte ist eine custom:button-card in der Kartenhuelle; der Inhalt
+# entsteht als HTML im Feld "inhalt".
+#   Knoten               feste Entitaeten des Knotens (variables.knoten) und
+#                        der Messsteckdose davor (variables.leistung,
+#                        variables.energie_heute)
+#   Virtuelle Maschinen  sucht die Geraete selbst: Geraetename "QEMU <name>
+#                        (<id>)" bzw. "LXC <name> (<id>)" der Integration
+#                        proxmoxve_custom, dazu deren Sensoren mit den
+#                        translation_keys status_raw, cpu_used und
+#                        memory_used_perc. Neue oder geloeschte VMs erscheinen
+#                        ohne Aenderung an der Karte. Gelesen wird der Name der
+#                        Integration (device.name), nicht ein eigener Name.
+#   Speicher             Geraete mit Modell "Storage" oder "Shared storage",
+#                        Sensor disk_used_perc
+#
+# Schwellen (Vorschlag aus dem Entwurf, je Karte in variables):
+#   Knoten CPU/RAM       ab 75 % Amber, ab 90 % Rot (wie system-karte.yaml)
+#   VM-Arbeitsspeicher   ab 85 % Amber, ab 95 % Rot
+#   Speicherbelegung     ab 80 % Amber, ab 90 % Rot
+#
+# Voraussetzung: custom:button-card + custom:decluttering-card (HACS),
+#   Integration "Proxmox VE Custom" (dougiteixeira/proxmoxve, getestet 6.0.4,
+#   deutsche Entitaetsnamen), Shelly-Messsteckdose vor dem Knoten mit
+#   utility_meter "daily", Templates aus technik-templates.yaml und
+#   navigation-templates.yaml.
+title: PVE
+path: pve
+icon: mdi:server
+visible:
+- user: benutzer_id_1
+type: sections
+max_columns: 3
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation_technik
+  # ---------------------------------------------------------------- Knoten
+  - type: custom:button-card
+    entity: binary_sensor.node_pve_status
+    variables:
+      knoten: pve
+      leistung: sensor.shelly_plugs_proxmox_switch_0_power
+      energie_heute: sensor.stromverbrauch_proxmox_daily
+      gelb: 75
+      rot: 90
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const k = 'sensor.node_' + variables.knoten + '_';
+          const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const stufe = (v) => v === null ? T : v >= variables.rot ? R : v >= variables.gelb ? A : T;
+          const kachel = (wert, einheit, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}<span style="font-size:11px;font-weight:600;color:${S};">${einheit ? ' ' + einheit : ''}</span></div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          const reihe = (inhalt) => `<div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:6px;margin-top:6px;">${inhalt}</div>`;
+          const an = entity && entity.state === 'on';
+          const bc = an ? G : R;
+          const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${an ? 'Online' : 'Offline'}</span>`;
+          const ver = states[k + 'version'];
+          const st = states[k + 'letzter_start'];
+          let seit = '';
+          const d = st ? new Date(st.state) : null;
+          if (d && !isNaN(d)) {
+            const z = (n) => String(n).padStart(2, '0');
+            seit = ` · läuft seit ${d.getDate()}.${d.getMonth() + 1}., ${z(d.getHours())}:${z(d.getMinutes())}`;
+          }
+          const unter = (ver && ver.state !== 'unavailable' ? 'Proxmox ' + ver.state : 'Proxmox VE') + seit;
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:server" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Node ${variables.knoten}</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const cpu = zahl(k + 'cpu_auslastung'), ram = zahl(k + 'prozentsatz_genutzter_arbeitsspeicher');
+          const io = zahl(k + 'io_delay'), load = zahl(k + 'load_average_1_min');
+          const upd = zahl(k + 'gesamte_updates'), fehl = zahl(k + 'fehlgeschlagene_aufgaben');
+          const w = zahl(variables.leistung), kwh = zahl(variables.energie_heute);
+          const nullOk = (v) => v === null ? T : v > 0 ? A : G;
+          return kopf +
+            reihe(kachel(de(cpu, 1), '%', 'CPU', stufe(cpu)) + kachel(de(ram, 1), '%', 'RAM', stufe(ram)) +
+                  kachel(de(io, 1), '%', 'IO-Delay') + kachel(de(load, 2), '', 'Load 1 min')) +
+            reihe(kachel(upd === null ? '–' : String(upd), '', 'Updates', nullOk(upd)) +
+                  kachel(fehl === null ? '–' : String(fehl), '', 'Fehl&shy;geschlagen', fehl > 0 ? R : nullOk(fehl)) +
+                  kachel(de(w, 1), 'W', 'Leistung') + kachel(de(kwh, 2), 'kWh', 'heute'));
+        ]]]
+    styles: &huelle
+      card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+      - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+      - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - justify-self: stretch
+        - text-align: left
+        - min-width: 0
+- type: grid
+  cards:
+  # ---------------------------------------------------- Virtuelle Maschinen
+  - type: custom:button-card
+    variables:
+      gelb: 85
+      rot: 95
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', L = 'var(--nachtblau-label, #b4c0cf)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const vms = {};
+          const geraete = hass.devices || {};
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform !== 'proxmoxve_custom' || !e.device_id) continue;
+            const g = geraete[e.device_id];
+            const m = g ? /^(QEMU|LXC)\s+(.+?)\s+\((\d+)\)$/.exec(g.name || g.name_by_user || '') : null;
+            if (!m) continue;
+            const v = vms[e.device_id] || (vms[e.device_id] = { typ: m[1], name: m[2], id: parseInt(m[3], 10) });
+            if (e.translation_key === 'status_raw') v.status = e.entity_id;
+            else if (e.translation_key === 'cpu_used') v.cpu = e.entity_id;
+            else if (e.translation_key === 'memory_used_perc') v.ram = e.entity_id;
+          }
+          const liste = Object.values(vms).sort((a, b) => a.id - b.id);
+          const zahl = (id) => { const e = id ? states[id] : null; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const de = (v) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          const stufe = (v) => v === null ? S : v >= variables.rot ? R : v >= variables.gelb ? A : G;
+          const laeuft = (v) => v.status && states[v.status] && states[v.status].state === 'running';
+          const vmZahl = liste.filter((v) => v.typ === 'QEMU').length;
+          const ctZahl = liste.length - vmZahl;
+          const an = liste.filter(laeuft).length;
+          const bc = liste.length && an === liste.length ? G : A;
+          const badge = liste.length ? `<span style="flex:none;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${an}/${liste.length}</span>` : '';
+          const unter = liste.length ? `${an} von ${liste.length} laufen · ${vmZahl} VM${vmZahl === 1 ? '' : 's'}, ${ctZahl} Container` : 'Keine VMs gefunden';
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:monitor-dashboard" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Virtuelle Maschinen</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const zeilen = liste.map((v, i) => {
+            const ram = zahl(v.ram), cpu = zahl(v.cpu);
+            const st = v.status && states[v.status] ? states[v.status].state : 'unbekannt';
+            const ok = st === 'running';
+            const text = { stopped: 'gestoppt', paused: 'pausiert', suspended: 'angehalten', shutdown: 'fährt herunter' }[st] || st;
+            const rechts = ok
+              ? `CPU ${de(cpu)} % · RAM <b style="color:${stufe(ram)};font-weight:700;">${de(ram)} %</b>`
+              : `<b style="color:${st === 'stopped' ? S : A};font-weight:700;">${text}</b>`;
+            const balken = ok && ram !== null
+              ? `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${Math.min(100, Math.max(0, ram))}%;border-radius:3px;background:${stufe(ram)};"></div></div>`
+              : '';
+            return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:4px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
+              `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.name} <span style="font-size:12px;font-weight:400;color:${S};">${v.typ === 'LXC' ? 'CT ' : ''}${v.id}</span></div>` +
+              `<div style="font-size:13px;color:${L};white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;">${rechts}</div>${balken}</div>`;
+          }).join('');
+          const fuss = `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">Balken: Arbeitsspeicher, ab ${variables.gelb} % Amber, ab ${variables.rot} % Rot.</div>`;
+          return kopf + zeilen + (liste.length ? fuss : '');
+        ]]]
+    styles: *huelle
+- type: grid
+  cards:
+  # ---------------------------------------------------------------- Speicher
+  - type: custom:button-card
+    variables:
+      gelb: 80
+      rot: 90
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)', B = 'var(--nachtblau-blau, #7fb3d5)';
+          const A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const geraete = hass.devices || {};
+          const liste = [];
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform !== 'proxmoxve_custom' || e.translation_key !== 'disk_used_perc' || !e.device_id) continue;
+            const g = geraete[e.device_id];
+            if (!g || (g.model !== 'Storage' && g.model !== 'Shared storage')) continue;
+            const voll = (g.name || '').replace(/^Storage\s+/, '');
+            const teile = voll.split('/');
+            const s = states[e.entity_id];
+            const v = s ? parseFloat(s.state) : NaN;
+            liste.push({
+              name: teile[teile.length - 1],
+              zusatz: g.model === 'Shared storage' ? 'geteilt' : (teile.length > 1 ? teile[0] : ''),
+              wert: isNaN(v) ? null : v,
+            });
+          }
+          liste.sort((a, b) => (b.wert === null ? -1 : b.wert) - (a.wert === null ? -1 : a.wert));
+          const de = (v) => v === null ? '–' : v < 1 && v > 0 ? '< 1' : v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          const stufe = (v) => v === null ? S : v >= variables.rot ? R : v >= variables.gelb ? A : B;
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:harddisk" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Speicher</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};">Belegung aus Sicht von PVE</div></div></div>`;
+          const zeilen = liste.map((x, i) =>
+            `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:4px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
+            `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${x.name} <span style="font-size:12px;font-weight:400;color:${S};">${x.zusatz}</span></div>` +
+            `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${x.wert !== null && x.wert >= variables.gelb ? stufe(x.wert) : T};">${de(x.wert)} %</div>` +
+            `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${x.wert === null ? 0 : Math.min(100, Math.max(1, x.wert))}%;border-radius:3px;background:${stufe(x.wert)};"></div></div></div>`
+          ).join('');
+          return kopf + (zeilen || `<div style="font-size:13px;color:${S};">Keine Speicher gefunden</div>`);
+        ]]]
+    styles: *huelle
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: floating_navbar

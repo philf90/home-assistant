@@ -124,6 +124,14 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 | [`unifi-udm-system-karte.yaml`](netzwerk/archiv/unifi-udm-system-karte.yaml) | karte | UDM SE Systemzustand v1 | button-card, card-mod | – | archiv, ersetzt durch `unifi-udm-system-karte-v2.yaml` |
 | [`wlan-karte.yaml`](netzwerk/archiv/wlan-karte.yaml) | karte | WLAN-QR – aufklappbar | button-card, card-mod, expander-card | – | archiv, ersetzt durch `wlan-karte-v2.yaml` |
 
+## technik
+
+| Datei | Art | Titel | Karten | Platzhalter | Status |
+|---|---|---|---|---|---|
+| [`pbs-view.yaml`](technik/pbs-view.yaml) | view | PBS – Proxmox Backup Server: Server, Datastore, Wartung, Backups | button-card, card-mod, decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
+| [`pve-view.yaml`](technik/pve-view.yaml) | view | PVE – Proxmox VE: Knoten, virtuelle Maschinen, Speicher | button-card, decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
+| [`technik-templates.yaml`](technik/technik-templates.yaml) | templates | Technik – Decluttering-Template top_navigation_technik | button-card | – | aktiv |
+
 ## fahrzeuge
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |

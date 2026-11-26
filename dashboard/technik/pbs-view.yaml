@@ -1,0 +1,482 @@
+# ============================================================================
+# PBS – Proxmox Backup Server: Server, Datastore, Wartung, Backups
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       technik
+# Status:        aktiv
+# Karten:        button-card, card-mod, decluttering-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                top_navigation_technik (technik-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik" unter
+#                views: oder per !include
+# Platzhalter:   benutzer_id_1/benutzer_id_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# Zweite View des Dashboards "Technik" (dashboard-technik), Route
+# /dashboard-technik/pbs, Klasse admin (design/routen.yaml). Entwurf:
+# Artefakt "Technik-Dashboard" (26.11.2026).
+#
+# Sections-View; auf dem Handy untereinander, breit bis zu drei Spalten.
+#   Section 1  Top-Navigation · Backup-Server · Datastore
+#   Section 2  Wartung · Aufgaben
+#   Section 3  Backups je VM
+#   Section 4  schwebende Navbar (floating_navbar, 1:1 wie im Home-Dashboard)
+#
+# Quelle ist die Integration "Proxmox Extended Sensors" (proxmox_sensors) mit
+# einer PBS-Verbindung. Die Entity-IDs bildet sie aus Server- und
+# Datastore-Namen: sensor.pbs_server_<server>_*, sensor.datastore_<ds>_*,
+# sensor.maintenance_<ds>_*, sensor.tasks_<server>_*. Server und Datastore
+# stehen je Karte in variables (server: pbs_1, ds: data01).
+#
+# Hinweise zu den Daten (Stand Integration 5.2.3):
+#   - "Letztes Backup" und die Zeiten je VM liefert die Integration als Text
+#     "TT/MM/JJJJ hh:mm:ss" ohne Zeitzone; die Karte zeigt sie so an. Ein
+#     Versatz von einer Stunde zur Ortszeit ist moeglich.
+#   - Die Namen der VMs in "Backups je VM" kommen aus den Geraeten der
+#     PVE-Integration (proxmoxve_custom, Geraetename "QEMU <name> (<id>)").
+#     Gibt es zur ID kein Geraet, steht "nicht in PVE" an der Zeile.
+#   - Fuer Sync gibt es keinen Status-Sensor, nur den Button. Ohne
+#     eingerichteten Sync-Job meldet PBS beim Druecken einen Fehler.
+#   - Die Wartungs-Buttons fragen vor dem Start nach (confirmation). Das Token
+#     braucht dafuer DatastoreAdmin auf /datastore.
+#
+# Schwellen (Vorschlag aus dem Entwurf, je Karte in variables):
+#   Datastore-Belegung   ab 80 % Amber, ab 90 % Rot
+#   Server CPU/RAM       ab 75 % Amber, ab 90 % Rot
+#   Backup-Alter         ab 30 h Amber, ab 168 h (7 Tage) Rot
+#
+# Voraussetzung: custom:button-card + custom:decluttering-card + card-mod
+#   (HACS), Integration "Proxmox Extended Sensors" (Javisen/proxmox_sensors,
+#   getestet 5.2.3, deutsche Entitaetsnamen) mit PBS-Verbindung, Integration
+#   "Proxmox VE Custom" fuer die VM-Namen, Shelly-Messsteckdose vor dem PBS mit
+#   utility_meter "daily", Templates aus technik-templates.yaml und
+#   navigation-templates.yaml.
+title: PBS
+path: pbs
+icon: mdi:backup-restore
+visible:
+- user: benutzer_id_1
+type: sections
+max_columns: 3
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation_technik
+  # ----------------------------------------------------------- Backup-Server
+  - type: custom:button-card
+    entity: sensor.pbs_server_pbs_1_authentifizierungsstatus
+    variables:
+      server: pbs_1
+      leistung: sensor.shelly_plugs_jellyfin_switch_0_power
+      energie_heute: sensor.stromverbrauch_jellyfin_daily
+      gelb: 75
+      rot: 90
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const k = 'sensor.pbs_server_' + variables.server + '_';
+          const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const stufe = (v) => v === null ? T : v >= variables.rot ? R : v >= variables.gelb ? A : T;
+          const kachel = (wert, einheit, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}<span style="font-size:11px;font-weight:600;color:${S};">${einheit ? ' ' + einheit : ''}</span></div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          const st = entity ? entity.state : 'unavailable';
+          const offline = st === 'unavailable' || st === 'unknown';
+          const bc = st === 'OK' ? G : offline ? R : A;
+          const btext = st === 'OK' ? 'Online' : offline ? 'Offline' : st;
+          const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${btext}</span>`;
+          const ver = states[k + 'version'], rel = states[k + 'release'];
+          const gueltig = (e) => e && e.state !== 'unavailable' && e.state !== 'unknown';
+          const unter = (gueltig(ver) ? 'PBS ' + ver.state + (gueltig(rel) ? ' · Release ' + rel.state : '') : 'Proxmox Backup Server') +
+            (st === 'OK' ? ' · Anmeldung OK' : '');
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:backup-restore" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Backup-Server</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const cpu = zahl(k + 'cpu_auslastung'), ram = zahl(k + 'ram_auslastung');
+          const w = zahl(variables.leistung), kwh = zahl(variables.energie_heute);
+          return kopf +
+            `<div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:6px;">` +
+            kachel(de(cpu, 1), '%', 'CPU', stufe(cpu)) + kachel(de(ram, 1), '%', 'RAM', stufe(ram)) +
+            kachel(de(w, 1), 'W', 'Leistung') + kachel(de(kwh, 2), 'kWh', 'heute') + `</div>`;
+        ]]]
+    styles: &huelle
+      card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+      - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+      - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - justify-self: stretch
+        - text-align: left
+        - min-width: 0
+  # --------------------------------------------------------------- Datastore
+  - type: custom:button-card
+    entity: sensor.datastore_data01_auslastung
+    variables:
+      ds: data01
+      gelb: 80
+      rot: 90
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)', B = 'var(--nachtblau-blau, #7fb3d5)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const k = 'sensor.datastore_' + variables.ds + '_';
+          const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const kachel = (wert, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}</div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          states['sensor.time']; // Minutentakt fuer "heute"/"gestern": button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert
+          // "TT/MM/JJJJ hh:mm:ss" (Text der Integration) -> "heute 03:06", "gestern 03:06" oder Datum
+          const lesen = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]) : null; };
+          const wann = (d) => {
+            if (!d) return '–';
+            const z = (n) => String(n).padStart(2, '0');
+            const h = new Date();
+            const tage = Math.round((new Date(h.getFullYear(), h.getMonth(), h.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+            const uhr = z(d.getHours()) + ':' + z(d.getMinutes());
+            return tage === 0 ? 'heute ' + uhr : tage === 1 ? 'gestern ' + uhr : `${z(d.getDate())}.${z(d.getMonth() + 1)}.${d.getFullYear()}`;
+          };
+          const p = zahl(k + 'auslastung');
+          const ringFarbe = p === null ? S : p >= variables.rot ? R : p >= variables.gelb ? A : B;
+          const status = states[k + 'status_letztes_backup'];
+          const stText = status ? status.state : 'unbekannt';
+          const bc = /ok/i.test(stText) ? G : /fail|error|fehl/i.test(stText) ? R : A;
+          const badge = `<span style="flex:none;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${stText}</span>`;
+          const groesse = zahl(k + 'letzte_backup_grosse');
+          const letzt = states[k + 'letztes_backup'];
+          const unter = 'Letztes Backup ' + wann(lesen(letzt ? letzt.state : '')) + (groesse !== null ? ' · ' + de(groesse, 1) + ' GB' : '');
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:database" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Datastore ${variables.ds}</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const U = 2 * Math.PI * 40;
+          const anteil = p === null ? 0 : Math.min(100, Math.max(0, p)) / 100;
+          const ring =
+            `<div style="display:grid;grid-template-columns:96px minmax(0, 1fr);gap:14px;align-items:center;margin-bottom:12px;">` +
+            `<svg viewBox="0 0 96 96" width="96" height="96" style="display:block;"><circle cx="48" cy="48" r="40" fill="none" stroke="var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))" stroke-width="9"/>` +
+            `<circle cx="48" cy="48" r="40" fill="none" stroke="${ringFarbe}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(U * anteil).toFixed(1)} ${U.toFixed(1)}" transform="rotate(-90 48 48)"/></svg>` +
+            `<div style="min-width:0;"><div style="font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:${T};">${de(p, 1)} %</div>` +
+            `<div style="font-size:13px;line-height:1.4;color:${S};">${de(zahl(k + 'genutzt'), 1)} von ${de(zahl(k + 'gesamt'), 1)} GB belegt<br>${de(zahl(k + 'frei'), 1)} GB frei</div></div></div>`;
+          const summe = states[k + 'backup_zusammenfassung'];
+          const snaps = summe && summe.attributes ? summe.attributes.total_snapshots : null;
+          const fehl = zahl(k + 'backup_fehler');
+          const dedup = zahl(k + 'deduplizierung');
+          return kopf + ring +
+            `<div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:6px;">` +
+            kachel(dedup === null ? '–' : de(dedup, 1) + '×', 'Dedup&shy;lizierung') +
+            kachel(snaps === null || snaps === undefined ? '–' : String(snaps), 'Snapshots') +
+            kachel(fehl === null ? '–' : String(fehl), 'Backup-Fehler', fehl === null ? T : fehl > 0 ? R : G) + `</div>`;
+        ]]]
+    styles: *huelle
+- type: grid
+  cards:
+  # ----------------------------------------------------------------- Wartung
+  # Huelle per card-mod um den Stapel aus Statuszeilen und Aktions-Kacheln.
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - type: custom:button-card
+      entity: sensor.maintenance_data01_gc_status
+      variables:
+        ds: data01
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      custom_fields:
+        inhalt: |
+          [[[
+            const V = 'var(--nachtblau-violett, #b399d4)';
+            const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+            const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+            const k = 'sensor.maintenance_' + variables.ds + '_';
+            const z = (n) => String(n).padStart(2, '0');
+            const zeit = (iso) => {
+              const d = iso ? new Date(iso) : null;
+              if (!d || isNaN(d)) return '';
+              const h = new Date();
+              const heute = d.toDateString() === h.toDateString();
+              return (heute ? '' : `${z(d.getDate())}.${z(d.getMonth() + 1)}. `) + z(d.getHours()) + ':' + z(d.getMinutes());
+            };
+            const dauer = (s) => {
+              const n = parseFloat(s);
+              if (isNaN(n)) return '';
+              if (n < 1) return 'unter 1 s';
+              if (n < 60) return Math.round(n) + ' s';
+              return Math.round(n / 60) + ' min';
+            };
+            const zeilen = [['gc_status', 'Garbage Collection'], ['verifizierungsstatus', 'Verify'], ['prune_status', 'Prune']].map(([id, name], i) => {
+              const e = states[k + id];
+              const st = e ? e.state : 'unbekannt';
+              const a = e && e.attributes ? e.attributes : {};
+              const teile = [zeit(a.last_run), dauer(a.duration_sec)];
+              if (id === 'gc_status' && a.removed_size) teile.push(a.removed_size.replace('.', ',') + ' frei');
+              const c = st === 'OK' ? G : /fehl|error|fail/i.test(st) ? R : st === 'unknown' || st === 'unavailable' ? S : A;
+              return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:2px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
+                `<div style="min-width:0;"><div style="font-size:14px;font-weight:500;color:${T};">${name}</div>` +
+                `<div style="font-size:12px;color:${S};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${teile.filter(Boolean).join(' · ') || '–'}</div></div>` +
+                `<div style="font-size:13px;font-weight:700;color:${c};white-space:nowrap;">${st}</div></div>`;
+            }).join('');
+            const la = states[k + 'letzte_aktion'];
+            const laText = la && la.state !== 'unknown' && la.state !== 'unavailable' ? 'Letzte Aktion: ' + la.state : 'Jobs auf ' + variables.ds;
+            const kopf =
+              `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">` +
+              `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:recycle-variant" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+              `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Wartung</div>` +
+              `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${laText}</div></div></div>`;
+            return kopf + zeilen;
+          ]]]
+      styles: &innen
+        card:
+        - padding: 0
+        - background: none
+        - border: none
+        - box-shadow: none
+        grid:
+        - grid-template-areas: '"inhalt"'
+        - grid-template-columns: minmax(0, 1fr)
+        custom_fields:
+          inhalt:
+          - justify-self: stretch
+          - text-align: left
+          - min-width: 0
+    # Aktions-Kacheln: druecken den Button der Integration, vorher Rueckfrage
+    - type: grid
+      columns: 4
+      square: false
+      cards:
+      - type: custom:button-card
+        entity: button.maintenance_data01_garbage_collection
+        icon: mdi:recycle-variant
+        name: GC
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.maintenance_data01_garbage_collection
+          confirmation:
+            text: Garbage Collection auf data01 starten? Sie läuft im Hintergrund und gibt Platz von gelöschten Snapshots frei.
+        hold_action:
+          action: more-info
+        styles: &aktion
+          card:
+          - padding: 8px 2px
+          - border-radius: 13px
+          - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+          - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+          - box-shadow: none
+          grid:
+          - grid-template-areas: '"i" "n"'
+          - grid-template-rows: min-content min-content
+          - justify-items: center
+          - row-gap: 4px
+          img_cell:
+          - height: 22px
+          icon:
+          - --ha-icon-display: block
+          - width: 20px
+          - height: 20px
+          - color: 'var(--nachtblau-violett, #b399d4)'
+          name:
+          - font-size: 11.5px
+          - font-weight: 500
+          - color: 'var(--nachtblau-label, #b4c0cf)'
+          - white-space: nowrap
+          - overflow: hidden
+          - text-overflow: ellipsis
+          - max-width: 100%
+      - type: custom:button-card
+        entity: button.maintenance_data01_verifizieren
+        icon: mdi:check-decagram
+        name: Verify
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.maintenance_data01_verifizieren
+          confirmation:
+            text: Verify-Job für data01 ausführen? Er liest die Snapshots vollständig und kann mehrere Minuten dauern.
+        hold_action:
+          action: more-info
+        styles: *aktion
+      - type: custom:button-card
+        entity: button.maintenance_data01_prune
+        icon: mdi:delete-sweep
+        name: Prune
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.maintenance_data01_prune
+          confirmation:
+            text: Prune-Job für data01 ausführen? Snapshots außerhalb der Aufbewahrungsregeln werden gelöscht.
+        hold_action:
+          action: more-info
+        styles: *aktion
+      - type: custom:button-card
+        entity: button.maintenance_data01_synchronisieren
+        icon: mdi:sync
+        name: Sync
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.maintenance_data01_synchronisieren
+          confirmation:
+            text: Sync-Job für data01 ausführen? Ohne eingerichteten Sync-Job meldet PBS einen Fehler.
+        hold_action:
+          action: more-info
+        styles: *aktion
+  # ---------------------------------------------------------------- Aufgaben
+  - type: custom:button-card
+    entity: sensor.tasks_pbs_1_active_tasks
+    variables:
+      server: pbs_1
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)', B = 'var(--nachtblau-blau, #7fb3d5)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const k = 'sensor.tasks_' + variables.server + '_';
+          const wert = (id) => { const e = states[k + id]; return e && e.state !== 'unknown' && e.state !== 'unavailable' ? e.state : null; };
+          const n = entity ? parseInt(entity.state, 10) : NaN;
+          const bc = isNaN(n) ? S : n > 0 ? B : S;
+          const badge = `<span style="flex:none;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${isNaN(n) ? '–' : n} aktiv</span>`;
+          const namen = { verificationjob: 'Verify-Job', verify: 'Verify', garbage_collection: 'Garbage Collection', prunejob: 'Prune-Job', prune: 'Prune', syncjob: 'Sync-Job', backup: 'Backup', reader: 'Wiederherstellung' };
+          const typ = wert('typ_der_letzten_aufgabe');
+          const st = wert('status_der_letzten_aufgabe');
+          const s = parseFloat(wert('dauer_der_letzten_aufgabe'));
+          const dauer = isNaN(s) ? '' : s < 60 ? Math.round(s) + ' s' : Math.round(s / 60) + ' min';
+          const stFarbe = st === 'OK' ? G : st ? R : S;
+          const unter = typ
+            ? `Zuletzt: ${namen[typ] || typ}${dauer ? ', ' + dauer : ''} · <span style="color:${stFarbe};font-weight:700;">${st || '–'}</span>`
+            : 'Noch keine Aufgabe';
+          return `<div style="display:flex;align-items:center;gap:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:timer-outline" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Aufgaben</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+        ]]]
+    styles: *huelle
+- type: grid
+  cards:
+  # ---------------------------------------------------------- Backups je VM
+  - type: custom:button-card
+    entity: sensor.datastore_data01_backup_zusammenfassung
+    variables:
+      gelb_h: 30
+      rot_h: 168
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const a = entity && entity.attributes ? entity.attributes : {};
+          const je = a.last_backups_per_resource || {};
+          // VM-Namen aus den Geraeten der PVE-Integration: "QEMU <name> (<id>)", "LXC <name> (<id>)"
+          const pve = {};
+          for (const g of Object.values(hass.devices || {})) {
+            const m = /^(QEMU|LXC)\s+(.+?)\s+\((\d+)\)$/.exec(g.name || '');
+            if (m) pve[m[3]] = m[2];
+          }
+          const z = (n) => String(n).padStart(2, '0');
+          const lesen = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/.exec(s || ''); return m ? new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]) : null; };
+          states['sensor.time']; // Minutentakt fuer das Backup-Alter (button-card v7 zeichnet neu, wenn sich eine gelesene Entitaet aendert)
+          const jetzt = new Date();
+          const liste = Object.entries(je).map(([res, s]) => {
+            const teile = String(res).split('/');
+            const id = teile[1] || teile[0];
+            const d = lesen(s);
+            return { res, id, typ: teile[0], name: pve[id] || null, d, h: d ? (jetzt - d) / 36e5 : null };
+          }).sort((x, y) => (parseInt(x.id, 10) || 0) - (parseInt(y.id, 10) || 0));
+          const wann = (x) => {
+            if (!x.d) return '–';
+            const tage = Math.round((new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate()) - new Date(x.d.getFullYear(), x.d.getMonth(), x.d.getDate())) / 864e5);
+            const uhr = z(x.d.getHours()) + ':' + z(x.d.getMinutes());
+            return tage === 0 ? 'heute ' + uhr : tage === 1 ? 'gestern ' + uhr : `${z(x.d.getDate())}.${z(x.d.getMonth() + 1)}.${x.d.getFullYear()}`;
+          };
+          const farbe = (x) => x.h === null ? S : x.h >= variables.rot_h ? R : x.h >= variables.gelb_h ? A : G;
+          const snaps = a.total_snapshots;
+          const unter = `${liste.length} Gruppe${liste.length === 1 ? '' : 'n'}` + (snaps !== undefined && snaps !== null ? ` · ${snaps} Snapshots` : '');
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:archive-clock-outline" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Backups je VM</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};">${unter}</div></div></div>`;
+          const zeilen = liste.map((x, i) =>
+            `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:2px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
+            `<div style="font-size:14px;font-weight:500;color:${x.name ? T : S};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${x.name || 'nicht in PVE'} <span style="font-size:12px;font-weight:400;color:${S};">${x.res}</span></div>` +
+            `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe(x)};">${wann(x)}</div></div>`
+          ).join('');
+          const fuss = `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">Älter als ${variables.gelb_h} h Amber, älter als ${Math.round(variables.rot_h / 24)} Tage Rot. Zeiten so, wie die Integration sie liefert.</div>`;
+          return kopf + (zeilen ? zeilen + fuss : `<div style="font-size:13px;color:${S};">Keine Backups gefunden</div>`);
+        ]]]
+    styles: *huelle
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: floating_navbar
