@@ -128,6 +128,7 @@ Alle Karten, Views, Templates, Konfig-Dateien und Entwürfe nach Bereich. Titel,
 
 | Datei | Art | Titel | Karten | Platzhalter | Status |
 |---|---|---|---|---|---|
+| [`nas-view.yaml`](technik/nas-view.yaml) | view | NAS – UniFi UNAS Pro: Geraet, Speicher-Pool, Platten, Verlauf | apexcharts-card, button-card, card-mod, decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`pbs-view.yaml`](technik/pbs-view.yaml) | view | PBS – Proxmox Backup Server: Server, Datastore, Wartung, Backups | button-card, card-mod, decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`pve-view.yaml`](technik/pve-view.yaml) | view | PVE – Proxmox VE: Knoten, virtuelle Maschinen, Speicher | button-card, decluttering-card | `benutzer_id_1/benutzer_id_2` | aktiv |
 | [`technik-templates.yaml`](technik/technik-templates.yaml) | templates | Technik – Decluttering-Template top_navigation_technik | button-card | – | aktiv |
