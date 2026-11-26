@@ -1,0 +1,628 @@
+# ============================================================================
+# NAS – UniFi UNAS Pro: Geraet, Speicher-Pool, Platten, Verlauf
+# ----------------------------------------------------------------------------
+# Art:           view
+# Bereich:       technik
+# Status:        aktiv
+# Karten:        apexcharts-card, button-card, card-mod, decluttering-card
+# Templates:     floating_navbar (navigation-templates.yaml),
+#                top_navigation_technik (technik-templates.yaml)
+# Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik" unter
+#                views: oder per !include
+# Platzhalter:   benutzer_id_1/benutzer_id_2
+#                (vor dem Einfuegen ersetzen, siehe README.md)
+# ============================================================================
+# View des Dashboards "Technik" (dashboard-technik), Route
+# /dashboard-technik/nas, Klasse admin (design/routen.yaml). Gebaut nach dem
+# Plan "Umzug ins Technik-Dashboard" (26.11.2026) aus den Werten von
+# unifi-unas-pro-karte.yaml, im Aufbau wie pve-view.yaml und pbs-view.yaml.
+# Die kompakte UNAS-Karte bleibt fuer die Netzwerk-View bestehen.
+#
+# Sections-View; auf dem Handy untereinander, breit bis zu drei Spalten.
+#   Section 1  Top-Navigation · Geraet
+#   Section 2  Speicher-Pool · Platten
+#   Section 3  Verlauf
+#   Section 4  schwebende Navbar (floating_navbar, 1:1 wie im Home-Dashboard)
+#
+# Karten:
+#   Geraet        Erreichbarkeit, UniFi OS, Laufzeit; CPU, RAM,
+#                 CPU-Temperatur, mittlere Plattentemperatur; Link,
+#                 Leistung und Verbrauch am Zwischenstecker, Drive-App.
+#   Speicher-Pool Zustand und RAID-Level, Belegung mit Balken, frei,
+#                 Datenpruefung (Scrub) und ob der Proxmox-Speicher auf dem
+#                 NAS aktiv ist (Speicher "UNAS-Pro" der Integration
+#                 Proxmox VE Custom).
+#   Platten       eine Zeile je Schacht: Temperatur, Betriebsdauer,
+#                 Health-Score ("Health 5"), defekte Sektoren, Zustand. Jede Zeile ist eine
+#                 eigene button-card; Tippen oeffnet den Temperaturverlauf.
+#   Verlauf       Belegung 30 Tage, Temperaturen 7 Tage (Langzeitstatistik).
+#
+# Schwellen (wie unifi-unas-pro-karte.yaml, je Karte in variables):
+#   CPU 70 / 90 %, RAM 75 / 90 %, CPU-Temperatur 70 / 85 °C (von der
+#   UDM-Karte uebernommen, fuer das UNAS Pro gibt es keinen
+#   veroeffentlichten Grenzwert), Platten 50 / 55 °C (die ST6000VN006 ist
+#   laut Haendler-Datenblaettern bis 65 °C spezifiziert), Belegung 80 / 90 %.
+#   Eine Platte wird rot, wenn das UNAS sie nicht als "optimal" meldet, der
+#   Health-Score nicht 5 ist oder der Problem-Sensor anschlaegt; Amber bei
+#   defekten Sektoren ueber 0.
+#
+# Hot-Spare: Die Integration meldet nicht, welche Platte Reserve ist (API-Feld
+#   isGlobalHotSpare). Der Schacht steht deshalb in variables.reserve der
+#   Platten-Zeilen (hier 7: RAID 5 aus sechs 6-TB-Platten ergibt die
+#   gemeldeten 27,25 TiB) und muss bei einem Umbau angepasst werden.
+#
+# Nicht genutzt: Netzwerk- und Plattendurchsatz (sensor.unas_pro_network_*,
+#   sensor.unas_pro_disk_<n>_transfer_*) sind in der Integration ab Werk
+#   deaktiviert und fehlen deshalb.
+#
+# Voraussetzung: custom:button-card + custom:decluttering-card
+#   + custom:apexcharts-card + card-mod (HACS), Integration "UniFi UNAS
+#   (non-invasive)" (LayerTM/unifi-unas-ha, Einrichtung: README.md, Abschnitt
+#   "UniFi UNAS Pro"), Integration "Proxmox VE Custom" fuer die
+#   Proxmox-Freigabe (optional), Shelly-Zwischenstecker mit utility_meter
+#   "daily" (optional), Templates aus technik-templates.yaml und
+#   navigation-templates.yaml.
+title: NAS
+path: nas
+icon: mdi:nas
+visible:
+- user: benutzer_id_1
+type: sections
+max_columns: 3
+cards: []
+sections:
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: top_navigation_technik
+  # ---------------------------------------------------------------- Geraet
+  - type: custom:button-card
+    entity: binary_sensor.unas_pro_online
+    variables:
+      geraet: unas_pro
+      leistung: sensor.shelly_plugs_unas_pro_switch_0_power
+      energie_heute: sensor.stromverbrauch_unas_pro_daily
+      cpu: [70, 90]
+      ram: [75, 90]
+      cpu_temp: [70, 85]
+      platten_temp: [50, 55]
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const g = variables.geraet + '_';
+          const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const text = (id) => { const e = states[id]; return e && !['unavailable', 'unknown'].includes(e.state) ? e.state : null; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const stufe = (v, s) => v === null ? T : v >= s[1] ? R : v >= s[0] ? A : T;
+          const kachel = (wert, einheit, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}<span style="font-size:11px;font-weight:600;color:${S};">${einheit ? ' ' + einheit : ''}</span></div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          const reihe = (inhalt) => `<div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:6px;margin-top:6px;">${inhalt}</div>`;
+          // Zustand: offline rot, Speicherproblem oder gefaehrdete Platten amber
+          const an = entity && entity.state === 'on';
+          const problem = (states['binary_sensor.' + g + 'storage_problem'] || {}).state === 'on';
+          const gefaehrdet = zahl('sensor.' + g + 'disks_at_risk') || 0;
+          const [bc, bt] = !an ? [R, 'Offline'] : (problem || gefaehrdet > 0) ? [A, 'Prüfen'] : [G, 'Online'];
+          const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${bt}</span>`;
+          let seit = '';
+          const t = Date.parse(text('sensor.' + g + 'last_boot'));
+          if (!isNaN(t)) {
+            const s = (Date.now() - t) / 1000, d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+            seit = ` · läuft seit ${d > 0 ? d + ' T ' : ''}${h} h`;
+          }
+          const os = text('sensor.' + g + 'unifi_os_version');
+          const unter = (os ? 'UniFi OS ' + os : 'UniFi OS') + seit;
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:nas" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">UNAS Pro</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const cpu = zahl('sensor.' + g + 'cpu_usage'), ram = zahl('sensor.' + g + 'memory_usage');
+          const ct = zahl('sensor.' + g + 'cpu_temperature'), pt = zahl('sensor.' + g + 'average_disk_temperature');
+          // Link "10 GbE": Zahl gross, Einheit klein
+          const link = text('sensor.' + g + 'link_speed_2');
+          const lm = link ? /^([\d.,]+)\s*(.*)$/.exec(link) : null;
+          const w = zahl(variables.leistung), kwh = zahl(variables.energie_heute);
+          const drive = text('sensor.' + g + 'drive_app_version');
+          return kopf +
+            reihe(kachel(de(cpu, 1), '%', 'CPU', stufe(cpu, variables.cpu)) + kachel(de(ram, 1), '%', 'RAM', stufe(ram, variables.ram)) +
+                  kachel(de(ct, 0), '°C', 'CPU-Temp.', stufe(ct, variables.cpu_temp)) + kachel(de(pt, 1), '°C', 'Ø Platten', stufe(pt, variables.platten_temp))) +
+            reihe(kachel(lm ? lm[1] : (link || '–'), lm ? lm[2] : '', 'Link') + kachel(de(w, 1), 'W', 'Leistung') +
+                  kachel(de(kwh, 2), '', 'kWh heute') + kachel(drive || '–', '', 'Drive'));
+        ]]]
+    styles: &huelle
+      card:
+      - padding: 16px 18px
+      - border-radius: 22px
+      - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+      - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+      - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+      grid:
+      - grid-template-areas: '"inhalt"'
+      - grid-template-columns: minmax(0, 1fr)
+      custom_fields:
+        inhalt:
+        - justify-self: stretch
+        - text-align: left
+        - min-width: 0
+- type: grid
+  cards:
+  # --------------------------------------------------------- Speicher-Pool
+  # Entity ist der belegte Speicher: Tippen oeffnet dessen Verlauf.
+  # "fullyOperational" ist laut API der gesunde Zustand; jeder andere Wert
+  # erscheint unuebersetzt in Amber, damit nichts beschoenigt wird.
+  - type: custom:button-card
+    entity: sensor.unas_pro_pool_1_storage_used
+    variables:
+      pool: unas_pro_pool_1
+      reserve: 1
+      platten: 7
+      proxmox_aktiv: binary_sensor.storage_unas_pro_storage_active
+      belegung: [80, 90]
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: more-info
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)', B = 'var(--nachtblau-blau, #7fb3d5)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const p = 'sensor.' + variables.pool + '_';
+          const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+          const text = (id) => { const e = states[id]; return e && !['unavailable', 'unknown'].includes(e.state) ? e.state : null; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const status = text(p + 'status');
+          const ok = status === 'fullyOperational';
+          // Plakette kurz halten; ein anderer Zustand steht im Wortlaut der API
+          // in der Unterzeile (kann lang und ohne Leerzeichen sein)
+          const [bc, bt] = !status ? [S, 'kein Status'] : ok ? [G, 'Intakt'] : [A, 'Prüfen'];
+          const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${bt}</span>`;
+          const raid = text(p + 'raid_level');
+          const stufe = raid && /^raid\d+$/i.test(raid) ? 'RAID ' + raid.replace(/raid/i, '') : (raid || 'Pool');
+          const unter = status && !ok
+            ? `${stufe} · <span style="color:${A};overflow-wrap:anywhere;">${status}</span>`
+            : `${stufe} · ${variables.platten} Platten, davon ${variables.reserve} Reserve`;
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:database" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Speicher-Pool</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          // Belegung: grosse Zahl, Balken in Statusfarbe
+          const belegt = zahl(p + 'storage_used'), gesamt = zahl(p + 'storage_total'), pct = zahl(p + 'storage_usage');
+          const s = variables.belegung;
+          const fb = pct === null ? S : pct >= s[1] ? R : pct >= s[0] ? A : G;
+          const breite = pct === null ? 0 : Math.max(2, Math.min(100, pct));
+          const belegung =
+            `<div style="padding:12px 12px 11px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));">` +
+            `<div style="display:flex;align-items:baseline;gap:8px;">` +
+            `<span style="font-size:22px;font-weight:750;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:${T};white-space:nowrap;">${de(belegt, 2)}<span style="font-size:12px;font-weight:600;color:${S};"> von ${de(gesamt, 2)} TiB</span></span>` +
+            `<span style="margin-left:auto;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:${pct !== null && pct >= s[0] ? fb : T};white-space:nowrap;">${de(pct, 1)} %</span></div>` +
+            `<div style="height:6px;border-radius:3px;margin-top:9px;background:var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05));overflow:hidden;"><div style="height:100%;width:${breite}%;border-radius:3px;background:${fb};"></div></div></div>`;
+          const kachel = (wert, einheit, name, farbe) =>
+            `<div style="padding:9px 4px 8px;border-radius:13px;background:var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028));border:1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));text-align:center;min-width:0;">` +
+            `<div style="font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;color:${farbe || T};">${wert}<span style="font-size:11px;font-weight:600;color:${S};">${einheit ? ' ' + einheit : ''}</span></div>` +
+            `<div style="font-size:11.5px;line-height:1.25;color:${S};margin-top:1px;">${name}</div></div>`;
+          const frei = belegt !== null && gesamt !== null ? gesamt - belegt : null;
+          // Datenpruefung: idle = ruht; laufend in Blau (Info, kein Fehler)
+          const scrub = text(p + 'data_scrubbing');
+          const [sw, sf] = !scrub ? ['–', null] : scrub === 'idle' ? ['ruht', null] : ['läuft', B];
+          // Proxmox-Freigabe: Speicher "UNAS-Pro" in Proxmox aktiv?
+          const pa = states[variables.proxmox_aktiv];
+          const [pw, pf] = !pa || ['unavailable', 'unknown'].includes(pa.state) ? ['–', null] : pa.state === 'on' ? ['aktiv', null] : ['inaktiv', A];
+          return kopf + belegung +
+            `<div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:6px;margin-top:6px;">` +
+            kachel(de(frei, 2), 'TiB', 'frei') + kachel(sw, '', 'Daten&shy;prüfung', sf) + kachel(pw, '', 'Proxmox', pf) + `</div>`;
+        ]]]
+    styles: *huelle
+  # ---------------------------------------------------------------- Platten
+  # Kopf und eine button-card je Schacht in einer gemeinsamen Huelle
+  # (vertical-stack mit card_mod wie in pbs-view.yaml, Karte Wartung).
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 6px !important;
+        }
+    cards:
+    - type: custom:button-card
+      entity: sensor.unas_pro_disks_at_risk
+      variables:
+        schaechte: [1, 2, 3, 4, 5, 6, 7]
+        mittel: sensor.unas_pro_average_disk_temperature
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: more-info
+      hold_action:
+        action: none
+      custom_fields:
+        inhalt: |
+          [[[
+            const V = 'var(--nachtblau-violett, #b399d4)';
+            const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)';
+            const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+            let da = 0, optimal = 0;
+            for (const n of variables.schaechte) {
+              const st = states['sensor.unas_pro_disk_' + n + '_state'];
+              if (!st || ['unavailable', 'unknown'].includes(st.state)) continue;
+              da++;
+              if (st.state === 'optimal') optimal++;
+            }
+            const m = states[variables.mittel];
+            const mv = m ? parseFloat(m.state) : NaN;
+            const unter = `${optimal} von ${da} optimal` + (isNaN(mv) ? '' : ` · Ø ${mv.toLocaleString('de-DE', { maximumFractionDigits: 1 })} °C`);
+            const n = entity ? parseInt(entity.state, 10) : NaN;
+            const [bc, bt] = isNaN(n) ? [S, 'keine Daten'] : n > 0 ? [A, n + ' gefährdet'] : [G, 'Gesund'];
+            const badge = `<span style="flex:none;display:inline-flex;align-items:center;gap:6px;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${bc};"></span>${bt}</span>`;
+            return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">` +
+              `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:harddisk" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+              `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Platten</div>` +
+              `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          ]]]
+      styles: &ohne_huelle
+        card:
+        - padding: 0
+        - background: none
+        - border: none
+        - box-shadow: none
+        grid:
+        - grid-template-areas: '"inhalt"'
+        - grid-template-columns: minmax(0, 1fr)
+        custom_fields:
+          inhalt:
+          - justify-self: stretch
+          - text-align: left
+          - min-width: 0
+    # Zeile je Schacht: Entity ist die Plattentemperatur, die uebrigen
+    # Sensoren derselben Platte liest die Zeile ueber variables.schacht.
+    # Spalten auf dem 360 px breiten Handy: 306 px Huelle - 22 px Innenabstand
+    # und Rand - 36 px Icon - 2 x 12 px Abstand - Pille (bis 64 px) = 160 px
+    # fuer Name und Zeile darunter ("Reserve · 1,5 Jahre · Health 5" passt;
+    # im Nachbau ohne Roboto brach "Health-Score 5" schon um).
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_1_temperature
+      variables:
+        schacht: 1
+        reserve: 7
+        temp: [50, 55]
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: more-info
+      hold_action:
+        action: none
+      custom_fields:
+        inhalt: &platte |
+          [[[
+            const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+            const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+            const n = variables.schacht, p = 'unas_pro_disk_' + n + '_';
+            const zahl = (id) => { const e = states[id]; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
+            const st = states['sensor.' + p + 'state'];
+            const zustand = st && !['unavailable', 'unknown'].includes(st.state) ? st.state : null;
+            const hs = zahl('sensor.' + p + 'health_score'), bs = zahl('sensor.' + p + 'bad_sectors');
+            const h = zahl('sensor.' + p + 'power_on_hours');
+            const pr = states['binary_sensor.' + p + 'problem'];
+            const t = entity ? parseFloat(entity.state) : NaN;
+            const reserve = String(n) === String(variables.reserve);
+            const titel = 'Schacht ' + n;
+            const zeile = (icon, farbe, rand, unter, pille) =>
+              `<div style="display:flex;align-items:center;gap:12px;">` +
+              `<div style="flex:none;width:36px;height:36px;box-sizing:border-box;border-radius:11px;display:grid;place-items:center;${rand}"><ha-icon icon="${icon}" style="--mdc-icon-size:19px;--ha-icon-display:block;width:19px;height:19px;color:${farbe};"></ha-icon></div>` +
+              `<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;color:${T};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${titel}</div>` +
+              `<div style="font-size:12px;line-height:1.25;margin-top:3px;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${pille}</div>`;
+            // Schacht leer oder keine Daten: gestrichelt, ohne Bewertung
+            if (!zustand && isNaN(t)) {
+              return zeile('mdi:harddisk', 'var(--nachtblau-muted, #6e7988)', 'border:1px dashed var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));', 'keine Platte oder keine Daten',
+                `<span style="flex:none;font-size:13px;font-weight:700;color:${S};">–</span>`);
+            }
+            const fehler = (zustand && zustand !== 'optimal') || (hs !== null && hs !== 5) || (pr && pr.state === 'on');
+            const heiss = !isNaN(t) && t >= variables.temp[1];
+            const warm = !isNaN(t) && t >= variables.temp[0];
+            const stufe = fehler || heiss ? 2 : (warm || (bs !== null && bs > 0)) ? 1 : 0;
+            const farbe = [G, A, R][stufe];
+            // Betriebsdauer: ab einem Jahr in Jahren, sonst in Monaten
+            const alter = h === null ? null : h >= 8766 ? (h / 8766).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' Jahre' : Math.max(1, Math.round(h / 730)) + ' Mon.';
+            // Befunde zuerst, damit die Zweizeilen-Begrenzung nur Alter und
+            // Health-Score abschneidet
+            const teile = reserve ? ['Reserve'] : [];
+            if (zustand && zustand !== 'optimal') teile.push(`<span style="color:${R};">${zustand}</span>`);
+            if (pr && pr.state === 'on') teile.push(`<span style="color:${R};">Problem gemeldet</span>`);
+            if (hs !== null && hs !== 5) teile.push(`<span style="color:${R};">Health ${hs}</span>`);
+            if (bs !== null && bs > 0) teile.push(`<span style="color:${A};">${bs} defekte Sektoren</span>`);
+            if (alter) teile.push(alter);
+            if (hs === 5) teile.push('Health 5');
+            // Trennpunkt haengt am Teil davor, damit keine Zeile mit "·" beginnt
+            const unter = teile.map((x, i) => `<span style="white-space:nowrap;">${x}${i < teile.length - 1 ? '&nbsp;·' : ''}</span>`).join(' ') || '–';
+            // Pille: Temperatur; kritisch (Fehler oder ab 55 °C) gefuellt in Rot
+            const wert = isNaN(t) ? '–' : Math.round(t) + ' °C';
+            const pille = stufe === 2
+              ? `<span style="flex:none;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;padding:4px 9px;border-radius:10px;color:#3d1512;background:${R};border:1px solid var(--nachtblau-fuellung-rand-rot, rgba(240, 115, 106, 0.5));">${fehler && !heiss ? 'Fehler' : wert}</span>`
+              : `<span style="flex:none;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;padding:4px 9px;border-radius:10px;color:${T};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);">${wert}</span>`;
+            return zeile('mdi:harddisk', farbe, `background:color-mix(in srgb, ${farbe} 16%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);`, unter, pille);
+          ]]]
+      styles: &zeile
+        card:
+        - padding: 8px 10px
+        - border-radius: 14px
+        - box-shadow: none
+        - background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))
+        - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+        grid:
+        - grid-template-areas: '"inhalt"'
+        - grid-template-columns: minmax(0, 1fr)
+        custom_fields:
+          inhalt:
+          - justify-self: stretch
+          - text-align: left
+          - min-width: 0
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_2_temperature
+      variables: { schacht: 2, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_3_temperature
+      variables: { schacht: 3, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_4_temperature
+      variables: { schacht: 4, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_5_temperature
+      variables: { schacht: 5, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_6_temperature
+      variables: { schacht: 6, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+    - type: custom:button-card
+      entity: sensor.unas_pro_disk_7_temperature
+      variables: { schacht: 7, reserve: 7, temp: [50, 55] }
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action: { action: more-info }
+      hold_action: { action: none }
+      custom_fields: { inhalt: *platte }
+      styles: *zeile
+- type: grid
+  cards:
+  # ---------------------------------------------------------------- Verlauf
+  # Langzeitstatistik (state_class measurement), Statistik seit Einrichten
+  # der Integration (hier Oktober 2026). Farben je Modus ueber card_mod wie
+  # in docker-verlauf-karte.yaml: apexcharts-card zeichnet beim Wechsel
+  # zwischen hell und dunkel nicht neu, color in series gilt nur als Vorgabe.
+  # Belegung in Blau (Info-Wert), CPU in Violett (Bereich Technik), Platten
+  # in Blau; Statusfarben bleiben Zustaenden vorbehalten.
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root {
+          background: linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%) !important;
+          border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05)) !important;
+          border-radius: 22px !important;
+          box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important;
+          padding: 16px 18px !important;
+          gap: 10px !important;
+        }
+    cards:
+    - type: custom:button-card
+      show_icon: false
+      show_name: false
+      show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      custom_fields:
+        inhalt: |
+          [[[
+            const V = 'var(--nachtblau-violett, #b399d4)';
+            const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
+            return `<div style="display:flex;align-items:center;gap:12px;">` +
+              `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:chart-line" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+              `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Verlauf</div>` +
+              `<div style="font-size:12.5px;line-height:1.3;color:${S};">Langzeitstatistik</div></div></div>`;
+          ]]]
+      styles: *ohne_huelle
+    - type: custom:apexcharts-card
+      graph_span: 30d
+      header:
+        show: true
+        title: Belegung · 30 Tage
+        show_states: false
+      apex_config:
+        chart: &apex_chart
+          background: transparent
+          fontFamily: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif
+          foreColor: '#8794a5'
+          height: 150
+          toolbar:
+            show: false
+        dataLabels: &apex_ohne_werte
+          enabled: false
+        grid: &apex_raster
+          borderColor: rgba(255,255,255,0.06)
+          strokeDashArray: 3
+        legend: &apex_legende
+          show: true
+          fontSize: 11px
+          labels:
+            colors: '#8794a5'
+          markers:
+            size: 5
+            strokeWidth: 0
+        stroke: &apex_linie
+          curve: smooth
+          width: 2
+        tooltip:
+          theme: dark
+          x:
+            format: dd.MM.
+        xaxis: &apex_zeit
+          labels:
+            format: dd.MM.
+      card_mod:
+        style: |
+          ha-card {
+            background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+            border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+            border-radius: 16px !important;
+            box-shadow: none !important;
+          }
+          /* apexcharts-card 2.2.3 hat kein .card-header: Kopf ist #header, Titel #header__title */
+          #header { padding: 10px 12px 0 !important; }
+          #header__title { font-size: 13px !important; color: var(--nachtblau-label, #b4c0cf) !important; }
+          /* ApexCharts 5.3.3: Legendentext liegt sonst ueber dem Farbpunkt */
+          .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+          /* Farben je Modus: Serien nach Index, Legende nach rel = Index + 1 */
+          .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --nw-c: var(--nachtblau-blau, #7fb3d5); }
+          .apexcharts-line { stroke: var(--nw-c); }
+          .apexcharts-marker { fill: var(--nw-c); }
+          .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
+          .apexcharts-legend-text { color: var(--nachtblau-text-sekundaer, #8794a5) !important; }
+          .apexcharts-gridline { stroke: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
+          /* Tooltips folgen dem Modus wie Popups (erhoehte Flaeche) */
+          .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; color: var(--nachtblau-text, #f2f5f8) !important; border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important; }
+          .apexcharts-tooltip-title { background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+          .apexcharts-xaxistooltip-top::before { border-top-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+          .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
+      yaxis:
+      - decimals: 2
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 3
+      series:
+      - entity: sensor.unas_pro_storage_used
+        name: belegt
+        color: '#7fb3d5'
+        unit: TiB
+        statistics:
+          type: mean
+          period: hour
+    - type: custom:apexcharts-card
+      graph_span: 7d
+      header:
+        show: true
+        title: Temperaturen · 7 Tage
+        show_states: false
+      apex_config:
+        chart: *apex_chart
+        dataLabels: *apex_ohne_werte
+        grid: *apex_raster
+        legend: *apex_legende
+        stroke: *apex_linie
+        tooltip:
+          theme: dark
+          x:
+            format: dd.MM. HH:mm
+        xaxis: *apex_zeit
+      card_mod:
+        style: |
+          ha-card {
+            background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important;
+            border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important;
+            border-radius: 16px !important;
+            box-shadow: none !important;
+          }
+          #header { padding: 10px 12px 0 !important; }
+          #header__title { font-size: 13px !important; color: var(--nachtblau-label, #b4c0cf) !important; }
+          .apexcharts-legend-text { margin-left: 0 !important; padding-left: 6px !important; }
+          .apexcharts-series[data\:realIndex="0"], .apexcharts-legend-series[rel="1"] { --nw-c: var(--nachtblau-violett, #b399d4); }
+          .apexcharts-series[data\:realIndex="1"], .apexcharts-legend-series[rel="2"] { --nw-c: var(--nachtblau-blau, #7fb3d5); }
+          .apexcharts-line { stroke: var(--nw-c); }
+          .apexcharts-marker { fill: var(--nw-c); }
+          .apexcharts-xaxis-label, .apexcharts-yaxis-label { fill: var(--nachtblau-text-sekundaer, #8794a5); }
+          .apexcharts-legend-text { color: var(--nachtblau-text-sekundaer, #8794a5) !important; }
+          .apexcharts-gridline { stroke: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)); }
+          .apexcharts-tooltip, .apexcharts-xaxistooltip, .apexcharts-yaxistooltip { background: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; color: var(--nachtblau-text, #f2f5f8) !important; border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-tooltip { box-shadow: 0 8px 20px -10px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7)) !important; }
+          .apexcharts-tooltip-title { background: var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028)) !important; border-bottom: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-bottom::before { border-bottom-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-bottom::after { border-bottom-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+          .apexcharts-xaxistooltip-top::before { border-top-color: var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06)) !important; }
+          .apexcharts-xaxistooltip-top::after { border-top-color: var(--nachtblau-flaeche-erhoeht, #222b3c) !important; }
+          .apexcharts-tooltip-series-group-0 .apexcharts-tooltip-marker { color: var(--nachtblau-violett, #b399d4) !important; }
+          .apexcharts-tooltip-series-group-1 .apexcharts-tooltip-marker { color: var(--nachtblau-blau, #7fb3d5) !important; }
+      yaxis:
+      - decimals: 0
+        apex_config:
+          forceNiceScale: true
+          tickAmount: 3
+      series:
+      - entity: sensor.unas_pro_cpu_temperature
+        name: CPU
+        color: '#b399d4'
+        unit: °C
+        statistics:
+          type: mean
+          period: 5minute
+      - entity: sensor.unas_pro_average_disk_temperature
+        name: Ø Platten
+        color: '#7fb3d5'
+        unit: °C
+        statistics:
+          type: mean
+          period: 5minute
+- type: grid
+  cards:
+  - type: custom:decluttering-card
+    template: floating_navbar
