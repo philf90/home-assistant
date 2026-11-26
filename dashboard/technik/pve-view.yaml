@@ -30,7 +30,10 @@
 #                        der Messsteckdose davor (variables.leistung,
 #                        variables.energie_heute); im Fuss Load 5/15 min,
 #                        Threads und RAM des Knotens (Sensoren load_5m,
-#                        load_15m, cpus, memory_total; deaktiviert angelegt)
+#                        load_15m, cpus, memory_total; deaktiviert angelegt).
+#                        Waehrend einer Sicherung (backup_running an) steht
+#                        unter dem Kopf "Backup laeuft seit hh:mm" in Blau,
+#                        mit Name der VM, wenn die Aufgabe eine nennt.
 #   Virtuelle Maschinen  sucht die Geraete selbst: Geraetename "QEMU <name>
 #                        (<id>)" bzw. "LXC <name> (<id>)" der Integration
 #                        proxmoxve_custom, dazu deren Sensoren mit den
@@ -55,6 +58,9 @@
 #                        Sensor disk_used_perc, dazu frei in GB (disk_free;
 #                        deaktiviert angelegt). local und local-zfs liegen im
 #                        selben Pool und zeigen denselben freien Platz.
+#                        Meldet storage_active "aus" (PVE erreicht den
+#                        Speicher nicht, z. B. PBS oder NFS), steht an der
+#                        Zeile "nicht erreichbar" in Rot, im Kopf ein Badge.
 #   Platten & ZFS        Geraete der Integration mit Modell "ZFS" (Pool:
 #                        zfs_health, zfs_used, zfs_total, zfs_used_perc) und
 #                        Geraete "Disk <knoten>: <modell>" (health,
@@ -147,6 +153,27 @@ sections:
           const upd = zahl(k + 'gesamte_updates'), fehl = zahl(k + 'fehlgeschlagene_aufgaben');
           const w = zahl(variables.leistung), kwh = zahl(variables.energie_heute);
           const nullOk = (v) => v === null ? T : v > 0 ? A : G;
+          // Laufende Sicherung (vzdump): binary_sensor ..._backup_running mit running_since und
+          // running_guests (ID aus der Aufgabe; leer, wenn ein Lauf alle Gaeste sichert)
+          const bk = states['binary_sensor.node_' + variables.knoten + '_backup_running'];
+          let sicherung = '';
+          if (bk && bk.state === 'on') {
+            const B = 'var(--nachtblau-blau, #7fb3d5)';
+            const a = bk.attributes || {};
+            const ab = a.running_since ? new Date(a.running_since) : null;
+            const z = (n) => String(n).padStart(2, '0');
+            let gast = '';
+            const gid = a.running_guests ? String(a.running_guests) : '';
+            if (/^\d+$/.test(gid)) {
+              gast = 'VM ' + gid;
+              for (const g of Object.values(hass.devices || {})) {
+                const m = /^(QEMU|LXC)\s+(.+?)\s+\((\d+)\)$/.exec(g.name || '');
+                if (m && m[3] === gid) { gast = m[2]; break; }
+              }
+            }
+            const text = 'Backup läuft' + (ab && !isNaN(ab) ? ' seit ' + z(ab.getHours()) + ':' + z(ab.getMinutes()) : '') + (gast ? ' · ' + gast : '');
+            sicherung = `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${B} 12%, transparent);border:1px solid color-mix(in srgb, ${B} 24%, transparent);color:${B};font-size:13px;font-weight:600;"><ha-icon icon="mdi:backup-restore" style="--mdc-icon-size:18px;--ha-icon-display:block;flex:none;"></ha-icon><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${text}</span></div>`;
+          }
           // Fuss: Load 5/15 min, Threads, RAM des Knotens (Sensoren deaktiviert angelegt; fehlen sie, entfaellt der Teil)
           const l5 = zahl(k + 'load_average_5_min'), l15 = zahl(k + 'load_average_15_min');
           const thr = zahl(k + 'cpus'), ramG = zahl(k + 'gesamtarbeitsspeicher');
@@ -155,7 +182,7 @@ sections:
           if (thr !== null) fussTeile.push(`${thr} Threads`);
           if (ramG !== null) fussTeile.push(`${de(ramG / 1.073741824, 1)} GiB RAM`);
           const fuss = fussTeile.length ? `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">${fussTeile.map((t) => `<span style="white-space:nowrap;">${t}</span>`).join(' · ')}</div>` : '';
-          return kopf +
+          return kopf + sicherung +
             reihe(kachel(de(cpu, 1), '%', 'CPU', stufe(cpu)) + kachel(de(ram, 1), '%', 'RAM', stufe(ram)) +
                   kachel(de(io, 1), '%', 'IO-Delay') + kachel(de(load, 2), '', 'Load 1 min')) +
             reihe(kachel(upd === null ? '–' : String(upd), '', 'Updates', nullOk(upd)) +
@@ -393,9 +420,11 @@ sections:
           const geraete = hass.devices || {};
           const liste = [];
           // frei in GB je Geraet (disk_free, deaktiviert angelegt; fehlt er, entfaellt die Angabe)
-          const freiId = {};
+          const freiId = {}, aktivId = {};
           for (const e of Object.values(hass.entities || {})) {
-            if (e.platform === 'proxmoxve_custom' && e.translation_key === 'disk_free' && e.device_id) freiId[e.device_id] = e.entity_id;
+            if (e.platform !== 'proxmoxve_custom' || !e.device_id) continue;
+            if (e.translation_key === 'disk_free') freiId[e.device_id] = e.entity_id;
+            else if (e.translation_key === 'storage_active') aktivId[e.device_id] = e.entity_id;
           }
           const gb = (v) => v === null ? '' : v >= 1000 ? (v / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' TB' : v.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GB';
           for (const e of Object.values(hass.entities || {})) {
@@ -409,25 +438,32 @@ sections:
             const fs = freiId[e.device_id] ? states[freiId[e.device_id]] : null;
             const fv = fs ? parseFloat(fs.state) : NaN;
             const ort = g.model === 'Shared storage' ? 'geteilt' : (teile.length > 1 ? teile[0] : '');
+            // storage_active: kann PVE den Speicher gerade erreichen (z. B. PBS, NFS)? Fehlt der Sensor, gilt er als erreichbar.
+            const ak = aktivId[e.device_id] ? states[aktivId[e.device_id]] : null;
             liste.push({
               name: teile[teile.length - 1],
               zusatz: [ort, isNaN(fv) ? '' : gb(fv) + ' frei'].filter(Boolean).join(' · '),
               wert: isNaN(v) ? null : v,
+              weg: !!ak && ak.state === 'off',
             });
           }
           liste.sort((a, b) => (b.wert === null ? -1 : b.wert) - (a.wert === null ? -1 : a.wert));
           const de = (v) => v === null ? '–' : v < 1 && v > 0 ? '< 1' : v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
           const stufe = (v) => v === null ? S : v >= variables.rot ? R : v >= variables.gelb ? A : B;
+          const weg = liste.filter((x) => x.weg).length;
+          const badge = weg ? `<span style="flex:none;color:${R};background:color-mix(in srgb, ${R} 12%, transparent);border:1px solid color-mix(in srgb, ${R} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${weg} nicht erreichbar</span>` : '';
           const kopf =
             `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">` +
             `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:harddisk" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
             `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Speicher</div>` +
-            `<div style="font-size:12.5px;line-height:1.3;color:${S};">Belegung aus Sicht von PVE</div></div></div>`;
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};">Belegung aus Sicht von PVE</div></div>${badge}</div>`;
           const zeilen = liste.map((x, i) =>
             `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:4px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
             `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${x.name} <span style="font-size:12px;font-weight:400;color:${S};">${x.zusatz}</span></div>` +
-            `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${x.wert !== null && x.wert >= variables.gelb ? stufe(x.wert) : T};">${de(x.wert)} %</div>` +
-            `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${x.wert === null ? 0 : Math.min(100, Math.max(1, x.wert))}%;border-radius:3px;background:${stufe(x.wert)};"></div></div></div>`
+            (x.weg
+              ? `<div style="font-size:13px;font-weight:700;white-space:nowrap;color:${R};">nicht erreichbar</div>`
+              : `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${x.wert !== null && x.wert >= variables.gelb ? stufe(x.wert) : T};">${de(x.wert)} %</div>`) +
+            `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${x.weg || x.wert === null ? 0 : Math.min(100, Math.max(1, x.wert))}%;border-radius:3px;background:${stufe(x.wert)};"></div></div></div>`
           ).join('');
           return kopf + (zeilen || `<div style="font-size:13px;color:${S};">Keine Speicher gefunden</div>`);
         ]]]
