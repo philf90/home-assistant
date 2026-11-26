@@ -1,0 +1,249 @@
+# ============================================================================
+# Technik – Decluttering-Template top_navigation_technik
+# ----------------------------------------------------------------------------
+# Art:           templates
+# Bereich:       technik
+# Status:        aktiv
+# Karten:        button-card
+# Templates:     keine
+# Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik",
+#                oberste Ebene unter decluttering_templates:
+# Platzhalter:   keine
+# ============================================================================
+# Top-Navigation des Dashboards "Technik" (dashboard-technik). Raster,
+# Kachelform und Styles wie top_navigation in navigation-templates.yaml:
+# 10 Kacheln in zwei Reihen, Reihe 1 mit Beschriftung, Reihe 2 nur Icons.
+# Entwurf: Artefakt "Technik-Dashboard" (26.11.2026), Variante B.
+#
+# Belegung:
+#   Reihe 1  PVE, PBS, Netzwerk*, Docker*, HmIP*
+#   Reihe 2  Zigbee*, NAS*, System*, frei, frei
+#   * vorgemerkt: gedimmt in Muted, ohne Aktion. Das sind die Admin-Views,
+#     die heute im Home-Dashboard liegen (Netzwerk, Docker, Homematic IP,
+#     Zigbee, System), und der NAS. Verlinkt werden sie erst, wenn sie
+#     umziehen; dann Route in design/routen.yaml eintragen, variables.pfad
+#     setzen, accent auf Violett und den Anker *tile_* statt *soon_* nehmen.
+#   frei: gestrichelte Kachel mit Plus, ohne Aktion.
+#
+# Abweichungen von top_navigation (Home):
+#   - Eine Farbe fuer alle belegten Kacheln: Violett, die Bereichsfarbe
+#     Technik (DESIGN.md, "Akzente und Bereiche").
+#   - Gruener Punkt an der aktuellen View, wie im More-Menue: Verglichen wird
+#     window.location.pathname mit variables.pfad (auch Unterseiten).
+#   - Kacheln ohne Ziel haben tap_action und hold_action none; button-card
+#     zeichnet dann keinen Ripple.
+#
+# Einbindung: Dieses Template und floating_navbar gehoeren in die
+#   decluttering_templates des Dashboards "Technik". floating_navbar wird
+#   unveraendert aus navigation-templates.yaml kopiert (Bottom-Navigation
+#   1:1 wie im Home-Dashboard); die Templates gelten nur im eigenen Dashboard.
+#   In jeder View:
+#     - type: custom:decluttering-card
+#       template: top_navigation_technik
+#
+# Voraussetzung: custom:decluttering-card + custom:button-card (HACS); alle
+#   Icons sind mdi.
+decluttering_templates:
+  top_navigation_technik:
+    card:
+      type: vertical-stack
+      cards:
+        # ---------- Reihe 1: mit Beschriftung ----------
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              variables: { accent: 'var(--nachtblau-violett, #b399d4)', pfad: /dashboard-technik/pve }
+              icon: mdi:server
+              name: PVE
+              show_icon: true
+              show_name: true
+              tap_action: { action: navigate, navigation_path: /dashboard-technik/pve }
+              # Klasse admin (design/routen.yaml): nur fuer Admins
+              hidden: &nur_admin '[[[ return !user.is_admin; ]]]'
+              extra_styles: &hier_punkt |
+                /* Punkt "aktuelle View" rechts oben an der Icon-Kachel (44 px breit,
+                   rechte Kante bei 50 % + 22 px); sichtbar ueber --tn-hier aus styles.card */
+                ha-card::after { content: ""; position: absolute; top: 9px; left: calc(50% + 17px); width: 7px; height: 7px; border-radius: 50%; background: var(--nachtblau-gruen, #a6d49e); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nachtblau-gruen, #a6d49e) 18%, transparent); opacity: var(--tn-hier, 0%); pointer-events: none; }
+              styles: &tile_labeled
+                card:
+                  - position: relative
+                  - padding: 12px 6px 11px
+                  - border-radius: 18px
+                  - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+                  - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+                  - box-shadow: 0 12px 30px -20px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
+                  # 100 % in der aktuellen View, sonst 0 %
+                  - --tn-hier: "[[[ const p = window.location.pathname, z = variables.pfad || ''; return z && (p === z || p.startsWith(z + '/')) ? '100%' : '0%'; ]]]"
+                grid:
+                  - grid-template-areas: '"i" "n"'
+                  - grid-template-rows: min-content min-content
+                  - justify-items: center
+                img_cell:
+                  - width: 44px
+                  - height: 44px
+                  - border-radius: 13px
+                  - margin-bottom: 8px
+                  - background: |
+                      [[[ return 'color-mix(in srgb, ' + variables.accent + ' 16%, transparent)'; ]]]
+                  - border: |
+                      [[[ return '1px solid color-mix(in srgb, ' + variables.accent + ' 24%, transparent)'; ]]]
+                icon:
+                  - --ha-icon-display: block
+                  - width: 24px
+                  - height: 24px
+                  - color: |
+                      [[[ return variables.accent; ]]]
+                name:
+                  - font-size: 12px
+                  - font-weight: 600
+                  - color: 'var(--nachtblau-text, #f2f5f8)'
+                  - white-space: nowrap
+                  - overflow: hidden
+                  - text-overflow: ellipsis
+                  - max-width: 100%
+            - type: custom:button-card
+              variables: { accent: 'var(--nachtblau-violett, #b399d4)', pfad: /dashboard-technik/pbs }
+              icon: mdi:backup-restore
+              name: PBS
+              show_icon: true
+              show_name: true
+              tap_action: { action: navigate, navigation_path: /dashboard-technik/pbs }
+              hidden: *nur_admin
+              extra_styles: *hier_punkt
+              styles: *tile_labeled
+            # vorgemerkt (ohne Ziel): gedimmt, Icon und Name in Muted bzw. Sekundaertext
+            - type: custom:button-card
+              icon: mdi:router-network
+              name: Netzwerk
+              show_icon: true
+              show_name: true
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: &soon_labeled
+                card:
+                  - padding: 12px 6px 11px
+                  - border-radius: 18px
+                  - opacity: '0.55'
+                  - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+                  - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: '"i" "n"'
+                  - grid-template-rows: min-content min-content
+                  - justify-items: center
+                img_cell:
+                  - width: 44px
+                  - height: 44px
+                  - border-radius: 13px
+                  - margin-bottom: 8px
+                  - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
+                  - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                icon:
+                  - --ha-icon-display: block
+                  - width: 24px
+                  - height: 24px
+                  - color: 'var(--nachtblau-muted, #6e7988)'
+                name:
+                  - font-size: 12px
+                  - font-weight: 500
+                  - color: 'var(--nachtblau-text-sekundaer, #8794a5)'
+                  - white-space: nowrap
+                  - overflow: hidden
+                  - text-overflow: ellipsis
+                  - max-width: 100%
+            - type: custom:button-card
+              icon: mdi:docker
+              name: Docker
+              show_icon: true
+              show_name: true
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: *soon_labeled
+            - type: custom:button-card
+              icon: mdi:home-automation
+              name: HmIP
+              show_icon: true
+              show_name: true
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: *soon_labeled
+        # ---------- Reihe 2: nur Icons ----------
+        - type: horizontal-stack
+          cards:
+            - type: custom:button-card
+              icon: mdi:zigbee
+              show_icon: true
+              show_name: false
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: &soon_icononly
+                card:
+                  - padding: 12px 6px
+                  - border-radius: 18px
+                  - opacity: '0.55'
+                  - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
+                  - border: 1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05))
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: '"i"'
+                  - justify-items: center
+                img_cell:
+                  - width: 44px
+                  - height: 44px
+                  - border-radius: 13px
+                  - background: 'var(--nachtblau-neutral-kachel, rgba(255, 255, 255, 0.05))'
+                  - border: 1px solid var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                icon:
+                  - --ha-icon-display: block
+                  - width: 24px
+                  - height: 24px
+                  - color: 'var(--nachtblau-muted, #6e7988)'
+            - type: custom:button-card
+              icon: mdi:nas
+              show_icon: true
+              show_name: false
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: *soon_icononly
+            - type: custom:button-card
+              icon: mdi:monitor-dashboard
+              show_icon: true
+              show_name: false
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: *soon_icononly
+            # frei: gestrichelt, ohne Huelle, Plus in Muted
+            - type: custom:button-card
+              icon: mdi:plus
+              show_icon: true
+              show_name: false
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: &frei_icononly
+                card:
+                  - padding: 12px 6px
+                  - border-radius: 18px
+                  - background: none
+                  - border: 1px dashed var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                  - box-shadow: none
+                grid:
+                  - grid-template-areas: '"i"'
+                  - justify-items: center
+                img_cell:
+                  - width: 44px
+                  - height: 44px
+                  - border-radius: 13px
+                  - background: 'var(--nachtblau-unterkachel, rgba(255, 255, 255, 0.028))'
+                  - border: 1px dashed var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06))
+                icon:
+                  - --ha-icon-display: block
+                  - width: 24px
+                  - height: 24px
+                  - color: 'var(--nachtblau-muted, #6e7988)'
+            - type: custom:button-card
+              icon: mdi:plus
+              show_icon: true
+              show_name: false
+              tap_action: { action: none }
+              hold_action: { action: none }
+              styles: *frei_icononly

@@ -50,6 +50,7 @@ BEREICHE = (
     "licht",
     "hausgeraete",
     "netzwerk",
+    "technik",
     "fahrzeuge",
     "garten",
     "personen",
