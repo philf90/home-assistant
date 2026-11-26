@@ -1,11 +1,13 @@
 # ============================================================================
-# PVE – Proxmox VE: Knoten, virtuelle Maschinen, Speicher
+# PVE – Proxmox VE: Knoten, virtuelle Maschinen, Speicher, Platten
 # ----------------------------------------------------------------------------
 # Art:           view
 # Bereich:       technik
 # Status:        aktiv
 # Karten:        button-card, decluttering-card
 # Templates:     floating_navbar (navigation-templates.yaml),
+#                pve_vm_info_popup (pve-templates.yaml),
+#                pve_vm_popup (pve-templates.yaml),
 #                top_navigation_technik (technik-templates.yaml)
 # Einfuegen:     Raw-Konfigurationseditor des Dashboards "Technik" unter
 #                views: oder per !include
@@ -18,15 +20,17 @@
 #
 # Sections-View; auf dem Handy untereinander, breit bis zu drei Spalten.
 #   Section 1  Top-Navigation · Knoten
-#   Section 2  Virtuelle Maschinen
-#   Section 3  Speicher
+#   Section 2  Virtuelle Maschinen · Popups je VM (#pve-vm-<id>)
+#   Section 3  Speicher · Platten & ZFS
 #   Section 4  schwebende Navbar (floating_navbar, 1:1 wie im Home-Dashboard)
 #
 # Jede Karte ist eine custom:button-card in der Kartenhuelle; der Inhalt
 # entsteht als HTML im Feld "inhalt".
 #   Knoten               feste Entitaeten des Knotens (variables.knoten) und
 #                        der Messsteckdose davor (variables.leistung,
-#                        variables.energie_heute)
+#                        variables.energie_heute); im Fuss Load 5/15 min,
+#                        Threads und RAM des Knotens (Sensoren load_5m,
+#                        load_15m, cpus, memory_total; deaktiviert angelegt)
 #   Virtuelle Maschinen  sucht die Geraete selbst: Geraetename "QEMU <name>
 #                        (<id>)" bzw. "LXC <name> (<id>)" der Integration
 #                        proxmoxve_custom, dazu deren Sensoren mit den
@@ -34,8 +38,27 @@
 #                        memory_used_perc. Neue oder geloeschte VMs erscheinen
 #                        ohne Aenderung an der Karte. Gelesen wird der Name der
 #                        Integration (device.name), nicht ein eigener Name.
+#                        Tippen auf eine Zeile oeffnet das Popup der VM
+#                        (Hash #pve-vm-<id>, pve-templates.yaml): Details und
+#                        Aktionen. Das Popup muss es je VM geben (Section 2,
+#                        unten); fehlt es, passiert beim Tippen nichts.
+#                        RAM: Wert von PVE; der zaehlt den Cache als belegt
+#                        (VM 102: PVE etwa 95 %, in der VM etwa 30 %). Fuer
+#                        VMs in variables.gast_ram steht stattdessen die
+#                        Messung in der VM. Im Fuss die Vergabe: vCPU
+#                        (Attribut cpus) und RAM (genutzt + frei = maxmem)
+#                        aller VMs gegen Threads und RAM des Knotens.
 #   Speicher             Geraete mit Modell "Storage" oder "Shared storage",
-#                        Sensor disk_used_perc
+#                        Sensor disk_used_perc, dazu frei in GB (disk_free;
+#                        deaktiviert angelegt). local und local-zfs liegen im
+#                        selben Pool und zeigen denselben freien Platz.
+#   Platten & ZFS        Geraete der Integration mit Modell "ZFS" (Pool:
+#                        zfs_health, zfs_used, zfs_total, zfs_used_perc) und
+#                        Geraete "Disk <knoten>: <modell>" (health,
+#                        temperature, disk_wearout, power_hours,
+#                        power_cycles, disk_size). Verschleiss ist der
+#                        verbrauchte Anteil (SMART "Percentage Used"; PVE und
+#                        Integration rechnen je 100 minus).
 #
 # Beschriftungen der Knoten-Kacheln bleiben einzeilig: Text in der Viererreihe
 #   62,0 px (S25) bzw. 72,5 px (iPhone). "Fehlgeschlagen" ist bei 11,5 px Roboto
@@ -46,12 +69,15 @@
 #   Knoten CPU/RAM       ab 75 % Amber, ab 90 % Rot (wie system-karte.yaml)
 #   VM-Arbeitsspeicher   ab 85 % Amber, ab 95 % Rot
 #   Speicherbelegung     ab 80 % Amber, ab 90 % Rot
+#   Platten              Temperatur ab 60 °C Amber, ab 70 °C Rot;
+#                        Verschleiss ab 80 % Amber, ab 90 % Rot
 #
 # Voraussetzung: custom:button-card + custom:decluttering-card (HACS),
-#   Integration "Proxmox VE Custom" (dougiteixeira/proxmoxve, getestet 6.0.4,
+#   Integration "Proxmox VE Custom" (dougiteixeira/proxmoxve, getestet 6.0.6,
 #   deutsche Entitaetsnamen), Shelly-Messsteckdose vor dem Knoten mit
-#   utility_meter "daily", Templates aus technik-templates.yaml und
-#   navigation-templates.yaml.
+#   utility_meter "daily", Templates aus technik-templates.yaml,
+#   pve-templates.yaml und navigation-templates.yaml; custom:bubble-card fuer
+#   die Popups, Integration "System Monitor" fuer den RAM in VM 102.
 title: PVE
 path: pve
 icon: mdi:server
@@ -118,12 +144,20 @@ sections:
           const upd = zahl(k + 'gesamte_updates'), fehl = zahl(k + 'fehlgeschlagene_aufgaben');
           const w = zahl(variables.leistung), kwh = zahl(variables.energie_heute);
           const nullOk = (v) => v === null ? T : v > 0 ? A : G;
+          // Fuss: Load 5/15 min, Threads, RAM des Knotens (Sensoren deaktiviert angelegt; fehlen sie, entfaellt der Teil)
+          const l5 = zahl(k + 'load_average_5_min'), l15 = zahl(k + 'load_average_15_min');
+          const thr = zahl(k + 'cpus'), ramG = zahl(k + 'gesamtarbeitsspeicher');
+          const fussTeile = [];
+          if (l5 !== null || l15 !== null) fussTeile.push(`Load 5 / 15 min ${de(l5, 2)} / ${de(l15, 2)}`);
+          if (thr !== null) fussTeile.push(`${thr} Threads`);
+          if (ramG !== null) fussTeile.push(`${de(ramG / 1.073741824, 1)} GiB RAM`);
+          const fuss = fussTeile.length ? `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">${fussTeile.map((t) => `<span style="white-space:nowrap;">${t}</span>`).join(' · ')}</div>` : '';
           return kopf +
             reihe(kachel(de(cpu, 1), '%', 'CPU', stufe(cpu)) + kachel(de(ram, 1), '%', 'RAM', stufe(ram)) +
                   kachel(de(io, 1), '%', 'IO-Delay') + kachel(de(load, 2), '', 'Load 1 min')) +
             reihe(kachel(upd === null ? '–' : String(upd), '', 'Updates', nullOk(upd)) +
                   kachel(fehl === null ? '–' : String(fehl), '', 'Fehler', fehl > 0 ? R : nullOk(fehl)) +
-                  kachel(de(w, 1), 'W', 'Leistung') + kachel(de(kwh, 2), 'kWh', 'heute'));
+                  kachel(de(w, 1), 'W', 'Leistung') + kachel(de(kwh, 2), 'kWh', 'heute')) + fuss;
         ]]]
     styles: &huelle
       card:
@@ -145,6 +179,10 @@ sections:
   # ---------------------------------------------------- Virtuelle Maschinen
   - type: custom:button-card
     variables:
+      knoten: pve
+      # RAM gemessen in der VM statt Wert von PVE (Schluessel: VM-ID)
+      gast_ram:
+        '102': sensor.system_monitor_speicherauslastung_2
       gelb: 85
       rot: 95
     show_icon: false
@@ -160,6 +198,29 @@ sections:
           const V = 'var(--nachtblau-violett, #b399d4)';
           const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
           const S = 'var(--nachtblau-text-sekundaer, #8794a5)', L = 'var(--nachtblau-label, #b4c0cf)', T = 'var(--nachtblau-text, #f2f5f8)';
+          // Antippen einer Zeile oeffnet das Popup #pve-vm-<id> (Bubble Card), Muster wie im Fussball-Popup:
+          // history.pushState + location-changed; touchend nur bei echtem Tipp (nicht beim Scrollen)
+          const P = window.__nachtblauPve || (window.__nachtblauPve = {});
+          P.oeffne = (id) => {
+            const h = '#pve-vm-' + id;
+            if (location.hash === h) return;
+            history.pushState(null, '', location.pathname + location.search + h);
+            window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+          };
+          P.tipp = (e, id) => {
+            e.stopPropagation();
+            if (e.type === 'touchstart') { const t = e.touches && e.touches[0]; P._t = t ? { x: t.clientX, y: t.clientY, z: Date.now() } : null; return; }
+            if (e.type === 'touchend') {
+              const t = e.changedTouches && e.changedTouches[0], a = P._t;
+              P._t = null;
+              if (!t || !a || Math.hypot(t.clientX - a.x, t.clientY - a.y) > 10 || Date.now() - a.z > 800) return;
+              if (e.cancelable) e.preventDefault();
+              P._zeit = Date.now();
+              P.oeffne(id);
+              return;
+            }
+            if (e.type === 'click') { e.preventDefault(); if (Date.now() - (P._zeit || 0) < 700) return; P.oeffne(id); }
+          };
           const vms = {};
           const geraete = hass.devices || {};
           for (const e of Object.values(hass.entities || {})) {
@@ -171,12 +232,15 @@ sections:
             if (e.translation_key === 'status_raw') v.status = e.entity_id;
             else if (e.translation_key === 'cpu_used') v.cpu = e.entity_id;
             else if (e.translation_key === 'memory_used_perc') v.ram = e.entity_id;
+            else if (e.translation_key === 'memory_used') v.belegt = e.entity_id;
+            else if (e.translation_key === 'memory_free') v.frei = e.entity_id;
           }
           const liste = Object.values(vms).sort((a, b) => a.id - b.id);
           const zahl = (id) => { const e = id ? states[id] : null; const v = e ? parseFloat(e.state) : NaN; return isNaN(v) ? null : v; };
-          const de = (v) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          const de = (v, d = 1) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
           const stufe = (v) => v === null ? S : v >= variables.rot ? R : v >= variables.gelb ? A : G;
           const laeuft = (v) => v.status && states[v.status] && states[v.status].state === 'running';
+          const gastRam = variables.gast_ram || {};
           const vmZahl = liste.filter((v) => v.typ === 'QEMU').length;
           const ctZahl = liste.length - vmZahl;
           const an = liste.filter(laeuft).length;
@@ -188,8 +252,15 @@ sections:
             `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:monitor-dashboard" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
             `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Virtuelle Maschinen</div>` +
             `<div style="font-size:12.5px;line-height:1.3;color:${S};overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;">${unter}</div></div>${badge}</div>`;
+          const pfeil = `<svg viewBox="0 0 24 24" width="12" height="12" style="display:block;flex:none;"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+          let vcpu = 0, ramVergeben = 0;
           const zeilen = liste.map((v, i) => {
-            const ram = zahl(v.ram), cpu = zahl(v.cpu);
+            const cpuS = v.cpu ? states[v.cpu] : null;
+            if (cpuS && cpuS.attributes && cpuS.attributes.cpus) vcpu += cpuS.attributes.cpus;
+            const b = zahl(v.belegt), f = zahl(v.frei);
+            if (b !== null && f !== null) ramVergeben += b + f;
+            const gast = gastRam[String(v.id)] ? zahl(gastRam[String(v.id)]) : null;
+            const ram = gast !== null ? gast : zahl(v.ram), cpu = zahl(v.cpu);
             const st = v.status && states[v.status] ? states[v.status].state : 'unbekannt';
             const ok = st === 'running';
             const text = { stopped: 'gestoppt', paused: 'pausiert', suspended: 'angehalten', shutdown: 'fährt herunter' }[st] || st;
@@ -199,14 +270,101 @@ sections:
             const balken = ok && ram !== null
               ? `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${Math.min(100, Math.max(0, ram))}%;border-radius:3px;background:${stufe(ram)};"></div></div>`
               : '';
-            return `<div style="display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:4px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
+            return `<div role="button" tabindex="0" aria-label="${v.name}: Details und Aktionen" ontouchstart="window.__nachtblauPve.tipp(event)" ontouchend="window.__nachtblauPve.tipp(event,${v.id})" onclick="window.__nachtblauPve.tipp(event,${v.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.__nachtblauPve.oeffne(${v.id});}" style="cursor:pointer;display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:4px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}">` +
               `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.name} <span style="font-size:12px;font-weight:400;color:${S};">${v.typ === 'LXC' ? 'CT ' : ''}${v.id}</span></div>` +
-              `<div style="font-size:13px;color:${L};white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;">${rechts}</div>${balken}</div>`;
+              `<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:${L};white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;">${rechts}<span style="color:${S};">${pfeil}</span></div>${balken}</div>`;
           }).join('');
-          const fuss = `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">Balken: Arbeitsspeicher, ab ${variables.gelb} % Amber, ab ${variables.rot} % Rot.</div>`;
+          // Vergabe gegen den Knoten (Sensoren cpus und memory_total, deaktiviert angelegt)
+          const k = 'sensor.node_' + variables.knoten + '_';
+          const thr = zahl(k + 'cpus'), ramK = zahl(k + 'gesamtarbeitsspeicher');
+          const gib = (gb) => gb / 1.073741824;
+          const vergabe = [];
+          if (vcpu) vergabe.push(`${vcpu} vCPU${thr !== null ? ' auf ' + thr + ' Threads' : ''}`);
+          if (ramVergeben) vergabe.push(`${de(gib(ramVergeben), 0)}${ramK !== null ? ' von ' + de(gib(ramK), 1) : ''} GiB RAM`);
+          const gastNamen = liste.filter((v) => gastRam[String(v.id)]).map((v) => v.name);
+          const fuss = `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">` +
+            (vergabe.length ? `Vergeben: ${vergabe.join(', ')}.<br>` : '') +
+            `RAM aus Sicht von PVE (Cache zählt als belegt)${gastNamen.length ? ', bei ' + gastNamen.join(', ') + ' gemessen in der VM' : ''}. Ab ${variables.gelb} % Amber, ab ${variables.rot} % Rot. Tippen zeigt Details und Aktionen.</div>`;
           return kopf + zeilen + (liste.length ? fuss : '');
         ]]]
     styles: *huelle
+  # ------------------------------------------------- Popups je VM (#pve-vm-<id>)
+  # VM 102: Home Assistant selbst, daher nur Details (pve_vm_info_popup)
+  - type: custom:decluttering-card
+    template: pve_vm_info_popup
+    variables:
+    - vmid: 102
+    - gast_ram: sensor.system_monitor_speicherauslastung_2
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 103
+    - name: OpenCCU
+    - status: sensor.qemu_raspberrymatic_103_status
+    - herunterfahren: button.qemu_openccu_103_herunterfahren
+    - neustart: button.qemu_openccu_103_neustart
+    - starten: button.qemu_openccu_103_starten
+    - snapshot: button.qemu_openccu_103_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 104
+    - name: jellyfin
+    - status: sensor.qemu_jellyfin_104_status
+    - herunterfahren: button.qemu_jellyfin_104_herunterfahren
+    - neustart: button.qemu_jellyfin_104_neustart
+    - starten: button.qemu_jellyfin_104_starten
+    - snapshot: button.qemu_jellyfin_104_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 105
+    - name: docker-01
+    - status: sensor.qemu_docker_105_status
+    - herunterfahren: button.qemu_docker_01_105_herunterfahren
+    - neustart: button.qemu_docker_01_105_neustart
+    - starten: button.qemu_docker_01_105_starten
+    - snapshot: button.qemu_docker_01_105_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 106
+    - name: docker-02
+    - status: sensor.qemu_docker_02_106_status
+    - herunterfahren: button.qemu_docker_02_106_herunterfahren
+    - neustart: button.qemu_docker_02_106_neustart
+    - starten: button.qemu_docker_02_106_starten
+    - snapshot: button.qemu_docker_02_106_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 107
+    - name: debian
+    - status: sensor.qemu_debian_107_status
+    - herunterfahren: button.qemu_debian_107_herunterfahren
+    - neustart: button.qemu_debian_107_neustart
+    - starten: button.qemu_debian_107_starten
+    - snapshot: button.qemu_debian_107_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 110
+    - name: windows11
+    - status: sensor.qemu_windows11_110_status
+    - herunterfahren: button.qemu_windows11_110_herunterfahren
+    - neustart: button.qemu_windows11_110_neustart
+    - starten: button.qemu_windows11_110_starten
+    - snapshot: button.qemu_windows11_110_create_snapshot
+  - type: custom:decluttering-card
+    template: pve_vm_popup
+    variables:
+    - vmid: 118
+    - name: teleport-windows
+    - status: sensor.qemu_teleport_windows_118_status
+    - herunterfahren: button.qemu_teleport_windows_118_herunterfahren
+    - neustart: button.qemu_teleport_windows_118_neustart
+    - starten: button.qemu_teleport_windows_118_starten
+    - snapshot: button.qemu_teleport_windows_118_create_snapshot
 - type: grid
   cards:
   # ---------------------------------------------------------------- Speicher
@@ -229,6 +387,12 @@ sections:
           const S = 'var(--nachtblau-text-sekundaer, #8794a5)', T = 'var(--nachtblau-text, #f2f5f8)';
           const geraete = hass.devices || {};
           const liste = [];
+          // frei in GB je Geraet (disk_free, deaktiviert angelegt; fehlt er, entfaellt die Angabe)
+          const freiId = {};
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform === 'proxmoxve_custom' && e.translation_key === 'disk_free' && e.device_id) freiId[e.device_id] = e.entity_id;
+          }
+          const gb = (v) => v === null ? '' : v >= 1000 ? (v / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' TB' : v.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' GB';
           for (const e of Object.values(hass.entities || {})) {
             if (e.platform !== 'proxmoxve_custom' || e.translation_key !== 'disk_used_perc' || !e.device_id) continue;
             const g = geraete[e.device_id];
@@ -237,9 +401,12 @@ sections:
             const teile = voll.split('/');
             const s = states[e.entity_id];
             const v = s ? parseFloat(s.state) : NaN;
+            const fs = freiId[e.device_id] ? states[freiId[e.device_id]] : null;
+            const fv = fs ? parseFloat(fs.state) : NaN;
+            const ort = g.model === 'Shared storage' ? 'geteilt' : (teile.length > 1 ? teile[0] : '');
             liste.push({
               name: teile[teile.length - 1],
-              zusatz: g.model === 'Shared storage' ? 'geteilt' : (teile.length > 1 ? teile[0] : ''),
+              zusatz: [ort, isNaN(fv) ? '' : gb(fv) + ' frei'].filter(Boolean).join(' · '),
               wert: isNaN(v) ? null : v,
             });
           }
@@ -258,6 +425,83 @@ sections:
             `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${x.wert === null ? 0 : Math.min(100, Math.max(1, x.wert))}%;border-radius:3px;background:${stufe(x.wert)};"></div></div></div>`
           ).join('');
           return kopf + (zeilen || `<div style="font-size:13px;color:${S};">Keine Speicher gefunden</div>`);
+        ]]]
+    styles: *huelle
+  # ---------------------------------------------------------- Platten & ZFS
+  - type: custom:button-card
+    variables:
+      temp: [60, 70]
+      verschleiss: [80, 90]
+      gelb: 80
+      rot: 90
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    custom_fields:
+      inhalt: |
+        [[[
+          const V = 'var(--nachtblau-violett, #b399d4)', B = 'var(--nachtblau-blau, #7fb3d5)';
+          const G = 'var(--nachtblau-gruen, #a6d49e)', A = 'var(--nachtblau-amber, #e6b566)', R = 'var(--nachtblau-rot, #f0736a)';
+          const S = 'var(--nachtblau-text-sekundaer, #8794a5)', L = 'var(--nachtblau-label, #b4c0cf)', T = 'var(--nachtblau-text, #f2f5f8)';
+          const geraete = hass.devices || {};
+          const je = {};
+          for (const e of Object.values(hass.entities || {})) {
+            if (e.platform !== 'proxmoxve_custom' || !e.device_id || !e.translation_key) continue;
+            const g = geraete[e.device_id];
+            if (!g) continue;
+            const art = g.model === 'ZFS' ? 'zfs' : /^Disk\s/.test(g.name || '') ? 'disk' : null;
+            if (!art) continue;
+            const x = je[e.device_id] || (je[e.device_id] = { art, g, e: {} });
+            x.e[e.translation_key] = e.entity_id;
+          }
+          const wert = (x, k) => { const s = x.e[k] ? states[x.e[k]] : null; return s ? s.state : null; };
+          const zahl = (x, k) => { const v = parseFloat(wert(x, k)); return isNaN(v) ? null : v; };
+          const de = (v, d) => v === null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+          const tb = (v) => v === null ? '' : v >= 1000 ? de(v / 1000, 1) + ' TB' : de(v, 0) + ' GB';
+          const stufe = (v, [g, r], normal) => v === null ? S : v >= r ? R : v >= g ? A : normal;
+          const pools = Object.values(je).filter((x) => x.art === 'zfs').sort((a, b) => (a.g.name || '').localeCompare(b.g.name || ''));
+          const platten = Object.values(je).filter((x) => x.art === 'disk').sort((a, b) => (a.g.name || '').localeCompare(b.g.name || ''));
+          const poolOk = (x) => wert(x, 'zfs_health') === 'ONLINE';
+          const platteOk = (x) => wert(x, 'health') !== 'on';
+          const probleme = pools.filter((x) => !poolOk(x)).length + platten.filter((x) => !platteOk(x)).length;
+          const bc = probleme ? R : G;
+          const badge = pools.length + platten.length ? `<span style="flex:none;color:${bc};background:color-mix(in srgb, ${bc} 12%, transparent);border:1px solid color-mix(in srgb, ${bc} 24%, transparent);font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;white-space:nowrap;">${probleme ? probleme + ' Problem' + (probleme === 1 ? '' : 'e') : 'OK'}</span>` : '';
+          const unter = [platten.length ? platten.length + ' Platte' + (platten.length === 1 ? '' : 'n') : '', pools.length ? (pools.length === 1 ? 'ZFS-Pool ' + (pools[0].g.name || '').replace(/^.*ZFS Pool\s+/, '') : pools.length + ' ZFS-Pools') : ''].filter(Boolean).join(' · ') || 'Keine Platten gefunden';
+          const kopf =
+            `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">` +
+            `<div style="flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb, ${V} 16%, transparent);border:1px solid color-mix(in srgb, ${V} 24%, transparent);"><ha-icon icon="mdi:expansion-card-variant" style="--mdc-icon-size:23px;--ha-icon-display:block;color:${V};"></ha-icon></div>` +
+            `<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:${T};">Platten &amp; ZFS</div>` +
+            `<div style="font-size:12.5px;line-height:1.3;color:${S};">${unter}</div></div>${badge}</div>`;
+          const balken = (p, farbe) => `<div style="grid-column:1 / -1;height:5px;border-radius:3px;background:var(--nachtblau-unterkachel-rand, rgba(255, 255, 255, 0.06));overflow:hidden;"><div style="height:100%;width:${p === null ? 0 : Math.min(100, Math.max(1, p))}%;border-radius:3px;background:${farbe};"></div></div>`;
+          const rahmen = (i) => `display:grid;grid-template-columns:minmax(0, 1fr) auto;gap:3px 10px;align-items:center;padding:8px 2px;${i ? 'border-top:1px solid var(--nachtblau-huelle-rand, rgba(255, 255, 255, 0.05));' : ''}`;
+          const zeilen = [];
+          for (const x of pools) {
+            const p = zahl(x, 'zfs_used_perc'), ok = poolOk(x);
+            const name = (x.g.name || '').replace(/^.*ZFS Pool\s+/, '');
+            zeilen.push(`<div style="${rahmen(zeilen.length)}">` +
+              `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name} <span style="font-size:12px;font-weight:400;color:${S};">ZFS · ${tb(zahl(x, 'zfs_used'))} von ${tb(zahl(x, 'zfs_total'))}</span></div>` +
+              `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;color:${ok ? (p !== null && p >= variables.gelb ? stufe(p, [variables.gelb, variables.rot], T) : T) : R};">${ok ? de(p, 1) + ' %' : wert(x, 'zfs_health') || 'unbekannt'}</div>` +
+              balken(p, stufe(p, [variables.gelb, variables.rot], B)) + `</div>`);
+          }
+          for (const x of platten) {
+            const name = (x.g.name || '').replace(/^Disk\s+[^:]+:\s*/, '');
+            const typ = ((x.g.model || '').split(/\s+/)[0] || '').replace(/^NVME$/i, 'NVMe');
+            const t = zahl(x, 'temperature'), w = zahl(x, 'disk_wearout'), h = zahl(x, 'power_hours'), c = zahl(x, 'power_cycles');
+            const ok = platteOk(x);
+            const rechts = ok ? `<span style="color:${stufe(t, variables.temp, T)};">${de(t, 0)} °C</span>` : `<span style="color:${R};">SMART-Fehler</span>`;
+            const info = [w !== null ? `Verschleiß <b style="font-weight:700;color:${stufe(w, variables.verschleiss, L)};">${de(w, 0)} %</b>` : '', h !== null ? de(h, 0) + ' h' : '', c !== null ? de(c, 0) + ' Starts' : ''].filter(Boolean).map((v) => `<span style="white-space:nowrap;">${v}</span>`).join(' · ');
+            zeilen.push(`<div style="${rahmen(zeilen.length)}">` +
+              `<div style="font-size:14px;font-weight:500;color:${T};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name} <span style="font-size:12px;font-weight:400;color:${S};">${[tb(zahl(x, 'disk_size')), typ].filter(Boolean).join(' · ')}</span></div>` +
+              `<div style="font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;">${rechts}</div>` +
+              `<div style="grid-column:1 / -1;font-size:12px;line-height:1.35;color:${S};">${info}</div>` +
+              (w !== null ? balken(w, stufe(w, variables.verschleiss, B)) : '') + `</div>`);
+          }
+          const fuss = platten.length ? `<div style="font-size:11.5px;line-height:1.4;color:${S};margin-top:8px;">Verschleiß: verbrauchter Anteil laut SMART, ab ${variables.verschleiss[0]} % Amber. Temperatur ab ${variables.temp[0]} °C Amber, ab ${variables.temp[1]} °C Rot.</div>` : '';
+          return kopf + (zeilen.join('') || `<div style="font-size:13px;color:${S};">Keine Platten gefunden</div>`) + fuss;
         ]]]
     styles: *huelle
 - type: grid
