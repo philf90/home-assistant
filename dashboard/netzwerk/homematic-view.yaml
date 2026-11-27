@@ -24,7 +24,9 @@
 #                 offline, Funk getrennt (rot); Alarm- oder Servicemeldung,
 #                 schwache Batterie, Firmware-Update (amber); sonst "Alles in
 #                 Ordnung". Dazu Systemzustand, Latenz, letztes Ereignis.
-#                 Antippen oeffnet die CCU.
+#                 Antippen oeffnet die CCU. Jede Warnung steht in einer eigenen
+#                 Zeile unter dem Titel und bricht dort um; neben Icon und
+#                 Titel passt bei 360 px nur "Alles in Ordnung".
 #   Funk          CCU (Funkmodul RPI-RF-MOD) und Access Point (HAP, Garage):
 #                 Duty Cycle (vom Funkmodul selbst gemeldet) und Carrier
 #                 Sense;
@@ -117,8 +119,12 @@ sections:
               alarm: binary_sensor.rauchmelder_buro_rauchalarm
               status: sensor.rauchmelder_buro_rauchmelder_alarmstatus
               batterie: binary_sensor.rauchmelder_buro_batterie
-        custom_fields:
-          lage: |
+          # Wichtigster offener Punkt fuer die Pille (Feld lage). Alles ausser "Alles in
+          # Ordnung" steht in einer eigenen Zeile unter dem Titel (styles.grid): bei 360 px
+          # bleiben neben Icon und Titel nur etwa 140 px, die Warntexte sind 150 bis 190 px
+          # breit, ein Rauchalarm mit mehreren Raeumen noch breiter. button-card wertet
+          # Variablen alphabetisch aus; "zustand" kommt nach allen, die es liest.
+          zustand: |
             [[[
               const st = (id) => (id && states[id]) ? states[id].state : '';
               const zahl = (id) => { const v = parseFloat(st(id)); return Number.isFinite(v) ? v : 0; };
@@ -140,7 +146,13 @@ sections:
               else if (zahl(variables.service) > 0) { c = AMBER; t = zahl(variables.service) === 1 ? '1 Servicemeldung' : `${zahl(variables.service)} Servicemeldungen`; }
               else if (bat) { c = AMBER; t = bat === 1 ? '1 Batterie schwach' : `${bat} Batterien schwach`; }
               else if (upd) { c = AMBER; t = upd === 1 ? '1 Update' : `${upd} Updates`; }
-              return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
+              return { farbe: c, text: t, ok: c === GRUEN };
+            ]]]
+        custom_fields:
+          lage: |
+            [[[
+              const { farbe: c, text: t, ok } = variables.zustand;
+              return `<span style="display:inline-flex;align-items:center;gap:6px;color:${c};background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:11px;${ok ? 'white-space:nowrap;' : 'white-space:normal;max-width:100%;box-sizing:border-box;'}"><span style="flex:none;width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 0 3px color-mix(in srgb, ${c} 18%, transparent);"></span>${t}</span>`;
             ]]]
           info: |
             [[[
@@ -159,9 +171,11 @@ sections:
             - background: 'linear-gradient(180deg, var(--nachtblau-huelle-oben, #1b2231) 0%, var(--nachtblau-huelle-unten, #171d29) 55%)'
             - box-shadow: 0 18px 44px -22px var(--nachtblau-schatten, rgba(0, 0, 0, 0.7))
           grid:
-            - grid-template-areas: '"i n lage" "info info info"'
-            - grid-template-columns: min-content 1fr min-content
-            - grid-template-rows: min-content min-content
+            # "Alles in Ordnung" rechts neben dem Titel, jede Warnung in eigener Zeile
+            # darunter ueber die volle Breite (siehe variables.zustand)
+            - grid-template-areas: '[[[ return variables.zustand.ok ? `"i n lage" "info info info"` : `"i n" "lage lage" "info info"`; ]]]'
+            - grid-template-columns: '[[[ return variables.zustand.ok ? `min-content 1fr min-content` : `min-content 1fr`; ]]]'
+            - grid-template-rows: '[[[ return variables.zustand.ok ? `min-content min-content` : `min-content min-content min-content`; ]]]'
             - row-gap: 12px
           img_cell:
             - width: 44px
@@ -185,7 +199,9 @@ sections:
             - color: 'var(--nachtblau-text, #f2f5f8)'
           custom_fields:
             lage:
-              - justify-self: end
+              - justify-self: '[[[ return variables.zustand.ok ? `end` : `start`; ]]]'
+              - min-width: 0
+              - white-space: normal
             info:
               - justify-self: start
               - text-align: left
