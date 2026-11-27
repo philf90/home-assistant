@@ -73,7 +73,8 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
 | `automation.weihnachten_beleuchtung_ausserhalb_der_saison_aus` | eines der vier Lichter wird `on` (Status-Auslöser nur mit `to`); Neustart | Saison aus und mindestens eines der vier Lichter an (siehe Hauptschalter) |
 
 - **Schwelle** im Helfer `input_number.weihnachten_einschalt_helligkeit`
-  (Kategorie Einstellung, 0 bis 500 lx), eingestellt auf **50 lx**. Der
+  (Kategorie Einstellung, 0 bis 500 lx), seit 2026-11-27 auf **150 lx**
+  (vorher 50 lx, Abschnitt „Warum 150 lx“). Der
   Helfer braucht die Einheit `lx`, sonst reagieren Auslöser und Bedingung
   nicht.
 - Die Auslöser 14:00 und Neustart holen das Einschalten nach, wenn es dann
@@ -94,7 +95,35 @@ Bereich Wohnzimmer. Ziel ist `label_id: weihnachten`, also Baum und Fenster.
   höchstens 4,2 lx. Wer das Licht davor von Hand ausschaltet, bekommt es zum
   Rückfall wieder eingeschaltet.
 
-### Warum 50 lx
+### Warum 150 lx
+
+Am 27.11. war es mit 50 lx zu spät: Die Beleuchtung wurde um 16:34:38 von
+Hand eingeschaltet, weil es draußen schon recht dunkel war; die Station maß
+37 lx (davor 62,9 lx um 16:29). Die Automation hätte erst um 16:43:53
+geschaltet. Einschaltzeit je Schwelle einschließlich 10 Minuten Wartezeit,
+aus den 5-Minuten-Höchstwerten der Langzeitstatistik (bis zu 5 Minuten zu
+spät geschätzt); am 27.11. aus den Einzelwerten:
+
+| Tag | 50 lx | 100 lx | 150 lx | 200 lx |
+|---|---|---|---|---|
+| 18.11. | 17:00 (Rückfall greift vorher) | 16:25 | 16:20 | 16:20 |
+| 19.11. | 16:40 | 16:30 | 16:25 | 16:25 |
+| 20.11. | 16:45 | 15:50 | 15:50 | 15:50 |
+| 21.11. | 16:50 | 16:45 | 16:40 | 16:30 |
+| 22.11. | 16:35 | 16:30 | 16:20 | 16:15 |
+| 23.11. | 16:50 | 16:45 | 16:35 | 16:30 |
+| 24.11. | 16:45 | 16:40 | 16:30 | 16:25 |
+| 25.11. | 16:35 | 16:30 | 16:25 | 16:00 |
+| 26.11. (trüb) | 16:15 | 16:00 | 15:50 | 15:40 |
+| 27.11. | 16:43:53 | 16:37:03 | 16:31:17 | 16:26:42 |
+
+150 lx hätte am 27.11. gut 3 Minuten vor dem Einschalten von Hand
+geschaltet und schaltet an klaren Tagen etwa 16:20 bis 16:40. Folge: An
+trüben oder kurz dunklen Nachmittagen kommt das Licht früher (20.11. und
+26.11. gegen 15:50). Die Schwelle gilt auch für den Neustart-Zweig von
+„morgens aus“ (Abschnitt Neustartsicher); der passt sich mit an.
+
+### Bisher: warum 50 lx (bis 2026-11-27)
 
 Der Sensor misst am Standort deutlich weniger als freier Himmel: Zum
 Sonnenuntergang (23.11. etwa 16:37) zeigt er zwischen 1 und rund 90 lx, eine
