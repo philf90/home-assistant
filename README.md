@@ -92,6 +92,9 @@ Dazu:
     (HACS, Frontend)
   - `hue:` aus [Hass Hue Icons](https://github.com/arallsopp/hass-hue-icons)
     (HACS, Frontend)
+  - `selfhst:` aus [Selfh.st icons](https://github.com/micash545/hass-selfhst-icons)
+    (HACS/Marketplace, Frontend) für das Homematic-IP-Logo in Navigation und
+    Technik-Dashboard
 
   Alle übrigen Icons sind `mdi:` und kommen mit Home Assistant.
 - **Home Assistant 2026.7 oder neuer** für `wachmodus-konfig.yaml` (neue
