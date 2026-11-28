@@ -71,6 +71,23 @@
 # sensor.time laesst die Karte jede Minute neu zeichnen (Altersangabe).
 # Zonen (Zuhause, Arbeit) haben Vorrang vor der Adresse.
 #
+# Zuhause und in Zonen (seit 28.11.2026): zweite Zeile "seit 07:58" (gestern
+# "seit gestern 19:30", davor "seit Mo 16:35", ab 48 h "seit über 2 Tagen"),
+# aus der Historie nach derselben Regel wie der Popup-Kopf, nicht aus
+# last_changed (ein Neustart setzt es auf die Startzeit). Grund: Beide Personen
+# waren vom 18. bis 28.11.2026 rund 87 % der Zeit zuhause, die Karte zeigte
+# dann nur "Zuhause". Die Zeile gleicht ausserdem die Hoehe an die
+# Unterwegs-Fassung an. Meldet sich das Handy zwischen 07 und 22 Uhr
+# zusammengerechnet 3 h nicht, steht dort in Amber "keine Meldung seit 14:05"
+# (Begruendung der Schwelle im Code, Abschnitt "Zuhause und in Zonen").
+# Halt unterwegs: Steht die Person seit mindestens 3 min an einem Ort, den
+# Places benennt (Geschaeft, Halle, Haltestelle), steht statt der Strasse der
+# Name, darunter "<Ort> · seit 25 Min". Strassennamen zaehlen nicht.
+# Heimweg: Faehrt die Person und meldet Places "towards home", ersetzt die
+# Ankunftszeit laut Waze das Wort "Heimweg" ("zuhause ca. 17:48"). Braucht
+# die Integration Waze Travel Time mit einem Eintrag (wie die Fahrzeiten-Karte)
+# und zone.home mit Koordinaten.
+#
 # Voraussetzung: custom:button-card und browser_mod (beide HACS), sensor.time
 # (Integration "Time & Date"), fuer die Bewegungsspur ein Valhalla-Server und
 # das Paket bewegungsspur-konfig.yaml. Optional fuer den Ort: Adress-Sensor
@@ -80,7 +97,10 @@
 # _route_number, _city, _last_updated, _direction_of_travel, _latitude und
 # _longitude (Places legt street, route_number, last_updated, latitude und
 # longitude deaktiviert an). Ohne diese Sensoren
-# zeigt die Karte wie bisher "Unterwegs".
+# zeigt die Karte wie bisher "Unterwegs". Fuer den Namen bei einem Halt
+# zusaetzlich _place_name und _place_type, fuer die Ankunftszeit auf dem
+# Heimweg die Integration Waze Travel Time (ein Eintrag genuegt, siehe
+# fahrzeiten-templates.yaml, "Waze-Eintrag als Anker").
 #
 # Bewegungsspur: Tippen oeffnet ein browser_mod-Popup mit der Strecke der
 # laufenden bzw. letzten Abwesenheit, auf Strassen eingerastet, und dem
@@ -288,72 +308,22 @@ cards:
                       const zone = !home && !weg && !unbekannt;
                       const farbe = home ? gruen : (zone ? blau : (weg ? rot : sek));
                       const status = home ? 'Zuhause' : (weg ? 'Unterwegs' : (unbekannt ? 'Ort unbekannt' : esc(raw)));
-                      // Uhrzeit: heute "09:54", gestern "gestern 18:51", sonst "Mo 16:35"
-                      const uhr = (t) => {
-                        const d = new Date(t);
-                        const hm = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                        const heute = new Date(); heute.setHours(0, 0, 0, 0);
-                        if (d >= heute) return hm;
-                        if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
-                        return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
-                      };
-                      // "seit": Beginn des aktuellen Zustands ohne kurze Ausreisser. Ein Abschnitt
-                      // mit anderem Zustand zaehlt nicht, wenn er kuerzer als 2 min ist, unbekannt
-                      // war oder als Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die
-                      // Strecke unten. Am 15.11.2026 zeigte der Kopf sonst "Zuhause seit 19:32"
-                      // nach einem 25-s-Sprung, statt 19:02. Historie: 48 h, einmal je Zustandswechsel.
-                      const VERSION = 2;
-                      if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== VERSION) {
-                        const kp = { version: VERSION, cache: {} };
-                        kp.beginn = (rows) => {
-                          let attr = null;
-                          const z = rows.map((r) => { if (r.a) attr = r.a; return { s: r.s, a: r.a || attr, t: r.lu }; });
-                          if (!z.length) return null;
-                          const genau = (x) => x.a && typeof x.a.latitude === 'number' && (x.a.gps_accuracy ?? 999) <= 50;
-                          // Abschnitte gleichen Zustands
-                          const ab = [];
-                          z.forEach((x) => {
-                            const l = ab[ab.length - 1];
-                            if (l && l.s === x.s) { l.genau += genau(x) ? 1 : 0; return; }
-                            ab.push({ s: x.s, von: x.t, genau: genau(x) ? 1 : 0 });
-                          });
-                          ab.forEach((x, i) => { x.bis = i + 1 < ab.length ? ab[i + 1].von : Infinity; });
-                          const ausreisser = (x) => ['unknown', 'unavailable'].includes(x.s) || x.bis - x.von < 120
-                            || (x.s !== 'home' && x.genau < 2);
-                          let i = ab.length - 1;
-                          const jetzt = ab[i].s;
-                          // Rueckwaerts: Ausreisser zwischen zwei Abschnitten des aktuellen Zustands ueberspringen
-                          for (let k = i - 1; k >= 0; k--) {
-                            if (!ausreisser(ab[k])) break;
-                            if (k - 1 >= 0 && ab[k - 1].s === jetzt) { i = k - 1; k = i; continue; }
-                            if (k - 1 < 0) break;
-                          }
-                          return ab[i].von;
-                        };
-                        kp.lade = async (hass, eid) => {
-                          const ende = new Date(), start = new Date(ende.getTime() - 48 * 3600e3);
-                          const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
-                          return kp.beginn(h[eid] || []);
-                        };
-                        window.__nachtblauKopf = kp;
-                      }
+                      // "seit": Bibliothek window.__nachtblauKopf aus der Personenkarte (Erklaerung
+                      // dort, Abschnitt "Seit wann"). Die Karte laedt sie vor dem Popup; fehlt sie
+                      // doch, gilt last_changed. kp.zeige schreibt den Text nach, sobald die
+                      // Historie da ist.
                       const kp = window.__nachtblauKopf;
-                      let seitT = e ? Date.parse(e.last_changed) : NaN;
-                      if (e) {
-                        const c = kp.cache[e.entity_id];
-                        if (!c || c.lc !== e.last_changed) {
-                          const karte = this, hh = this._hass || hass, eintrag = { lc: e.last_changed, t: null };
-                          kp.cache[e.entity_id] = eintrag;
-                          kp.lade(hh, e.entity_id).then((t) => {
-                            // Nur frueher als der letzte Wechsel uebernehmen; beginnt der Abschnitt am
-                            // Anfang der 48 h, gilt der letzte Wechsel
-                            if (t && t * 1000 < seitT - 1000) { eintrag.t = t * 1000; if (karte.requestUpdate) karte.requestUpdate(); }
-                          }).catch(() => {});
-                        } else if (c.t) {
-                          seitT = c.t;
-                        }
+                      const uhr = (t) => {
+                        if (kp) return kp.uhr(t);
+                        const d = new Date(t);
+                        return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                      };
+                      let seit = '';
+                      if (e && !unbekannt) {
+                        if (kp) { kp.karten.add(this); seit = kp.text(kp.stand(this._hass || hass, e)); }
+                        else if (!isNaN(Date.parse(e.last_changed))) seit = 'seit ' + uhr(Date.parse(e.last_changed));
                       }
-                      const seit = !unbekannt && !isNaN(seitT) ? ' seit ' + uhr(seitT) : '';
+                      const seitHtml = e && !unbekannt ? ` <span data-pk-seit="${esc(e.entity_id)}">${esc(seit)}</span>` : '';
                       const posT = e ? Date.parse(e.last_updated) : NaN;
                       const min = isNaN(posT) ? null : Math.max(0, Math.floor((Date.now() - posT) / 60000));
                       const alter = min === null ? '' : (min < 1 ? 'gerade eben' : (min < 60 ? `vor ${min} Min` : 'um ' + uhr(posT)));
@@ -368,7 +338,7 @@ cards:
                             <span style="font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${sek};">${home ? 'Letzte Strecke' : 'Strecke seit Aufbruch'}</span>
                             <span style="display:flex;align-items:center;gap:7px;min-width:0;font-size:15.5px;font-weight:700;line-height:1.2;color:${text};">
                               <span style="width:7px;height:7px;flex:none;border-radius:50%;background:${farbe};box-shadow:0 0 0 3px color-mix(in srgb, ${farbe} 18%, transparent);"></span>
-                              <span style="min-width:0;${zweiZeilen}">${status}${seit}</span>
+                              <span style="min-width:0;${zweiZeilen}">${status}${seitHtml}</span>
                             </span>
                             ${zeile2 ? `<span style="font-size:12.5px;line-height:1.25;color:${sek};">${zeile2}</span>` : ''}
                           </div>
@@ -1237,6 +1207,88 @@ cards:
           };
           const pz = variables.places_prefix || '';
           const pl = (s) => { const o = pz ? states[pz + '_' + s] : null; return o && !leer(o.state) ? String(o.state).trim() : null; };
+
+          // ---------- Seit wann: Beginn des Zustands aus der Historie ----------
+          // Bibliothek window.__nachtblauKopf, einmal pro Seite; der Popup-Kopf nutzt
+          // sie mit (das Popup oeffnet erst nach der Karte). Ein Abschnitt mit anderem
+          // Zustand zaehlt nicht, wenn er kuerzer als 2 min ist, unbekannt war oder als
+          // Abwesenheit keine 2 genauen Punkte (bis 50 m) hat; wie die Strecke im Popup.
+          // Am 15.11.2026 hiess es sonst "Zuhause seit 19:32" nach einem 25-s-Sprung,
+          // statt 19:02. last_changed allein reicht nicht: Nach einem Neustart von Home
+          // Assistant steht dort die Startzeit (28.11.2026: beide Personen 09:13:01,
+          // letzter echter Wechsel am Vortag). Historie: 48 h, einmal je Zustandswechsel.
+          // Liegt der Beginn am Anfang der 48 h, steht "seit über 2 Tagen", ausser
+          // last_changed ist aelter (dann gilt es). Bis die Historie da ist, bleibt die
+          // Zeile leer; danach schreibt kp.zeige den Text in jede offene Karte
+          // (button-card zeichnet ohne Zustandsaenderung nicht neu, shouldUpdate).
+          const KOPF_VERSION = 3;
+          if (!window.__nachtblauKopf || window.__nachtblauKopf.version !== KOPF_VERSION) {
+            const kp = { version: KOPF_VERSION, cache: {}, karten: new Set() };
+            kp.beginn = (rows) => {
+              let a0 = null;
+              const z = rows.map((r) => { if (r.a) a0 = r.a; return { s: r.s, a: r.a || a0, t: r.lu }; });
+              if (!z.length) return null;
+              const genau = (x) => x.a && typeof x.a.latitude === 'number' && (x.a.gps_accuracy ?? 999) <= 50;
+              const ab = [];
+              z.forEach((x) => {
+                const l = ab[ab.length - 1];
+                if (l && l.s === x.s) { l.genau += genau(x) ? 1 : 0; return; }
+                ab.push({ s: x.s, von: x.t, genau: genau(x) ? 1 : 0 });
+              });
+              ab.forEach((x, i) => { x.bis = i + 1 < ab.length ? ab[i + 1].von : Infinity; });
+              const ausreisser = (x) => ['unknown', 'unavailable'].includes(x.s) || x.bis - x.von < 120
+                || (x.s !== 'home' && x.genau < 2);
+              let i = ab.length - 1;
+              const jetzt = ab[i].s;
+              // Rueckwaerts: Ausreisser zwischen zwei Abschnitten des aktuellen Zustands ueberspringen
+              for (let k = i - 1; k >= 0; k--) {
+                if (!ausreisser(ab[k])) break;
+                if (k - 1 >= 0 && ab[k - 1].s === jetzt) { i = k - 1; k = i; continue; }
+                if (k - 1 < 0) break;
+              }
+              return ab[i].von;
+            };
+            kp.lade = async (hass, eid) => {
+              const ende = new Date(), start = new Date(ende.getTime() - 48 * 3600e3);
+              const h = await hass.callWS({ type: 'history/history_during_period', start_time: start.toISOString(), end_time: ende.toISOString(), entity_ids: [eid], minimal_response: false, no_attributes: false, significant_changes_only: false });
+              const t = kp.beginn(h[eid] || []);
+              return t === null ? null : { t: t * 1000, offen: t * 1000 <= start.getTime() + 1000 };
+            };
+            // Uhrzeit: heute "09:54", gestern "gestern 18:51", sonst "Mo 16:35"
+            kp.uhr = (t) => {
+              const d = new Date(t);
+              const hm = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+              const heute = new Date(); heute.setHours(0, 0, 0, 0);
+              if (d >= heute) return hm;
+              if (d >= heute.getTime() - 86400000) return 'gestern ' + hm;
+              return d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '') + ' ' + hm;
+            };
+            kp.text = (c) => (!c || !c.fertig ? '' : (c.offen ? 'seit über 2 Tagen' : 'seit ' + kp.uhr(c.t)));
+            kp.stand = (hass, e) => {
+              let c = kp.cache[e.entity_id];
+              if (c && c.lc === e.last_changed) return c;
+              const lcT = Date.parse(e.last_changed);
+              c = { lc: e.last_changed, t: lcT, offen: false, fertig: false };
+              kp.cache[e.entity_id] = c;
+              kp.lade(hass, e.entity_id)
+                .then((r) => { if (r && r.t < lcT - 1000) { c.t = r.t; c.offen = r.offen; } })
+                .catch(() => { /* Historie nicht abrufbar: last_changed gilt */ })
+                .finally(() => { c.fertig = true; kp.zeige(e.entity_id); });
+              return c;
+            };
+            kp.zeige = (eid) => {
+              const txt = kp.text(kp.cache[eid]);
+              kp.karten.forEach((k) => {
+                if (!k.isConnected) { kp.karten.delete(k); return; }
+                if (!k.shadowRoot) return;
+                k.shadowRoot.querySelectorAll('[data-pk-seit]').forEach((el) => { if (el.dataset.pkSeit === eid) el.textContent = txt; });
+              });
+            };
+            window.__nachtblauKopf = kp;
+          }
+          const kp = window.__nachtblauKopf;
+          kp.karten.add(this);
+
           const posT = e ? zeit(e.last_updated) : null;
           const frisch = (t) => t !== null && posT !== null && t >= posT - 120000;
           const geo = states[variables.geocoded_entity];
@@ -1324,13 +1376,97 @@ cards:
           const kmh = speed !== null && speed > 0 ? `${Math.round(speed * 3.6)} km/h` : null;
           const richtungMap = { 'towards home': 'Heimweg', 'away from home': 'entfernt sich' };
           const richtung = plPasst ? (richtungMap[String(pl('direction_of_travel') || '').toLowerCase()] || null) : null;
+          const unterwegs = !home && !inZone && raw === 'not_home' && !!quelle;
+
+          // ---------- Ankunft zuhause auf dem Heimweg (Waze) ----------
+          // Nur wenn die Person faehrt und Places "towards home" meldet. Aufruf wie in
+          // der Fahrzeiten-Karte (fahrzeiten-templates.yaml): waze_travel_time.
+          // get_travel_times mit Antwort, Start und Ziel als Koordinaten, Start auf drei
+          // Nachkommastellen (rund 100 m) gerundet. Deren Bibliothek laedt nur auf der
+          // Auto-View, deshalb hier ein eigener Cache je Person, gleiche Regel: neu nach
+          // 5 min, bei anderem Start nach 2 min; nur mit Echtzeit, schnellste Route.
+          // Gerechnet wird nur, solange die Karte offen ist, in jedem Browser fuer sich.
+          // Ohne Antwort oder mit Antwort aelter als 10 min bleibt "Heimweg" stehen.
+          const ETA_VERSION = 1;
+          if (!window.__nachtblauEta || window.__nachtblauEta.version !== ETA_VERSION) {
+            const et = { version: ETA_VERSION, cache: {}, karten: new Set() };
+            et.text = (eid) => {
+              const c = et.cache[eid];
+              if (!c || !c.an || Date.now() - c.zeit > 600000) return 'Heimweg';
+              if (c.an - Date.now() < 60000) return 'gleich zuhause';
+              return 'zuhause ca. ' + new Date(c.an).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            };
+            et.zeige = (eid) => {
+              const txt = et.text(eid);
+              et.karten.forEach((k) => {
+                if (!k.isConnected) { et.karten.delete(k); return; }
+                if (!k.shadowRoot) return;
+                k.shadowRoot.querySelectorAll('[data-pk-eta]').forEach((el) => { if (el.dataset.pkEta === eid) el.textContent = txt; });
+              });
+            };
+            et.abruf = (hass, eid, o, d) => {
+              const c = et.cache[eid];
+              const alter = c ? Date.now() - c.zeit : Infinity;
+              if (c && ((c.laeuft && alter < 60000) || (!c.laeuft && alter < (c.o === o ? 300000 : 120000)))) return;
+              et.cache[eid] = { ...(c || {}), laeuft: true, zeit: Date.now() };
+              hass.callService('waze_travel_time', 'get_travel_times', { origin: o, destination: d, region: 'eu', realtime: true }, undefined, false, true)
+                .then((r) => {
+                  const routen = (r && r.response && Array.isArray(r.response.routes)) ? r.response.routes : [];
+                  const b = routen.filter((x) => typeof x.duration === 'number').reduce((a, x) => (!a || x.duration < a.duration ? x : a), null);
+                  et.cache[eid] = { zeit: Date.now(), o, an: b ? Date.now() + b.duration * 60000 : null };
+                })
+                .catch(() => { et.cache[eid] = { zeit: Date.now(), o, an: null }; })
+                .finally(() => et.zeige(eid));
+            };
+            window.__nachtblauEta = et;
+          }
+          const et = window.__nachtblauEta;
+          et.karten.add(this);
+          const heimZone = states['zone.home'];
+          const heimweg = unterwegs && faehrt && !veraltet && !unpassend && richtung === 'Heimweg' && hatPos
+            && !!heimZone && typeof heimZone.attributes.latitude === 'number';
+          if (heimweg) {
+            et.abruf(this._hass || hass, e.entity_id, pLat.toFixed(3) + ',' + pLon.toFixed(3),
+              heimZone.attributes.latitude.toFixed(5) + ',' + heimZone.attributes.longitude.toFixed(5));
+          }
+          const etaHtml = heimweg ? `<span data-pk-eta="${esc(e.entity_id)}">${et.text(e.entity_id)}</span>` : null;
+
+          // ---------- Halt an einem benannten Ort (Places) ----------
+          // Steht die Person, nennt die Karte statt der Strasse den Ort aus Places
+          // (<places_prefix>_place_name, Typ aus _place_type), darunter Ort und Dauer.
+          // Gleiche Filter wie die Tagesliste im Popup: Strassen (Typ motorway bis
+          // busway) nennen keinen Ort, bei Haltestellen ("Ort, Name") faellt der Ort
+          // weg; ein Name gleich der Strasse zaehlt auch nicht. Stehen heisst: kein
+          // Fahren, Tempo unter 2 m/s oder unbekannt, Places-Position nah an der Person
+          // (wie bei der Strasse) und derselbe Name seit mindestens 3 min (Places fragt
+          // alle 40-50 s ab; im Vorbeigehen wechselt der Name). Die Dauer zaehlt ab dem
+          // letzten Namenswechsel (last_changed des Sensors), ab 60 min als Uhrzeit.
+          // Nach einem Neustart von Home Assistant beginnt sie neu.
+          const STRASSE = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'road', 'track', 'pedestrian', 'footway', 'path', 'cycleway', 'bridleway', 'steps', 'busway']);
+          const HALTESTELLE = new Set(['bus_stop', 'tram_stop', 'stop_position', 'platform']);
+          const halt = (() => {
+            if (!unterwegs || veraltet || unpassend || faehrt || !plOk) return null;
+            if (speed !== null && speed >= 2) return null;
+            if (!nah(dPl, plT)) return null;
+            const o = pz ? states[pz + '_place_name'] : null;
+            if (!o || leer(o.state)) return null;
+            const typ = String(pl('place_type') || '').toLowerCase();
+            if (STRASSE.has(typ)) return null;
+            let n = String(o.state).trim();
+            if (HALTESTELLE.has(typ) && n.includes(', ')) n = n.slice(n.indexOf(', ') + 2).trim();
+            if (!n || [plStr, geoStr].some((s) => s && s.toLowerCase() === n.toLowerCase())) return null;
+            const ab = zeit(o.last_changed);
+            if (ab === null || Date.now() - ab < 180000) return null;
+            const min = Math.floor((Date.now() - ab) / 60000);
+            return { name: n, seit: min < 60 ? `seit ${min} Min` : 'seit ' + kp.uhr(ab) };
+          })();
+
           // Zeilen: Status (Strasse oder Schild + "bei Ort") und Unterzeile
           // Trennpunkt mit geschuetztem Leerzeichen davor: beim Umbruch beginnt keine Zeile mit "·"
           const TRENNER = '\u00a0· ';
           let zeile1 = esc(statusLabel);
           let zeile2 = '';
           let schild = '';
-          const unterwegs = !home && !inZone && raw === 'not_home' && !!quelle;
           if (unterwegs) {
             if (veraltet || unpassend) {
               // Bei "unpassend" ist die Position aktuell, die Adresse nicht:
@@ -1341,13 +1477,51 @@ cards:
               // Schild und Tempo sind kurz und passen in eine Zeile, Ort und Richtung bekommen die volle Breite
               schild = esc(strRef);
               zeile1 = kmh || '';
-              zeile2 = [ort ? 'bei ' + esc(ort) : null, richtung].filter(Boolean).join(TRENNER) || alterTxt;
+              zeile2 = [ort ? 'bei ' + esc(ort) : null, etaHtml || richtung].filter(Boolean).join(TRENNER) || alterTxt;
+            } else if (halt) {
+              zeile1 = esc(halt.name);
+              zeile2 = [ort ? esc(ort) : null, halt.seit].filter(Boolean).join(TRENNER);
             } else {
               zeile1 = esc(strasse || ort);
               const teile = [];
               if (strasse && ort) teile.push(esc(ort));
               teile.push(faehrt ? kmh : alterTxt);
+              if (etaHtml) teile.push(etaHtml);
               zeile2 = teile.filter(Boolean).join(TRENNER);
+            }
+          }
+
+          // ---------- Zuhause und in Zonen: seit wann, oder keine Meldung ----------
+          // Zweite Zeile "seit 07:58" (Bibliothek oben). Meldet sich das Handy nicht
+          // mehr, steht dort in Amber "keine Meldung seit 14:05". Letzte Meldung: der
+          // juengste Zeitstempel (last_updated) von Person, Tracker, Akku, Ladezustand
+          // und Adress-Sensor; last_reported kommt nicht im Frontend an. Gezaehlt wird
+          // nur die Zeit zwischen 07 und 22 Uhr, Schwelle 3 h (gesetzt): Das iPhone
+          // meldete nachts 6-7 h gar nichts (21.-28.11.2026, auch Akku und Adresse),
+          // tagsueber (08-21 Uhr) war die laengste Luecke 1,5 h, am S25 ebenfalls 1,5 h.
+          const seitZeile = !!e && (home || inZone);
+          let zeile2Farbe = muted;
+          let zeile2Attr = '';
+          if (seitZeile) {
+            const meldungen = [e, trk, states[variables.battery_entity], states[variables.charging_entity], geo]
+              .map((o) => (o ? zeit(o.last_updated) : null)).filter((t) => t !== null);
+            const letzte = meldungen.length ? Math.max(...meldungen) : null;
+            const tagMin = (a, b) => {
+              let s = 0;
+              const d = new Date(a); d.setHours(0, 0, 0, 0);
+              while (d.getTime() < b) {
+                const v = new Date(d).setHours(7, 0, 0, 0), w = new Date(d).setHours(22, 0, 0, 0);
+                s += Math.max(0, Math.min(b, w) - Math.max(a, v));
+                d.setDate(d.getDate() + 1);
+              }
+              return s / 60000;
+            };
+            if (letzte !== null && tagMin(letzte, Date.now()) >= 180) {
+              zeile2 = 'keine Meldung seit ' + esc(kp.uhr(letzte));
+              zeile2Farbe = warn;
+            } else {
+              zeile2 = esc(kp.text(kp.stand(this._hass || hass, e)));
+              zeile2Attr = ` data-pk-seit="${esc(e.entity_id)}"`;
             }
           }
 
@@ -1437,7 +1611,7 @@ cards:
                 <div style="display:flex;align-items:center;gap:5px;margin-top:3px;color:${muted};font-size:13px;line-height:1.2;min-width:0;">
                   ${statusIcon}${schildHtml}${zeile1 ? `<span style="min-width:0;${zweiZeilen}">${zeile1}</span>` : ''}
                 </div>
-                ${zeile2 ? `<div style="margin-top:3px;color:${muted};font-size:12px;line-height:1.25;min-width:0;${zweiZeilen}">${zeile2}</div>` : ''}
+                ${zeile2 || zeile2Attr ? `<div${zeile2Attr} style="margin-top:3px;color:${zeile2Farbe};font-size:12px;line-height:1.25;min-height:15px;min-width:0;${zweiZeilen}">${zeile2}</div>` : ''}
               </div>
             </div>`;
         ]]]
