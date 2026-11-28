@@ -87,14 +87,6 @@
 # Ankunftszeit laut Waze das Wort "Heimweg" ("zuhause ca. 17:48"). Braucht
 # die Integration Waze Travel Time mit einem Eintrag (wie die Fahrzeiten-Karte)
 # und zone.home mit Koordinaten.
-# Gesundheit (seit 28.11.2026): Unter dem Status stehen Schritte heute, Schlaf
-# der letzten Nacht und die Erholungs-Ampel als kleine Kacheln, nur auf der
-# Karte der angemeldeten Person selbst (Attribut user_id) und nur mit
-# variables.gesundheit. Regeln und Farben wie in gesundheit-view.yaml; die
-# Helfer input_datetime.schlaf_letzte_nacht und sensor.erholung_signale kommen
-# aus gesundheit-meldungen-konfig.yaml und gesundheit-view.yaml. Andere
-# Benutzer sehen die Zeile nicht; die Werte selbst bleiben fuer jeden Benutzer
-# der Instanz abrufbar.
 #
 # Voraussetzung: custom:button-card und browser_mod (beide HACS), sensor.time
 # (Integration "Time & Date"), fuer die Bewegungsspur ein Valhalla-Server und
@@ -240,13 +232,6 @@ cards:
       geocoded_entity: sensor.iphone_geocoded_location
       activity_entity: sensor.iphone_activity
       places_prefix: sensor.places_bewohner
-      # Gesundheit auf der Karte, nur fuer die Person selbst sichtbar
-      # (Apple Health ueber die Companion App; weglassen = keine Zeile)
-      gesundheit:
-        schritte: sensor.iphone_health_steps
-        schlaf: sensor.iphone_sleep_duration
-        schlaf_nacht: input_datetime.schlaf_letzte_nacht
-        erholung: sensor.erholung_signale
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
       # Reiter Tagesprofil im Popup: eigene = nur die Person selbst, alle = jeder
       tag_fuer: eigene
@@ -1540,47 +1525,6 @@ cards:
             }
           }
 
-          // ---------- Gesundheit, nur fuer die Person selbst ----------
-          // Variable gesundheit (schritte, schlaf, schlaf_nacht, erholung). Sichtbar
-          // nur, wenn das Attribut user_id der Person der angemeldete Benutzer ist,
-          // wie das Tagesprofil im Popup; die Route Gesundheit ist persoenlich
-          // (design/routen.yaml). Anzeigeregel, kein Zugriffsschutz. Regeln wie in
-          // der Gesundheit-View (gesundheit-view.yaml): Schritte zaehlen nur mit
-          // Update von heute, sonst 0 (TAGESZAEHLER VOM VORTAG); Schlaf nur, wenn
-          // die Nacht heute angekommen ist (input_datetime.schlaf_letzte_nacht,
-          // NAECHTE OHNE UHR), sonst "–"; Erholung aus sensor.erholung_signale:
-          // 0 Gruen "typisch", 1 Amber, ab 2 Koralle, immer mit Text
-          // (ERHOLUNGS-AMPEL). Farben: Schritte Rose, Schlaf Indigo (DESIGN.md).
-          // Schlaf als "8:39" statt "8 h 39": Bei 168 px (133 px Inhalt) passen so
-          // auch 12.345 Schritte und der Schlaf in eine Zeile (gemessen 127 px);
-          // die Erholung bricht in die zweite um.
-          const gv = variables.gesundheit;
-          let gesHtml = '';
-          if (gv && e && user && e.attributes && e.attributes.user_id === user.id) {
-            const rose = 'var(--nachtblau-rose, #e6a0c4)';
-            const indigo = 'var(--nachtblau-indigo, #8ea2e6)';
-            const koralle = 'var(--nachtblau-koralle, #e7936e)';
-            const heuteTxt = new Date().toDateString();
-            const chip = (farbe, icon, txt, titel) => `<span title="${titel}" style="display:inline-flex;align-items:center;gap:3px;flex:none;font-size:11.5px;font-weight:600;line-height:17px;padding:1px 6px;border-radius:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:${farbe};background:color-mix(in srgb, ${farbe} 12%, transparent);border:1px solid color-mix(in srgb, ${farbe} 24%, transparent);"><ha-icon icon="${icon}" style="--mdc-icon-size:12px;--ha-icon-display:block;width:12px;height:12px;display:flex;flex:none;margin:0;"></ha-icon>${txt}</span>`;
-            const teile = [];
-            const sSt = gv.schritte ? states[gv.schritte] : null;
-            if (sSt && !isNaN(parseFloat(sSt.state))) {
-              const schritte = new Date(sSt.last_updated).toDateString() === heuteTxt ? Math.round(parseFloat(sSt.state)) : 0;
-              teile.push(chip(rose, 'mdi:walk', schritte.toLocaleString('de-DE'), 'Schritte heute'));
-            }
-            const sl = gv.schlaf ? states[gv.schlaf] : null;
-            if (sl) {
-              const nacht = gv.schlaf_nacht && states[gv.schlaf_nacht] ? states[gv.schlaf_nacht].attributes.timestamp : null;
-              const v = nacht && new Date(nacht * 1000).toDateString() === heuteTxt ? parseFloat(sl.state) : NaN;
-              const m = Math.round(v);
-              teile.push(chip(indigo, 'mdi:sleep', isNaN(v) ? '–' : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`, 'Schlaf letzte Nacht'));
-            }
-            const er = gv.erholung ? states[gv.erholung] : null;
-            const n = er ? parseInt(er.state, 10) : NaN;
-            if (!isNaN(n)) teile.push(chip(n === 0 ? green : (n === 1 ? warn : koralle), 'mdi:heart-pulse', n === 0 ? 'typisch' : `${n} auffällig`, 'Erholung'));
-            if (teile.length) gesHtml = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${teile.join('')}</div>`;
-          }
-
           // ---------- Akku ----------
           const bat = states[variables.battery_entity];
           const batBad = !bat || bat.state === 'unavailable' || bat.state === 'unknown';
@@ -1668,7 +1612,6 @@ cards:
                   ${statusIcon}${schildHtml}${zeile1 ? `<span style="min-width:0;${zweiZeilen}">${zeile1}</span>` : ''}
                 </div>
                 ${zeile2 || zeile2Attr ? `<div${zeile2Attr} style="margin-top:3px;color:${zeile2Farbe};font-size:12px;line-height:1.25;min-height:15px;min-width:0;${zweiZeilen}">${zeile2}</div>` : ''}
-                ${gesHtml}
               </div>
             </div>`;
         ]]]
