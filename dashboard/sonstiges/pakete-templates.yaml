@@ -21,7 +21,9 @@
 #                       abholbereite; Tippen oeffnet die View. Sichtbar nur,
 #                       solange eines davon vorliegt (visibility in
 #                       pakete-karte.yaml)
-#   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
+#   pakete_uebersicht   Kopf der View: Zahlen (dazu "Versendet", solange es
+#                       verschickte Sendungen gibt), Achtung-Liste, "vor der
+#                       Tuer"
 #   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
 #                       unterwegs, zugestellt, versendet) als eigene Karte
 #   pakete_meldungen    Schalter je Push-Meldung (Karte "Meldungen")
@@ -165,7 +167,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 14, vorher = window.__nachtblauPakete;
+          const VERSION = 15, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -615,11 +617,16 @@ button_card_templates:
               ${mitKnopf ? pk.knopf('+ Sendung', 'window.__nachtblauPakete.formularOeffnen()', BLAU) : ''}</div>`;
           pk.inZustellung = g => g.heute.filter(p => p.status === 'out_for_delivery');
           // Untertitel der View: Zahl statt Liste je Dienst (sechs Dienste passten
-          // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst
+          // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst.
+          // Geschuetzte Leerzeichen: Umbruch nur hinter " ·" (der Punkt bleibt
+          // am Ende der ersten Zeile), sonst stuende bei 402 px "aktiv" allein
+          // in der zweiten Zeile. Platz bei 360 px rund
+          // 142 px, "12 Sendungen aktiv" braucht 115 px (Inter 12,5 px);
+          // "Keine Sendung unterwegs" (155 px) darf umbrechen
           pk.aktivText = g => {
             const n = g.achtung.length + g.heute.length + g.abholbereit.length + g.unterwegs.length;
             const z = g.zugestellt.length;
-            return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
+            return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1\u00a0Sendung\u00a0aktiv' : `${n}\u00a0Sendungen\u00a0aktiv`) + (z ? `\u00a0· ${z}\u00a0zugestellt` : '');
           };
           // Kleine Schrift auf getoenter Flaeche in Label-Grau (DESIGN.md, "Text")
           pk.streifen = (icon, c, titel, text) => `<div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">
@@ -671,12 +678,21 @@ button_card_templates:
           };
           pk.uebersicht = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Sendungen', 'Keine Daten', false) + pk.fehltHinweis());
-            const g = pk.gruppen();
-            const zahlen = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;">
+            const g = pk.gruppen(), v = pk.versendet().length;
+            // Fuenfte Kachel "Versendet" nur, solange die Liste "Versendet" etwas
+            // zeigt (gleiche Zahl: aktive und kuerzlich zugestellte). Zahl in
+            // Textfarbe: neutral wie die Pille "Versendet", aber heller als die
+            // graue Null. Breite je Kachel bei 5 Spalten: 360 px 56 px (Text
+            // 46 px), 402 px 65 px (Text 55 px); dann brechen "Unter-wegs",
+            // "Abhol-bereit", "Zu-gestellt" und "Ver-sendet" zweizeilig um
+            // (Inter 11 px: 57, 60, 51 und 53 px), bei 4 Spalten (Text 62 px)
+            // bleiben alle einzeilig
+            const zahlen = `<div style="display:grid;grid-template-columns:repeat(${v ? 5 : 4},minmax(0,1fr));gap:6px;">
                 ${pk.zahl(g.heute.length, 'Heute', AMBER)}
                 ${pk.zahl(g.unterwegs.length, 'Unter&shy;wegs', BLAU)}
                 ${pk.zahl(g.abholbereit.length, 'Abhol&shy;bereit', KORALLE)}
-                ${pk.zahl(g.zugestellt.length, 'Zu&shy;gestellt', GRUEN)}</div>`;
+                ${pk.zahl(g.zugestellt.length, 'Zu&shy;gestellt', GRUEN)}
+                ${v ? pk.zahl(v, 'Ver&shy;sendet', TEXT) : ''}</div>`;
             return pk.block(pk.kopf('Sendungen', pk.esc(pk.aktivText(g)), true) + zahlen + pk.achtung(g) + pk.tuer());
           };
           const LISTEN = {
