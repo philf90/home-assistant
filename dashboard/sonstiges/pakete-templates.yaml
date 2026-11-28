@@ -21,9 +21,11 @@
 #                       abholbereite; Tippen oeffnet die View. Sichtbar nur,
 #                       solange eines davon vorliegt (visibility in
 #                       pakete-karte.yaml)
-#   pakete_uebersicht   Kopf der View: Zahlen, Achtung-Liste, "vor der Tuer"
+#   pakete_uebersicht   Kopf der View: Zahlen (dazu "Versendet", solange es
+#                       verschickte Sendungen gibt), Achtung-Liste, "vor der
+#                       Tuer"
 #   pakete_liste        eine Liste (variables.gruppe: heute, abholbereit,
-#                       unterwegs, zugestellt) als eigene Karte
+#                       unterwegs, zugestellt, versendet) als eigene Karte
 #   pakete_meldungen    Schalter je Push-Meldung (Karte "Meldungen")
 #   pakete_popup        Formular "Sendung hinzufuegen" (browser_mod-Popup)
 #
@@ -33,6 +35,10 @@
 #   sensor.parcel_aggregator_awaiting_pickup    am Abholort
 #   sensor.parcel_aggregator_delivered_parcels  kuerzlich zugestellt (Fenster
 #                                               je Dienst, Amazon 7 Tage)
+#   sensor.parcel_aggregator_outgoing_parcels   aktive verschickte Pakete
+#   sensor.parcel_aggregator_outgoing_delivered_parcels
+#                                               kuerzlich beim Empfaenger
+#                                               zugestellte verschickte
 # tragen im Attribut "parcels" je Paket: carrier, barcode, sender, contents,
 # status, raw_status, delivered, delivered_at, planned_from, planned_to,
 # pickup, pickup_point, url, history (nur mit Option "Parcel history" je
@@ -77,7 +83,22 @@
 #   heute        status out_for_delivery oder Zeitfenster liegt ganz auf heute
 #                (DPD meldet bis kurz vor der Zustellung den ganzen Tag)
 #   unterwegs    alle anderen aktiven, nach planned_from sortiert
-#   zugestellt   aus dem Sensor "delivered", neueste zuerst
+#   zugestellt   aus dem Sensor "delivered", neueste zuerst; auch eine
+#                Ruecksendung, die wieder beim Absender ist (Hermes ab 2.1.0:
+#                status bleibt returning, delivered wird wahr), dann mit
+#                "beim Absender" statt "zugestellt" (die Pille sagt
+#                "Ruecksendung"; bei 360 px passt so die Uhrzeit noch)
+#   versendet    eigene Liste ausserhalb der Gruppen (pk.versendet), aus den
+#                beiden outgoing-Sensoren: Sendungen, die du verschickt hast
+#
+# Versendet: Die DHL-Integration uebernimmt Sendungen, die DHL dem eigenen
+# Konto als abgehend zuordnet (sendungsrichtung ABGEHEND), ohne dass eine
+# Nummer eingetragen werden muss, meldet ihren Status aber immer als unknown
+# (README ha-dhl, Stand 2.0.0). Die Zeile zeigt deshalb die Pille
+# "Versendet" (zugestellt: "Zugestellt") und darunter den Text des Dienstes
+# mit Zeitpunkt, z. B. "Einlieferung in Packstation · heute 15:29". Oben
+# hinter dem Dienst steht der Inhalt, sonst der Empfaenger ("an ..."). Liefert
+# ein Dienst einen echten Status, gilt er wie bei eingehenden Paketen.
 #
 # Meldungen: je Push-Meldung ein Schalter input_boolean.pakete_meldung_*
 # (pakete-konfig.yaml), Liste in CFG.meldungen. Karte und Schalter wie die
@@ -146,7 +167,7 @@ button_card_templates:
       pk: |
         [[[
           // VERSION bei jeder Aenderung an diesem Block erhoehen (siehe Kopf).
-          const VERSION = 13, vorher = window.__nachtblauPakete;
+          const VERSION = 15, vorher = window.__nachtblauPakete;
           if (vorher && vorher.version === VERSION) { vorher.hass = hass; return vorher; }
 
           // ---------- KONFIGURATION ----------
@@ -154,6 +175,10 @@ button_card_templates:
             eingehend: 'sensor.parcel_aggregator_incoming_parcels',
             abholbereit: 'sensor.parcel_aggregator_awaiting_pickup',
             zugestellt: 'sensor.parcel_aggregator_delivered_parcels',
+            // Verschickte Sendungen (Liste "Versendet"): aktive und kuerzlich
+            // beim Empfaenger zugestellte
+            ausgehend: 'sensor.parcel_aggregator_outgoing_parcels',
+            ausgehendZugestellt: 'sensor.parcel_aggregator_outgoing_delivered_parcels',
             tuer: 'input_boolean.paket_vor_der_tur',
             tuerZeit: 'input_datetime.paket_erkannt_um',
             stopps: 'sensor.pakete_amazon_stopps',
@@ -212,6 +237,19 @@ button_card_templates:
             }));
             return [...m.values()];
           };
+          // Verschickte Sendungen, je Sendungsnummer einmal (die zugestellte
+          // Fassung schlaegt die aktive). Kopien mit pkAusgehend: true, damit
+          // Zeile, Pille und Unterzeile sie erkennen; die Zustandsobjekte von
+          // Home Assistant bleiben unveraendert. Aktive zuerst, nach letztem
+          // Verlaufseintrag (neueste oben), dann zugestellte, neueste zuerst.
+          pk.versendet = () => {
+            const m = new Map();
+            [CFG.ausgehend, CFG.ausgehendZugestellt].forEach(id => liste(id).forEach(p => {
+              if (p) m.set(pk.schluessel(p), { ...p, pkAusgehend: true });
+            }));
+            const neu = p => zeit(p.delivered_at) ?? pk.letzteZeit(p) ?? 0;
+            return [...m.values()].sort((a, b) => (a.delivered === true) - (b.delivered === true) || neu(b) - neu(a));
+          };
 
           // ---------- Paketdienste und Status ----------
           const DIENSTE = [
@@ -234,8 +272,18 @@ button_card_templates:
             returning: { text: 'Rücksendung', farbe: ROT, voll: true },
             problem: { text: 'Problem', farbe: ROT, voll: true },
             unknown: { text: 'Unbekannt', farbe: SEK, grau: true },
+            // Verschickt, Stand unbekannt: DHL meldet bei Sendungen vom eigenen
+            // Konto (sendungsrichtung ABGEHEND) den Status immer als unknown
+            // (README ha-dhl), neutral wie Angekuendigt
+            versendet: { text: 'Versendet', farbe: SEK, grau: true },
           };
           pk.status = st => STATUS[st] || STATUS.unknown;
+          // Status fuer Pille und Verlauf: bei verschickten Sendungen ohne
+          // eigenen Status "Versendet", zugestellt "Zugestellt"
+          pk.anzeigeStatus = p => {
+            if (!p.pkAusgehend || (p.status && p.status !== 'unknown')) return p.status;
+            return p.delivered === true ? 'delivered' : 'versendet';
+          };
 
           // ---------- Zeit ----------
           const p2 = n => String(n).padStart(2, '0');
@@ -274,6 +322,11 @@ button_card_templates:
             if (bisTagesende) return `${pk.tag(von)} ab\u00a0${pk.uhr(von)}\u00a0Uhr`;
             if (bis - von >= 20 * 3600000) return pk.tag(von);
             return `${pk.tag(von)} ${pk.uhr(von)}–${pk.uhr(bis)}\u00a0Uhr`;
+          };
+          // Zeitpunkt des neuesten Verlaufseintrags oder null
+          pk.letzteZeit = p => {
+            const t = (Array.isArray(p.history) ? p.history : []).map(h => zeit(h && h.timestamp)).filter(x => x !== null);
+            return t.length ? Math.max(...t) : null;
           };
           pk.istHeute = p => {
             const von = zeit(p.planned_from), bis = zeit(p.planned_to);
@@ -338,14 +391,21 @@ button_card_templates:
           // Hinter dem Dienst der Inhalt (Feld contents, seit den Updates vom
           // 23.11.2026; Amazon fuellt es mit den Artikelnamen, bei den anderen
           // per track_parcel/update_contents), sonst der Absender.
-          pk.zusatz = p => String(p.contents || p.sender || '').trim();
+          // Bei verschickten Sendungen statt des Absenders der Empfaenger.
+          pk.zusatz = p => String(p.contents || (p.pkAusgehend ? (p.receiver ? 'an ' + p.receiver : '') : p.sender) || '').trim();
           pk.zeilenTitel = (p, c = LABEL) => `${pk.esc(pk.dienst(p).name)}${pk.zusatz(p) ? `<span style="font-weight:400;color:${c};"> · ${pk.esc(pk.zusatz(p))}</span>` : ''}`;
           pk.nummer = (p, c, px) => p.barcode ? `<span style="display:block;font-size:${px}px;line-height:1.3;color:${c};font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${pk.esc(String(p.barcode))}</span>` : '';
           // Fliesstext (Achtung-Liste): Dienst, Absender, Nummer
           pk.kennung = p => [pk.dienst(p).name, p.sender, p.barcode].filter(Boolean).map(String).join(' · ');
           pk.unter = p => {
             const g = pk.gruppe(p), fe = pk.fenster(p);
-            if (g === 'zugestellt') { const t = zeit(p.delivered_at); return (t === null ? 'zugestellt' : 'zugestellt ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
+            // Rueckgabe beim Absender angekommen: Hermes (ab 2.1.0) laesst den
+            // Status auf returning und setzt delivered und delivered_at
+            if (g === 'zugestellt') { const t = zeit(p.delivered_at), w = p.status === 'returning' ? 'beim Absender' : 'zugestellt'; return (t === null ? w : w + ' ' + pk.wann(t)) + (pk.foto(p) ? ' · Foto' : ''); }
+            // Verschickt, noch unterwegs: Text des Dienstes und dessen Zeitpunkt
+            // ("Einlieferung in Packstation · heute 15:29"), dazu ein Zeitfenster,
+            // falls der Dienst eines nennt
+            if (p.pkAusgehend) { const t = pk.letzteZeit(p); return [pk.statusText(p), fe ? 'voraussichtlich ' + fe : (t === null ? '' : pk.wann(t))].filter(Boolean).join(' · '); }
             if (g === 'abholbereit') return p.pickup_point || 'am Abholort';
             if (g === 'achtung') return pk.statusText(p);
             // Unterwegs zu einer Abholstelle (pickup true, noch nicht dort; wie
@@ -499,7 +559,7 @@ button_card_templates:
                     ${pk.nummer(p, LABEL, 11.5)}
                     <span style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.3;color:${SEK};">${pk.esc(pk.unter(p))}</span>
                   </span>
-                  ${pk.pille(p.status)}`;
+                  ${pk.pille(pk.anzeigeStatus(p))}`;
           // Linie im Verlauf vom Punkt eines Eintrags zum Punkt darunter (2 px,
           // mittig unter dem 7-px-Punkt, je 2 px Abstand zu beiden Punkten).
           // Neuester Eintrag oben: Ist die Sendung noch unterwegs, ist er der
@@ -511,12 +571,12 @@ button_card_templates:
             : `<span style="position:absolute;left:2.5px;top:14px;bottom:-3px;width:2px;border-radius:1px;background:${i === 0 && offen ? `repeating-linear-gradient(180deg, ${farbe} 0 4px, transparent 4px 7px)` : 'var(--nachtblau-aus, #3a4453)'};"></span>`;
           pk.zeile = p => {
             const k = pk.schluessel(p), d = pk.dienst(p), auf = pk.offen.has(k), kj = pk.esc(JSON.stringify(k));
-            const code = String(p.barcode || ''), foto = pk.foto(p);
+            const code = String(p.barcode || ''), foto = pk.foto(p), farbe = pk.status(pk.anzeigeStatus(p)).farbe;
             const eintraege = Array.isArray(p.history) ? p.history.slice().reverse().slice(0, 8) : [];
             const verlauf = eintraege.length
               ? eintraege.map((h, i) => `<div style="position:relative;padding:0 0 9px 16px;">
-                  ${pk.verlaufLinie(i, eintraege.length, pk.gruppe(p) !== 'zugestellt', pk.status(p.status).farbe)}
-                  <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? pk.status(p.status).farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
+                  ${pk.verlaufLinie(i, eintraege.length, pk.gruppe(p) !== 'zugestellt', farbe)}
+                  <span style="position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:${i === 0 ? farbe : 'var(--nachtblau-aus, #3a4453)'};"></span>
                   <div style="font-size:11.5px;color:${SEK};font-variant-numeric:tabular-nums;">${pk.esc(pk.wann(zeit(h.timestamp)))}</div>
                   <div style="font-size:12.5px;color:${LABEL};">${pk.esc(pk.statusText(h))}</div></div>`).join('')
               : `<div style="font-size:12.5px;color:${LABEL};">${pk.esc(pk.statusText(p))}</div>
@@ -535,14 +595,17 @@ button_card_templates:
                   <div style="display:none;font-size:12px;color:${SEK};">Foto konnte nicht geladen werden. Zum Neuladen zu- und wieder aufklappen.</div>` : ''}
                   ${p.contents ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Inhalt: ${pk.esc(p.contents)}</div>` : ''}
                   ${p.sender ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Absender: ${pk.esc(p.sender)}</div>` : ''}
+                  ${p.pkAusgehend && p.receiver ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Empfänger: ${pk.esc(p.receiver)}</div>` : ''}
                   ${p.pickup === true && p.pickup_point && pk.gruppe(p) !== 'abholbereit' ? `<div style="font-size:12px;color:${SEK};overflow-wrap:anywhere;">Abholstelle: ${pk.esc(p.pickup_point)}</div>` : ''}
                   <div>${verlauf}</div>
                   ${knoepfe ? `<div style="display:flex;flex-wrap:wrap;gap:6px;">${knoepfe}</div>` : ''}
                 </div>
               </div>`;
           };
+          // Pakete einer Liste: Gruppe der eingehenden oder "versendet"
+          pk.listePakete = g => g === 'versendet' ? pk.versendet() : (pk.gruppen()[g] || []);
           pk.liste = (g, leer) => {
-            const l = pk.gruppen()[g] || [];
+            const l = pk.listePakete(g);
             return l.length ? `<div style="display:flex;flex-direction:column;gap:6px;">${l.map(pk.zeile).join('')}</div>` : pk.hinweisText(leer);
           };
 
@@ -554,11 +617,16 @@ button_card_templates:
               ${mitKnopf ? pk.knopf('+ Sendung', 'window.__nachtblauPakete.formularOeffnen()', BLAU) : ''}</div>`;
           pk.inZustellung = g => g.heute.filter(p => p.status === 'out_for_delivery');
           // Untertitel der View: Zahl statt Liste je Dienst (sechs Dienste passten
-          // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst
+          // bei 306 px nicht in zwei Zeilen); den Dienst nennt jede Zeile selbst.
+          // Geschuetzte Leerzeichen: Umbruch nur hinter " ·" (der Punkt bleibt
+          // am Ende der ersten Zeile), sonst stuende bei 402 px "aktiv" allein
+          // in der zweiten Zeile. Platz bei 360 px rund
+          // 142 px, "12 Sendungen aktiv" braucht 115 px (Inter 12,5 px);
+          // "Keine Sendung unterwegs" (155 px) darf umbrechen
           pk.aktivText = g => {
             const n = g.achtung.length + g.heute.length + g.abholbereit.length + g.unterwegs.length;
             const z = g.zugestellt.length;
-            return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1 Sendung aktiv' : `${n} Sendungen aktiv`) + (z ? ` · ${z} zugestellt` : '');
+            return (n === 0 ? 'Keine Sendung unterwegs' : n === 1 ? '1\u00a0Sendung\u00a0aktiv' : `${n}\u00a0Sendungen\u00a0aktiv`) + (z ? `\u00a0· ${z}\u00a0zugestellt` : '');
           };
           // Kleine Schrift auf getoenter Flaeche in Label-Grau (DESIGN.md, "Text")
           pk.streifen = (icon, c, titel, text) => `<div style="display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;padding:8px 10px;border-radius:13px;background:color-mix(in srgb, ${c} 12%, transparent);border:1px solid color-mix(in srgb, ${c} 24%, transparent);">
@@ -610,12 +678,21 @@ button_card_templates:
           };
           pk.uebersicht = () => {
             if (pk.fehlt()) return pk.block(pk.kopf('Sendungen', 'Keine Daten', false) + pk.fehltHinweis());
-            const g = pk.gruppen();
-            const zahlen = `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;">
+            const g = pk.gruppen(), v = pk.versendet().length;
+            // Fuenfte Kachel "Versendet" nur, solange die Liste "Versendet" etwas
+            // zeigt (gleiche Zahl: aktive und kuerzlich zugestellte). Zahl in
+            // Textfarbe: neutral wie die Pille "Versendet", aber heller als die
+            // graue Null. Breite je Kachel bei 5 Spalten: 360 px 56 px (Text
+            // 46 px), 402 px 65 px (Text 55 px); dann brechen "Unter-wegs",
+            // "Abhol-bereit", "Zu-gestellt" und "Ver-sendet" zweizeilig um
+            // (Inter 11 px: 57, 60, 51 und 53 px), bei 4 Spalten (Text 62 px)
+            // bleiben alle einzeilig
+            const zahlen = `<div style="display:grid;grid-template-columns:repeat(${v ? 5 : 4},minmax(0,1fr));gap:6px;">
                 ${pk.zahl(g.heute.length, 'Heute', AMBER)}
                 ${pk.zahl(g.unterwegs.length, 'Unter&shy;wegs', BLAU)}
                 ${pk.zahl(g.abholbereit.length, 'Abhol&shy;bereit', KORALLE)}
-                ${pk.zahl(g.zugestellt.length, 'Zu&shy;gestellt', GRUEN)}</div>`;
+                ${pk.zahl(g.zugestellt.length, 'Zu&shy;gestellt', GRUEN)}
+                ${v ? pk.zahl(v, 'Ver&shy;sendet', TEXT) : ''}</div>`;
             return pk.block(pk.kopf('Sendungen', pk.esc(pk.aktivText(g)), true) + zahlen + pk.achtung(g) + pk.tuer());
           };
           const LISTEN = {
@@ -623,11 +700,12 @@ button_card_templates:
             abholbereit: ['Abholbereit', 'Nichts liegt zur Abholung bereit.'],
             unterwegs: ['Unterwegs', 'Keine weitere Sendung unterwegs.'],
             zugestellt: ['Zuletzt zugestellt', 'In den letzten Tagen wurde nichts zugestellt.'],
+            versendet: ['Versendet', 'Gerade ist nichts unterwegs, was du verschickt hast.'],
           };
           pk.listenKarte = gruppe => {
             if (pk.fehlt()) return pk.block(pk.fehltHinweis());
             const [t, leer] = LISTEN[gruppe] || [gruppe, ''];
-            return pk.block(pk.titel(t, (pk.gruppen()[gruppe] || []).length) + pk.liste(gruppe, leer));
+            return pk.block(pk.titel(t, pk.listePakete(gruppe).length) + pk.liste(gruppe, leer));
           };
 
           // ---------- Meldungen (Schalter) ----------
