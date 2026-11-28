@@ -87,11 +87,6 @@
 # Ankunftszeit laut Waze das Wort "Heimweg" ("zuhause ca. 17:48"). Braucht
 # die Integration Waze Travel Time mit einem Eintrag (wie die Fahrzeiten-Karte)
 # und zone.home mit Koordinaten.
-# Schritte (seit 28.11.2026): Unter der Akku-Pille stehen die Schritte von
-# heute, nur auf der Karte der angemeldeten Person selbst (Attribut user_id)
-# und nur mit variables.schritte_entity. Die Karte wird dadurch nicht hoeher.
-# Ein erster Entwurf mit drei Kacheln (Schritte, Schlaf, Erholung) unter dem
-# Status machte die Karte zu gross und ist verworfen.
 #
 # Voraussetzung: custom:button-card und browser_mod (beide HACS), sensor.time
 # (Integration "Time & Date"), fuer die Bewegungsspur ein Valhalla-Server und
@@ -237,9 +232,6 @@ cards:
       geocoded_entity: sensor.iphone_geocoded_location
       activity_entity: sensor.iphone_activity
       places_prefix: sensor.places_bewohner
-      # Schritte heute unter der Akku-Pille, nur fuer die Person selbst sichtbar
-      # (weglassen = keine Zeile)
-      schritte_entity: sensor.iphone_health_steps
       avatar_fallback: linear-gradient(160deg,#4a5a74,#33404f)
       # Reiter Tagesprofil im Popup: eigene = nur die Person selbst, alle = jeder
       tag_fuer: eigene
@@ -1607,37 +1599,12 @@ cards:
               <span style="font-size:15px;font-weight:700;color:${value};font-variant-numeric:tabular-nums;line-height:1;">${batTxt}<span style="font-size:10px;color:${muted};font-weight:600;margin-left:1px;">%</span></span>
             </div>`;
 
-          // ---------- Schritte heute (unter der Akku-Pille, nur fuer die Person selbst) ----------
-          // Variable schritte_entity (Apple Health ueber die Companion App). Sichtbar
-          // nur, wenn das Attribut user_id der Person der angemeldete Benutzer ist,
-          // wie das Tagesprofil im Popup; die Route Gesundheit ist persoenlich
-          // (design/routen.yaml). Anzeigeregel, kein Zugriffsschutz. Der Zaehler gilt
-          // nur mit Update von heute, sonst 0: Die App setzt ihn erst mit dem ersten
-          // Wert des neuen Tags zurueck (gesundheit-view.yaml, TAGESZAEHLER VOM
-          // VORTAG). Eine Zeile ohne Flaeche, 15 px hoch: Mit 3 px Abstand ist die
-          // Spalte so hoch wie der Avatar (28 + 3 + 15 = 46 px), die Karte wird nicht
-          // hoeher. Rechts buendig mit der Ziffer der Pille (deren Innenabstand 9 px).
-          // Icon in Rose (Personen und Gesundheit, DESIGN.md), Zahl in Sekundaertext.
-          let schritteHtml = '';
-          const stE = variables.schritte_entity ? states[variables.schritte_entity] : null;
-          if (stE && user && e && e.attributes && e.attributes.user_id === user.id && !isNaN(parseFloat(stE.state))) {
-            const heute = new Date(stE.last_updated).toDateString() === new Date().toDateString();
-            const n = heute ? Math.round(parseFloat(stE.state)) : 0;
-            schritteHtml = `
-              <div title="Schritte heute" style="display:flex;align-items:center;gap:3px;padding-right:9px;font-size:12px;font-weight:600;line-height:15px;color:${muted};font-variant-numeric:tabular-nums;white-space:nowrap;">
-                <ha-icon icon="mdi:walk" style="--mdc-icon-size:13px;--ha-icon-display:block;width:13px;height:13px;display:flex;flex:none;margin:0;color:var(--nachtblau-rose, #e6a0c4);"></ha-icon>${n.toLocaleString('de-DE')}
-              </div>`;
-          }
-          const obenRechts = schritteHtml
-            ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;">${batteryPill}${schritteHtml}</div>`
-            : batteryPill;
-
           // ---------- Aufbau ----------
           return `
             <div style="display:flex;flex-direction:column;gap:11px;width:100%;box-sizing:border-box;overflow:hidden;color:${value};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;text-align:left;">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
                 ${avatar}
-                ${obenRechts}
+                ${batteryPill}
               </div>
               <div style="min-width:0;">
                 <div style="font-size:16.5px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
